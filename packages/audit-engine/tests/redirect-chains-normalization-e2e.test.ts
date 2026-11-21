@@ -12,14 +12,22 @@
 // real stored chains through the real adapter mapping. A fabricated hop
 // introduced at ANY of those layers fails here.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import {
+  createCrawler,
+  SQLiteStorage,
+  type CrawlerConfig,
+} from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, SQLiteStorage, type CrawlerConfig } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, type PreFetchedAssets } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  type PreFetchedAssets,
+} from "../src/adapter";
 
 const RULE_ID = "links/redirect-chains";
 
@@ -90,7 +98,7 @@ function serve(handler: (path: string, url: URL) => Response): Site {
 function html(body: string): Response {
   return new Response(
     `<!doctype html><html><head><title>t</title></head><body>${body}</body></html>`,
-    { headers: { "content-type": "text/html" } },
+    { headers: { "content-type": "text/html" } }
   );
 }
 
@@ -118,17 +126,24 @@ async function audit(origin: string): Promise<Audit> {
       const crawlId = yield* crawler.start(`${origin}/`, `${origin}/`);
       const pages = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(pages);
-      const result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+      const result = yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        CONFIG,
+        EMPTY_ASSETS
+      );
       return {
         checks: result.ruleResultsMap.get(RULE_ID)?.checks ?? [],
         crawled: pages.map((page) => page.normalizedUrl),
       };
       // `Effect.gen`'s try/finally does not run on failure; `ensuring` does.
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
-const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const named = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 /**
  * The rule ran and reported no redirect anywhere. Asserting the explicit `pass`
@@ -151,7 +166,11 @@ describe("#1510 — normalization never manufactures a hop (crawl → rule)", ()
     const site = serve((path) => {
       if (path !== "/" && !path.endsWith("/")) return movedTo(`${path}/`);
       if (!PAGES.includes(path)) return new Response("nope", { status: 404 });
-      return html(PAGES.filter((p) => p !== path).map(link).join(""));
+      return html(
+        PAGES.filter((p) => p !== path)
+          .map(link)
+          .join("")
+      );
     });
 
     const { checks, crawled } = await audit(site.origin);
@@ -163,7 +182,9 @@ describe("#1510 — normalization never manufactures a hop (crawl → rule)", ()
     }
     // And the origin was never asked for a form the site does not link.
     const documentPaths = site.requested.filter((p) => !p.includes("."));
-    expect(documentPaths.filter((p) => p !== "/" && !p.endsWith("/"))).toEqual([]);
+    expect(documentPaths.filter((p) => p !== "/" && !p.endsWith("/"))).toEqual(
+      []
+    );
 
     expectNoRedirectsReported(checks);
   });
@@ -173,7 +194,8 @@ describe("#1510 — normalization never manufactures a hop (crawl → rule)", ()
     // as written and the URL requested genuinely differ. That difference is a
     // normalization, not a hop, and the origin sends no 3xx here at all.
     const site = serve((path, url) => {
-      if (path === "/") return html(link("/blog/?utm_source=newsletter") + link("/kontakt/"));
+      if (path === "/")
+        return html(link("/blog/?utm_source=newsletter") + link("/kontakt/"));
       if (path === "/blog/" || path === "/kontakt/") {
         // Proves the strip rather than assuming it: a request that still carried
         // the param would be answered with a redirect, which the assertions
@@ -212,7 +234,11 @@ describe("#1510 — real redirects still report, with their real statuses", () =
 
     // The statuses, structurally — this is the assertion that would have caught
     // the reported `200 → 200`.
-    const chain = (redirectPages?.items?.[0]?.meta as { chain?: { hops: { url: string; statusCode: number }[] } }).chain;
+    const chain = (
+      redirectPages?.items?.[0]?.meta as {
+        chain?: { hops: { url: string; statusCode: number }[] };
+      }
+    ).chain;
     expect(chain?.hops.map((hop) => hop.statusCode)).toEqual([301, 301, 200]);
     expect(chain?.hops.map((hop) => hop.url)).toEqual([
       `${site.origin}/stary/`,
@@ -222,11 +248,13 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     // A chain of two redirects is labelled with its hop count (#1750).
     expect(redirectPages?.items?.[0]?.label).toBe(
       // Two redirect responses before the landing page, so the label carries the hop count (#1750).
-      `2 hops: ${site.origin}/stary/ (301) → ${site.origin}/posredni/ (301) → ${site.origin}/nowy/ (200)`,
+      `2 hops: ${site.origin}/stary/ (301) → ${site.origin}/posredni/ (301) → ${site.origin}/nowy/ (200)`
     );
 
     // The page that linked the redirecting form is the one blamed.
-    expect(named(checks, "links-to-redirect")?.items?.[0]?.sourcePages).toEqual([`${site.origin}/`]);
+    expect(named(checks, "links-to-redirect")?.items?.[0]?.sourcePages).toEqual(
+      [`${site.origin}/`]
+    );
   });
 
   test("(c) normalization plus one real 301 yields exactly one hop", async () => {
@@ -237,7 +265,8 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     const site = serve((path, url) => {
       if (path === "/") return html(link("/stary/?utm_source=newsletter"));
       if (path === "/stary/") {
-        if (url.searchParams.has("utm_source")) return new Response("nope", { status: 404 });
+        if (url.searchParams.has("utm_source"))
+          return new Response("nope", { status: 404 });
         return movedTo("/nowy/");
       }
       if (path === "/nowy/") return html("");
@@ -251,7 +280,11 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     expect(redirectPages?.items).toHaveLength(1);
     expect(redirectPages?.items?.[0]?.id).toBe(`${site.origin}/stary/`);
 
-    const chain = (redirectPages?.items?.[0]?.meta as { chain?: { chainLength: number; hops: { statusCode: number }[] } }).chain;
+    const chain = (
+      redirectPages?.items?.[0]?.meta as {
+        chain?: { chainLength: number; hops: { statusCode: number }[] };
+      }
+    ).chain;
     expect(chain?.chainLength).toBe(1);
     expect(chain?.hops.map((hop) => hop.statusCode)).toEqual([301, 200]);
   });
@@ -260,7 +293,8 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     // The shape from the bug report — `(200) → (200)` — as an invariant over
     // whatever this crawl produces, not over a hand-written chain.
     const site = serve((path) => {
-      if (path === "/") return html(link("/stary/") + link("/o-mnie") + link("/o-mnie/"));
+      if (path === "/")
+        return html(link("/stary/") + link("/o-mnie") + link("/o-mnie/"));
       if (path === "/stary/") return movedTo("/o-mnie/");
       if (path === "/o-mnie") return movedTo("/o-mnie/");
       if (path === "/o-mnie/") return html("");
@@ -273,7 +307,9 @@ describe("#1510 — real redirects still report, with their real statuses", () =
     expect(items.length).toBeGreaterThan(0);
     const nonFinalHops = items.flatMap(
       (item) =>
-        (item.meta as { chain?: { hops: { statusCode: number }[] } }).chain?.hops.slice(0, -1) ?? [],
+        (
+          item.meta as { chain?: { hops: { statusCode: number }[] } }
+        ).chain?.hops.slice(0, -1) ?? []
     );
     expect(nonFinalHops.length).toBeGreaterThan(0);
     for (const hop of nonFinalHops) {

@@ -5,11 +5,12 @@
 // rule that a report with no section data carries no block at all (a crawl stored before the
 // classifier existed), and the block's wording in every output format.
 
-import { describe, expect, test } from "bun:test";
-
 import type { PageStructureScalars } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import type { AuditReport, ReportTechnology } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -53,7 +54,14 @@ const FIXTURE: Array<PageStructureScalars | undefined> = [
   }),
   // product page, by the model, with part of the answer degraded
   scalars({
-    sections: { header: 2, navigation: 4, footer: 6, sidebar: 2, content: 5, related_content: 2 },
+    sections: {
+      header: 2,
+      navigation: 4,
+      footer: 6,
+      sidebar: 2,
+      content: 5,
+      related_content: 2,
+    },
     chrome: 12,
     content: 5,
     type: { label: "product_detail", confidence: 0.9, source: "model" },
@@ -135,7 +143,14 @@ describe("extractPageStructure", () => {
     });
 
     expect(out).toEqual({
-      sections: { header: 1, navigation: 1, footer: 2, content: 2, unknown: 1, pagination: 1 },
+      sections: {
+        header: 1,
+        navigation: 1,
+        footer: 2,
+        content: 2,
+        unknown: 1,
+        pagination: 1,
+      },
       chromeInternal: 3,
       contentInternal: 2,
       pageType: { label: "blog_post", confidence: 0.91, source: "model" },
@@ -146,7 +161,9 @@ describe("extractPageStructure", () => {
   test("a page with neither a section nor a classification contributes nothing", () => {
     expect(extractPageStructure({})).toBeUndefined();
     expect(extractPageStructure({ links: [] })).toBeUndefined();
-    expect(extractPageStructure({ links: [{ isInternal: true }] })).toBeUndefined();
+    expect(
+      extractPageStructure({ links: [{ isInternal: true }] })
+    ).toBeUndefined();
   });
 
   test("a classification alone is enough, and so is a section alone", () => {
@@ -164,7 +181,11 @@ describe("extractPageStructure", () => {
       pageType: { label: "about", confidence: 0.8, source: "rules" },
       degraded: false,
     });
-    expect(extractPageStructure({ links: [{ isInternal: true, section: "content" }] })?.pageType).toBeNull();
+    expect(
+      extractPageStructure({
+        links: [{ isInternal: true, section: "content" }],
+      })?.pageType
+    ).toBeNull();
   });
 });
 
@@ -201,12 +222,21 @@ describe("page structure builder", () => {
 
   test("a rules answer counts from 0.8 and not below it; a model answer always counts", () => {
     const at = (confidence: number, source: Source) =>
-      build([scalars({ sections: { content: 1 }, chrome: 0, content: 1, type: { label: "legal", confidence, source } })])!
-        .pageTypes;
+      build([
+        scalars({
+          sections: { content: 1 },
+          chrome: 0,
+          content: 1,
+          type: { label: "legal", confidence, source },
+        }),
+      ])!.pageTypes;
 
     expect(at(0.8, "rules").counts).toEqual([{ label: "legal", pages: 1 }]);
     expect(at(0.79, "rules")).toMatchObject({ counts: [], notClassified: 1 });
-    expect(at(0.1, "model")).toMatchObject({ counts: [{ label: "legal", pages: 1 }], byModel: 1 });
+    expect(at(0.1, "model")).toMatchObject({
+      counts: [{ label: "legal", pages: 1 }],
+      byModel: 1,
+    });
   });
 
   test("builds nothing when no page carries any data", () => {
@@ -215,15 +245,24 @@ describe("page structure builder", () => {
   });
 
   test("the share is null when no internal link sits in the chrome or the content", () => {
-    const structure = build([scalars({ sections: { pagination: 3 }, chrome: 0, content: 0 })])!;
-    expect(structure.chrome).toEqual({ links: 0, contentLinks: 0, share: null });
+    const structure = build([
+      scalars({ sections: { pagination: 3 }, chrome: 0, content: 0 }),
+    ])!;
+    expect(structure.chrome).toEqual({
+      links: 0,
+      contentLinks: 0,
+      share: null,
+    });
   });
 
   test("ignores a section or label it does not know instead of printing it", () => {
     const structure = build([
       {
         // what a hand-edited report file could carry
-        sections: { header: 2, "<script>alert(1)</script>": 5 } as PageStructureScalars["sections"],
+        sections: {
+          header: 2,
+          "<script>alert(1)</script>": 5,
+        } as PageStructureScalars["sections"],
         chromeInternal: 2,
         contentInternal: 0,
         pageType: { label: "<img src=x>", confidence: 1, source: "model" },
@@ -231,7 +270,9 @@ describe("page structure builder", () => {
       },
     ])!;
 
-    expect(structure.sections).toEqual([{ section: "header", pages: 1, links: 2 }]);
+    expect(structure.sections).toEqual([
+      { section: "header", pages: 1, links: 2 },
+    ]);
     expect(structure.totalLinks).toBe(2);
     expect(structure.pageTypes.counts).toEqual([]);
     expect(structure.pageTypes.notClassified).toBe(1);
@@ -246,12 +287,16 @@ describe("page structure wording", () => {
   });
 
   test("no page types line when the classifier labelled nothing", () => {
-    const sectionsOnly = build([scalars({ sections: { footer: 4 }, chrome: 4, content: 0 })])!;
+    const sectionsOnly = build([
+      scalars({ sections: { footer: 4 }, chrome: 4, content: 0 }),
+    ])!;
     expect(structurePageTypesLine(sectionsOnly)).toBeNull();
   });
 
   test("a table row reads as a phrase with the right plurals", () => {
-    expect(structureRowDetail({ pages: 88, links: 3784 })).toBe("3,784 links on 88 pages");
+    expect(structureRowDetail({ pages: 88, links: 3784 })).toBe(
+      "3,784 links on 88 pages"
+    );
     expect(structureRowDetail({ pages: 1, links: 1 })).toBe("1 link on 1 page");
   });
 
@@ -269,19 +314,27 @@ describe("page structure in the output formats", () => {
     const md = renderMarkdown(withStructure);
 
     expect(md).toContain("### Page structure");
-    expect(md).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(md).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified."
+    );
     expect(md).toContain("| Section | Pages | Links |");
     expect(md).toContain("| Footer | 5 | 30 |");
     expect(md).toContain("| Content | 5 | 18 |");
     expect(md).toContain("| Comments | 1 | 1 |");
-    expect(md).toContain("71 links counted; 3 could not be placed in a section.");
+    expect(md).toContain(
+      "71 links counted; 3 could not be placed in a section."
+    );
     expect(md).toContain(
       "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content."
     );
-    expect(md).toContain("1 page fell back to the markup rules for part of the classification.");
+    expect(md).toContain(
+      "1 page fell back to the markup rules for part of the classification."
+    );
     // Rows come out most links first.
     expect(md.indexOf("| Footer |")).toBeLessThan(md.indexOf("| Content |"));
-    expect(md.indexOf("| Content |")).toBeLessThan(md.indexOf("| Navigation |"));
+    expect(md.indexOf("| Content |")).toBeLessThan(
+      md.indexOf("| Navigation |")
+    );
   });
 
   test("markdown: inside Report detail, the last section, after every issue", () => {
@@ -289,19 +342,35 @@ describe("page structure in the output formats", () => {
       report({
         structure: STRUCTURE,
         technologies: {
-          items: [{ id: "nextjs", name: "Next.js", category: "framework", version: null, confidence: "high" } as ReportTechnology],
+          items: [
+            {
+              id: "nextjs",
+              name: "Next.js",
+              category: "framework",
+              version: null,
+              confidence: "high",
+            } as ReportTechnology,
+          ],
           added: [],
           removed: [],
           firstScan: true,
         },
-      }),
+      })
     );
 
-    expect(md.indexOf("## Summary")).toBeLessThan(md.indexOf("## Report detail"));
-    expect(md.indexOf("## Technologies")).toBeLessThan(md.indexOf("## Report detail"));
-    expect(md.indexOf("## Report detail")).toBeLessThan(md.indexOf("### Page structure"));
+    expect(md.indexOf("## Summary")).toBeLessThan(
+      md.indexOf("## Report detail")
+    );
+    expect(md.indexOf("## Technologies")).toBeLessThan(
+      md.indexOf("## Report detail")
+    );
+    expect(md.indexOf("## Report detail")).toBeLessThan(
+      md.indexOf("### Page structure")
+    );
     // Nothing of it above the score.
-    expect(md.slice(0, md.indexOf("## Summary"))).not.toContain("Page structure");
+    expect(md.slice(0, md.indexOf("## Summary"))).not.toContain(
+      "Page structure"
+    );
   });
 
   test("no em-dash anywhere in the block, in any text format", () => {
@@ -313,8 +382,12 @@ describe("page structure in the output formats", () => {
 
     expect(block(md, "### Page structure", "\n---\n")).not.toContain("—");
     expect(block(txt, "Page structure", "==========")).not.toContain("—");
-    expect(block(llm, "<page-structure", "</page-structure>")).not.toContain("—");
-    expect(block(md, "### Page structure", "\n---\n").length).toBeGreaterThan(200);
+    expect(block(llm, "<page-structure", "</page-structure>")).not.toContain(
+      "—"
+    );
+    expect(block(md, "### Page structure", "\n---\n").length).toBeGreaterThan(
+      200
+    );
   });
 
   test("text: the same three pieces", () => {
@@ -322,7 +395,9 @@ describe("page structure in the output formats", () => {
 
     expect(text).toContain("REPORT DETAIL");
     expect(text).toContain("Page structure\n");
-    expect(text).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(text).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified."
+    );
     expect(text).toMatch(/Footer\s+5\s+30/);
     expect(text).toContain(
       "71% of internal links sit in the header, footer, navigation and sidebar; 29% in the page content."
@@ -332,11 +407,17 @@ describe("page structure in the output formats", () => {
   test("llm: attributes first, then the sentences and one row per section", () => {
     const llm = renderLlm(withStructure);
 
-    expect(llm).toContain('<page-structure pages="7" links="71" chrome-share="0.712">');
-    expect(llm).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(llm).toContain(
+      '<page-structure pages="7" links="71" chrome-share="0.712">'
+    );
+    expect(llm).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified."
+    );
     // The section id the JSON report uses, one row per section.
     expect(llm).toContain('<section name="footer" pages="5" links="30"/>');
-    expect(llm).toContain('<section name="related_content" pages="1" links="2"/>');
+    expect(llm).toContain(
+      '<section name="related_content" pages="1" links="2"/>'
+    );
     expect(llm).toContain("</page-structure>");
   });
 
@@ -347,7 +428,9 @@ describe("page structure in the output formats", () => {
       '<page-structure pages="7" links="71" unknown-links="3" chrome-links="42" content-links="17" chrome-share="0.712">'
     );
     expect(xml).toContain('<section name="footer" pages="5" links="30"/>');
-    expect(xml).toContain('<page-types not-classified="3" by-model="2" degraded="1">');
+    expect(xml).toContain(
+      '<page-types not-classified="3" by-model="2" degraded="1">'
+    );
     expect(xml).toContain('<page-type label="product_detail" pages="2"/>');
     expect(xml).not.toContain("—");
   });
@@ -356,10 +439,15 @@ describe("page structure in the output formats", () => {
     const hostile = {
       ...STRUCTURE,
       pages: '1"><x/>' as unknown as number,
-      sections: [{ section: "footer", pages: "<y>" as unknown as number, links: 3 }],
+      sections: [
+        { section: "footer", pages: "<y>" as unknown as number, links: 3 },
+      ],
     } as typeof STRUCTURE;
 
-    for (const out of [renderLlm(report({ structure: hostile })), renderXml(report({ structure: hostile }))]) {
+    for (const out of [
+      renderLlm(report({ structure: hostile })),
+      renderXml(report({ structure: hostile })),
+    ]) {
       expect(out).not.toContain("<x/>");
       expect(out).not.toContain("<y>");
       expect(out).toContain('pages="0"');
@@ -386,7 +474,11 @@ describe("page structure in the output formats", () => {
     const markup = (html: string) => {
       let out = html;
       for (const tag of ["script", "style"]) {
-        for (let at = out.indexOf(`<${tag}`); at !== -1; at = out.indexOf(`<${tag}`)) {
+        for (
+          let at = out.indexOf(`<${tag}`);
+          at !== -1;
+          at = out.indexOf(`<${tag}`)
+        ) {
           const close = out.indexOf(`</${tag}>`, at);
           if (close === -1) break;
           out = out.slice(0, at) + out.slice(close + tag.length + 3);
@@ -394,25 +486,39 @@ describe("page structure in the output formats", () => {
       }
       return out;
     };
-    for (const out of [renderMarkdown(r), renderText(r), renderLlm(r), renderXml(r), markup(renderHtml(r))]) {
+    for (const out of [
+      renderMarkdown(r),
+      renderText(r),
+      renderLlm(r),
+      renderXml(r),
+      markup(renderHtml(r)),
+    ]) {
       expect(out).not.toContain("undefined");
       expect(out).not.toContain("null page");
     }
-    expect(renderMarkdown(r)).toContain("Page types: 2 constructor pages, 1 contact page; 3 not classified.");
+    expect(renderMarkdown(r)).toContain(
+      "Page types: 2 constructor pages, 1 contact page; 3 not classified."
+    );
   });
 
   test("links that are all unknown still get their totals line, with no table", () => {
-    const unknownOnly = build([scalars({ sections: { unknown: 4 }, chrome: 0, content: 0 })])!;
+    const unknownOnly = build([
+      scalars({ sections: { unknown: 4 }, chrome: 0, content: 0 }),
+    ])!;
     const r = report({ structure: unknownOnly });
 
     for (const out of [renderMarkdown(r), renderText(r)]) {
-      expect(out).toContain("4 links counted; 4 could not be placed in a section.");
+      expect(out).toContain(
+        "4 links counted; 4 could not be placed in a section."
+      );
     }
     expect(renderMarkdown(r)).not.toContain("| Section |");
   });
 
   test("json: the block as data, under structure", () => {
-    const parsed = JSON.parse(renderJson(withStructure)) as { structure?: unknown };
+    const parsed = JSON.parse(renderJson(withStructure)) as {
+      structure?: unknown;
+    };
     expect(parsed.structure).toEqual(STRUCTURE);
   });
 
@@ -421,7 +527,9 @@ describe("page structure in the output formats", () => {
 
     expect(html).toContain('<section id="structure">');
     expect(html).toContain("Page structure");
-    expect(html).toContain("Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified.");
+    expect(html).toContain(
+      "Page types: 2 product pages, 1 contact page, 1 homepage; 3 not classified."
+    );
     expect(html).toContain("30 links on 5 pages");
     expect(html).toContain("2 links on 1 page<");
   });
@@ -434,11 +542,15 @@ describe("page structure in the output formats", () => {
     expect(renderLlm(plain)).not.toContain("page-structure");
     expect(renderXml(plain)).not.toContain("page-structure");
     expect(renderHtml(plain)).not.toContain("Page structure");
-    expect("structure" in (JSON.parse(renderJson(plain)) as object)).toBe(false);
+    expect("structure" in (JSON.parse(renderJson(plain)) as object)).toBe(
+      false
+    );
   });
 
   test("empty rows are hidden: no page types, no table and no chrome line when there is nothing to say", () => {
-    const sparse = build([scalars({ sections: { pagination: 2 }, chrome: 0, content: 0 })])!;
+    const sparse = build([
+      scalars({ sections: { pagination: 2 }, chrome: 0, content: 0 }),
+    ])!;
     const md = renderMarkdown(report({ structure: sparse }));
 
     expect(md).toContain("### Page structure");

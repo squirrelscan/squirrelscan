@@ -17,9 +17,15 @@
 //   const place = elementPlacer(result, elements);
 //   place(anchor); // { region: {label: "content_block", ...}, section: {label: "comments", ...} }
 
-import { commentRule } from "./comments-rule";
-import type { NodePrediction, PageClassification, SectionPrediction, Source } from "./predict";
+import type {
+  NodePrediction,
+  PageClassification,
+  SectionPrediction,
+  Source,
+} from "./predict";
 import type { RegionLabel } from "./rules-fallback";
+
+import { commentRule } from "./comments-rule";
 
 export interface RegionPlacement {
   label: RegionLabel;
@@ -66,7 +72,7 @@ interface Walkable {
  */
 export function elementPlacer(
   result: PageClassification,
-  elements: readonly unknown[],
+  elements: readonly unknown[]
 ): (element: unknown) => Placement {
   const idOf = new Map<unknown, number>();
   for (let i = 0; i < elements.length; i++) idOf.set(elements[i], i);
@@ -78,7 +84,8 @@ export function elementPlacer(
     let region: RegionPlacement | null = null;
     let section: SectionPlacement | null = null;
     const found = element ? rule.lookup(element as Element) : null;
-    if (found && "truncated" in found) return { region: null, section: null, truncated: true };
+    if (found && "truncated" in found)
+      return { region: null, section: null, truncated: true };
     const match = found;
     if (match) {
       section = {
@@ -105,7 +112,8 @@ export function elementPlacer(
             hops,
           };
         }
-        if (section === null && node.section) section = { ...node.section, nodeId: id!, hops };
+        if (section === null && node.section)
+          section = { ...node.section, nodeId: id!, hops };
       }
       el = el.parentElement;
     }

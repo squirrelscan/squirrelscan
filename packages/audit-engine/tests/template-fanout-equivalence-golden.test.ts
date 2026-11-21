@@ -45,22 +45,28 @@
 // Named `*golden*` so `bun run test:engine` runs it alongside the other
 // byte-identity gates and not only in the whole-package CI step.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-import { parseDocument } from "@squirrelscan/parser";
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
+import type { Rule, RuleRunResult, SiteData } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { parseDocument } from "@squirrelscan/parser";
+import { checkAffectedPages } from "@squirrelscan/report";
 import { RuleRunner, createRunner, fingerprintPage } from "@squirrelscan/rules";
-import type { Rule, RuleRunResult, SiteData } from "@squirrelscan/rules";
 import { foldOverflowChecks } from "@squirrelscan/rules/fold";
-import type { CheckResult, PageRecord } from "@squirrelscan/core-contracts";
-import type { Config } from "@squirrelscan/config";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { buildHeadersMap, buildSiteContext, isRenderedFetch, parseHtmlForRules } from "../src/adapter";
+import {
+  buildHeadersMap,
+  buildSiteContext,
+  isRenderedFetch,
+  parseHtmlForRules,
+} from "../src/adapter";
 import { isAuditablePage } from "../src/page-features";
 import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
-import { streamPageRules } from "../src/streaming";
 import { buildStreamFindings } from "../src/stream-findings";
+import { streamPageRules } from "../src/streaming";
 import {
   CONTENT_READ_METAS,
   fanoutClusterKey,
@@ -68,7 +74,6 @@ import {
   templateFanoutEnabled,
 } from "../src/template-fanout";
 import { templateFingerprintKey } from "../src/template-key";
-import { checkAffectedPages } from "@squirrelscan/report";
 import { CORPUS, ORIGIN, mkPage } from "./helpers/template-corpus";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -78,7 +83,10 @@ function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
 const CRAWL = "crawl-1";
 // `enable: ["*"]` turns the whole rule set on; filterRules defaults every rule to
 // disabled, so an empty `rules` would make both arms trivially equal on nothing.
-const CONFIG = { rule_options: {}, rules: { enable: ["*"] } } as unknown as Config;
+const CONFIG = {
+  rule_options: {},
+  rules: { enable: ["*"] },
+} as unknown as Config;
 const SITE_DATA = {
   baseUrl: ORIGIN,
   pages: [],
@@ -130,12 +138,13 @@ async function residentPageRules(storage: SQLiteStorage, runner: RuleRunner) {
         redirectChain: page.redirectChain,
         rendered: isRenderedFetch(page.fetcherId),
       },
-      SITE_DATA,
+      SITE_DATA
     );
     const pageUrl = page.normalizedUrl;
     const byRule = new Map<string, CheckResult[]>();
     for (const [ruleId, rr] of result.ruleResults) {
-      for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+      for (const check of rr.checks)
+        if (!check.pageUrl) check.pageUrl = pageUrl;
       foldRuleResultIntoTallies(tallies, ruleId, rr as RuleRunResult);
       byRule.set(ruleId, rr.checks);
     }
@@ -158,10 +167,12 @@ describe("fanning a template verdict out is indistinguishable from running the r
       streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
         batchSize: 4, // < the corpus, so clusters straddle batch boundaries
         templateFanout: true,
-      }),
+      })
     );
 
-    expect([...fanned.pageResults.keys()].sort()).toEqual([...reference.pageResults.keys()].sort());
+    expect([...fanned.pageResults.keys()].sort()).toEqual(
+      [...reference.pageResults.keys()].sort()
+    );
     for (const [url, checks] of reference.pageResults) {
       // The flat per-page list, in enabled-rule order — this is what catches a
       // fanned rule landing in the wrong position as well as a wrong verdict.
@@ -175,7 +186,9 @@ describe("fanning a template verdict out is indistinguishable from running the r
         expect(got!.get(ruleId)).toEqual(checks as never);
       }
     }
-    expect([...fanned.tallies.keys()].sort()).toEqual([...reference.tallies.keys()].sort());
+    expect([...fanned.tallies.keys()].sort()).toEqual(
+      [...reference.tallies.keys()].sort()
+    );
     for (const [ruleId, rt] of reference.tallies) {
       // Health score is folded from these, so equal tallies is "the score did not
       // move" without re-deriving a score here.
@@ -188,10 +201,14 @@ describe("fanning a template verdict out is indistinguishable from running the r
   test("the fan-out actually ran: clusters found, rule invocations removed", async () => {
     const storage = await corpusStorage();
     const on = await run(
-      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
+        templateFanout: true,
+      })
     );
     const off = await run(
-      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: false }),
+      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
+        templateFanout: false,
+      })
     );
 
     // 3 templates + 2 singletons = 5 keys; 11 clustered pages - 3 representatives
@@ -243,17 +260,33 @@ function countingRules(): CountingRules {
   return {
     rules: [
       {
-        meta: { ...base, id: "test/counter-template", verdictScope: "template" as const },
+        meta: {
+          ...base,
+          id: "test/counter-template",
+          verdictScope: "template" as const,
+        },
         run: () => {
           template++;
-          return { checks: [{ name: "counter", status: "pass" as const, message: "seen" }] };
+          return {
+            checks: [
+              { name: "counter", status: "pass" as const, message: "seen" },
+            ],
+          };
         },
       },
       {
-        meta: { ...base, id: "test/counter-page", verdictScope: "page" as const },
+        meta: {
+          ...base,
+          id: "test/counter-page",
+          verdictScope: "page" as const,
+        },
         run: () => {
           page++;
-          return { checks: [{ name: "counter", status: "pass" as const, message: "seen" }] };
+          return {
+            checks: [
+              { name: "counter", status: "pass" as const, message: "seen" },
+            ],
+          };
         },
       },
     ],
@@ -275,7 +308,9 @@ describe("what actually runs", () => {
     });
 
     const result = await run(
-      streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     // 13 pages, 5 clusters (3 templates + 2 singletons).
@@ -284,15 +319,26 @@ describe("what actually runs", () => {
 
     // …and both rules still reported on every page.
     for (const url of result.pageUrls) {
-      expect(result.pageRuleResults.get(url)?.get("test/counter-template")).toHaveLength(1);
-      expect(result.pageRuleResults.get(url)?.get("test/counter-page")).toHaveLength(1);
+      expect(
+        result.pageRuleResults.get(url)?.get("test/counter-template")
+      ).toHaveLength(1);
+      expect(
+        result.pageRuleResults.get(url)?.get("test/counter-page")
+      ).toHaveLength(1);
     }
 
     // With fan-out off, the template-scoped rule runs per page like any other —
     // the difference between the two numbers is the whole feature.
     counters.reset();
-    await run(streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: false }));
-    expect(counters.counts()).toEqual({ template: CORPUS.length, page: CORPUS.length });
+    await run(
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, {
+        templateFanout: false,
+      })
+    );
+    expect(counters.counts()).toEqual({
+      template: CORPUS.length,
+      page: CORPUS.length,
+    });
 
     await run(storage.close());
   });
@@ -338,14 +384,17 @@ describe("what actually runs", () => {
     });
 
     const result = await run(
-      streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     // Declared "template", but it ran on every page because its verdict could not
     // be copied — the degradation is in cost, never in what is reported.
     expect(ran).toBe(CORPUS.length);
     for (const url of result.pageUrls) {
-      const checks = result.pageRuleResults.get(url)?.get("test/uncloneable") ?? [];
+      const checks =
+        result.pageRuleResults.get(url)?.get("test/uncloneable") ?? [];
       expect(checks).toHaveLength(1);
       expect(checks[0]!.pageUrl).toBe(url);
     }
@@ -378,7 +427,9 @@ describe("what actually runs", () => {
       },
       run: () => {
         ran++;
-        return { checks: [{ name: "gated", status: "pass" as const, message: "seen" }] };
+        return {
+          checks: [{ name: "gated", status: "pass" as const, message: "seen" }],
+        };
       },
     };
     const runner = new RuleRunner({
@@ -387,14 +438,18 @@ describe("what actually runs", () => {
     });
 
     const result = await run(
-      streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     // Declared "template" and still ran on every page — the contradiction costs
     // speed, never a verdict copied onto a page nobody looked at.
     expect(ran).toBe(CORPUS.length);
     for (const url of result.pageUrls) {
-      expect(result.pageRuleResults.get(url)?.get("test/soft404-gated")).toHaveLength(1);
+      expect(
+        result.pageRuleResults.get(url)?.get("test/soft404-gated")
+      ).toHaveLength(1);
     }
 
     await run(storage.close());
@@ -408,7 +463,9 @@ describe("what actually runs", () => {
       additionalNamespaces: [{ name: "test", rules: counters.rules }],
     });
     const result = await run(
-      streamPageRules(storage, CRAWL, runner, SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, runner, SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     // The two one-off pages are 2 of the 5 invocations: a cluster of one costs
@@ -417,7 +474,9 @@ describe("what actually runs", () => {
     for (const url of singles) expect(result.pageUrls).toContain(url);
     expect(counters.counts().template).toBe(5);
     // 8 fanned pages + 5 that ran = 13, so no singleton was ever fanned.
-    expect(result.templateFanout.fannedPages + counters.counts().template).toBe(CORPUS.length);
+    expect(result.templateFanout.fannedPages + counters.counts().template).toBe(
+      CORPUS.length
+    );
 
     await run(storage.close());
   });
@@ -431,7 +490,9 @@ describe("a fanned finding names the page it is about", () => {
   test("affectedPages and details.occurrences cover every member, not the representative", async () => {
     const storage = await corpusStorage();
     const result = await run(
-      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: true }),
+      streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     const checks = result.ruleResultsMap.get(FANNED_RULE)?.checks ?? [];
@@ -451,7 +512,9 @@ describe("a fanned finding names the page it is about", () => {
     expect(folded).toHaveLength(1);
     const aggregate = folded[0]!;
     expect(aggregate.details?.occurrences).toBe(CORPUS.length);
-    expect(new Set(aggregate.pages ?? [])).toEqual(new Set(CORPUS.map((c) => c.url)));
+    expect(new Set(aggregate.pages ?? [])).toEqual(
+      new Set(CORPUS.map((c) => c.url))
+    );
     // …and the report's own accessor agrees, so this is not a claim about fold's
     // internals (#1882: this surface has counted the wrong thing before).
     expect(checkAffectedPages(aggregate).size).toBe(CORPUS.length);
@@ -468,20 +531,24 @@ describe("a fanned finding names the page it is about", () => {
     for (const templateFanout of [true, false]) {
       arms.push(
         await run(
-          streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout }),
-        ),
+          streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
+            templateFanout,
+          })
+        )
       );
     }
 
     // The real writer: what the container streams into page_findings.
     const [withFanout, without] = arms.map((r) =>
-      buildStreamFindings(Object.fromEntries(r.ruleResultsMap), 1_000),
+      buildStreamFindings(Object.fromEntries(r.ruleResultsMap), 1_000)
     );
 
     // NOT sorted: each key is zipped back onto its own row below, so a sort
     // here would pair a key with someone else's finding.
     const keyed = (rows: ReturnType<typeof buildStreamFindings>) =>
-      rows.map((f) => [f.normalizedUrl, f.ruleId, f.checkName, f.locator].join(" "));
+      rows.map((f) =>
+        [f.normalizedUrl, f.ruleId, f.checkName, f.locator].join(" ")
+      );
     // Compared BY the finding key, never as two independently sorted lists: the
     // same values sitting on different rows compare equal when each list is sorted
     // on its own. Each finding is checked against the one carrying the SAME
@@ -498,7 +565,9 @@ describe("a fanned finding names the page it is about", () => {
     // since the fingerprint is computed from status/message/value/expected and the
     // classification's whole claim is that those do not vary across the cluster.
     // No corpus can change that, so do not read this line as stronger than it is.
-    const fannedRows = new Map(keyed(withFanout!).map((k, i) => [k, withFanout![i]!]));
+    const fannedRows = new Map(
+      keyed(withFanout!).map((k, i) => [k, withFanout![i]!])
+    );
     const plainRows = new Map(keyed(without!).map((k, i) => [k, without![i]!]));
     expect(fannedRows.size).toBe(withFanout!.length); // no key collisions
     expect([...fannedRows.keys()].sort()).toEqual([...plainRows.keys()].sort());
@@ -511,7 +580,9 @@ describe("a fanned finding names the page it is about", () => {
 
     // And the fanned rule is genuinely represented per member here, not once.
     const forRule = withFanout!.filter((f) => f.ruleId === FANNED_RULE);
-    expect(new Set(forRule.map((f) => f.normalizedUrl)).size).toBe(CORPUS.length);
+    expect(new Set(forRule.map((f) => f.normalizedUrl)).size).toBe(
+      CORPUS.length
+    );
 
     await run(storage.close());
   });
@@ -548,7 +619,9 @@ describe("a verdict is never copied across origins", () => {
     }
 
     const result = await run(
-      streamPageRules(store, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: true }),
+      streamPageRules(store, CRAWL, createRunner(CONFIG), SITE_DATA, {
+        templateFanout: true,
+      })
     );
 
     // Same template, two groups, and nothing inherited.
@@ -558,8 +631,11 @@ describe("a verdict is never copied across origins", () => {
 
     // …and the verdicts really do differ, so the separation is load-bearing rather
     // than a distinction the rules would not have noticed.
-    const sriOn = (url: string) => result.pageRuleResults.get(url)?.get(FANNED_RULE) ?? [];
-    expect(sriOn(secure).map((c) => c.status)).not.toEqual(sriOn(insecure).map((c) => c.status));
+    const sriOn = (url: string) =>
+      result.pageRuleResults.get(url)?.get(FANNED_RULE) ?? [];
+    expect(sriOn(secure).map((c) => c.status)).not.toEqual(
+      sriOn(insecure).map((c) => c.status)
+    );
 
     await run(store.close());
   });
@@ -574,7 +650,12 @@ describe("a verdict is never copied across origins", () => {
     `<nav><a href="/">Home</a></nav>${main}<footer>f</footer></body></html>`;
   const SIG = "0123456789abcdef";
   const VIEWPORT = `<meta name="viewport" content="width=device-width, initial-scale=1">`;
-  const counterexamples: Array<{ name: string; ruleId: string; a: string; b: string }> = [
+  const counterexamples: Array<{
+    name: string;
+    ruleId: string;
+    a: string;
+    b: string;
+  }> = [
     {
       name: "a missing viewport meta",
       ruleId: "mobile/viewport",
@@ -590,14 +671,22 @@ describe("a verdict is never copied across origins", () => {
     {
       name: "a script that gains an integrity attribute",
       ruleId: "security/sri",
-      a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js"></script>`),
-      b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/a.js" integrity="sha384-abc" crossorigin="anonymous"></script>`),
+      a: sameChrome(
+        `${VIEWPORT}<script src="https://cdn.other.test/a.js"></script>`
+      ),
+      b: sameChrome(
+        `${VIEWPORT}<script src="https://cdn.other.test/a.js" integrity="sha384-abc" crossorigin="anonymous"></script>`
+      ),
     },
     {
       name: "a cross-origin stylesheet that gains an integrity attribute",
       ruleId: "security/sri",
-      a: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css">`),
-      b: sameChrome(`${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css" integrity="sha384-abc">`),
+      a: sameChrome(
+        `${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css">`
+      ),
+      b: sameChrome(
+        `${VIEWPORT}<link rel="stylesheet" href="https://cdn.other.test/a.css" integrity="sha384-abc">`
+      ),
     },
     {
       name: "a second main landmark",
@@ -608,33 +697,52 @@ describe("a verdict is never copied across origins", () => {
     {
       name: "a script path that differs on the same host",
       ruleId: "security/sri",
-      a: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/a.js"></script>`),
-      b: sameChrome(`${VIEWPORT}<script src="https://cdn.other.test/assets/b.js"></script>`),
+      a: sameChrome(
+        `${VIEWPORT}<script src="https://cdn.other.test/assets/a.js"></script>`
+      ),
+      b: sameChrome(
+        `${VIEWPORT}<script src="https://cdn.other.test/assets/b.js"></script>`
+      ),
     },
     // #614: the root attributes and icon links three declared rules read.
     {
       name: "an xml:lang on <html> that contradicts its lang",
       ruleId: "a11y/html-xml-lang-mismatch",
       a: sameChrome(VIEWPORT),
-      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'),
+      b: sameChrome(VIEWPORT).replace(
+        '<html lang="en">',
+        '<html lang="en" xml:lang="fr">'
+      ),
     },
     {
       name: "a different <html lang> under the same xml:lang",
       ruleId: "a11y/html-xml-lang-mismatch",
-      a: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr" xml:lang="fr">'),
-      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'),
+      a: sameChrome(VIEWPORT).replace(
+        '<html lang="en">',
+        '<html lang="fr" xml:lang="fr">'
+      ),
+      b: sameChrome(VIEWPORT).replace(
+        '<html lang="en">',
+        '<html lang="en" xml:lang="fr">'
+      ),
     },
     {
       name: "aria-hidden on <html>",
       ruleId: "a11y/aria-hidden-body",
       a: sameChrome(VIEWPORT),
-      b: sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">'),
+      b: sameChrome(VIEWPORT).replace(
+        '<html lang="en">',
+        '<html lang="en" aria-hidden="true">'
+      ),
     },
     {
       name: "aria-hidden on <body>",
       ruleId: "a11y/aria-hidden-body",
       a: sameChrome(VIEWPORT),
-      b: sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'),
+      b: sameChrome(VIEWPORT).replace(
+        '<body class="tpl-x">',
+        '<body class="tpl-x" aria-hidden="true">'
+      ),
     },
     {
       name: "a missing favicon link",
@@ -651,8 +759,12 @@ describe("a verdict is never copied across origins", () => {
     {
       name: "the same favicon links in another order",
       ruleId: "core/favicon",
-      a: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.ico"><link rel="icon" href="/favicon.svg">`),
-      b: sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico">`),
+      a: sameChrome(
+        `${VIEWPORT}<link rel="icon" href="/favicon.ico"><link rel="icon" href="/favicon.svg">`
+      ),
+      b: sameChrome(
+        `${VIEWPORT}<link rel="icon" href="/favicon.svg"><link rel="icon" href="/favicon.ico">`
+      ),
     },
   ];
 
@@ -667,22 +779,29 @@ describe("a verdict is never copied across origins", () => {
 
       const reference = await residentPageRules(store, createRunner(CONFIG));
       const result = await run(
-        streamPageRules(store, CRAWL, createRunner(CONFIG), SITE_DATA, { templateFanout: true }),
+        streamPageRules(store, CRAWL, createRunner(CONFIG), SITE_DATA, {
+          templateFanout: true,
+        })
       );
 
       // The premise: the rule really does see these two pages differently, and the
       // old chrome-only key really would have grouped them.
-      const ref = (url: string) => reference.pageRuleResults.get(url)?.get(ruleId);
+      const ref = (url: string) =>
+        reference.pageRuleResults.get(url)?.get(ruleId);
       expect(ref(urlA)).not.toEqual(ref(urlB));
       const chromeKey = (url: string, html: string) =>
-        templateFingerprintKey(fingerprintPage(parseHtmlForRules(html, url), url));
+        templateFingerprintKey(
+          fingerprintPage(parseHtmlForRules(html, url), url)
+        );
       expect(chromeKey(urlA, a)).not.toBeNull();
       expect(chromeKey(urlA, a)).toBe(chromeKey(urlB, b));
 
       // Nothing was inherited, and each page carries the verdict of running on it.
       expect(result.templateFanout.fannedPages).toBe(0);
       for (const url of [urlA, urlB]) {
-        expect(result.pageRuleResults.get(url)?.get(ruleId)).toEqual(ref(url) as never);
+        expect(result.pageRuleResults.get(url)?.get(ruleId)).toEqual(
+          ref(url) as never
+        );
       }
 
       await run(store.close());
@@ -694,24 +813,34 @@ describe("a verdict is never copied across origins", () => {
     const base = sig(sameChrome(VIEWPORT));
     expect(sig(sameChrome(VIEWPORT))).toBe(base);
     expect(sig(sameChrome(""))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT, "<main>1</main><main>2</main>"))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT, '<main>1</main><div role="main">2</div>'))).not.toBe(base);
-    expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<script src="/b.js"></script>`)),
+    expect(sig(sameChrome(VIEWPORT, "<main>1</main><main>2</main>"))).not.toBe(
+      base
     );
+    expect(
+      sig(sameChrome(VIEWPORT, '<main>1</main><div role="main">2</div>'))
+    ).not.toBe(base);
+    expect(
+      sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`))
+    ).not.toBe(sig(sameChrome(`${VIEWPORT}<script src="/b.js"></script>`)));
     // Identical inputs on different pages must still group, or the key is
     // vacuously tight and fan-out never happens.
-    expect(sig(sameChrome(VIEWPORT))).toBe(sig(sameChrome(VIEWPORT, "<main><p>other</p></main>")));
+    expect(sig(sameChrome(VIEWPORT))).toBe(
+      sig(sameChrome(VIEWPORT, "<main><p>other</p></main>"))
+    );
     expect(fanoutClusterKey("abc123", "https://shop.test/a", base)).toBe(
-      fanoutClusterKey("abc123", "https://shop.test/b", base),
+      fanoutClusterKey("abc123", "https://shop.test/b", base)
     );
     // Duplicates count, and `name` is not `property`.
     expect(sig(sameChrome(`${VIEWPORT}${VIEWPORT}`))).not.toBe(base);
-    expect(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script><script src="/a.js"></script>`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`)),
-    );
+    expect(
+      sig(
+        sameChrome(
+          `${VIEWPORT}<script src="/a.js"></script><script src="/a.js"></script>`
+        )
+      )
+    ).not.toBe(sig(sameChrome(`${VIEWPORT}<script src="/a.js"></script>`)));
     expect(sig(sameChrome(`${VIEWPORT}<meta name="x" content="1">`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<meta property="x" content="1">`)),
+      sig(sameChrome(`${VIEWPORT}<meta property="x" content="1">`))
     );
     expect(fanoutInputSignature(null)).toBeNull();
     expect(fanoutClusterKey("abc123", "https://shop.test/a", null)).toBeNull();
@@ -723,23 +852,62 @@ describe("a verdict is never copied across origins", () => {
   test("fanoutInputSignature separates the <html> and <body> attributes and icon links (#614)", () => {
     const sig = (html: string) => fanoutInputSignature(parseDocument(html));
     const base = sig(sameChrome(VIEWPORT));
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" xml:lang="fr">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" aria-hidden="true">'))).not.toBe(base);
-    expect(sig(sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x" aria-hidden="true">'))).not.toBe(base);
+    expect(
+      sig(sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="fr">'))
+    ).not.toBe(base);
+    expect(
+      sig(
+        sameChrome(VIEWPORT).replace(
+          '<html lang="en">',
+          '<html lang="en" xml:lang="fr">'
+        )
+      )
+    ).not.toBe(base);
+    expect(
+      sig(
+        sameChrome(VIEWPORT).replace(
+          '<html lang="en">',
+          '<html lang="en" aria-hidden="true">'
+        )
+      )
+    ).not.toBe(base);
+    expect(
+      sig(
+        sameChrome(VIEWPORT).replace(
+          '<body class="tpl-x">',
+          '<body class="tpl-x" aria-hidden="true">'
+        )
+      )
+    ).not.toBe(base);
     const icon = `<link rel="icon" href="/favicon-a.ico">`;
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(base);
     expect(sig(sameChrome(`${VIEWPORT}${icon}`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon-b.ico">`)),
+      sig(sameChrome(`${VIEWPORT}<link rel="icon" href="/favicon-b.ico">`))
     );
     // A `|` in rel or href cannot forge another pair.
-    expect(sig(sameChrome(`${VIEWPORT}<link rel="icon|apple-touch-icon" href="/a.ico">`))).not.toBe(
-      sig(sameChrome(`${VIEWPORT}<link rel="icon" href="apple-touch-icon|/a.ico">`)),
+    expect(
+      sig(
+        sameChrome(
+          `${VIEWPORT}<link rel="icon|apple-touch-icon" href="/a.ico">`
+        )
+      )
+    ).not.toBe(
+      sig(
+        sameChrome(
+          `${VIEWPORT}<link rel="icon" href="apple-touch-icon|/a.ico">`
+        )
+      )
     );
     // Positive control: a <body> or <html> attribute no declared rule reads leaves
     // the signature alone, so the new inputs do not make the key over-sensitive.
-    const otherClass = sameChrome(VIEWPORT).replace('<body class="tpl-x">', '<body class="tpl-x home">');
-    const otherDir = sameChrome(VIEWPORT).replace('<html lang="en">', '<html lang="en" dir="ltr">');
+    const otherClass = sameChrome(VIEWPORT).replace(
+      '<body class="tpl-x">',
+      '<body class="tpl-x home">'
+    );
+    const otherDir = sameChrome(VIEWPORT).replace(
+      '<html lang="en">',
+      '<html lang="en" dir="ltr">'
+    );
     expect(otherClass).not.toBe(sameChrome(VIEWPORT));
     expect(otherDir).not.toBe(sameChrome(VIEWPORT));
     expect(sig(otherClass)).toBe(base);
@@ -748,19 +916,21 @@ describe("a verdict is never copied across origins", () => {
 
   test("fanoutClusterKey separates origins and survives an unparseable url", () => {
     expect(fanoutClusterKey("abc123", "https://shop.test/a", SIG)).not.toBe(
-      fanoutClusterKey("abc123", "http://shop.test/a", SIG),
+      fanoutClusterKey("abc123", "http://shop.test/a", SIG)
     );
     expect(fanoutClusterKey("abc123", "https://shop.test/a", SIG)).toBe(
-      fanoutClusterKey("abc123", "https://shop.test/b?q=1", SIG),
+      fanoutClusterKey("abc123", "https://shop.test/b?q=1", SIG)
     );
     // No template key means no group, whatever the url.
     expect(fanoutClusterKey(null, "https://shop.test/a", SIG)).toBeNull();
     // A url that will not parse falls back to itself, so it can only ever group
     // with a byte-identical url.
     expect(fanoutClusterKey("abc123", "not a url", SIG)).not.toBe(
-      fanoutClusterKey("abc123", "also not a url", SIG),
+      fanoutClusterKey("abc123", "also not a url", SIG)
     );
-    expect(fanoutClusterKey("abc123", "not a url", SIG)).toBe(fanoutClusterKey("abc123", "not a url", SIG));
+    expect(fanoutClusterKey("abc123", "not a url", SIG)).toBe(
+      fanoutClusterKey("abc123", "not a url", SIG)
+    );
   });
 });
 
@@ -779,7 +949,7 @@ describe("the cache is bounded", () => {
       streamPageRules(storage, CRAWL, createRunner(CONFIG), SITE_DATA, {
         templateFanout: true,
         templateFanoutMaxClusters: 1,
-      }),
+      })
     );
 
     expect(capped.templateFanout.clusters).toBe(1);
@@ -805,7 +975,9 @@ describe("SQUIRREL_TEMPLATE_FANOUT", () => {
     expect(templateFanoutEnabled({ SQUIRREL_TEMPLATE_FANOUT: "1" })).toBe(true);
     expect(templateFanoutEnabled({ SQUIRREL_TEMPLATE_FANOUT: "" })).toBe(true);
     for (const off of ["0", "false", "FALSE", "off", "no", " 0 "]) {
-      expect(templateFanoutEnabled({ SQUIRREL_TEMPLATE_FANOUT: off })).toBe(false);
+      expect(templateFanoutEnabled({ SQUIRREL_TEMPLATE_FANOUT: off })).toBe(
+        false
+      );
     }
   });
 });

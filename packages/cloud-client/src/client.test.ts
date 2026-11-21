@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 
 import { createCloudClient } from "./client";
 import { CloudClientError } from "./errors";
@@ -11,8 +18,16 @@ const realFetch = globalThis.fetch;
 // time bounds only, so retry behaviour and bounds are unchanged.
 const realSetTimeout = globalThis.setTimeout;
 beforeAll(() => {
-  globalThis.setTimeout = ((fn: (...a: unknown[]) => void, ms?: number, ...args: unknown[]) =>
-    realSetTimeout(fn, ms !== undefined && ms >= 1000 ? 1 : ms, ...args)) as typeof setTimeout;
+  globalThis.setTimeout = ((
+    fn: (...a: unknown[]) => void,
+    ms?: number,
+    ...args: unknown[]
+  ) =>
+    realSetTimeout(
+      fn,
+      ms !== undefined && ms >= 1000 ? 1 : ms,
+      ...args
+    )) as typeof setTimeout;
 });
 afterAll(() => {
   globalThis.setTimeout = realSetTimeout;
@@ -36,7 +51,9 @@ function countingTransportFailure(): { calls: () => number } {
  * repeats): a number replies that HTTP status; "throw" is a transport error;
  * "hang" waits for the per-attempt timeout to abort then rejects like real fetch.
  */
-function scriptedFetch(steps: Array<number | "throw" | "hang">): { calls: () => number } {
+function scriptedFetch(steps: Array<number | "throw" | "hang">): {
+  calls: () => number;
+} {
   let calls = 0;
   globalThis.fetch = (async (_url: string, init: RequestInit) => {
     const step = steps[Math.min(calls, steps.length - 1)];
@@ -44,7 +61,8 @@ function scriptedFetch(steps: Array<number | "throw" | "hang">): { calls: () => 
     if (step === "throw") throw new TypeError("network down");
     if (step === "hang") {
       await new Promise((_resolve, reject) => {
-        const abort = () => reject(new DOMException("The operation was aborted", "AbortError"));
+        const abort = () =>
+          reject(new DOMException("The operation was aborted", "AbortError"));
         // Guard the already-aborted race so the listener can't be registered too late.
         if (init.signal?.aborted) abort();
         else init.signal?.addEventListener("abort", abort);
@@ -70,9 +88,9 @@ describe("cloud-client transport retry", () => {
       timeoutMs: 10_000,
     });
 
-    await expect(client.render({ urls: ["https://example.com/"] })).rejects.toBeInstanceOf(
-      CloudClientError,
-    );
+    await expect(
+      client.render({ urls: ["https://example.com/"] })
+    ).rejects.toBeInstanceOf(CloudClientError);
     expect(probe.calls()).toBe(1);
   });
 
@@ -85,9 +103,9 @@ describe("cloud-client transport retry", () => {
       timeoutMs: 10_000,
     });
 
-    await expect(client.deadLinks({ urls: ["https://example.com/"] })).rejects.toBeInstanceOf(
-      CloudClientError,
-    );
+    await expect(
+      client.deadLinks({ urls: ["https://example.com/"] })
+    ).rejects.toBeInstanceOf(CloudClientError);
     // Proves the render pin doesn't leak into other methods.
     expect(probe.calls()).toBe(3);
   });
@@ -102,7 +120,9 @@ describe("cloud-client resilient reads (preflight bulletproofing)", () => {
       maxAttempts: 2,
       timeoutMs: 10_000,
     });
-    await expect(client.getBalance()).resolves.toMatchObject({ balance: { total: 1 } });
+    await expect(client.getBalance()).resolves.toMatchObject({
+      balance: { total: 1 },
+    });
     expect(probe.calls()).toBe(2);
   });
 
@@ -186,7 +206,7 @@ describe("cloud-client resilient reads (preflight bulletproofing)", () => {
       timeoutMs: 20,
     });
     await expect(
-      client.siteMetadata({ url: "https://example.com", pages: [] }),
+      client.siteMetadata({ url: "https://example.com", pages: [] })
     ).rejects.toBeInstanceOf(CloudClientError);
     expect(probe.calls()).toBe(1);
   });
@@ -207,11 +227,14 @@ describe("cloud-client siteMetadata", () => {
           hasOwnershipVerified: false,
           confidence: "high",
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }) as typeof fetch;
 
-    const client = createCloudClient({ apiUrl: "https://api.test", token: "sqcli_x" });
+    const client = createCloudClient({
+      apiUrl: "https://api.test",
+      token: "sqcli_x",
+    });
     const res = await client.siteMetadata({
       auditId: "audit-1",
       url: "https://example.com",
@@ -234,7 +257,7 @@ describe("cloud-client siteMetadata", () => {
     });
 
     await expect(
-      client.siteMetadata({ url: "https://example.com", pages: [] }),
+      client.siteMetadata({ url: "https://example.com", pages: [] })
     ).rejects.toBeInstanceOf(CloudClientError);
     expect(probe.calls()).toBe(3);
   });
@@ -252,9 +275,16 @@ describe("cloud-client 402 error parsing (#214 envelope)", () => {
 
   test("reads `required` from the typed envelope `{ error: { required } }`", async () => {
     reply402({
-      error: { code: "INSUFFICIENT_CREDITS", message: "Insufficient credits", required: 7 },
+      error: {
+        code: "INSUFFICIENT_CREDITS",
+        message: "Insufficient credits",
+        required: 7,
+      },
     });
-    const client = createCloudClient({ apiUrl: "https://api.test", token: "sqcli_x" });
+    const client = createCloudClient({
+      apiUrl: "https://api.test",
+      token: "sqcli_x",
+    });
     const err = await client
       .siteMetadata({ url: "https://example.com", pages: [] })
       .catch((e) => e);
@@ -266,7 +296,10 @@ describe("cloud-client 402 error parsing (#214 envelope)", () => {
 
   test("ignores a legacy top-level `required` — envelope-only after #214 rollout (#377)", async () => {
     reply402({ error: "insufficient_credits", required: 5 });
-    const client = createCloudClient({ apiUrl: "https://api.test", token: "sqcli_x" });
+    const client = createCloudClient({
+      apiUrl: "https://api.test",
+      token: "sqcli_x",
+    });
     const err = await client
       .siteMetadata({ url: "https://example.com", pages: [] })
       .catch((e) => e);
@@ -287,7 +320,10 @@ describe("cloud-client 409 code split — RUN_NOT_ACTIVE vs DUPLICATE_REQUEST (#
 
   test("RUN_NOT_ACTIVE → run_inactive (reaped run, NOT a replay)", async () => {
     reply409("RUN_NOT_ACTIVE");
-    const client = createCloudClient({ apiUrl: "https://api.test", token: "sqcli_x" });
+    const client = createCloudClient({
+      apiUrl: "https://api.test",
+      token: "sqcli_x",
+    });
     const err = await client
       .siteMetadata({ url: "https://example.com", pages: [] })
       .catch((e) => e);
@@ -298,7 +334,10 @@ describe("cloud-client 409 code split — RUN_NOT_ACTIVE vs DUPLICATE_REQUEST (#
 
   test("DUPLICATE_REQUEST → duplicate_request (unchanged status-derived mapping)", async () => {
     reply409("DUPLICATE_REQUEST");
-    const client = createCloudClient({ apiUrl: "https://api.test", token: "sqcli_x" });
+    const client = createCloudClient({
+      apiUrl: "https://api.test",
+      token: "sqcli_x",
+    });
     const err = await client
       .siteMetadata({ url: "https://example.com", pages: [] })
       .catch((e) => e);
@@ -329,7 +368,10 @@ describe("cloud-client stalled response body (#1214)", () => {
         });
       },
     });
-    return { url: `http://localhost:${server.port}`, stop: () => server.stop(true) };
+    return {
+      url: `http://localhost:${server.port}`,
+      stop: () => server.stop(true),
+    };
   }
 
   test("a 200 whose body never completes rejects within timeoutMs, not hangs", async () => {
@@ -364,7 +406,12 @@ describe("cloud-client stalled response body (#1214)", () => {
       });
       const started = Date.now();
       const err = await client
-        .editorSummary({ auditId: "a1", url: "https://example.com", categories: [], issues: [] })
+        .editorSummary({
+          auditId: "a1",
+          url: "https://example.com",
+          categories: [],
+          issues: [],
+        })
         .catch((e) => e);
       expect(err).toBeInstanceOf(CloudClientError);
       // The stalled error body degrades to undefined; the status-derived code survives.
@@ -391,7 +438,10 @@ describe("cloud-client stalled response body (#1214)", () => {
             controller.enqueue(new TextEncoder().encode('{"partial":'));
           },
         });
-        return new Response(stream, { status: 500, headers: { "Content-Type": "application/json" } });
+        return new Response(stream, {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
       },
     });
     try {

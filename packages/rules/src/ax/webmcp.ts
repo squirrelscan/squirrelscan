@@ -3,7 +3,14 @@
 // here is informational: a site without it loses nothing, and a bad declaration is a score-neutral warn.
 // Imperative registration (navigator.modelContext in script) is detected in inline scripts but never validated.
 
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
+
 import { elementSelector } from "../element-path";
 
 /**
@@ -60,7 +67,13 @@ export interface WebMcpScan {
   problems: WebMcpProblem[];
 }
 
-const NON_PARAM_INPUT_TYPES = new Set(["submit", "button", "reset", "image", "hidden"]);
+const NON_PARAM_INPUT_TYPES = new Set([
+  "submit",
+  "button",
+  "reset",
+  "image",
+  "hidden",
+]);
 
 function controlType(el: Element): string {
   const tag = el.tagName.toLowerCase();
@@ -71,7 +84,9 @@ function controlType(el: Element): string {
 /** Controls that can be a tool parameter: input/select/textarea, minus buttons, images and hidden inputs. */
 function paramControls(form: Element): Element[] {
   return [...form.querySelectorAll("input, select, textarea")].filter(
-    (el) => el.tagName.toLowerCase() !== "input" || !NON_PARAM_INPUT_TYPES.has(controlType(el)),
+    (el) =>
+      el.tagName.toLowerCase() !== "input" ||
+      !NON_PARAM_INPUT_TYPES.has(controlType(el))
   );
 }
 
@@ -97,7 +112,8 @@ export function redactFormAction(raw: string): string {
   const rest = m[2] ?? "";
   const sep = rest.search(/[\\/]/);
   const authority = sep === -1 ? rest : rest.slice(0, sep);
-  if (authority.includes("@")) return prefix + rest.slice(authority.lastIndexOf("@") + 1);
+  if (authority.includes("@"))
+    return prefix + rest.slice(authority.lastIndexOf("@") + 1);
   // An unencoded "/" or "\\" in a password ends the authority early ("user:pa/ss@host"). Treat a later "@"
   // as the end of userinfo when the text before the first separator is user:password, not host:port.
   const at = rest.lastIndexOf("@");
@@ -214,10 +230,16 @@ function hasVisibleControls(form: Element): boolean {
 function isImperativeScript(doc: Document): boolean {
   for (const script of doc.querySelectorAll("script:not([src])")) {
     const type = (script.getAttribute("type") ?? "").trim().toLowerCase();
-    if (type.includes("json") || type === "importmap" || type === "speculationrules") continue;
+    if (
+      type.includes("json") ||
+      type === "importmap" ||
+      type === "speculationrules"
+    )
+      continue;
     const text = (script.textContent ?? "").slice(0, MAX_SCRIPT_SCAN);
     if (!text.includes("navigator.modelContext")) continue;
-    if (text.includes("registerTool") || text.includes("provideContext")) return true;
+    if (text.includes("registerTool") || text.includes("provideContext"))
+      return true;
   }
   return false;
 }
@@ -227,7 +249,8 @@ function dataAttr(el: Element, key: string): string | null {
   return el.getAttribute(`data-${key}`);
 }
 
-const CHALLENGE_SELECTOR = ".g-recaptcha, .h-captcha, .frc-captcha, .cf-turnstile";
+const CHALLENGE_SELECTOR =
+  ".g-recaptcha, .h-captcha, .frc-captcha, .cf-turnstile";
 
 /**
  * A visible challenge: a reCAPTCHA, hCaptcha, Friendly Captcha or Turnstile widget element. Not visible when
@@ -238,12 +261,14 @@ function visibleChallengeProvider(el: Element): string | null {
   const cls = ` ${(el.getAttribute("class") ?? "").toLowerCase()} `;
   const tag = el.tagName.toLowerCase();
   if (tag === "button" || tag === "input") return null;
-  if ((dataAttr(el, "size") ?? "").trim().toLowerCase() === "invisible") return null;
+  if ((dataAttr(el, "size") ?? "").trim().toLowerCase() === "invisible")
+    return null;
   if (cls.includes(" frc-captcha ")) return "Friendly Captcha";
   if (cls.includes(" g-recaptcha ")) return "reCAPTCHA";
   if (cls.includes(" h-captcha ")) return "hCaptcha";
   if (cls.includes(" cf-turnstile ")) {
-    return (dataAttr(el, "appearance") ?? "").trim().toLowerCase() === "interaction-only"
+    return (dataAttr(el, "appearance") ?? "").trim().toLowerCase() ===
+      "interaction-only"
       ? null
       : "Turnstile";
   }
@@ -253,7 +278,7 @@ function visibleChallengeProvider(el: Element): string | null {
 function schemaWarn(
   problems: WebMcpProblem[],
   selectorOf: (el: Element) => Pick<CheckItem, "selector">,
-  hasTools: boolean,
+  hasTools: boolean
 ): CheckResult {
   const n = problems.length;
   const consequence = hasTools
@@ -297,11 +322,19 @@ export const webmcpRule: Rule = {
       {
         name: "webmcp-declarative-tools",
         outcome: "clean",
-        clears: ["webmcp-forms-without-tools", "webmcp-imperative", "webmcp-tool-form-challenge"],
+        clears: [
+          "webmcp-forms-without-tools",
+          "webmcp-imperative",
+          "webmcp-tool-form-challenge",
+        ],
       },
       { name: "webmcp-declarative-tools", outcome: "skipped" },
       { name: "webmcp-tool-schema", outcome: "problem" },
-      { name: "webmcp-tool-schema", outcome: "clean", clears: ["webmcp-tool-schema"] },
+      {
+        name: "webmcp-tool-schema",
+        outcome: "clean",
+        clears: ["webmcp-tool-schema"],
+      },
       { name: "webmcp-forms-without-tools", outcome: "problem" },
       { name: "webmcp-imperative", outcome: "problem" },
       { name: "webmcp-tool-form-challenge", outcome: "problem" },
@@ -316,7 +349,8 @@ export const webmcpRule: Rule = {
           {
             name: "webmcp-declarative-tools",
             status: "skipped",
-            message: "No parsed document, so WebMCP declarations were not checked",
+            message:
+              "No parsed document, so WebMCP declarations were not checked",
           },
         ],
       };
@@ -368,10 +402,13 @@ export const webmcpRule: Rule = {
         details: { tools: [], relatedRules: RELATED_RULES },
       });
       // A toolname on a non-form element is a mistake even when no form declares a tool.
-      if (problems.length > 0) checks.push(schemaWarn(problems, selectorOf, false));
+      if (problems.length > 0)
+        checks.push(schemaWarn(problems, selectorOf, false));
     }
 
-    const plainForms = [...doc.querySelectorAll("form:not([toolname])")].filter(hasVisibleControls);
+    const plainForms = [...doc.querySelectorAll("form:not([toolname])")].filter(
+      hasVisibleControls
+    );
     if (plainForms.length > 0) {
       checks.push({
         name: "webmcp-forms-without-tools",
@@ -381,7 +418,8 @@ export const webmcpRule: Rule = {
         items: plainForms.slice(0, MAX_TOOL_ITEMS).map((f, i) => {
           const action = redactFormAction(f.getAttribute("action") ?? "");
           return {
-            id: f.getAttribute("id") || f.getAttribute("name") || `form-${i + 1}`,
+            id:
+              f.getAttribute("id") || f.getAttribute("name") || `form-${i + 1}`,
             label: action ? `form posting to ${clip(action, 80)}` : "form",
             ...selectorOf(f),
           };
@@ -405,7 +443,8 @@ export const webmcpRule: Rule = {
         const provider = visibleChallengeProvider(el);
         if (provider) providers.add(provider);
       }
-      if (providers.size > 0) challenged.push({ tool, providers: [...providers].sort() });
+      if (providers.size > 0)
+        challenged.push({ tool, providers: [...providers].sort() });
     }
     if (challenged.length > 0) {
       checks.push({

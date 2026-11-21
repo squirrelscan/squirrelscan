@@ -15,7 +15,10 @@ describe("parseSrcset", () => {
       { url: "small.jpg", w: 400 },
       { url: "big.jpg", w: 960 },
     ]);
-    expect(parseSrcset("a.jpg, b.jpg 2x")).toEqual([{ url: "a.jpg" }, { url: "b.jpg", x: 2 }]);
+    expect(parseSrcset("a.jpg, b.jpg 2x")).toEqual([
+      { url: "a.jpg" },
+      { url: "b.jpg", x: 2 },
+    ]);
     expect(parseSrcset("/a,b.jpg 1.5x")).toEqual([{ url: "/a,b.jpg", x: 1.5 }]);
     expect(parseSrcset(null)).toEqual([]);
     expect(parseSrcset("   ,  ,")).toEqual([]);
@@ -68,25 +71,36 @@ describe("selectImageCandidate", () => {
         src: "big.jpg",
         srcset: "small.jpg 400w, big.jpg 960w",
         sizes: "180px",
-      }),
+      })
     ).toBe("small.jpg");
   });
 
   test("no candidate covers the width: the largest", () => {
     expect(
-      selectImageCandidate({ src: "a.jpg", srcset: "s.jpg 400w, m.jpg 800w", sizes: "100vw" }),
+      selectImageCandidate({
+        src: "a.jpg",
+        srcset: "s.jpg 400w, m.jpg 800w",
+        sizes: "100vw",
+      })
     ).toBe("m.jpg");
   });
 
   test("no sizes means 100vw: a 1280 viewport at 2x needs 2560w", () => {
-    expect(selectImageCandidate({ src: "a.jpg", srcset: "s.jpg 400w, l.jpg 3000w" })).toBe("l.jpg");
+    expect(
+      selectImageCandidate({ src: "a.jpg", srcset: "s.jpg 400w, l.jpg 3000w" })
+    ).toBe("l.jpg");
   });
 
   test("density descriptors pick the smallest at or above 2x, else the largest", () => {
-    expect(selectImageCandidate({ src: "a.jpg", srcset: "a.jpg 1x, b.jpg 2x, c.jpg 3x" })).toBe(
-      "b.jpg",
+    expect(
+      selectImageCandidate({
+        src: "a.jpg",
+        srcset: "a.jpg 1x, b.jpg 2x, c.jpg 3x",
+      })
+    ).toBe("b.jpg");
+    expect(selectImageCandidate({ src: "a.jpg", srcset: "a.jpg 1x" })).toBe(
+      "a.jpg"
     );
-    expect(selectImageCandidate({ src: "a.jpg", srcset: "a.jpg 1x" })).toBe("a.jpg");
   });
 
   test("Shopify Dawn's calc() sizes select the candidate that covers the computed width (#1251)", () => {
@@ -96,9 +110,10 @@ describe("selectImageCandidate", () => {
     expect(
       selectImageCandidate({
         src: "i-940.jpg",
-        srcset: "i-165.jpg 165w, i-360.jpg 360w, i-535.jpg 535w, i-720.jpg 720w, i-940.jpg 940w",
+        srcset:
+          "i-165.jpg 165w, i-360.jpg 360w, i-535.jpg 535w, i-720.jpg 720w, i-940.jpg 940w",
         sizes,
-      }),
+      })
     ).toBe("i-720.jpg");
   });
 
@@ -108,14 +123,14 @@ describe("selectImageCandidate", () => {
         src: "big.jpg",
         srcset: "small.jpg 400w, mid.jpg 800w, big.jpg 1600w",
         sizes: "(max-width: 600px) calc(100vw - 20px), 400px",
-      }),
+      })
     ).toBe("mid.jpg");
     expect(
       selectImageCandidate({
         src: "big.jpg",
         srcset: "small.jpg 400w, mid.jpg 800w, big.jpg 1600w",
         sizes: "(min-width: 40em) 300px, 100vw",
-      }),
+      })
     ).toBe("mid.jpg");
   });
 
@@ -125,7 +140,7 @@ describe("selectImageCandidate", () => {
         src: "a.jpg",
         srcset: "s.jpg 400w, l.jpg 900w",
         sizes: "min(100vw, 40em)",
-      }),
+      })
     ).toBe("l.jpg");
   });
 
@@ -159,17 +174,18 @@ describe("initial viewport", () => {
   test("content images fill the budget in order; later images, icons included, are below it", () => {
     const content = { width: "600", height: "400" };
     const icon = { width: "24", height: "24" };
-    expect(initialViewportFlags([content, content, content, content, icon])).toEqual([
-      true,
-      true,
-      true,
-      false,
-      false,
-    ]);
+    expect(
+      initialViewportFlags([content, content, content, content, icon])
+    ).toEqual([true, true, true, false, false]);
     expect(ABOVE_FOLD_IMAGE_BUDGET).toBe(3);
   });
 
   test("undeclared images count as content", () => {
-    expect(initialViewportFlags([{}, {}, {}, {}])).toEqual([true, true, true, false]);
+    expect(initialViewportFlags([{}, {}, {}, {}])).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
   });
 });

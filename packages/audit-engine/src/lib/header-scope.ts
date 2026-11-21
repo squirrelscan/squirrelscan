@@ -4,7 +4,10 @@
 // user content, a SaaS CNAME, a dangling CNAME someone else claimed. So only
 // the audited origin gets them, plus the hosts the user names.
 
-import { createHeaderScope, type HeaderScope } from "@squirrelscan/utils/headers";
+import {
+  createHeaderScope,
+  type HeaderScope,
+} from "@squirrelscan/utils/headers";
 
 export { createHeaderScope, type HeaderScope };
 
@@ -24,7 +27,7 @@ export type ScopedHeaderOptions =
 export function customHeadersFor(
   url: string,
   headers: Record<string, string> | undefined,
-  scope: HeaderScope | undefined,
+  scope: HeaderScope | undefined
 ): Record<string, string> | undefined {
   if (!headers) return undefined;
   return scope?.(url) ? headers : undefined;
@@ -34,7 +37,7 @@ export function customHeadersFor(
 export function headersWithheldFrom(
   url: string,
   headers: Record<string, string> | undefined,
-  scope: HeaderScope | undefined,
+  scope: HeaderScope | undefined
 ): boolean {
   return !!headers && Object.keys(headers).length > 0 && !scope?.(url);
 }

@@ -8,14 +8,14 @@
 // complete (matching the sibling areaServed `.some()` semantics), and plain
 // object handling is unchanged.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { localBusinessSchemaRule } from "../src/schema/local-business";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   return {
@@ -35,7 +35,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 
 function withSchema(schema: unknown): string {
   return `<html><head><script type="application/ld+json">${JSON.stringify(
-    schema,
+    schema
   )}</script></head><body><p>content</p></body></html>`;
 }
 
@@ -53,7 +53,7 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Wrapped Address Co",
       address: [COMPLETE],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     // Address IS present (wrapped), so the SAB location check must not fire.
@@ -65,9 +65,12 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
     const html = withSchema({
       "@type": "LocalBusiness",
       name: "Two Locations",
-      address: [{ "@type": "PostalAddress", streetAddress: "1 Small Ln" }, COMPLETE],
+      address: [
+        { "@type": "PostalAddress", streetAddress: "1 Small Ln" },
+        COMPLETE,
+      ],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
   });
@@ -81,11 +84,14 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
         { "@type": "PostalAddress", addressLocality: "Perth" },
       ],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
-    expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
+    expect(addressCheck?.items?.map((i) => i.id)).toEqual([
+      "addressLocality",
+      "postalCode",
+    ]);
   });
 
   test("single-element array with incomplete address → warns with that entry's missing fields", async () => {
@@ -94,11 +100,14 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Wrapped Half Store",
       address: [{ "@type": "PostalAddress", streetAddress: "123 Main St" }],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
-    expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
+    expect(addressCheck?.items?.map((i) => i.id)).toEqual([
+      "addressLocality",
+      "postalCode",
+    ]);
   });
 
   test("array with null entry plus complete address → passes without crashing", async () => {
@@ -107,7 +116,7 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Null Then Complete",
       address: [null, COMPLETE],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
   });
@@ -118,7 +127,7 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Null Address Co",
       address: [null],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
@@ -135,13 +144,15 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Empty Address Co",
       address: [],
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     // No "Address incomplete" warning — falls through to the location guidance.
     expect(check(checks, "local-business-address")).toBeUndefined();
     const locationCheck = check(checks, "local-business-location");
     expect(locationCheck?.status).toBe("warn");
-    expect(locationCheck?.message).toBe("LocalBusiness schema has no address or service area");
+    expect(locationCheck?.message).toBe(
+      "LocalBusiness schema has no address or service area"
+    );
   });
 
   test("empty address array with areaServed → SAB path passes (#724)", async () => {
@@ -151,7 +162,7 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       address: [],
       areaServed: "Sydney NSW",
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     expect(check(checks, "local-business-location")?.status).toBe("pass");
@@ -163,7 +174,7 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Corner Store",
       address: COMPLETE,
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
 
     expect(check(checks, "local-business-address")).toBeUndefined();
     expect(check(checks, "local-business-location")).toBeUndefined();
@@ -175,10 +186,13 @@ describe("schema/local-business — array-wrapped address (#711)", () => {
       name: "Half Store",
       address: { "@type": "PostalAddress", streetAddress: "123 Main St" },
     });
-    const checks = (await run(localBusinessSchemaRule, pageCtx(html)));
+    const checks = await run(localBusinessSchemaRule, pageCtx(html));
     const addressCheck = check(checks, "local-business-address");
 
     expect(addressCheck?.status).toBe("warn");
-    expect(addressCheck?.items?.map((i) => i.id)).toEqual(["addressLocality", "postalCode"]);
+    expect(addressCheck?.items?.map((i) => i.id)).toEqual([
+      "addressLocality",
+      "postalCode",
+    ]);
   });
 });

@@ -1,11 +1,21 @@
-import React from "react";
-import { isAuditFailed, validateBrandColor } from "@squirrelscan/core-contracts";
+import type {
+  CheckItem,
+  EditorSummaryPriority,
+  ReportBranding,
+  ReportStructure,
+} from "@squirrelscan/core-contracts";
+
+import {
+  isAuditFailed,
+  validateBrandColor,
+} from "@squirrelscan/core-contracts";
 import {
   countByWcagLevel,
   lowestWcagLevel,
   WCAG_LEVELS,
   wcagLabel,
 } from "@squirrelscan/core-contracts/wcag";
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   PiArrowSquareOut,
@@ -17,12 +27,7 @@ import {
   PiX,
 } from "react-icons/pi";
 
-import type {
-  CheckItem,
-  EditorSummaryPriority,
-  ReportBranding,
-  ReportStructure,
-} from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../types";
 
 import {
   affectedPages,
@@ -34,17 +39,8 @@ import {
   ruleAffectedRollup,
   ruleCarriedPageCount,
 } from "../affected-pages";
-import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
-import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
-import {
-  describeRoot,
-  fixRollupLine,
-  fixUnits,
-  isRenderableFixGroup,
-  ruleFixCoverage,
-  type FixCoverage,
-} from "../component-presentation";
 import { agentSignalLines } from "../agent-signals";
+import { cacheHitRatePercent, cacheReasonsLabel } from "../cache-stats";
 import {
   getBadgeName,
   getBadgeTitle,
@@ -53,6 +49,14 @@ import {
   getGroupTitle,
   severityLabel,
 } from "../categories";
+import {
+  describeRoot,
+  fixRollupLine,
+  fixUnits,
+  isRenderableFixGroup,
+  ruleFixCoverage,
+  type FixCoverage,
+} from "../component-presentation";
 import {
   REPORT_COLLAPSE_THRESHOLD,
   REPORT_ITEMS_COLLAPSE_THRESHOLD,
@@ -74,7 +78,6 @@ import {
   startRedirectLine,
   clampedPageLimit,
 } from "../coverage";
-import { ignoredLine, ignoredNoteLines } from "../ignored";
 import { getDocsUrl } from "../docs";
 import { allPositionBands, domainStatRows } from "../domain-stats";
 import { editorSummaryView, priorityEffortLabel } from "../editor-summary";
@@ -85,7 +88,10 @@ import {
   entityViewerMarkup,
   entityViewerScript,
 } from "../entities-viewer";
-import { getAuditFailureNotice, reportFailureReasonCode } from "../failure-notice";
+import {
+  getAuditFailureNotice,
+  reportFailureReasonCode,
+} from "../failure-notice";
 import {
   flattenIssuesBySeverity,
   groupIssuesByCategory,
@@ -95,6 +101,8 @@ import {
   type GroupedCheck,
   type PassedRule,
 } from "../grouping";
+import { hostRows } from "../host";
+import { ignoredLine, ignoredNoteLines } from "../ignored";
 import {
   affectedPagesSuffix,
   hasItemSources,
@@ -102,9 +110,17 @@ import {
   moreSourcePages,
   type ItemSourceRow,
 } from "../item-sources";
-import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
+import {
+  javascriptPageSize,
+  javascriptShipped,
+  javascriptShippedSummary,
+} from "../javascript-shipped";
+import {
+  LOCKED_REASON_LABELS,
+  lockedRuleView,
+  lockedRulesMessage,
+} from "../locked-rules";
 import { notCheckedLines } from "../not-checked";
-import { safeWafBlocked, wafBlockedPagesLines } from "../waf-blocked";
 import { privateTargetLine } from "../private-target";
 import {
   checkPagesScopedAway,
@@ -113,9 +129,8 @@ import {
   itemRegionScope,
   regionScopeLine,
 } from "../region-scope";
-import { GROUP_COLORS, getGroupColor, getScoreGrade } from "../scoring";
 import { scoreAdjustmentNoteFor } from "../score-adjustment";
-import { count, discoveredPages } from "../top-line";
+import { GROUP_COLORS, getGroupColor, getScoreGrade } from "../scoring";
 import { siteProfileFlags, siteProfileRows } from "../site-metadata";
 import {
   ruleSiteResourceCoverage,
@@ -131,7 +146,6 @@ import {
   structureRows,
   structureTotalsLine,
 } from "../structure";
-import { hostRows } from "../host";
 import {
   groupTechnologies,
   isLocalOnlyTech,
@@ -139,9 +153,10 @@ import {
   techChangeSummary,
   techIconUrl,
 } from "../technologies";
-import type { AuditReport } from "../types";
+import { count, discoveredPages } from "../top-line";
 import { getPathname } from "../url";
 import { formatBytes, sanitizeUrl } from "../utils";
+import { safeWafBlocked, wafBlockedPagesLines } from "../waf-blocked";
 import {
   coverageGap,
   fixPlanPrompt,
@@ -214,7 +229,8 @@ const EFFORTS = new Set(["quick-win", "moderate", "significant"]);
 
 /** Strategic issues off report JSON, keeping only well-formed rows (cloud-only, unchecked shape). */
 function strategicIssues(report: AuditReport): StrategicIssueView[] {
-  const raw = (report as AuditReport & { strategicIssues?: unknown }).strategicIssues;
+  const raw = (report as AuditReport & { strategicIssues?: unknown })
+    .strategicIssues;
   if (!Array.isArray(raw)) return [];
   return raw.filter((v: unknown): v is StrategicIssueView => {
     if (!v || typeof v !== "object") return false;
@@ -242,7 +258,10 @@ const CLOUD_FEATURES: Array<[string, string]> = [
     "Browser rendering",
     "Every page rendered in a real headless browser, so JavaScript-heavy sites are audited as visitors see them.",
   ],
-  ["AI analysis", "Page classification, site profile, parsability scoring and authority checks."],
+  [
+    "AI analysis",
+    "Page classification, site profile, parsability scoring and authority checks.",
+  ],
   [
     "Shared data",
     "Full adblock and privacy filter lists, a global dead-link cache and search demand data.",
@@ -259,10 +278,25 @@ const CLOUD_FEATURES: Array<[string, string]> = [
 
 type Severity = "error" | "warning" | "info";
 
-const SEVERITY: Record<Severity, { color: BadgeColor; title: string; blurb: string }> = {
-  error: { color: "red", title: "Errors", blurb: "Broken or harmful. Fix these first." },
-  info: { color: "blue", title: "Recommendations", blurb: "Worth doing, not hurting you today." },
-  warning: { color: "yellow", title: "Warnings", blurb: "Likely to cost you over time." },
+const SEVERITY: Record<
+  Severity,
+  { color: BadgeColor; title: string; blurb: string }
+> = {
+  error: {
+    color: "red",
+    title: "Errors",
+    blurb: "Broken or harmful. Fix these first.",
+  },
+  info: {
+    color: "blue",
+    title: "Recommendations",
+    blurb: "Worth doing, not hurting you today.",
+  },
+  warning: {
+    color: "yellow",
+    title: "Warnings",
+    blurb: "Likely to cost you over time.",
+  },
 };
 const BAND_ORDER: Severity[] = ["error", "info", "warning"];
 const GROUPS = ["seo", "performance", "security", "ai"] as const;
@@ -270,7 +304,20 @@ const GROUPS = ["seo", "performance", "security", "ai"] as const;
 const plural = (n: number, one: string, many = `${one}s`) =>
   `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
 /** The timestamp as ISO 8601, or undefined when it does not parse (toISOString would throw). */
@@ -342,7 +389,13 @@ const actionSteps = (md: string): string[] =>
  * Copy-to-agent button. With script it copies the prompt and says so; without
  * (or if the clipboard is refused) it opens to show the prompt for selection.
  */
-function CopyPrompt({ text, label = "Copy fix prompt" }: { text: string; label?: string }) {
+function CopyPrompt({
+  text,
+  label = "Copy fix prompt",
+}: {
+  text: string;
+  label?: string;
+}) {
   return (
     <details className="copy-prompt">
       <summary
@@ -381,7 +434,8 @@ const COPY_SCRIPT = `document.addEventListener("click",function(e){var s=e.targe
 const LOCAL_TIME_SCRIPT = `document.querySelectorAll("time[data-local-time]").forEach(function(t){var d=new Date(t.getAttribute("datetime"));if(isNaN(d))return;t.textContent=new Intl.DateTimeFormat(undefined,{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short"}).format(d);t.title=d.toISOString()});document.querySelectorAll("img[data-favicon],img[data-hide-broken]").forEach(function(i){function h(){(i.closest("[data-hide-scope]")||i).style.display="none"}if(i.complete&&!i.naturalWidth)h();else i.addEventListener("error",h)});`;
 
 /** The audit levels guide: what each level reads and how to raise the depth. */
-export const AUDIT_LEVELS_DOCS_URL = "https://docs.squirrelscan.com/guides/audit-levels";
+export const AUDIT_LEVELS_DOCS_URL =
+  "https://docs.squirrelscan.com/guides/audit-levels";
 
 /** localStorage key prefix for a dismissed notice; the notice's key follows it. */
 export const NOTICE_STORAGE_PREFIX = "squirrelscan:notice-dismissed:";
@@ -415,7 +469,7 @@ function fnv1a(text: string): string {
  */
 export function coverageNoticeKey(
   report: Pick<AuditReport, "baseUrl" | "timestamp">,
-  reportId?: string,
+  reportId?: string
 ): string {
   const id = (reportId ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
   if (id) return `r-${id}`;
@@ -485,11 +539,18 @@ function CoverageNotice({
             `This run was limited to ${clamped.effective.toLocaleString("en-US")} of the ${clamped.requested.toLocaleString("en-US")} pages requested, so raising the limit alone will not extend it. `
           ) : (
             <>
-              Raise the audit depth in the CLI (<code className={code}>--level full</code>,{" "}
-              <code className={code}>--max-pages N</code>) or in the cloud website settings.{" "}
+              Raise the audit depth in the CLI (
+              <code className={code}>--level full</code>,{" "}
+              <code className={code}>--max-pages N</code>) or in the cloud
+              website settings.{" "}
             </>
           )}
-          <a href={AUDIT_LEVELS_DOCS_URL} target="_blank" rel="noreferrer" className="lnk">
+          <a
+            href={AUDIT_LEVELS_DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="lnk"
+          >
             Audit levels
           </a>
         </p>
@@ -518,7 +579,9 @@ const groupsOf = (ids: string[], known: Known): string[] => {
     const g = ruleGroup(id, known);
     count.set(g, (count.get(g) ?? 0) + 1);
   }
-  return GROUPS.filter((g) => count.has(g)).sort((a, b) => count.get(b)! - count.get(a)!);
+  return GROUPS.filter((g) => count.has(g)).sort(
+    (a, b) => count.get(b)! - count.get(a)!
+  );
 };
 
 /** Rule ids as chips in their group's colour; the ones with a row on this page link to it. */
@@ -528,10 +591,19 @@ function RuleChips({ ids, known }: { ids: string[]; known: Known }) {
     <div className="mt-2 flex flex-wrap gap-1.5">
       {ids.map((id) => {
         const c = getGroupColor(ruleGroup(id, known));
-        const style = { color: c.text, background: c.bg, borderColor: c.border };
+        const style = {
+          color: c.text,
+          background: c.bg,
+          borderColor: c.border,
+        };
         const cls = "border px-1.5 py-0.5 font-mono text-[11px]";
         return known.has(id) ? (
-          <a key={id} href={`#rule-${id}`} className={`${cls} hover:underline`} style={style}>
+          <a
+            key={id}
+            href={`#rule-${id}`}
+            className={`${cls} hover:underline`}
+            style={style}
+          >
             {id}
           </a>
         ) : (
@@ -571,7 +643,9 @@ const SEVERITY_RANK: Record<StrategicIssueView["severity"], number> = {
 const overlap = (a: string[], b: string[]): number => {
   if (a.length === 0 || b.length === 0) return 0;
   const sb = new Set(b);
-  return a.filter((id) => sb.has(id)).length / Math.min(a.length, new Set(b).size);
+  return (
+    a.filter((id) => sb.has(id)).length / Math.min(a.length, new Set(b).size)
+  );
 };
 
 /**
@@ -581,7 +655,7 @@ const overlap = (a: string[], b: string[]): number => {
  */
 function mergeIssues(
   priorities: EditorSummaryPriority[],
-  strategic: StrategicIssueView[],
+  strategic: StrategicIssueView[]
 ): TopIssue[] {
   const out: TopIssue[] = priorities.map((p, i) => ({
     key: `p${i}`,
@@ -622,7 +696,10 @@ function mergeIssues(
       });
     }
   }
-  rest.sort((a, b) => SEVERITY_RANK[a.severity ?? "low"] - SEVERITY_RANK[b.severity ?? "low"]);
+  rest.sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity ?? "low"] - SEVERITY_RANK[b.severity ?? "low"]
+  );
   return [...out, ...rest];
 }
 
@@ -665,13 +742,21 @@ function TopIssues({
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold tracking-tight">{t.title}</h3>
+                    <h3 className="text-base font-semibold tracking-tight">
+                      {t.title}
+                    </h3>
                     {t.severity && (
-                      <Badge color={STRATEGIC_SEVERITY[t.severity] ?? "neutral"} appearance="tag">
+                      <Badge
+                        color={STRATEGIC_SEVERITY[t.severity] ?? "neutral"}
+                        appearance="tag"
+                      >
                         {t.severity}
                       </Badge>
                     )}
-                    <Badge color={EFFORT_COLOR[t.effort] ?? "blue"} appearance="tag">
+                    <Badge
+                      color={EFFORT_COLOR[t.effort] ?? "blue"}
+                      appearance="tag"
+                    >
                       {priorityEffortLabel(t.effort)}
                     </Badge>
                     {gs.map((g) => (
@@ -685,9 +770,13 @@ function TopIssues({
                     ))}
                   </div>
                   {t.why && (
-                    <p className="mt-1.5 max-w-prose text-sm text-muted-foreground">{t.why}</p>
+                    <p className="mt-1.5 max-w-prose text-sm text-muted-foreground">
+                      {t.why}
+                    </p>
                   )}
-                  {t.action && <p className="mt-1.5 max-w-prose text-sm">{t.action}</p>}
+                  {t.action && (
+                    <p className="mt-1.5 max-w-prose text-sm">{t.action}</p>
+                  )}
                   {t.steps.length > 0 && (
                     <ol className="mt-2 max-w-prose list-decimal space-y-1 pl-5 text-sm">
                       {t.steps.map((step, j) => (
@@ -721,8 +810,9 @@ function CloudUpsell({ report }: { report: AuditReport }) {
               Get the full audit with squirrelscan cloud
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              This audit ran on your machine, without the cloud checks. A free account adds these to
-              the same report, with 500 free credits every month and no card needed.
+              This audit ran on your machine, without the cloud checks. A free
+              account adds these to the same report, with 500 free credits every
+              month and no card needed.
             </p>
           </div>
           <div className="flex flex-col items-start gap-2">
@@ -750,8 +840,9 @@ function CloudUpsell({ report }: { report: AuditReport }) {
         {locked.length > 0 && (
           <div className="mt-5 border-t border-border pt-4">
             <p className="mb-2 text-sm text-muted-foreground">
-              {plural(locked.length, "check")} on this site {locked.length === 1 ? "needs" : "need"}{" "}
-              the cloud and did not run:
+              {plural(locked.length, "check")} on this site{" "}
+              {locked.length === 1 ? "needs" : "need"} the cloud and did not
+              run:
             </p>
             <div className="flex flex-wrap gap-1.5">
               {locked.map((r) => (
@@ -794,12 +885,19 @@ function PageLinks({
 }) {
   if (pages.length === 0) return null;
   const total = Math.max(count, pages.length);
-  const carriedSet = carried && carried.length > 0 ? new Set(carried) : undefined;
+  const carriedSet =
+    carried && carried.length > 0 ? new Set(carried) : undefined;
   const shown = pages.slice(0, REPORT_PAGES_HARD_CAP);
   const inline = shown.slice(0, REPORT_PAGES_INLINE_CAP);
   const overflow = shown.slice(REPORT_PAGES_INLINE_CAP);
   const link = (p: string, i: number) => (
-    <a key={i} href={sanitizeUrl(p)} target="_blank" rel="noreferrer" className="lnk-b pg">
+    <a
+      key={i}
+      href={sanitizeUrl(p)}
+      target="_blank"
+      rel="noreferrer"
+      className="lnk-b pg"
+    >
       {getPathname(p) || "/"}
       {carriedSet?.has(p) && (
         <span className="sub-tag" title="Not re-checked this run">
@@ -809,14 +907,18 @@ function PageLinks({
     </a>
   );
   return (
-    <details className="mt-1" open={!collapsed && total <= REPORT_COLLAPSE_THRESHOLD}>
+    <details
+      className="mt-1"
+      open={!collapsed && total <= REPORT_COLLAPSE_THRESHOLD}
+    >
       <summary className="more">
         {summary ? summary(total) : `${plural(total, "page")} affected`}
       </summary>
       <div className="plist">
         {total > shown.length && (
           <p className="text-muted-foreground">
-            Showing {shown.length.toLocaleString()} of {total.toLocaleString()} affected pages.
+            Showing {shown.length.toLocaleString()} of {total.toLocaleString()}{" "}
+            affected pages.
           </p>
         )}
         {inline.map(link)}
@@ -832,7 +934,9 @@ function PageLinks({
         )}
         {shown.length > REPORT_COLLAPSE_THRESHOLD && (
           <details>
-            <summary className="cursor-pointer text-muted-foreground">Copy as text</summary>
+            <summary className="cursor-pointer text-muted-foreground">
+              Copy as text
+            </summary>
             <textarea
               readOnly
               rows={Math.min(shown.length, 10)}
@@ -863,7 +967,7 @@ function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
   const sentence = fixRollupLine(
     unit,
     REPORT_SOURCE_PAGES_PREVIEW,
-    (page) => getPathname(page) || "/",
+    (page) => getPathname(page) || "/"
   );
   const label = describeRoot(unit);
   const at = label ? sentence.indexOf(label) : -1;
@@ -909,7 +1013,10 @@ export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
         const group = unit.representative;
         const repeated = group.attribution === "repeated-subtree";
         return (
-          <li className={`fix-group${repeated ? " fix-group-weak" : ""}`} key={group.id}>
+          <li
+            className={`fix-group${repeated ? " fix-group-weak" : ""}`}
+            key={group.id}
+          >
             <div className="fix-group-head">
               <span className={`fix-badge${repeated ? " fix-badge-weak" : ""}`}>
                 {repeated ? "Likely shared block" : "Fix once"}
@@ -943,7 +1050,11 @@ export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
  * limit and the same path formatter markdown uses, so this file decides no
  * wording of its own and the five surfaces cannot drift.
  */
-export function SiteResourceFixCards({ coverage }: { coverage: SiteResourceCoverage }) {
+export function SiteResourceFixCards({
+  coverage,
+}: {
+  coverage: SiteResourceCoverage;
+}) {
   if (coverage.groups.length === 0) return null;
   return (
     <ul className="fix-groups">
@@ -957,7 +1068,7 @@ export function SiteResourceFixCards({ coverage }: { coverage: SiteResourceCover
               {siteResourceFixLine(
                 group,
                 REPORT_SOURCE_PAGES_PREVIEW,
-                (page) => getPathname(page) || "/",
+                (page) => getPathname(page) || "/"
               )}
             </p>
           </div>
@@ -992,7 +1103,12 @@ function ItemSources({
   const renderRow = (row: ItemSourceRow, j: number) => (
     <p key={j} className="ind">
       from{" "}
-      <a href={sanitizeUrl(row.page)} target="_blank" rel="noreferrer" className="lnk">
+      <a
+        href={sanitizeUrl(row.page)}
+        target="_blank"
+        rel="noreferrer"
+        className="lnk"
+      >
         {getPathname(row.page) || "/"}
       </a>
       {row.detail ? ` (${row.detail})` : ""}
@@ -1001,14 +1117,19 @@ function ItemSources({
   if (view.scope) {
     // pub#846: one line for the region; every listed page stays in the item, collapsed.
     const all = view.all.slice(0, REPORT_PAGES_HARD_CAP);
-    const total = Math.max(view.scope.pages + view.scope.otherPages, view.all.length);
+    const total = Math.max(
+      view.scope.pages + view.scope.otherPages,
+      view.all.length
+    );
     return (
       <div>
         <p className="ind region-scope">{regionScopeLine(view.scope)}</p>
         {all.length > 0 && (
           <details className="ind">
             <summary className="more">
-              {all.length < total ? `${all.length} of ${total} pages` : `All ${all.length} pages`}
+              {all.length < total
+                ? `${all.length} of ${total} pages`
+                : `All ${all.length} pages`}
             </summary>
             {all.map(renderRow)}
           </details>
@@ -1028,10 +1149,14 @@ function ItemSources({
       {rest.length > 0 && (
         <details className="ind">
           <summary className="more">{moreSourcePages(rest.length)}</summary>
-          {rest.map((row, j) => renderRow(row, REPORT_SOURCE_PAGES_PREVIEW + j))}
+          {rest.map((row, j) =>
+            renderRow(row, REPORT_SOURCE_PAGES_PREVIEW + j)
+          )}
         </details>
       )}
-      {notShown > 0 && <p className="ind">{moreSourcePages(notShown)} not listed here</p>}
+      {notShown > 0 && (
+        <p className="ind">{moreSourcePages(notShown)} not listed here</p>
+      )}
     </div>
   );
 }
@@ -1068,7 +1193,12 @@ function CheckBlock({
         : ap.sample;
   return (
     <div className="flex gap-2 text-sm">
-      <span className={check.status === "fail" ? "cb-mark cb-fail" : "cb-mark cb-warn"} aria-hidden>
+      <span
+        className={
+          check.status === "fail" ? "cb-mark cb-fail" : "cb-mark cb-warn"
+        }
+        aria-hidden
+      >
         {check.status === "fail" ? "✗" : "!"}
       </span>
       <div className="min-w-0">
@@ -1078,11 +1208,16 @@ function CheckBlock({
           {hasItemSources(check)
             ? affectedPagesSuffix(check, ap.count)
             : ap.count > 1 && (
-                <span className="text-muted-foreground"> · {plural(ap.count, "page")}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {plural(ap.count, "page")}
+                </span>
               )}
         </p>
         {(carriedLabel || partial) && (
-          <p className="text-xs text-muted-foreground">{carriedLabel ?? partial}</p>
+          <p className="text-xs text-muted-foreground">
+            {carriedLabel ?? partial}
+          </p>
         )}
         {checkScope && <p className="region-scope">{checkScope}</p>}
         <PageLinks
@@ -1094,20 +1229,29 @@ function CheckBlock({
           collapsed={checkPagesScopedAway(check, ap.count, structure)}
           {...(coverage.mode === "partial"
             ? {
-                summary: (total: number) => `Pages not attributed to a shared component (${total})`,
+                summary: (total: number) =>
+                  `Pages not attributed to a shared component (${total})`,
               }
             : {})}
         />
         {items && items.length > 0 && (
-          <details className="mt-1" open={items.length <= REPORT_ITEMS_COLLAPSE_THRESHOLD}>
+          <details
+            className="mt-1"
+            open={items.length <= REPORT_ITEMS_COLLAPSE_THRESHOLD}
+          >
             <summary className="more">
               {plural(items.length, "item")}
-              {notListed > 0 ? `, ${notListed.toLocaleString("en-US")} more not listed` : ""}
+              {notListed > 0
+                ? `, ${notListed.toLocaleString("en-US")} more not listed`
+                : ""}
             </summary>
             <div className="mt-2 grid gap-2 font-mono text-xs">
               {items.map((item, i) => {
                 // pub#846: a scoped item's label drops the section phrase its region line says.
-                const ownLabel = itemLabel(item, itemRegionScope(item, structure, check));
+                const ownLabel = itemLabel(
+                  item,
+                  itemRegionScope(item, structure, check)
+                );
                 return (
                   <div key={i}>
                     {isPageUrl(item.id) ? (
@@ -1123,7 +1267,11 @@ function CheckBlock({
                     ) : (
                       <span className="break-all">{ownLabel ?? item.id}</span>
                     )}
-                    <ItemSources item={item} structure={structure} check={check} />
+                    <ItemSources
+                      item={item}
+                      structure={structure}
+                      check={check}
+                    />
                   </div>
                 );
               })}
@@ -1131,7 +1279,9 @@ function CheckBlock({
           </details>
         )}
         {(!items || items.length === 0) && notListed > 0 && (
-          <p className="mt-1 text-xs text-muted-foreground">{itemsNotListedLine(notListed)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {itemsNotListedLine(notListed)}
+          </p>
         )}
       </div>
     </div>
@@ -1145,7 +1295,10 @@ function reach(rule: FlatIssue, totalPages: number) {
   return {
     count: rollup.count,
     hasMore: rollup.hasMore,
-    pct: totalPages > 0 ? Math.min(100, Math.round((rollup.count / totalPages) * 100)) : 0,
+    pct:
+      totalPages > 0
+        ? Math.min(100, Math.round((rollup.count / totalPages) * 100))
+        : 0,
     label:
       rollup.count === 0
         ? "site-wide"
@@ -1165,14 +1318,20 @@ function IssueRow({
   structure: ReportStructure | undefined;
 }) {
   const r = reach(rule, totalPages);
-  const live = rule.checks.filter((c) => c.status === "fail" || c.status === "warn");
+  const live = rule.checks.filter(
+    (c) => c.status === "fail" || c.status === "warn"
+  );
   // #2307: which pages, if any, a shared-component fix already accounts for. `none` (no
   // evidence, one-page groups, an attribution this build cannot phrase) leaves everything
   // below exactly as it was before the feature existed. #2341: shared-resource units
   // narrow that coverage, so a page a resource card names is not also listed below as
   // unattributed.
   const siteResources = ruleSiteResourceCoverage(rule);
-  const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
+  const coverage = withSiteResourceCoverage(
+    ruleFixCoverage(rule),
+    siteResources,
+    rule
+  );
   return (
     <details
       className="issue ir group"
@@ -1201,14 +1360,19 @@ function IssueRow({
           {r.label}
           {totalPages > 1 && (
             <div className="mt-1.5 h-1 overflow-hidden bg-muted sm:ml-auto">
-              <div className="h-full bg-[var(--gc)]" style={{ width: `${Math.max(r.pct, 4)}%` }} />
+              <div
+                className="h-full bg-[var(--gc)]"
+                style={{ width: `${Math.max(r.pct, 4)}%` }}
+              />
             </div>
           )}
         </div>
       </summary>
       <div className="grid gap-4 px-4 pb-5 pt-1 sm:pl-11">
         {rule.description && (
-          <p className="max-w-prose text-sm text-muted-foreground">{rule.description}</p>
+          <p className="max-w-prose text-sm text-muted-foreground">
+            {rule.description}
+          </p>
         )}
         {rule.solution && live.length > 0 && (
           <Panel tone="selected" padded={false} className="max-w-prose p-3">
@@ -1221,14 +1385,21 @@ function IssueRow({
         {live.length > 0 && (
           <div>
             {/* Built from #fix-prompts on click; hidden until the page script runs. */}
-            <button type="button" className="cp-btn" data-copy-rule={rule.id} hidden>
+            <button
+              type="button"
+              className="cp-btn"
+              data-copy-rule={rule.id}
+              hidden
+            >
               <Sym id="copy" className="copy-icon size-3.5" />
               <Sym id="check" className="copied-icon size-3.5 text-primary" />
               <span data-copy-label>Copy fix prompt</span>
             </button>
           </div>
         )}
-        {r.carriedRollup && <p className="text-xs text-muted-foreground">{r.carriedRollup}</p>}
+        {r.carriedRollup && (
+          <p className="text-xs text-muted-foreground">{r.carriedRollup}</p>
+        )}
         {rule.mixedProvenanceNote && (
           <p className="text-xs text-primary">{rule.mixedProvenanceNote}</p>
         )}
@@ -1239,7 +1410,12 @@ function IssueRow({
         <FixGroupCards coverage={coverage} />
         <div className="grid gap-3">
           {rule.checks.map((c, i) => (
-            <CheckBlock check={c} coverage={coverage} structure={structure} key={i} />
+            <CheckBlock
+              check={c}
+              coverage={coverage}
+              structure={structure}
+              key={i}
+            />
           ))}
         </div>
         <div className="ir-foot">
@@ -1249,7 +1425,12 @@ function IssueRow({
               WCAG {wcagLabel(c)} (WCAG {c.version})
             </span>
           ))}
-          <a href={getDocsUrl(rule.id)} target="_blank" rel="noreferrer" className="ir-docs">
+          <a
+            href={getDocsUrl(rule.id)}
+            target="_blank"
+            rel="noreferrer"
+            className="ir-docs"
+          >
             Rule docs <Sym id="out" className="size-3" />
           </a>
         </div>
@@ -1287,14 +1468,21 @@ function Issues({
           All <b>{issues.length}</b>
         </a>
         {present.map((g) => (
-          <a className="chip-link chip-group" href={`#g-${g}`} key={g} style={gcVar(g)}>
+          <a
+            className="chip-link chip-group"
+            href={`#g-${g}`}
+            key={g}
+            style={gcVar(g)}
+          >
             {getGroupName(g)} <b>{counts[g]}</b>
           </a>
         ))}
       </div>
       {(() => {
         const byLevel = countByWcagLevel(issues);
-        const parts = WCAG_LEVELS.filter((l) => byLevel[l]).map((l) => `Level ${l}: ${byLevel[l]}`);
+        const parts = WCAG_LEVELS.filter((l) => byLevel[l]).map(
+          (l) => `Level ${l}: ${byLevel[l]}`
+        );
         return parts.length > 0 ? (
           <p className="mb-5 text-sm text-muted-foreground" id="wcag-levels">
             Accessibility rules with findings, by WCAG level: {parts.join(", ")}
@@ -1310,8 +1498,12 @@ function Issues({
             token: NOTE_TOKEN,
             rules: Object.fromEntries(
               issues
-                .filter((r) => r.checks.some((c) => c.status === "fail" || c.status === "warn"))
-                .map((r) => [r.id, issuePromptBody(r, ctx)]),
+                .filter((r) =>
+                  r.checks.some(
+                    (c) => c.status === "fail" || c.status === "warn"
+                  )
+                )
+                .map((r) => [r.id, issuePromptBody(r, ctx)])
             ),
           }),
         }}
@@ -1326,11 +1518,18 @@ function Issues({
                 <Badge color={SEVERITY[sev].color} appearance="tag" size="md">
                   {SEVERITY[sev].title} {rows.length}
                 </Badge>
-                <span className="text-sm text-muted-foreground">{SEVERITY[sev].blurb}</span>
+                <span className="text-sm text-muted-foreground">
+                  {SEVERITY[sev].blurb}
+                </span>
               </div>
               <Card flat>
                 {rows.map((r) => (
-                  <IssueRow rule={r} totalPages={totalPages} structure={structure} key={r.id} />
+                  <IssueRow
+                    rule={r}
+                    totalPages={totalPages}
+                    structure={structure}
+                    key={r.id}
+                  />
                 ))}
               </Card>
             </div>
@@ -1350,13 +1549,16 @@ function Issues({
 function PagesLens() {
   return (
     <section id="pages" hidden>
-      <SectionHead title="Pages" sub="The same findings, by URL. Worst first." />
+      <SectionHead
+        title="Pages"
+        sub="The same findings, by URL. Worst first."
+      />
       <Card flat>
         <div id="pages-list" />
       </Card>
       <p id="pages-note" className="mt-2 text-xs text-muted-foreground">
-        Built from each rule&apos;s listed examples, so a very widespread rule may not name every
-        page.
+        Built from each rule&apos;s listed examples, so a very widespread rule
+        may not name every page.
       </p>
     </section>
   );
@@ -1385,10 +1587,19 @@ function PassedRules({ rules }: { rules: PassedRule[] }) {
               className="flex flex-wrap items-center gap-2 border-b border-border py-2 last:border-b-0"
             >
               <span className="font-semibold">{r.name}</span>
-              <GTag group={getCategoryGroup(r.categoryCode)} category={r.categoryCode} />
-              <span className="text-xs text-muted-foreground">{r.categoryName}</span>
-              <code className="font-mono text-xs text-muted-foreground">{r.id}</code>
-              <span className="text-xs text-muted-foreground sm:ml-auto">{passedRuleScope(r)}</span>
+              <GTag
+                group={getCategoryGroup(r.categoryCode)}
+                category={r.categoryCode}
+              />
+              <span className="text-xs text-muted-foreground">
+                {r.categoryName}
+              </span>
+              <code className="font-mono text-xs text-muted-foreground">
+                {r.id}
+              </code>
+              <span className="text-xs text-muted-foreground sm:ml-auto">
+                {passedRuleScope(r)}
+              </span>
             </li>
           ))}
         </ul>
@@ -1401,7 +1612,13 @@ function PassedRules({ rules }: { rules: PassedRule[] }) {
  * A technology logo from our own asset host; hidden by the page script if it
  * fails to load. Never in an offline (local) report: that would be a remote request.
  */
-function TechIcon({ icon, offline }: { icon?: string | null; offline: boolean }) {
+function TechIcon({
+  icon,
+  offline,
+}: {
+  icon?: string | null;
+  offline: boolean;
+}) {
   const { techIconBaseUrl } = React.useContext(RenderAssets);
   if (offline) return null;
   const url = techIconUrl(icon, techIconBaseUrl);
@@ -1422,7 +1639,8 @@ function TechIcon({ icon, offline }: { icon?: string | null; offline: boolean })
 /** GroupBadge colours as one stylesheet, keyed by data-g (instead of inline styles on every tag). */
 const GROUP_TAG_CSS = Object.entries(GROUP_COLORS)
   .map(
-    ([g, c]) => `.gtag[data-g="${g}"]{color:${c.text};background:${c.bg};border-color:${c.border}}`,
+    ([g, c]) =>
+      `.gtag[data-g="${g}"]{color:${c.text};background:${c.bg};border-color:${c.border}}`
   )
   .join("");
 
@@ -1456,7 +1674,10 @@ const SPRITE: Record<string, React.ComponentType> = {
 export function spriteSymbol(id: string, svg: string): string {
   const open = /^<svg\b[^>]*>/.exec(svg);
   const viewBox = open ? /\bviewBox="([^"]+)"/.exec(open[0])?.[1] : undefined;
-  const inner = open && svg.endsWith("</svg>") ? svg.slice(open[0].length, -"</svg>".length) : "";
+  const inner =
+    open && svg.endsWith("</svg>")
+      ? svg.slice(open[0].length, -"</svg>".length)
+      : "";
   if (!viewBox) throw new Error(`report sprite: icon "${id}" has no viewBox`);
   if (!/<(path|circle|rect|polyline|polygon|line|g)\b/.test(inner)) {
     throw new Error(`report sprite: icon "${id}" has no drawable markup`);
@@ -1467,7 +1688,13 @@ export function spriteSymbol(id: string, svg: string): string {
 const SPRITE_MARKUP = Object.entries(SPRITE)
   .map(([id, C]) => spriteSymbol(id, renderToStaticMarkup(<C />)))
   .join("");
-const Sym = ({ id, className }: { id: keyof typeof SPRITE & string; className?: string }) => (
+const Sym = ({
+  id,
+  className,
+}: {
+  id: keyof typeof SPRITE & string;
+  className?: string;
+}) => (
   <svg className={className} aria-hidden="true" fill="currentColor">
     <use href={`#i-${id}`} />
   </svg>
@@ -1478,7 +1705,13 @@ const PanelTitle = ({ children }: { children: React.ReactNode }) => (
 );
 
 /** Site profile and tech stack, the search footprint, and the entity graph: each its own titled section. */
-function SiteContext({ report, offline }: { report: AuditReport; offline: boolean }) {
+function SiteContext({
+  report,
+  offline,
+}: {
+  report: AuditReport;
+  offline: boolean;
+}) {
   const tech = report.technologies;
   const meta = report.siteMetadata;
   const stats = report.domainStats;
@@ -1562,17 +1795,28 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                 <div className="grid gap-4">
                   {groupTechnologies(tech!.items).map((grp) => (
                     <div key={grp.category}>
-                      <p className="mb-1.5 text-xs text-muted-foreground">{grp.label}</p>
+                      <p className="mb-1.5 text-xs text-muted-foreground">
+                        {grp.label}
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {grp.items.map((t) => (
-                          <Badge variant="outline" size="md" key={t.id} className="bg-card">
+                          <Badge
+                            variant="outline"
+                            size="md"
+                            key={t.id}
+                            className="bg-card"
+                          >
                             <TechIcon icon={t.icon} offline={offline} />
                             {t.name}
                             {t.version && (
-                              <span className="text-muted-foreground">{t.version}</span>
+                              <span className="text-muted-foreground">
+                                {t.version}
+                              </span>
                             )}
                             {isLocalOnlyTech(t) && (
-                              <span className="text-muted-foreground">{TECH_LOCAL_MARK}</span>
+                              <span className="text-muted-foreground">
+                                {TECH_LOCAL_MARK}
+                              </span>
                             )}
                           </Badge>
                         ))}
@@ -1591,7 +1835,9 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
                     {js.heaviestPages.map((page) => (
                       <li key={page.url} className="break-words">
                         {page.url}{" "}
-                        <span className="text-muted-foreground">({javascriptPageSize(page)})</span>
+                        <span className="text-muted-foreground">
+                          ({javascriptPageSize(page)})
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -1601,8 +1847,9 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
           </div>
           {cs && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Cache: {cacheHitRatePercent(cs)}% hit rate · {cs.hits.toLocaleString()}/
-              {cs.total.toLocaleString()} reused · {formatBytes(cs.bytesSaved)} saved
+              Cache: {cacheHitRatePercent(cs)}% hit rate ·{" "}
+              {cs.hits.toLocaleString()}/{cs.total.toLocaleString()} reused ·{" "}
+              {formatBytes(cs.bytesSaved)} saved
               {cacheReasonsLabel(cs) ? ` (${cacheReasonsLabel(cs)})` : ""}
             </p>
           )}
@@ -1611,18 +1858,35 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
 
       {statRows.length > 0 && (
         <section id="footprint">
-          <SectionHead title="Search footprint" sub="How the domain shows up in search" />
+          <SectionHead
+            title="Search footprint"
+            sub="How the domain shows up in search"
+          />
           <Panel>
-            <Metrics items={statRows.map((r) => ({ value: String(r.value), label: r.label }))} />
+            <Metrics
+              items={statRows.map((r) => ({
+                value: String(r.value),
+                label: r.label,
+              }))}
+            />
             {bands.some((b) => b.count > 0) && (
               <div
                 data-position-chart
                 className="mt-5 grid max-w-md gap-1.5 text-xs text-muted-foreground"
               >
                 {bands.map((b) => (
-                  <div key={b.label} className="grid grid-cols-[4rem_1fr_3rem] items-center gap-3">
+                  <div
+                    key={b.label}
+                    className="grid grid-cols-[4rem_1fr_3rem] items-center gap-3"
+                  >
                     <span className="text-right">{b.label}</span>
-                    <Progress value={b.count === 0 ? 0 : Math.max(2, (b.count / maxBand) * 100)} />
+                    <Progress
+                      value={
+                        b.count === 0
+                          ? 0
+                          : Math.max(2, (b.count / maxBand) * 100)
+                      }
+                    />
                     <span className="font-semibold text-foreground">
                       {b.count.toLocaleString("en-US")}
                     </span>
@@ -1648,7 +1912,9 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
               id="em-data"
               dangerouslySetInnerHTML={{ __html: entityViewerData(map) }}
             />
-            <script dangerouslySetInnerHTML={{ __html: entityViewerScript() }} />
+            <script
+              dangerouslySetInnerHTML={{ __html: entityViewerScript() }}
+            />
           </Panel>
         </section>
       )}
@@ -1660,7 +1926,11 @@ function SiteContext({ report, offline }: { report: AuditReport; offline: boolea
  * Page structure (#2307): where the links on the audited pages sit, from the page classifier and
  * the markup. Informational, never scored; absent for a report built from an older crawl.
  */
-function PageStructure({ structure }: { structure: ReportStructure | undefined }) {
+function PageStructure({
+  structure,
+}: {
+  structure: ReportStructure | undefined;
+}) {
   if (!structure) return null;
   const rows = structureRows(structure);
   const lines = [
@@ -1679,9 +1949,16 @@ function PageStructure({ structure }: { structure: ReportStructure | undefined }
         {rows.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {rows.map((row) => (
-              <Badge variant="outline" size="md" className="bg-card" key={row.section}>
+              <Badge
+                variant="outline"
+                size="md"
+                className="bg-card"
+                key={row.section}
+              >
                 {row.section}
-                <span className="text-muted-foreground">{structureRowDetail(row)}</span>
+                <span className="text-muted-foreground">
+                  {structureRowDetail(row)}
+                </span>
               </Badge>
             ))}
           </div>
@@ -1720,13 +1997,20 @@ function WhiteLabelBrand({ branding }: { branding: ReportBranding }) {
   const brand =
     logo ??
     (branding.orgName ? (
-      <span className="wl-wordmark font-mono font-semibold">{branding.orgName}</span>
+      <span className="wl-wordmark font-mono font-semibold">
+        {branding.orgName}
+      </span>
     ) : null);
   if (!brand) return null;
   const website = whiteLabelWebsite(branding);
   if (!website) return brand;
   return (
-    <a href={website} target="_blank" rel="noopener noreferrer" className="wl-brand-link">
+    <a
+      href={website}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="wl-brand-link"
+    >
       {brand}
     </a>
   );
@@ -1735,7 +2019,8 @@ function WhiteLabelBrand({ branding }: { branding: ReportBranding }) {
 /** The org's website when it is an https URL, else null (never linked). */
 function whiteLabelWebsite(branding: ReportBranding): string | null {
   const website = branding.websiteUrl?.trim();
-  if (!website || !/^https:\/\//i.test(website) || sanitizeUrl(website) === "#") return null;
+  if (!website || !/^https:\/\//i.test(website) || sanitizeUrl(website) === "#")
+    return null;
   return website;
 }
 
@@ -1758,7 +2043,12 @@ function WhiteLabelFooter({ branding }: { branding: ReportBranding }) {
       {branding.footerText}
       {branding.footerText && website && " · "}
       {website && (
-        <a href={website} target="_blank" rel="noopener noreferrer" className="lnk wl-footer-link">
+        <a
+          href={website}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="lnk wl-footer-link"
+        >
           {host}
         </a>
       )}
@@ -1794,7 +2084,8 @@ function ReportPage({
   // A crawl cut short knows only part of the site: its discovered count is a
   // floor, so it reads "N+" wherever it is printed.
   const discoveredFloor =
-    (!!report.scanScope?.capped || report.scanScope?.stopReason !== undefined) &&
+    (!!report.scanScope?.capped ||
+      report.scanScope?.stopReason !== undefined) &&
     found.total > totalPages;
   const discoveredCount = `${found.total.toLocaleString()}${discoveredFloor ? "+" : ""}`;
   const localRun =
@@ -1809,15 +2100,17 @@ function ReportPage({
   const agentLines = agentSignalLines(report);
   const failedRun = isAuditFailed(report.status);
   const issues = flattenIssuesBySeverity(
-    groupIssuesByCategory(report.ruleResults, report.checkTallies),
+    groupIssuesByCategory(report.ruleResults, report.checkTallies)
   );
   const es = editorSummaryView(report.editorSummary, report);
   const priorities = es?.priorities ?? [];
   const passedRules = reportPassedRules(report, includePassed);
   const known: Known = new Map(issues.map((i) => [i.id, i.group]));
-  const techName = new Map((report.technologies?.items ?? []).map((t) => [t.id, t.name]));
+  const techName = new Map(
+    (report.technologies?.items ?? []).map((t) => [t.id, t.name])
+  );
   const techIcon = new Map(
-    (report.technologies?.items ?? []).map((t) => [t.id, t.icon ?? undefined]),
+    (report.technologies?.items ?? []).map((t) => [t.id, t.icon ?? undefined])
   );
   const gap = failedRun
     ? null
@@ -1843,7 +2136,8 @@ function ReportPage({
     report.coverage.auditedPages < report.coverage.knownPages &&
     found.total <= count(report.coverage.knownPages) &&
     (report.rateLimited?.unfetched ?? 0) <= 0;
-  const reportBase = reportUrl ?? (reportId ? defaultReportUrl(reportId) : null);
+  const reportBase =
+    reportUrl ?? (reportId ? defaultReportUrl(reportId) : null);
   const ctx: PromptContext = {
     url: report.baseUrl,
     reportMd: reportBase ? `${reportBase}.md` : null,
@@ -1859,14 +2153,20 @@ function ReportPage({
     report.baseUrl,
     report.rateLimited,
     reportFailureReasonCode(report),
-    report.status === "blocked" ? (safeWafBlocked(report)?.seed ?? undefined) : undefined,
+    report.status === "blocked"
+      ? (safeWafBlocked(report)?.seed ?? undefined)
+      : undefined
   );
   const issueGroups = new Set(issues.map((i) => i.group));
   const signedIn = report.cloudPlan === "free" || report.cloudPlan === "paid";
   const lockedAi =
-    signedIn && report.coverageMode === "quick" && !groups.some((g) => g.group === "ai");
+    signedIn &&
+    report.coverageMode === "quick" &&
+    !groups.some((g) => g.group === "ai");
   const locked = branding?.whiteLabel ? null : lockedRulesMessage(report);
-  const brandStyle = brandColorCss(branding?.whiteLabel ? branding.brandColor : undefined);
+  const brandStyle = brandColorCss(
+    branding?.whiteLabel ? branding.brandColor : undefined
+  );
   const level = auditLevelLine(report);
   const robotsNote = robotsHonouredNote(report);
   const cov =
@@ -1918,7 +2218,9 @@ function ReportPage({
     ...issues.filter((i) => i.severity === "error").sort(byReach),
     ...issues.filter((i) => i.severity === "warning").sort(byReach),
   ].slice(0, 4);
-  const shotSrc = report.screenshotUrl ? sanitizeUrl(report.screenshotUrl) : "#";
+  const shotSrc = report.screenshotUrl
+    ? sanitizeUrl(report.screenshotUrl)
+    : "#";
   const shot = shotSrc === "#" ? null : shotSrc;
   const base = reportBase;
   const groupsPart = groups.length
@@ -1948,7 +2250,9 @@ function ReportPage({
             <meta property="og:image:height" content="630" />
             {/* White-label (#810): the org name as site_name, or none. */}
             {branding?.whiteLabel ? (
-              branding.orgName && <meta property="og:site_name" content={branding.orgName} />
+              branding.orgName && (
+                <meta property="og:site_name" content={branding.orgName} />
+              )
             ) : (
               <meta property="og:site_name" content="squirrelscan" />
             )}
@@ -1957,7 +2261,9 @@ function ReportPage({
         )}
         <style dangerouslySetInnerHTML={{ __html: REPORT_CSS }} />
         <style dangerouslySetInnerHTML={{ __html: GROUP_TAG_CSS }} />
-        {brandStyle && <style dangerouslySetInnerHTML={{ __html: brandStyle }} />}
+        {brandStyle && (
+          <style dangerouslySetInnerHTML={{ __html: brandStyle }} />
+        )}
       </head>
       <body>
         <svg
@@ -2066,7 +2372,8 @@ function ReportPage({
                   rel="noreferrer"
                   className="mt-1 inline-flex items-center gap-1 break-all font-mono text-sm text-primary hover:underline"
                 >
-                  {report.baseUrl} <Sym id="out" className="size-3.5 shrink-0" />
+                  {report.baseUrl}{" "}
+                  <Sym id="out" className="size-3.5 shrink-0" />
                 </a>
                 {description && (
                   <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted-foreground">
@@ -2078,7 +2385,8 @@ function ReportPage({
                     <span
                       title={`${found.sitemap.toLocaleString()} in sitemaps, ${found.crawlOnly.toLocaleString()} more found by crawling${found.unfetched > 0 ? `; this crawl fetched ${count(report.scanScope?.pagesCrawled).toLocaleString()} and left ${found.unfetched.toLocaleString()} queued` : ""}`}
                     >
-                      Scanned {totalPages.toLocaleString()} of {discoveredCount} discovered{" "}
+                      Scanned {totalPages.toLocaleString()} of {discoveredCount}{" "}
+                      discovered{" "}
                       {found.total === 1 && !discoveredFloor ? "page" : "pages"}
                     </span>
                   </Badge>
@@ -2170,12 +2478,21 @@ function ReportPage({
           )}
 
           {notice && (
-            <Card id="failure-notice" tone="destructive" flat className="mb-6 space-y-3 p-4 md:p-6">
-              <h2 className="text-lg font-semibold text-destructive">{notice.heading}</h2>
+            <Card
+              id="failure-notice"
+              tone="destructive"
+              flat
+              className="mb-6 space-y-3 p-4 md:p-6"
+            >
+              <h2 className="text-lg font-semibold text-destructive">
+                {notice.heading}
+              </h2>
               <p className="text-sm text-muted-foreground">{notice.body[0]}</p>
               {notice.tone === "blocked" ? (
                 <>
-                  <p className="text-sm text-muted-foreground">{notice.stepsIntro}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {notice.stepsIntro}
+                  </p>
                   <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                     {notice.steps.map((s, i) => (
                       <li key={i}>{s}</li>
@@ -2191,7 +2508,8 @@ function ReportPage({
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  {(notice.body[1] ?? "").replace(/\.\s*$/, "")}, or run it locally with{" "}
+                  {(notice.body[1] ?? "").replace(/\.\s*$/, "")}, or run it
+                  locally with{" "}
                   <code className="bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
                     {notice.cliCommand}
                   </code>
@@ -2199,13 +2517,18 @@ function ReportPage({
                 </p>
               )}
               {report.statusReason && (
-                <p className="text-xs text-muted-foreground">Reason: {report.statusReason}</p>
+                <p className="text-xs text-muted-foreground">
+                  Reason: {report.statusReason}
+                </p>
               )}
             </Card>
           )}
 
           {scoreNote && (
-            <p className="mb-3 text-xs text-muted-foreground" data-score-adjustment>
+            <p
+              className="mb-3 text-xs text-muted-foreground"
+              data-score-adjustment
+            >
               {scoreNote}
             </p>
           )}
@@ -2223,17 +2546,24 @@ function ReportPage({
                       ) : (
                         <>
                           {g.failed > 0 && (
-                            <span className="text-destructive">{plural(g.failed, "error")}</span>
+                            <span className="text-destructive">
+                              {plural(g.failed, "error")}
+                            </span>
                           )}
                           {g.failed > 0 && g.warnings > 0 && " · "}
                           {g.warnings > 0 && (
-                            <span className="text-amber-600">{plural(g.warnings, "warning")}</span>
+                            <span className="text-amber-600">
+                              {plural(g.warnings, "warning")}
+                            </span>
                           )}
                         </>
                       )}
                     </p>
                     {g.group === "ai" && agentLines.length > 0 && (
-                      <p className="mt-1.5 text-xs text-muted-foreground" data-agent-signals>
+                      <p
+                        className="mt-1.5 text-xs text-muted-foreground"
+                        data-agent-signals
+                      >
                         {agentLines.map((l) => (
                           <span key={l} className="block">
                             {l}
@@ -2293,9 +2623,21 @@ function ReportPage({
               items={[
                 { value: totalPages.toLocaleString(), label: "Scanned" },
                 { value: discoveredCount, label: "Discovered" },
-                { value: passed.toLocaleString(), label: "Passed", color: "#16a34a" },
-                { value: warnings.toLocaleString(), label: "Warnings", color: "#ca8a04" },
-                { value: failed.toLocaleString(), label: "Failed", color: "#dc2626" },
+                {
+                  value: passed.toLocaleString(),
+                  label: "Passed",
+                  color: "#16a34a",
+                },
+                {
+                  value: warnings.toLocaleString(),
+                  label: "Warnings",
+                  color: "#ca8a04",
+                },
+                {
+                  value: failed.toLocaleString(),
+                  label: "Failed",
+                  color: "#dc2626",
+                },
               ]}
             />
           )}
@@ -2351,7 +2693,10 @@ function ReportPage({
                 <Panel>
                   <ol className="grid gap-4">
                     {fixFirst.map((r, i) => (
-                      <li key={r.id} className="grid grid-cols-[1.5rem_1fr] gap-3">
+                      <li
+                        key={r.id}
+                        className="grid grid-cols-[1.5rem_1fr] gap-3"
+                      >
                         <span className="flex size-6 items-center justify-center border border-border bg-muted text-xs font-semibold text-muted-foreground">
                           {i + 1}
                         </span>
@@ -2363,7 +2708,10 @@ function ReportPage({
                             >
                               {r.name}
                             </a>
-                            <Badge color={SEVERITY[r.severity].color} appearance="tag">
+                            <Badge
+                              color={SEVERITY[r.severity].color}
+                              appearance="tag"
+                            >
                               {severityLabel(r.severity)}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
@@ -2397,7 +2745,9 @@ function ReportPage({
               <PagesLens />
             </>
           ) : failedRun ? null : (
-            <Panel className="mt-8 text-center text-primary">✓ No issues found</Panel>
+            <Panel className="mt-8 text-center text-primary">
+              ✓ No issues found
+            </Panel>
           )}
 
           {passedRules.length > 0 && <PassedRules rules={passedRules} />}
@@ -2407,7 +2757,10 @@ function ReportPage({
           <PageStructure structure={report.structure} />
 
           {locked && !localRun && (
-            <details id="locked-rules" className="mt-12 border border-dashed border-border p-4">
+            <details
+              id="locked-rules"
+              className="mt-12 border border-dashed border-border p-4"
+            >
               <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
                 <PiLockSimple className="size-4" /> {locked.heading}
               </summary>
@@ -2432,7 +2785,9 @@ function ReportPage({
                 {locked.rules.map(lockedRuleView).map((r) => (
                   <span
                     key={r.id}
-                    title={r.reason ? LOCKED_REASON_LABELS[r.reason] : undefined}
+                    title={
+                      r.reason ? LOCKED_REASON_LABELS[r.reason] : undefined
+                    }
                     data-locked-reason={r.reason}
                   >
                     <Badge color="neutral" size="md">
@@ -2447,20 +2802,29 @@ function ReportPage({
 
           <footer className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 text-sm text-muted-foreground">
             {capped && (
-              <p id="published-report-note" className="basis-full text-xs leading-5">
+              <p
+                id="published-report-note"
+                className="basis-full text-xs leading-5"
+              >
                 {capped}
               </p>
             )}
             <span>
-              {passed.toLocaleString()} passed · {warnings.toLocaleString()} warnings ·{" "}
-              {failed.toLocaleString()} failed across {plural(totalPages, "page")}
+              {passed.toLocaleString()} passed · {warnings.toLocaleString()}{" "}
+              warnings · {failed.toLocaleString()} failed across{" "}
+              {plural(totalPages, "page")}
             </span>
             {branding?.whiteLabel ? (
               <WhiteLabelFooter branding={branding} />
             ) : (
               <span>
                 Generated by{" "}
-                <a href="https://squirrelscan.com" target="_blank" rel="noreferrer" className="lnk">
+                <a
+                  href="https://squirrelscan.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="lnk"
+                >
                   squirrelscan.com
                 </a>
               </span>
@@ -2469,7 +2833,11 @@ function ReportPage({
         </main>
         <script
           dangerouslySetInnerHTML={{
-            __html: COPY_SCRIPT + FINDING_COPY_SCRIPT + PAGES_SCRIPT + LOCAL_TIME_SCRIPT,
+            __html:
+              COPY_SCRIPT +
+              FINDING_COPY_SCRIPT +
+              PAGES_SCRIPT +
+              LOCAL_TIME_SCRIPT,
           }}
         />
       </body>
@@ -2498,11 +2866,16 @@ export function reportInlineScripts(): readonly string[] {
  * compiled ahead of time (scripts/build-css.ts).
  * Changing this output? Bump REPORT_HTML_VERSION (constants.ts) so cached HTML invalidates.
  */
-export function renderHtml(report: AuditReport, options?: HtmlRenderOptions): string {
+export function renderHtml(
+  report: AuditReport,
+  options?: HtmlRenderOptions
+): string {
   return (
     "<!DOCTYPE html>" +
     renderToStaticMarkup(
-      <RenderAssets.Provider value={{ techIconBaseUrl: options?.techIconBaseUrl }}>
+      <RenderAssets.Provider
+        value={{ techIconBaseUrl: options?.techIconBaseUrl }}
+      >
         <ReportPage
           report={report}
           reportId={options?.reportId}
@@ -2512,7 +2885,7 @@ export function renderHtml(report: AuditReport, options?: HtmlRenderOptions): st
           offline={options?.offline ?? true}
           includePassed={options?.includePassed ?? false}
         />
-      </RenderAssets.Provider>,
+      </RenderAssets.Provider>
     )
   );
 }

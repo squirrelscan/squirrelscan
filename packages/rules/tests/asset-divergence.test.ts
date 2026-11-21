@@ -10,10 +10,16 @@
 // real parsed DOM, the streaming path reads the stored page_features scalars, and
 // the two must be byte-identical.
 
-import { describe, expect, test } from "bun:test";
-import { parseHTML } from "@squirrelscan/parser/dom";
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   assetDivergenceRule,
@@ -23,7 +29,6 @@ import {
   ASSET_NORM_MIN_PAGES,
   ASSET_NORM_MIN_SAMPLE,
 } from "../src/social/asset-divergence";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   path: string;
@@ -39,7 +44,12 @@ interface PageSpec {
 }
 
 function alternatesOf(spec: PageSpec) {
-  return spec.alternates?.map((path, i) => ({ hreflang: `l${i}`, href: url(path) })) ?? null;
+  return (
+    spec.alternates?.map((path, i) => ({
+      hreflang: `l${i}`,
+      href: url(path),
+    })) ?? null
+  );
 }
 
 function url(path: string): string {
@@ -54,14 +64,18 @@ function pad(i: number): string {
 function headHtml(spec: PageSpec): string {
   if (spec.head !== undefined) return spec.head;
   const parts: string[] = [];
-  if (spec.favicon != null) parts.push(`<link rel="icon" href="${spec.favicon}">`);
-  if (spec.themeColor != null) parts.push(`<meta name="theme-color" content="${spec.themeColor}">`);
+  if (spec.favicon != null)
+    parts.push(`<link rel="icon" href="${spec.favicon}">`);
+  if (spec.themeColor != null)
+    parts.push(`<meta name="theme-color" content="${spec.themeColor}">`);
   return parts.join("");
 }
 
 /** A parsed page with a LIVE document, the way the legacy site pass sees one. */
 function parsedFor(spec: PageSpec): ParsedPage {
-  const { document } = parseHTML(`<html><head>${headHtml(spec)}</head><body></body></html>`);
+  const { document } = parseHTML(
+    `<html><head>${headHtml(spec)}</head><body></body></html>`
+  );
   return {
     document,
     og: { image: spec.ogImage ?? null },
@@ -71,7 +85,13 @@ function parsedFor(spec: PageSpec): ParsedPage {
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -164,7 +184,12 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
   return {
     ...baseCtx,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteQuery,
   };
 }
@@ -219,7 +244,9 @@ describe("social/asset-divergence — silence guards", () => {
         themeColor: "#0a5c36",
         ogImage: "https://cdn.example.com/default-share.png",
       })),
-      ...template(ASSET_NORM_MIN_PAGES, (i) => ({ path: `/nothing-${pad(i)}` })),
+      ...template(ASSET_NORM_MIN_PAGES, (i) => ({
+        path: `/nothing-${pad(i)}`,
+      })),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
@@ -236,13 +263,18 @@ describe("social/asset-divergence — silence guards", () => {
     }));
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(`${Math.round(ASSET_NORM_MIN_AGREEMENT * 100)}%`);
+    expect(check.message).toContain(
+      `${Math.round(ASSET_NORM_MIN_AGREEMENT * 100)}%`
+    );
   });
 
   test("a page that declares nothing is never a deviant", async () => {
     // Half the corpus ships no chrome at all — that is core/favicon's finding,
     // not this rule's, and the declaring half is uniform.
-    const specs = [...uniformSite(12), ...template(12, (i) => ({ path: `/bare-${pad(i)}` }))];
+    const specs = [
+      ...uniformSite(12),
+      ...template(12, (i) => ({ path: `/bare-${pad(i)}` })),
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
     expect(check.value).toBe(12);
@@ -288,8 +320,13 @@ describe("social/asset-divergence — no false positives on per-page OG images",
     expect(check.status).toBe("pass");
     // Their favicon/theme-color still count — chrome is uniform even on an article.
     expect(check.value).toBe(32);
-    const norms = (check.details as { norms: Array<{ dimension: string }> }).norms;
-    expect(norms.map((n) => n.dimension)).toEqual(["favicon", "theme-color", "og-image"]);
+    const norms = (check.details as { norms: Array<{ dimension: string }> })
+      .norms;
+    expect(norms.map((n) => n.dimension)).toEqual([
+      "favicon",
+      "theme-color",
+      "og-image",
+    ]);
   });
 
   test("a bespoke OG image on an untyped page does not flag", async () => {
@@ -309,7 +346,9 @@ describe("social/asset-divergence — no false positives on per-page OG images",
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
     // The 6 one-off images neither vote nor are judged on the OG axis.
-    const norms = (check.details as { norms: Array<{ dimension: string; pages: number }> }).norms;
+    const norms = (
+      check.details as { norms: Array<{ dimension: string; pages: number }> }
+    ).norms;
     expect(norms.find((n) => n.dimension === "og-image")?.pages).toBe(20);
     expect(check.value).toBe(26);
   });
@@ -327,7 +366,9 @@ describe("social/asset-divergence — no false positives on per-page OG images",
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    expect(itemFor(check, "favicon")?.meta?.value).toBe("https://example.com/old-favicon.ico");
+    expect(itemFor(check, "favicon")?.meta?.value).toBe(
+      "https://example.com/old-favicon.ico"
+    );
     expect(itemFor(check, "og-image")).toBeUndefined();
   });
 });
@@ -414,14 +455,23 @@ describe("social/asset-divergence — findings", () => {
   test("passes a site whose chrome is uniform", async () => {
     const check = await bothPaths(uniformSite(20));
     expect(check.status).toBe("pass");
-    expect(check.message).toContain("favicon, theme-color and default OG image");
+    expect(check.message).toContain(
+      "favicon, theme-color and default OG image"
+    );
     expect(check.items).toBeUndefined();
   });
 });
 
 /** One entity page plus its locale variants, every page listing all the others. */
-function localeCluster(prefix: string, count: number, ogImage: string): PageSpec[] {
-  const paths = Array.from({ length: count }, (_, i) => `/${prefix}-${pad(i)}/collections/gloves`);
+function localeCluster(
+  prefix: string,
+  count: number,
+  ogImage: string
+): PageSpec[] {
+  const paths = Array.from(
+    { length: count },
+    (_, i) => `/${prefix}-${pad(i)}/collections/gloves`
+  );
   return paths.map((path) => ({
     path,
     favicon: "/favicon.ico",
@@ -436,7 +486,10 @@ describe("social/asset-divergence — hreflang alternates are one og-image voter
   const ENTITY_OG = "https://cdn.example.com/collections/gloves.webp";
 
   test("a collection and its 15 alternates sharing an entity image are not a fallback", async () => {
-    const check = await bothPaths([...uniformSite(60), ...localeCluster("loc", 16, ENTITY_OG)]);
+    const check = await bothPaths([
+      ...uniformSite(60),
+      ...localeCluster("loc", 16, ENTITY_OG),
+    ]);
     expect(check.status).toBe("pass");
     expect(itemFor(check, "og-image")).toBeUndefined();
   });
@@ -453,7 +506,10 @@ describe("social/asset-divergence — hreflang alternates are one og-image voter
   test("a one-way hreflang claim does not merge pages", async () => {
     const cluster = localeCluster("loc", 16, ENTITY_OG);
     // Only the first page lists the others; none link back.
-    const oneWay = cluster.map((spec, i) => ({ ...spec, alternates: i === 0 ? spec.alternates : [] }));
+    const oneWay = cluster.map((spec, i) => ({
+      ...spec,
+      alternates: i === 0 ? spec.alternates : [],
+    }));
     const check = await bothPaths([...uniformSite(60), ...oneWay]);
     expect(itemFor(check, "og-image")?.meta?.pageCount).toBe(16);
   });
@@ -481,7 +537,10 @@ describe("social/asset-divergence — hreflang alternates are one og-image voter
       ...uniformSite(10),
       ...localeCluster("loc", 16, "https://cdn.example.com/default-share.png"),
     ]);
-    const norms = (check.details?.norms ?? []) as Array<{ dimension: string; pages: number }>;
+    const norms = (check.details?.norms ?? []) as Array<{
+      dimension: string;
+      pages: number;
+    }>;
     const norm = norms.find((n) => n.dimension === "og-image");
     expect(norm?.pages).toBe(11);
   });
@@ -557,6 +616,10 @@ describe("social/asset-divergence — extraction", () => {
 
   test("absent assets read as null, not empty strings", () => {
     const signal = chrome('<link rel="icon" href="">');
-    expect(signal).toEqual({ faviconHref: null, themeColor: null, ogImage: null });
+    expect(signal).toEqual({
+      faviconHref: null,
+      themeColor: null,
+      ogImage: null,
+    });
   });
 });

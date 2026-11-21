@@ -1,12 +1,20 @@
 import { expect, test } from "bun:test";
-import { OFF, REAL, OVERLAY, run, finished, fired, foundOrNoted } from "./integrity-budget-fixture";
+
+import {
+  OFF,
+  REAL,
+  OVERLAY,
+  run,
+  finished,
+  fired,
+  foundOrNoted,
+} from "./integrity-budget-fixture";
 
 // #784: the integrity rules against hostile pages, through the rule runner. The subject is the WORK bounds
 // (how much of the page a rule reads, and the notes it emits when it stops), not elapsed time, so the runner's
 // wall-clock rule budget is turned off here (`ruleTimeBudgetMs: 0`): on a loaded machine the same page that an
 // idle one finishes would be cut by the clock (#1465). Each case asserts that the rule finished (no `-error`,
 // `timeout` or skipped check) and that it found what a clean page of the same shape would, or said what it left.
-
 
 test("5 MB of plain links (333,000 controls) before the real control: both rules finish and find it", async () => {
   const { checks } = await run(`${'<a href="/">x</a>'.repeat(300_000)}${REAL}`);
@@ -16,7 +24,9 @@ test("5 MB of plain links (333,000 controls) before the real control: both rules
 
 test("100 KB of templates nested in templates: no deep clone, both rules finish, a later control is found", async () => {
   const nested = "<template>".repeat(10_000);
-  const { checks } = await run(`${nested}${"</template>".repeat(10_000)}<template>${REAL}</template>${OVERLAY}`);
+  const { checks } = await run(
+    `${nested}${"</template>".repeat(10_000)}<template>${REAL}</template>${OVERLAY}`
+  );
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);
   expect(fired(checks, "fake-auth-overlay")).toBe(true);
@@ -24,7 +34,10 @@ test("100 KB of templates nested in templates: no deep clone, both rules finish,
 
 test("400 aria-labelledby references to one 500 KB target are read once and bounded", async () => {
   const target = `<div id="big">${"<span>word </span>".repeat(30_000)}</div>`;
-  const links = '<a href="https://p.invalid/" aria-labelledby="big big big big">x</a>'.repeat(400);
+  const links =
+    '<a href="https://p.invalid/" aria-labelledby="big big big big">x</a>'.repeat(
+      400
+    );
   const { checks } = await run(`${target}${links}${REAL}`);
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);
@@ -33,14 +46,22 @@ test("400 aria-labelledby references to one 500 KB target are read once and boun
 test("1,000 auth-named iframes with 500 shared classes and a unique one each: the overlay is still found", async () => {
   const shared = Array.from({ length: 500 }, (_, i) => `c${i}`);
   const css = shared.map((c) => `.${c}{border:0}`.repeat(200)).join("");
-  const frames = Array.from({ length: 1_000 }, (_, i) => `<iframe class="auth ${shared.join(" ")} u${i}" srcdoc=""></iframe>`).join("");
+  const frames = Array.from(
+    { length: 1_000 },
+    (_, i) =>
+      `<iframe class="auth ${shared.join(" ")} u${i}" srcdoc=""></iframe>`
+  ).join("");
   const { checks } = await run(`${frames}${OVERLAY}`, `<style>${css}</style>`);
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "fake-auth-overlay")).toBe(true);
 }, 120_000);
 
 test("a phrase squashed of its spaces needs its word boundaries: look-alike words do not read as a sign-in with Google", async () => {
-  for (const label of ["Redesign in with Google Workspace", "Catalogin with Google", "Login with GoogleMail"]) {
+  for (const label of [
+    "Redesign in with Google Workspace",
+    "Catalogin with Google",
+    "Login with GoogleMail",
+  ]) {
     const { checks } = await run(`<p>Welcome</p><a href="${OFF}">${label}</a>`);
     expect(fired(checks, "brand-impersonation")).toBe(false);
   }
@@ -49,73 +70,122 @@ test("a phrase squashed of its spaces needs its word boundaries: look-alike word
 });
 
 test("a tab or newline inside an own-site looking destination is the off-site URL it resolves to", async () => {
-  for (const href of ["/&#9;/credential-fixture.invalid/signin", "/&#10;/credential-fixture.invalid/signin", "&#9;//credential-fixture.invalid/signin"]) {
+  for (const href of [
+    "/&#9;/credential-fixture.invalid/signin",
+    "/&#10;/credential-fixture.invalid/signin",
+    "&#9;//credential-fixture.invalid/signin",
+  ]) {
     const link = await run(`<a href="${href}">Sign in with Google</a>`);
     expect(fired(link.checks, "brand-impersonation")).toBe(true);
-    const button = await run(`<form><button formaction="${href}">Sign in with Google</button></form>`);
+    const button = await run(
+      `<form><button formaction="${href}">Sign in with Google</button></form>`
+    );
     expect(fired(button.checks, "brand-impersonation")).toBe(true);
-    const form = await run(`<form action="${href}"><button>Sign in with Google</button></form>`);
+    const form = await run(
+      `<form action="${href}"><button>Sign in with Google</button></form>`
+    );
     expect(fired(form.checks, "brand-impersonation")).toBe(true);
   }
 }, 120_000);
 
 test("5,001 empty templates do not use up the template bound; 5,001 real ones are reported when they do", async () => {
-  const empty = await run(`${"<template></template>".repeat(5_001)}<template>${REAL}</template>`);
+  const empty = await run(
+    `${"<template></template>".repeat(5_001)}<template>${REAL}</template>`
+  );
   expect(fired(empty.checks, "brand-impersonation")).toBe(true);
-  const full = await run(`${"<template><b>x</b></template>".repeat(5_001)}<template>${REAL}</template>`);
+  const full = await run(
+    `${"<template><b>x</b></template>".repeat(5_001)}<template>${REAL}</template>`
+  );
   expect(foundOrNoted(full.checks, "brand-impersonation")).toBe(true);
   // The note names templates, not controls, as what was left unread: 5,000 are read, so one more than that is one cut.
-  const one = await run(`${"<template><b>x</b></template>".repeat(5_000)}<template>${REAL}</template>`);
-  const note = one.checks.find((c) => c.details?.scanTruncated === true) as { message?: string; details?: Record<string, unknown> } | undefined;
+  const one = await run(
+    `${"<template><b>x</b></template>".repeat(5_000)}<template>${REAL}</template>`
+  );
+  const note = one.checks.find((c) => c.details?.scanTruncated === true) as
+    | { message?: string; details?: Record<string, unknown> }
+    | undefined;
   expect(note?.details?.templatesUnread).toBe(1);
   expect(note?.details?.controlsUnread).toBeUndefined();
   expect(note?.message).toBe(
-    "1 <template> element was past the template limit and not read (scan work limit); no brand impersonation was found in what was read",
+    "1 <template> element was past the template limit and not read (scan work limit); no brand impersonation was found in what was read"
   );
-  const several = await run(`${"<template><b>x</b></template>".repeat(5_002)}<template>${REAL}</template>`);
-  const many = several.checks.find((c) => c.details?.scanTruncated === true) as { message?: string; details?: Record<string, unknown> } | undefined;
+  const several = await run(
+    `${"<template><b>x</b></template>".repeat(5_002)}<template>${REAL}</template>`
+  );
+  const many = several.checks.find((c) => c.details?.scanTruncated === true) as
+    | { message?: string; details?: Record<string, unknown> }
+    | undefined;
   expect(many?.details?.templatesUnread).toBe(3);
-  expect(many?.message).toContain("3 <template> elements were past the template limit and not read");
+  expect(many?.message).toContain(
+    "3 <template> elements were past the template limit and not read"
+  );
 }, 120_000);
 
 test("an overlay whose geometry is on a ninth class, or after 1,000 padding classes, is found", async () => {
-  const decoys = Array.from({ length: 8 }, (_, i) => `.d${i}{z-index:1}`).join("");
+  const decoys = Array.from({ length: 8 }, (_, i) => `.d${i}{z-index:1}`).join(
+    ""
+  );
   const css = `${decoys}.cover{position:fixed;inset:0;z-index:9999}`;
-  const ninth = await run('<iframe class="auth d0 d1 d2 d3 d4 d5 d6 d7 cover" srcdoc=""></iframe>', `<style>${css}</style>`);
+  const ninth = await run(
+    '<iframe class="auth d0 d1 d2 d3 d4 d5 d6 d7 cover" srcdoc=""></iframe>',
+    `<style>${css}</style>`
+  );
   expect(fired(ninth.checks, "fake-auth-overlay")).toBe(true);
   const padding = Array.from({ length: 1_000 }, (_, i) => `p${i}`).join(" ");
-  const padded = await run(`<iframe class="${padding} auth cover" srcdoc=""></iframe>`, `<style>${css}</style>`);
+  const padded = await run(
+    `<iframe class="${padding} auth cover" srcdoc=""></iframe>`,
+    `<style>${css}</style>`
+  );
   expect(fired(padded.checks, "fake-auth-overlay")).toBe(true);
 }, 120_000);
 
 test("201 later iframe rules do not push the real overlay rule out; geometric ones that do are reported", async () => {
   const cover = ".cover{position:fixed;inset:0;z-index:9999}";
   const frame = '<iframe class="auth cover" srcdoc=""></iframe>';
-  const harmless = await run(frame, `<style>${cover}${"iframe{border:0}".repeat(201)}</style>`);
+  const harmless = await run(
+    frame,
+    `<style>${cover}${"iframe{border:0}".repeat(201)}</style>`
+  );
   expect(fired(harmless.checks, "fake-auth-overlay")).toBe(true);
-  const geometric = await run(frame, `<style>${cover}${"iframe{width:1px}".repeat(201)}</style>`);
+  const geometric = await run(
+    frame,
+    `<style>${cover}${"iframe{width:1px}".repeat(201)}</style>`
+  );
   expect(foundOrNoted(geometric.checks, "fake-auth-overlay")).toBe(true);
 }, 120_000);
 
 test("a phrase split by markup with words around it is still the phrase", async () => {
-  for (const label of ["Sign<br>in with Goo<i>gle</i> to continue", "Acme: Sign<br>in with Goo<i>gle</i>", "Sign<br>in with Goo<i>gle</i> to your Acme dashboard"]) {
+  for (const label of [
+    "Sign<br>in with Goo<i>gle</i> to continue",
+    "Acme: Sign<br>in with Goo<i>gle</i>",
+    "Sign<br>in with Goo<i>gle</i> to your Acme dashboard",
+  ]) {
     const { checks } = await run(`<a href="${OFF}">${label}</a>`);
     expect(fired(checks, "brand-impersonation")).toBe(true);
   }
 }, 120_000);
 
 test("padding an attribute label or listing a fifth aria-labelledby target is found or reported", async () => {
-  const spaces = await run(`<a href="${OFF}" aria-label="${" ".repeat(400)}Sign in with Google">x</a>`);
+  const spaces = await run(
+    `<a href="${OFF}" aria-label="${" ".repeat(400)}Sign in with Google">x</a>`
+  );
   expect(fired(spaces.checks, "brand-impersonation")).toBe(true);
-  const zero = await run(`<a href="${OFF}" aria-label="${"​".repeat(400)}Sign in with Google">x</a>`);
+  const zero = await run(
+    `<a href="${OFF}" aria-label="${"​".repeat(400)}Sign in with Google">x</a>`
+  );
   expect(fired(zero.checks, "brand-impersonation")).toBe(true);
-  const fifth = await run(`<span id="a">a</span><span id="b">b</span><span id="c">c</span><span id="d">d</span><span id="e">Sign in with Google</span><a href="${OFF}" aria-labelledby="a b c d e">x</a>`);
+  const fifth = await run(
+    `<span id="a">a</span><span id="b">b</span><span id="c">c</span><span id="d">d</span><span id="e">Sign in with Google</span><a href="${OFF}" aria-labelledby="a b c d e">x</a>`
+  );
   expect(foundOrNoted(fifth.checks, "brand-impersonation")).toBe(true);
 }, 120_000);
 
 test("1,600 controls naming one 500 KB aria-labelledby target finish and find the real control", async () => {
   const target = `<div id="big">${"<span>word </span>".repeat(30_000)}</div>`;
-  const links = '<a href="https://p.invalid/" aria-labelledby="big big big big">x</a>'.repeat(1_600);
+  const links =
+    '<a href="https://p.invalid/" aria-labelledby="big big big big">x</a>'.repeat(
+      1_600
+    );
   const { checks } = await run(`${target}${links}${REAL}`);
   expect(finished(checks)).toBe(true);
   expect(fired(checks, "brand-impersonation")).toBe(true);

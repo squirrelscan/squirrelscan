@@ -16,14 +16,17 @@
 // loaded machine proves nothing, and the index existing proves nothing either
 // if the planner does not pick it.
 
+import type {
+  CrawlMetadata,
+  PageRecord,
+} from "@squirrelscan/core-contracts/storage";
+
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import type { CrawlMetadata, PageRecord } from "@squirrelscan/core-contracts/storage";
 
 import { SQLiteStorage } from "../src/storage/sqlite";
 
@@ -146,7 +149,9 @@ async function crawlWith(
 function planFor(sql: string, ...params: SQLQueryBindings[]): string {
   const db = new Database(dbPath, { readonly: true });
   try {
-    const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as Array<{
+    const rows = db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all(...params) as Array<{
       detail: string;
     }>;
     return rows.map((r) => r.detail).join("\n");
@@ -166,7 +171,10 @@ describe("idx_pages_url_recency (#1912)", () => {
   test("the superseded-pages predicate seeks, it does not scan the table per row", async () => {
     const store = new SQLiteStorage(dbPath);
     await run(store.init());
-    const first = await crawlWith(store, 0, ["https://e.test/a", "https://e.test/b"]);
+    const first = await crawlWith(store, 0, [
+      "https://e.test/a",
+      "https://e.test/b",
+    ]);
     await crawlWith(store, 1, ["https://e.test/a", "https://e.test/b"]);
     store.close?.();
 
@@ -194,9 +202,15 @@ describe("idx_pages_url_recency (#1912)", () => {
     for (const id of ids) {
       await run(store.upsertPage(id, page("https://e.test/tied", 5_000, id)));
     }
-    await run(store.upsertPage(ids[0]!, page("https://e.test/back", 5_000, "a")));
-    await run(store.upsertPage(ids[1]!, page("https://e.test/back", 4_000, "b")));
-    await run(store.upsertPage(ids[2]!, page("https://e.test/only", 5_000, "c")));
+    await run(
+      store.upsertPage(ids[0]!, page("https://e.test/back", 5_000, "a"))
+    );
+    await run(
+      store.upsertPage(ids[1]!, page("https://e.test/back", 4_000, "b"))
+    );
+    await run(
+      store.upsertPage(ids[2]!, page("https://e.test/only", 5_000, "c"))
+    );
     store.close?.();
 
     const db = new Database(dbPath, { readonly: true });
@@ -217,13 +231,17 @@ describe("idx_pages_url_recency (#1912)", () => {
     const store = new SQLiteStorage(dbPath);
     await run(store.init());
     const urls = ["https://e.test/a", "https://e.test/b", "https://e.test/c"];
-    const first = await crawlWith(store, 0, [...urls, "https://e.test/only-old"]);
+    const first = await crawlWith(store, 0, [
+      ...urls,
+      "https://e.test/only-old",
+    ]);
     await crawlWith(store, 1, urls);
 
     // What the duplicated predicate says should go.
     const db = new Database(dbPath);
-    const expected = (db.prepare(SUPERSEDED).all(first) as Array<{ rowid: number }>)
-      .length;
+    const expected = (
+      db.prepare(SUPERSEDED).all(first) as Array<{ rowid: number }>
+    ).length;
     db.close();
     // A url no later crawl saw is still the freshest record of it, so it stays:
     // 3 superseded, not 4.

@@ -13,6 +13,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -67,7 +68,10 @@ async function freshCrawl(store: SQLiteStorage): Promise<string> {
   return run(store.createCrawl(meta));
 }
 
-function page(normalizedUrl: string, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: normalizedUrl,
     normalizedUrl,
@@ -117,9 +121,10 @@ describe("getPageLinkRows", () => {
             html: `<html><body>${"x".repeat(2048)}</body></html>`,
             // A page with no stored parse (an error page, a non-HTML response)
             // must come back as null, not as an empty string.
-            parsedData: i === 2 ? null : JSON.stringify({ links: [{ url: `/l${i}` }] }),
-          }),
-        ),
+            parsedData:
+              i === 2 ? null : JSON.stringify({ links: [{ url: `/l${i}` }] }),
+          })
+        )
       );
     }
 
@@ -134,11 +139,13 @@ describe("getPageLinkRows", () => {
         parsedData: p.parsedData,
         status: p.status,
         contentType: p.contentType,
-      })),
+      }))
     );
     expect(projected.map((r) => r.normalizedUrl)).toEqual([...urls].sort());
     // The one page stored without a parse (inserted third, sorts second).
-    expect(projected.find((r) => r.normalizedUrl.endsWith("/b"))!.parsedData).toBeNull();
+    expect(
+      projected.find((r) => r.normalizedUrl.endsWith("/b"))!.parsedData
+    ).toBeNull();
 
     // Paging: same window, same rows — including the edges. Offset past the end
     // returns nothing; limit 0 is falsy in BOTH builders, so both omit LIMIT,
@@ -154,8 +161,12 @@ describe("getPageLinkRows", () => {
     };
     for (const limit of [1, 2, 5, 0]) {
       for (const offset of [0, 1, 3, urls.length, urls.length + 10]) {
-        const a = await outcome(run(store!.getPages(crawlId, { limit, offset })));
-        const b = await outcome(run(store!.getPageLinkRows(crawlId, { limit, offset })));
+        const a = await outcome(
+          run(store!.getPages(crawlId, { limit, offset }))
+        );
+        const b = await outcome(
+          run(store!.getPageLinkRows(crawlId, { limit, offset }))
+        );
         if (a.failed || b.failed) {
           expect({ limit, offset, a: a.failed, b: b.failed }).toEqual({
             limit,
@@ -171,7 +182,7 @@ describe("getPageLinkRows", () => {
             parsedData: p.parsedData,
             status: p.status,
             contentType: p.contentType,
-          })),
+          }))
         );
       }
     }
@@ -187,11 +198,24 @@ describe("getPageLinkRows", () => {
 
     const shared = ["https://example.com/Zeta", "https://example.com/alpha"];
     for (const url of shared) {
-      await run(store.upsertPage(mine, page(url, { parsedData: '{"links":[],"who":"mine"}' })));
-      await run(store.upsertPage(other, page(url, { parsedData: '{"links":[],"who":"other"}' })));
+      await run(
+        store.upsertPage(
+          mine,
+          page(url, { parsedData: '{"links":[],"who":"mine"}' })
+        )
+      );
+      await run(
+        store.upsertPage(
+          other,
+          page(url, { parsedData: '{"links":[],"who":"other"}' })
+        )
+      );
     }
     await run(
-      store.upsertPage(other, page("https://example.com/only-other", { parsedData: "{}" })),
+      store.upsertPage(
+        other,
+        page("https://example.com/only-other", { parsedData: "{}" })
+      )
     );
 
     const projected = await run(store.getPageLinkRows(mine));
@@ -202,11 +226,12 @@ describe("getPageLinkRows", () => {
         parsedData: p.parsedData,
         status: p.status,
         contentType: p.contentType,
-      })),
+      }))
     );
     // The other crawl's extra page must not appear, and its rows must not win.
     expect(projected).toHaveLength(2);
-    for (const row of projected) expect(row.parsedData).toContain('"who":"mine"');
+    for (const row of projected)
+      expect(row.parsedData).toContain('"who":"mine"');
     // BINARY collation puts uppercase first; a switch to NOCASE would reorder.
     expect(projected.map((r) => r.normalizedUrl)).toEqual([
       "https://example.com/Zeta",
@@ -220,8 +245,18 @@ describe("getPageLinkRows", () => {
     store = new SQLiteStorage(":memory:");
     await run(store.init());
     const crawlId = await freshCrawl(store);
-    await run(store.upsertPage(crawlId, page("https://example.com/empty", { parsedData: "" })));
-    await run(store.upsertPage(crawlId, page("https://example.com/null", { parsedData: null })));
+    await run(
+      store.upsertPage(
+        crawlId,
+        page("https://example.com/empty", { parsedData: "" })
+      )
+    );
+    await run(
+      store.upsertPage(
+        crawlId,
+        page("https://example.com/null", { parsedData: null })
+      )
+    );
 
     const projected = await run(store.getPageLinkRows(crawlId));
     const full = await run(store.getPages(crawlId));
@@ -231,10 +266,14 @@ describe("getPageLinkRows", () => {
         parsedData: p.parsedData,
         status: p.status,
         contentType: p.contentType,
-      })),
+      }))
     );
-    expect(projected.find((r) => r.normalizedUrl.endsWith("/empty"))!.parsedData).toBe("");
-    expect(projected.find((r) => r.normalizedUrl.endsWith("/null"))!.parsedData).toBeNull();
+    expect(
+      projected.find((r) => r.normalizedUrl.endsWith("/empty"))!.parsedData
+    ).toBe("");
+    expect(
+      projected.find((r) => r.normalizedUrl.endsWith("/null"))!.parsedData
+    ).toBeNull();
   });
 
   test("reads the parse WITHOUT touching the content store", async () => {
@@ -258,8 +297,11 @@ describe("getPageLinkRows", () => {
     await run(
       store.upsertPage(
         crawlId,
-        page("https://example.com/a", { html: null, parsedData: '{"links":[]}' }),
-      ),
+        page("https://example.com/a", {
+          html: null,
+          parsedData: '{"links":[]}',
+        })
+      )
     );
 
     reads = 0;

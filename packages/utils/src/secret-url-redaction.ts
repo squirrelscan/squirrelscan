@@ -154,7 +154,7 @@ const CREDENTIAL_KEYS = new Set(
     "sgid",
     "csrfmiddlewaretoken",
     "oobcode",
-  ].map((name) => name.replace(/[-_.]/g, "")),
+  ].map((name) => name.replace(/[-_.]/g, ""))
 );
 
 /** Redacted in every URL whatever the value: nothing a page serves is chosen by a password. */
@@ -191,7 +191,8 @@ const SESSION_KEYS = new Set([
  * `csrfToken`, `session_id` is a credential above): a whole word at the end, so
  * `tokenId`, `sessions` and `nonce_page` do not match.
  */
-const SESSION_WORDS = /(?:^|_)(?:token|sess|session|sessid|sid|nonce|csrf|xsrf|verifier|ticket)$/;
+const SESSION_WORDS =
+  /(?:^|_)(?:token|sess|session|sessid|sid|nonce|csrf|xsrf|verifier|ticket)$/;
 
 /** Cursors that page a list: per-request, but each value is a different page. */
 const PAGINATION_NAMES =
@@ -209,7 +210,11 @@ const NAME_DECODE_ROUNDS = 2;
  */
 function paramWords(rawName: string): string {
   let name = rawName;
-  for (let round = 0; round < NAME_DECODE_ROUNDS && name.includes("%"); round++) {
+  for (
+    let round = 0;
+    round < NAME_DECODE_ROUNDS && name.includes("%");
+    round++
+  ) {
     try {
       name = decodeURIComponent(name);
     } catch {
@@ -297,7 +302,7 @@ const NEVER_CONTENT_KEYS = new Set(
     "private_token",
     "sgid",
     "oobcode",
-  ].map((name) => name.replace(/[-_.]/g, "")),
+  ].map((name) => name.replace(/[-_.]/g, ""))
 );
 
 /**
@@ -375,17 +380,26 @@ export type ZeroXIds = "both" | "address" | "none";
  * separators or no digits; ids are digits, and an `0x` address or hash is an
  * id too unless `zeroXIds` says otherwise. Percent-decoded first.
  */
-export function looksLikeAToken(raw: string, zeroXIds: ZeroXIds = "both"): boolean {
+export function looksLikeAToken(
+  raw: string,
+  zeroXIds: ZeroXIds = "both"
+): boolean {
   const value = tokenCore(raw);
   if (value.length < 16 || /\s/.test(value)) return false;
   // An Ethereum-style address or hash (`/token/0x6b17…`, `/tx/0x…`) is a page's id.
   if (zeroXIds !== "none" && /^0x[0-9a-f]{40}$/i.test(value)) return false;
   if (zeroXIds === "both" && /^0x[0-9a-f]{64}$/i.test(value)) return false;
-  if (/^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*$/.test(value)) return true;
+  if (/^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*$/.test(value))
+    return true;
   if (UUID.test(value)) return true;
   if (/^\d+$/.test(value)) return false;
   if (/^[0-9a-f]{16,}$/i.test(value)) return true;
-  if (/^[A-Za-z0-9]{20,}$/.test(value) && /\d/.test(value) && /[A-Za-z]/.test(value)) return true;
+  if (
+    /^[A-Za-z0-9]{20,}$/.test(value) &&
+    /\d/.test(value) &&
+    /[A-Za-z]/.test(value)
+  )
+    return true;
   // A session id can be letters only (PHP, ASP.NET); no word runs on for 24.
   if (/^[A-Za-z0-9]{24,}$/.test(value)) return true;
   return (
@@ -418,10 +432,13 @@ function tokenCore(raw: string): string {
 function looksLikeAShortToken(raw: string): boolean {
   const value = percentDecoded(raw);
   if (!/^[A-Za-z0-9]{16,19}$/.test(value)) return false;
-  if (!/\d/.test(value) || !/[a-z]/.test(value) || !/[A-Z]/.test(value)) return false;
-  const kind = (ch: string) => (ch >= "0" && ch <= "9" ? 0 : ch >= "a" && ch <= "z" ? 1 : 2);
+  if (!/\d/.test(value) || !/[a-z]/.test(value) || !/[A-Z]/.test(value))
+    return false;
+  const kind = (ch: string) =>
+    ch >= "0" && ch <= "9" ? 0 : ch >= "a" && ch <= "z" ? 1 : 2;
   let changes = 0;
-  for (let i = 1; i < value.length; i++) if (kind(value[i]!) !== kind(value[i - 1]!)) changes++;
+  for (let i = 1; i < value.length; i++)
+    if (kind(value[i]!) !== kind(value[i - 1]!)) changes++;
   return changes * 2 >= value.length - 1;
 }
 
@@ -481,7 +498,8 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const asArray = (value: unknown): unknown[] =>
+  Array.isArray(value) ? value : [];
 
 /** The page URLs one check names: its page, its pages, and its items' source pages. */
 function checkPageUrls(check: unknown, into: unknown[]): void {
@@ -504,7 +522,10 @@ function checkPageUrls(check: unknown, into: unknown[]): void {
  * host, so the publish schema, the container and the later signal translation
  * agree.
  */
-export function reportSiteHosts(report: unknown, alsoUrls: Iterable<unknown> = []): SiteHosts {
+export function reportSiteHosts(
+  report: unknown,
+  alsoUrls: Iterable<unknown> = []
+): SiteHosts {
   const r = asRecord(report);
   const urls: unknown[] = [...alsoUrls];
   if (!r) return siteHostsOf(urls);
@@ -516,7 +537,8 @@ export function reportSiteHosts(report: unknown, alsoUrls: Iterable<unknown> = [
   }
   for (const check of asArray(r.siteChecks)) checkPageUrls(check, urls);
   for (const rule of Object.values(asRecord(r.ruleResults) ?? {})) {
-    for (const check of asArray(asRecord(rule)?.checks)) checkPageUrls(check, urls);
+    for (const check of asArray(asRecord(rule)?.checks))
+      checkPageUrls(check, urls);
   }
   for (const row of asArray(r.pageStatuses)) urls.push(asRecord(row)?.url);
   for (const list of Object.values(asRecord(r.summary) ?? {})) {
@@ -569,7 +591,8 @@ const AUTHORITY_END = new Set(["/", "?", "#", ";", "\\"]);
 /** Where a percent-encoded one ends (`%2F`, `%3F`, `%23`, `%3B`, `%26`) or the outer value does. */
 const ENCODED_AUTHORITY_END = /%2F|%3F|%23|%3B|%26|[&/?#;\\\s"'<>]/gi;
 /** The same, encoded twice. */
-const TWICE_ENCODED_AUTHORITY_END = /%252F|%253F|%2523|%253B|%2526|[&/?#;\\\s"'<>]/gi;
+const TWICE_ENCODED_AUTHORITY_END =
+  /%252F|%253F|%2523|%253B|%2526|[&/?#;\\\s"'<>]/gi;
 /** An authority's start, percent-encoded once or twice: after a scheme, or protocol-relative. */
 const ENCODED_AUTHORITY_START: [RegExp, number, 1 | 2][] = [
   [/^%3A%2F%2F/i, 9, 1],
@@ -596,7 +619,7 @@ const ENCODED_RELATIVE_START: [RegExp, number, 1 | 2][] = [
 function urlCursor(
   text: string,
   site: SiteHosts,
-  isWpResetQuery: (query: number) => boolean = () => false,
+  isWpResetQuery: (query: number) => boolean = () => false
 ) {
   let pos = 0;
   let authority = -1;
@@ -645,7 +668,8 @@ function urlCursor(
     if (onSite === undefined) {
       let host: string;
       if (levels > 0) {
-        const end = levels === 2 ? TWICE_ENCODED_AUTHORITY_END : ENCODED_AUTHORITY_END;
+        const end =
+          levels === 2 ? TWICE_ENCODED_AUTHORITY_END : ENCODED_AUTHORITY_END;
         end.lastIndex = at;
         host = text.slice(at, end.exec(text)?.index ?? text.length);
         for (let round = 0; round < levels; round++) {
@@ -686,7 +710,11 @@ function urlCursor(
           ({ authority, encoded } = outer);
           query = true;
           outer = null;
-        } else if (ch === ":" && text[pos + 1] === "/" && text[pos + 2] === "/") {
+        } else if (
+          ch === ":" &&
+          text[pos + 1] === "/" &&
+          text[pos + 2] === "/"
+        ) {
           startAuthority(pos + 3, 0);
           pos += 2;
         } else if (ch === "/" && text[pos + 1] === "/" && valueStart(pos)) {
@@ -696,12 +724,19 @@ function urlCursor(
           // `pos` moved past the marker.
         } else if (ch === "?" || ch === "#") {
           // Not after a value being replaced (`;password=wp-login.php?`).
-          if (ch === "?" && pos - "wp-login.php".length >= skippedTo && isWpResetQuery(pos)) {
+          if (
+            ch === "?" &&
+            pos - "wp-login.php".length >= skippedTo &&
+            isWpResetQuery(pos)
+          ) {
             wpQuery = pos;
           }
           root ??= { authority, encoded };
           query = true;
-        } else if (ch === "%" && /^%(?:3F|23)/i.test(text.slice(pos, pos + 3))) {
+        } else if (
+          ch === "%" &&
+          /^%(?:3F|23)/i.test(text.slice(pos, pos + 3))
+        ) {
           root ??= { authority, encoded };
           query = true;
         }
@@ -731,7 +766,10 @@ function urlCursor(
      * never changes this answer for the site's own URLs.
      */
     onSite(): boolean {
-      return isSite(authority, encoded) || (root !== null && isSite(root.authority, root.encoded));
+      return (
+        isSite(authority, encoded) ||
+        (root !== null && isSite(root.authority, root.encoded))
+      );
     },
   };
 }
@@ -766,7 +804,8 @@ const USERINFO = /((?:\bhttps?:)?\/\/)[^\s/?#"'<>\\]+@/gi;
  * (`https%3A%2F%2Fu%3Ap%40host`, `%2F%2Fu%3Ap%40host`, `https%253A%252F%252F…%2540`),
  * once-encoded ending at a raw `@` too (half-encoded).
  */
-const ENCODED_USERINFO = /((?:https?%3A)?%2F%2F)(?:(?!%2F|%3F|%23)[^\s/?#"'<>\\&])*(?:%40|@)/gi;
+const ENCODED_USERINFO =
+  /((?:https?%3A)?%2F%2F)(?:(?!%2F|%3F|%23)[^\s/?#"'<>\\&])*(?:%40|@)/gi;
 const TWICE_ENCODED_USERINFO =
   /((?:https?%253A)?%252F%252F)(?:(?!%252F|%253F|%2523)[^\s/?#"'<>\\&])*%2540/gi;
 /**
@@ -794,7 +833,8 @@ const PARAM_AHEAD = /[^=&?;#\s"'<>\\]{1,128}=/y;
 
 /** Whether the value end at `to` is glued inside the value (see {@link GLUE_ENDS}). */
 function gluedEnd(text: string, to: number): boolean {
-  if (!GLUE_ENDS.has(text[to]!) || !VALUE_CHAR.test(text[to + 1] ?? "")) return false;
+  if (!GLUE_ENDS.has(text[to]!) || !VALUE_CHAR.test(text[to + 1] ?? ""))
+    return false;
   if (text[to] !== ";") return true;
   PARAM_AHEAD.lastIndex = to + 1;
   return !PARAM_AHEAD.test(text);
@@ -803,7 +843,9 @@ function gluedEnd(text: string, to: number): boolean {
 /** A nested query's start at `at`: `?`, or one encoded once or twice. */
 function isNestedQueryAt(text: string, at: number): boolean {
   const ch = text[at];
-  return ch === "?" || (ch === "%" && /^%(?:25)?3F/i.test(text.slice(at, at + 5)));
+  return (
+    ch === "?" || (ch === "%" && /^%(?:25)?3F/i.test(text.slice(at, at + 5)))
+  );
 }
 
 /**
@@ -841,7 +883,7 @@ function encodedParamPatterns(pct: "%" | "%25") {
   return {
     start: new RegExp(
       `(${sep})((?:[A-Za-z0-9._~\\[\\]-]|${nameEscape}){1,128})(?:${pct}3D|=)`,
-      "gi",
+      "gi"
     ),
     end: new RegExp(valueEnd, "gi"),
     // A matrix parameter's value also ends at the next segment or the query.
@@ -852,7 +894,18 @@ const ENCODED_ONCE = encodedParamPatterns("%");
 const ENCODED_TWICE = encodedParamPatterns("%25");
 
 /** Where a WordPress reset link's query ends: its `#`, or the run's (not at a `'`, see below). */
-const WP_QUERY_END = new Set(["#", " ", "\t", "\n", "\r", "\f", "\v", '"', "<", ">"]);
+const WP_QUERY_END = new Set([
+  "#",
+  " ",
+  "\t",
+  "\n",
+  "\r",
+  "\f",
+  "\v",
+  '"',
+  "<",
+  ">",
+]);
 /** `wp-login.php` right before a query's `?`, a path segment or a whole value. */
 const WP_LOGIN_PATH = /(?:^|[/=\s"'<>])wp-login\.php$/i;
 /** The end of a reset action's value: where the value does (a `;`, `'` or `\` glued on does not end it). */
@@ -861,8 +914,14 @@ const WP_ACTION_END = `(?=[&#"\\s<>]|$|[;'\\\\](?![A-Za-z0-9_~.%-])|;[^=&?;#\\s"
  * A reset action as a query's first parameter (sticky, at its `?`), or as a
  * later one, after an `&` or an HTML-escaped `&amp;` (an `outerHTML` snippet).
  */
-const WP_FIRST_RESET_ACTION = new RegExp(`\\?action=(?:rp|resetpass)${WP_ACTION_END}`, "iy");
-const WP_RESET_ACTION = new RegExp(`&(?:amp;)?action=(?:rp|resetpass)${WP_ACTION_END}`, "gi");
+const WP_FIRST_RESET_ACTION = new RegExp(
+  `\\?action=(?:rp|resetpass)${WP_ACTION_END}`,
+  "iy"
+);
+const WP_RESET_ACTION = new RegExp(
+  `&(?:amp;)?action=(?:rp|resetpass)${WP_ACTION_END}`,
+  "gi"
+);
 
 /**
  * Where the query starting at a raw `?` ends when it is a WordPress
@@ -888,14 +947,21 @@ function wpResetQueries(text: string) {
     return list[lo] ?? text.length;
   };
   return (query: number): number => {
-    if (query < 0 || !WP_LOGIN_PATH.test(text.slice(Math.max(0, query - 13), query))) return -1;
+    if (
+      query < 0 ||
+      !WP_LOGIN_PATH.test(text.slice(Math.max(0, query - 13), query))
+    )
+      return -1;
     if (actions === null) {
       actions = Array.from(text.matchAll(WP_RESET_ACTION), (m) => m.index);
-      for (let i = 0; i < text.length; i++) if (WP_QUERY_END.has(text[i]!)) ends.push(i);
+      for (let i = 0; i < text.length; i++)
+        if (WP_QUERY_END.has(text[i]!)) ends.push(i);
     }
     const end = firstAfter(ends, query);
     WP_FIRST_RESET_ACTION.lastIndex = query;
-    return WP_FIRST_RESET_ACTION.test(text) || firstAfter(actions, query) < end ? end : -1;
+    return WP_FIRST_RESET_ACTION.test(text) || firstAfter(actions, query) < end
+      ? end
+      : -1;
   };
 }
 
@@ -931,7 +997,9 @@ function inOAuthCallbackQuery(text: string, at: number): boolean {
     for (const m of window.matchAll(mark)) query = Math.max(query, m.index);
   }
   if (query === -1) return false;
-  let path = window.slice(Math.max(0, query - 80), query).replace(/%(?:25)?2F/gi, "/");
+  let path = window
+    .slice(Math.max(0, query - 80), query)
+    .replace(/%(?:25)?2F/gi, "/");
   const nested = path.lastIndexOf("=");
   if (nested !== -1) path = path.slice(nested + 1);
   return OAUTH_CALLBACK_PATH.test(path);
@@ -949,10 +1017,14 @@ function redactParams(
   text: string,
   site: SiteHosts,
   start: RegExp,
-  valueEnd: (matrix: boolean) => RegExp,
+  valueEnd: (matrix: boolean) => RegExp
 ): string {
   const wpResetQueryEnd = wpResetQueries(text);
-  const cursor = urlCursor(text, site, (query) => wpResetQueryEnd(query) !== -1);
+  const cursor = urlCursor(
+    text,
+    site,
+    (query) => wpResetQueryEnd(query) !== -1
+  );
   const valueEndFrom = valueEnds(text);
   let out = "";
   let copied = 0;
@@ -966,7 +1038,8 @@ function redactParams(
     // An OAuth authorization code on the site's callback URL, whatever its
     // shape: one-time, and as short as a page number (#3433).
     const oauthCode =
-      words === "code" && inOAuthCallbackQuery(text, match.index + match[1]!.length);
+      words === "code" &&
+      inOAuthCallbackQuery(text, match.index + match[1]!.length);
     const session = !credential && (oauthCode || isSessionName(match[2]!));
     // A reset link's own `key`: the first parameter after its `?`, or a later
     // one after an `&` (or `&amp;`), before its `#`, the link the run's last one so far
@@ -979,7 +1052,8 @@ function redactParams(
       wpQuery !== -1 &&
       (match.index === wpQuery ||
         match[1] === "&" ||
-        (match[1] === ";" && text.slice(match.index - 4, match.index).toLowerCase() === "&amp")) &&
+        (match[1] === ";" &&
+          text.slice(match.index - 4, match.index).toLowerCase() === "&amp")) &&
       match.index < wpResetQueryEnd(wpQuery);
     if (!credential && !session && !wpKey) continue;
     if ((session || wpKey) && !cursor.onSite()) continue;
@@ -988,7 +1062,9 @@ function redactParams(
     // is no telling a nested path from a nested query, and a `;` query is rare.
     const separator = match[1]!.toLowerCase();
     const matrix =
-      separator === ";" ? !cursor.inQuery() : separator === "%3b" || separator === "%253b";
+      separator === ";"
+        ? !cursor.inQuery()
+        : separator === "%3b" || separator === "%253b";
     const from = match.index + match[0].length;
     const to = valueEndFrom(valueEnd(matrix), from);
     if (from === to) continue;
@@ -998,7 +1074,8 @@ function redactParams(
     let nested = from;
     while (nested < to && !isNestedQueryAt(text, nested)) nested++;
     const prefix = text.slice(from, nested);
-    if (nested === to && (prefix === REDACTED_VALUE || /^\*+$/.test(prefix))) continue;
+    if (nested === to && (prefix === REDACTED_VALUE || /^\*+$/.test(prefix)))
+      continue;
     // A token, or a token a query value runs on from (`?a=1;token=<hex>/more`),
     // or one glued on after a `;`, `'` or `\` (`token=x;<hex>`).
     const head = prefix.split("/", 1)[0]!;
@@ -1008,7 +1085,8 @@ function redactParams(
       const uuidIsId = UUID_ID_KEYS.has(words.replace(/_/g, ""));
       const zeroXIds = HASH_IS_SECRET_NAME.test(words) ? "address" : "both";
       const shaped = (part: string) =>
-        (looksLikeAToken(part, zeroXIds) && !(uuidIsId && UUID.test(tokenCore(part)))) ||
+        (looksLikeAToken(part, zeroXIds) &&
+          !(uuidIsId && UUID.test(tokenCore(part)))) ||
         looksLikeAShortToken(part);
       if (!shaped(prefix) && !head.split(/[;'\\]/).some(shaped)) continue;
     }
@@ -1026,7 +1104,11 @@ function redactJwts(text: string): string {
   let out = "";
   let copied = 0;
   JWT_CANDIDATE.lastIndex = 0;
-  for (let match = JWT_CANDIDATE.exec(text); match !== null; match = JWT_CANDIDATE.exec(text)) {
+  for (
+    let match = JWT_CANDIDATE.exec(text);
+    match !== null;
+    match = JWT_CANDIDATE.exec(text)
+  ) {
     const header = match[0].slice(0, match[0].search(JWT_SEPARATOR));
     if (!isJwtHeader(header)) {
       // The token can start later in this run (`subdomain.eyJ…`, `3DeyJ…`).
@@ -1045,7 +1127,9 @@ function redactAspNetSegments(text: string, site: SiteHosts): string {
   const cursor = urlCursor(text, site);
   return text.replace(ASPNET_COOKIELESS, (segment: string, at: number) => {
     cursor.seek(at);
-    return cursor.onSite() ? segment.replace(ASPNET_PART, `$1(${REDACTED_VALUE})`) : segment;
+    return cursor.onSite()
+      ? segment.replace(ASPNET_PART, `$1(${REDACTED_VALUE})`)
+      : segment;
   });
 }
 
@@ -1072,7 +1156,11 @@ const CREDENTIAL_CONTEXT_WORDS = new Set([
  * beside any other word: `/blog/confirmation-bias/<hex>` and
  * `/products/activation-lock/<hex>` are pages.
  */
-const NOUN_CONTEXT_WORDS = new Set(["confirmation", "activation", "invitation"]);
+const NOUN_CONTEXT_WORDS = new Set([
+  "confirmation",
+  "activation",
+  "invitation",
+]);
 const NOUN_PAIR_WORDS = new Set([
   "email",
   "account",
@@ -1120,7 +1208,14 @@ const WEAK_CONTEXT_WORDS = new Set([
   "recovery",
 ]);
 /** What a weak word pairs with to mean a credential, in its own segment. */
-const CONTEXT_PAIR_WORDS = new Set(["email", "link", "account", "code", "key", "login"]);
+const CONTEXT_PAIR_WORDS = new Set([
+  "email",
+  "link",
+  "account",
+  "code",
+  "key",
+  "login",
+]);
 /**
  * The same as the segment before a weak word, less the nouns that name a
  * page there (`/key/token/<hex>`, `/code/token/<hex>`).
@@ -1155,11 +1250,16 @@ const CHAIN_OBJECT_WORDS = new Set([
 function segmentContext(words: string[]): "credential" | "weak" | null {
   if (words.length === 1) {
     const word = words[0]!;
-    return CREDENTIAL_CONTEXT_WORDS.has(word) || NOUN_CONTEXT_WORDS.has(word) ? "credential" : null;
+    return CREDENTIAL_CONTEXT_WORDS.has(word) || NOUN_CONTEXT_WORDS.has(word)
+      ? "credential"
+      : null;
   }
   if (words.length !== 2) return null;
   if (words.some((w) => CREDENTIAL_CONTEXT_WORDS.has(w))) return "credential";
-  if (words.some((w) => NOUN_CONTEXT_WORDS.has(w)) && words.some((w) => NOUN_PAIR_WORDS.has(w))) {
+  if (
+    words.some((w) => NOUN_CONTEXT_WORDS.has(w)) &&
+    words.some((w) => NOUN_PAIR_WORDS.has(w))
+  ) {
     return "credential";
   }
   return words.some((w) => WEAK_CONTEXT_WORDS.has(w)) &&
@@ -1176,7 +1276,10 @@ function segmentContext(words: string[]): "credential" | "weak" | null {
  * another weak word (`/login/token/<t>`, `/account/verify/<t>`,
  * `/auth/token/<t>`).
  */
-function contextAfter(previous: string[], words: string[]): "credential" | "weak" | null {
+function contextAfter(
+  previous: string[],
+  words: string[]
+): "credential" | "weak" | null {
   const own = segmentContext(words);
   if (own) return own;
   if (words.length === 1 && BETWEEN_WORDS.has(words[0]!)) {
@@ -1194,7 +1297,8 @@ function contextAfter(previous: string[], words: string[]): "credential" | "weak
   const before = segmentContext(previous);
   if (before) return before;
   if (previous.length !== 1) return null;
-  return PREVIOUS_PAIR_WORDS.has(previous[0]!) || WEAK_CONTEXT_WORDS.has(previous[0]!)
+  return PREVIOUS_PAIR_WORDS.has(previous[0]!) ||
+    WEAK_CONTEXT_WORDS.has(previous[0]!)
     ? "weak"
     : null;
 }
@@ -1208,7 +1312,7 @@ function contextAfter(previous: string[], words: string[]): "credential" | "weak
 function contextZeroXIds(
   context: "credential" | "weak",
   previous: string[],
-  words: string[],
+  words: string[]
 ): ZeroXIds {
   if (previous.some((w) => CHAIN_OBJECT_WORDS.has(w))) return "both";
   return context === "weak" || words.includes("token") ? "address" : "none";
@@ -1218,7 +1322,8 @@ function contextZeroXIds(
  * A URL path in text: after a host (with a scheme, or protocol-relative), or a
  * relative one at the start of a run or a value.
  */
-const URL_PATH = /(?:(?:\bhttps?:)?\/\/[^\s/?#"'<>\\]+|(?<=^|[\s"'<>=(]|#!?))(\/[^\s?#&"'<>\\]*)/g;
+const URL_PATH =
+  /(?:(?:\bhttps?:)?\/\/[^\s/?#"'<>\\]+|(?<=^|[\s"'<>=(]|#!?))(\/[^\s?#&"'<>\\]*)/g;
 /** Where a path that is not a parameter's value ends: it can hold an `&`. */
 const PATH_END = /[\s?#"'<>\\]/g;
 
@@ -1235,7 +1340,8 @@ function segmentWords(segment: string): string[] {
   const out: string[] = [];
   for (const word of words) {
     const last = out.length - 1;
-    if (word === "in" && (out[last] === "sign" || out[last] === "log")) out[last] += "in";
+    if (word === "in" && (out[last] === "sign" || out[last] === "log"))
+      out[last] += "in";
     else out.push(PLURAL_CONTEXT_WORDS.get(word) ?? word);
   }
   return out;
@@ -1259,7 +1365,8 @@ const PLURAL_CONTEXT_WORDS = new Map([
  * a credential (#3433).
  */
 const DJANGO_RESET_TOKEN = /^[0-9a-z]{1,13}-[0-9a-f]{20,64}$/;
-const DJANGO_SIGNED_KEY = /^[A-Za-z0-9_-]{1,64}:[A-Za-z0-9]{4,10}:[A-Za-z0-9_-]{20,}$/;
+const DJANGO_SIGNED_KEY =
+  /^[A-Za-z0-9_-]{1,64}:[A-Za-z0-9]{4,10}:[A-Za-z0-9_-]{20,}$/;
 /** A Django `uidb64` segment before its reset token: a user's id, base64url, not the secret. */
 const DJANGO_UIDB64 = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -1283,10 +1390,15 @@ function trailingPunctuationStart(text: string): number {
  * the part before a markdown link's closing `)` or a file extension
  * (`/reset/<hex>)`, `/reset/<hex>.html`, #3433); 0 when none is.
  */
-function pathTokenLength(head: string, zeroXIds: ZeroXIds, context: "credential" | "weak"): number {
+function pathTokenLength(
+  head: string,
+  zeroXIds: ZeroXIds,
+  context: "credential" | "weak"
+): number {
   const isToken = (part: string) =>
     looksLikeAToken(part, zeroXIds) ||
-    (context === "credential" && (DJANGO_RESET_TOKEN.test(part) || DJANGO_SIGNED_KEY.test(part)));
+    (context === "credential" &&
+      (DJANGO_RESET_TOKEN.test(part) || DJANGO_SIGNED_KEY.test(part)));
   if (isToken(head)) return head.length;
   const bare = head.slice(0, trailingPunctuationStart(head));
   if (bare !== head && isToken(bare)) return bare.length;
@@ -1319,7 +1431,11 @@ function redactSegments(segments: string[], cut: RegExp): boolean {
     }
     // Django's `/reset/<uidb64>/<token>/`: the token is two segments on.
     const after = segments[i + 2];
-    if (context === "credential" && after !== undefined && DJANGO_UIDB64.test(head)) {
+    if (
+      context === "credential" &&
+      after !== undefined &&
+      DJANGO_UIDB64.test(head)
+    ) {
       const token = after.split(cut)[0]!;
       if (DJANGO_RESET_TOKEN.test(token)) {
         segments[i + 2] = `${REDACTED_VALUE}${after.slice(token.length)}`;
@@ -1331,7 +1447,15 @@ function redactSegments(segments: string[], cut: RegExp): boolean {
 }
 
 /** What ends a parameter name, reading back from its `=`. */
-const PARAM_NAME_END = new Set(["=", "&", "?", ";", "#", ...URL_BOUNDARY, "\\"]);
+const PARAM_NAME_END = new Set([
+  "=",
+  "&",
+  "?",
+  ";",
+  "#",
+  ...URL_BOUNDARY,
+  "\\",
+]);
 /** An encoded separator right before a name: `%3Fnext=`, `%253Fnext=`. */
 const ENCODED_NAME_START = /%(?:25)?(?:3F|26|3B|23)[^%]*$/i;
 
@@ -1391,7 +1515,11 @@ function redactPathTokens(text: string, site: SiteHosts): string {
   let copied = 0;
   let cursor: ReturnType<typeof urlCursor> | null = null;
   URL_PATH.lastIndex = 0;
-  for (let match = URL_PATH.exec(text); match !== null; match = URL_PATH.exec(text)) {
+  for (
+    let match = URL_PATH.exec(text);
+    match !== null;
+    match = URL_PATH.exec(text)
+  ) {
     let path = match[1]!;
     const host = match[0].slice(0, match[0].length - path.length);
     const pathAt = match.index + match[0].length - path.length;
@@ -1399,7 +1527,8 @@ function redactPathTokens(text: string, site: SiteHosts): string {
     // there (`?next=/reset/<t>&lang=en`), and what follows is read from there.
     // Any other path runs on to its end, read once. A replaced value never
     // holds an `&`, so a second pass cuts the same.
-    const paramValue = text[match.index - 1] === "=" && endsParamName(text, match.index - 1);
+    const paramValue =
+      text[match.index - 1] === "=" && endsParamName(text, match.index - 1);
     if (!paramValue && text[pathAt + path.length] === "&") {
       PATH_END.lastIndex = pathAt + path.length;
       const end = PATH_END.exec(text)?.index ?? text.length;
@@ -1408,10 +1537,18 @@ function redactPathTokens(text: string, site: SiteHosts): string {
     }
     if (path.length < 18) continue;
     // A hash route (`/#/reset/<t>`, `#!/reset/<t>`, #3433) is its URL's.
-    const hashRoute = !host && text[pathAt - 1] !== undefined && "#!".includes(text[pathAt - 1]!);
+    const hashRoute =
+      !host &&
+      text[pathAt - 1] !== undefined &&
+      "#!".includes(text[pathAt - 1]!);
     if (host && site !== null) {
       const authority = host.slice(host.indexOf("//") + 2);
-      if (!site.has(canonicalHostKey(authority.slice(authority.lastIndexOf("@") + 1)))) continue;
+      if (
+        !site.has(
+          canonicalHostKey(authority.slice(authority.lastIndexOf("@") + 1))
+        )
+      )
+        continue;
     } else if (!host && site !== null && (paramValue || hashRoute)) {
       // A parameter's value or a hash route: the URL it is in decides. A
       // relative path anywhere else (a run's start, after `(`) is the site's own.
@@ -1440,7 +1577,7 @@ function encodedPathPattern(pct: "%" | "%25") {
   return {
     path: new RegExp(
       `(?:(=)(?:https?${pct}3A${pct}2F${pct}2F(?:(?!${pct}2F|${pct}3F|${pct}23)[^\\s&#/?"'<>\\\\])+)?|${pct}23(?:${pct}21|!)?)(${pct}2F)(?!${pct}2F)`,
-      "gi",
+      "gi"
     ),
     /**
      * Where the path ends: its encoded query or fragment, or what ends the
@@ -1466,7 +1603,11 @@ function redactEncodedPathTokens(text: string, site: SiteHosts): string {
     let copied = 0;
     let cursor: ReturnType<typeof urlCursor> | null = null;
     pattern.path.lastIndex = 0;
-    for (let match = pattern.path.exec(text); match !== null; match = pattern.path.exec(text)) {
+    for (
+      let match = pattern.path.exec(text);
+      match !== null;
+      match = pattern.path.exec(text)
+    ) {
       if (match[1] !== undefined && !endsParamName(text, match.index)) continue;
       const pathAt = match.index + match[0].length - match[2]!.length;
       pattern.end.lastIndex = pathAt + match[2]!.length;
@@ -1484,7 +1625,8 @@ function redactEncodedPathTokens(text: string, site: SiteHosts): string {
       const segments = path.split(pattern.separator);
       if (!redactSegments(segments, pattern.cut)) continue;
       let rebuilt = segments[0]!;
-      for (let i = 1; i < segments.length; i++) rebuilt += separators[i - 1]! + segments[i]!;
+      for (let i = 1; i < segments.length; i++)
+        rebuilt += separators[i - 1]! + segments[i]!;
       out += `${text.slice(copied, pathAt)}${rebuilt}`;
       copied = pathAt + path.length;
     }
@@ -1526,17 +1668,17 @@ function redactOnce(text: string, site: SiteHosts): string {
   if (/%2540/i.test(out)) out = out.replace(TWICE_ENCODED_USERINFO, "$1");
   if (out.includes("=")) {
     out = redactParams(out, site, PARAM_START, (matrix) =>
-      matrix ? MATRIX_VALUE_END : QUERY_VALUE_END,
+      matrix ? MATRIX_VALUE_END : QUERY_VALUE_END
     );
   }
   if (/%3[Ff]|%26|%3[Bb]|%23/.test(out)) {
     out = redactParams(out, site, ENCODED_ONCE.start, (matrix) =>
-      matrix ? ENCODED_ONCE.matrixEnd : ENCODED_ONCE.end,
+      matrix ? ENCODED_ONCE.matrixEnd : ENCODED_ONCE.end
     );
   }
   if (/%25(?:3[Ff]|26|3[Bb]|23)/.test(out)) {
     out = redactParams(out, site, ENCODED_TWICE.start, (matrix) =>
-      matrix ? ENCODED_TWICE.matrixEnd : ENCODED_TWICE.end,
+      matrix ? ENCODED_TWICE.matrixEnd : ENCODED_TWICE.end
     );
   }
   if (JWT_HEADER_START.test(out)) out = redactJwts(out);
@@ -1570,10 +1712,17 @@ const STAR_VALUE = /(=|%3D)(\*+)(?=$|[&#;%])/gi;
  * redacted again, where a page's own `REDACTED` (`?topic=REDACTED`) is not.
  */
 export function carriesRedactedValue(url: string): boolean {
-  for (let at = url.indexOf(REDACTED_VALUE); at !== -1; at = url.indexOf(REDACTED_VALUE, at + 1)) {
+  for (
+    let at = url.indexOf(REDACTED_VALUE);
+    at !== -1;
+    at = url.indexOf(REDACTED_VALUE, at + 1)
+  ) {
     const end = at + REDACTED_VALUE.length;
-    const whole = WHOLE_MARKER_BEFORE.has(url[at - 1]!) && WHOLE_MARKER_AFTER.has(url[end]);
-    for (const token of whole ? [PROBE_TOKEN, PROBE_JWT, PROBE_DJANGO] : [PROBE_TOKEN]) {
+    const whole =
+      WHOLE_MARKER_BEFORE.has(url[at - 1]!) && WHOLE_MARKER_AFTER.has(url[end]);
+    for (const token of whole
+      ? [PROBE_TOKEN, PROBE_JWT, PROBE_DJANGO]
+      : [PROBE_TOKEN]) {
       const probe = `${url.slice(0, at)}${token}${url.slice(end)}`;
       if (redactSecretText(probe) !== probe) return true;
     }
@@ -1608,14 +1757,15 @@ function redactInPlace(
   value: unknown,
   depth: number,
   site: SiteHosts,
-  onChange?: OnChange,
+  onChange?: OnChange
 ): unknown {
   if (typeof value === "string") {
     const out = redactSecretText(value, site);
     if (out !== value) onChange?.();
     return out;
   }
-  if (value === null || typeof value !== "object" || depth >= MAX_DEPTH) return value;
+  if (value === null || typeof value !== "object" || depth >= MAX_DEPTH)
+    return value;
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
       value[i] = redactInPlace(value[i], depth + 1, site, onChange);
@@ -1663,7 +1813,7 @@ function redactInPlace(
  */
 export function redactingReplacer(
   report: unknown,
-  site: SiteHosts,
+  site: SiteHosts
 ): (this: unknown, key: string, value: unknown) => unknown {
   const root = asRecord(report);
   /** Subtrees written as they are: the resolution signal, robots.txt's text. */
@@ -1673,18 +1823,22 @@ export function redactingReplacer(
     const keep =
       (holder !== null && kept.has(holder)) ||
       (holder === root && SIGNAL_FIELDS.has(key)) ||
-      (root !== undefined && holder === root.robotsTxt && ROBOTS_TEXT_FIELDS.has(key));
+      (root !== undefined &&
+        holder === root.robotsTxt &&
+        ROBOTS_TEXT_FIELDS.has(key));
     if (keep) {
       if (value === null || typeof value !== "object") return value;
       // Inside a kept subtree: its own nodes. At its root: a copy, so an
       // object the report shares between the signal and a page list is
       // still redacted where the page list writes it.
-      const own = holder !== null && kept.has(holder) ? value : structuredClone(value);
+      const own =
+        holder !== null && kept.has(holder) ? value : structuredClone(value);
       kept.add(own);
       return own;
     }
     if (typeof value === "string") return redactSecretText(value, site);
-    if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    if (value === null || typeof value !== "object" || Array.isArray(value))
+      return value;
     const record = value as Record<string, unknown>;
     const keys = Object.keys(record);
     const redactedKeys = keys.map((k) => redactSecretText(k, site));
@@ -1740,7 +1894,7 @@ export type FindingFingerprint = (
   status: string,
   message: string,
   value: string | null,
-  expected: string | null,
+  expected: string | null
 ) => string;
 
 /**
@@ -1755,15 +1909,20 @@ export function redactFindingLine<L extends RedactableFindingLine>(
   line: L,
   site: SiteHosts,
   fingerprint: FindingFingerprint,
-  onChange?: OnChange,
+  onChange?: OnChange
 ): L {
   const text = [line.message, line.value, line.expected];
   if (typeof line.payload === "string") {
     try {
       let changed = false;
-      const redacted = redactInPlace(JSON.parse(line.payload) as unknown, 1, site, () => {
-        changed = true;
-      });
+      const redacted = redactInPlace(
+        JSON.parse(line.payload) as unknown,
+        1,
+        site,
+        () => {
+          changed = true;
+        }
+      );
       // Re-serialized only when something in it changed: a payload is the
       // bulk of a line, and most have nothing to redact.
       if (changed) {
@@ -1775,19 +1934,25 @@ export function redactFindingLine<L extends RedactableFindingLine>(
     }
   }
   redactInPlace(line, 1, site, onChange);
-  const changed = [line.message, line.value, line.expected].some((v, i) => v !== text[i]);
+  const changed = [line.message, line.value, line.expected].some(
+    (v, i) => v !== text[i]
+  );
   if (
     changed &&
     typeof line.status === "string" &&
     typeof line.message === "string" &&
-    (line.value === undefined || line.value === null || typeof line.value === "string") &&
-    (line.expected === undefined || line.expected === null || typeof line.expected === "string")
+    (line.value === undefined ||
+      line.value === null ||
+      typeof line.value === "string") &&
+    (line.expected === undefined ||
+      line.expected === null ||
+      typeof line.expected === "string")
   ) {
     line.fingerprint = fingerprint(
       line.status,
       line.message,
       (line.value as string | null | undefined) ?? null,
-      (line.expected as string | null | undefined) ?? null,
+      (line.expected as string | null | undefined) ?? null
     ) as L["fingerprint"];
   }
   return line;
@@ -1802,7 +1967,7 @@ export function redactFindingLine<L extends RedactableFindingLine>(
 export function redactedFindingLine<L extends RedactableFindingLine>(
   line: L,
   site: SiteHosts,
-  fingerprint: FindingFingerprint,
+  fingerprint: FindingFingerprint
 ): L {
   let changed = false;
   const copy = redactFindingLine({ ...line }, site, fingerprint, () => {
@@ -1821,7 +1986,12 @@ export function findingLineKey(line: RedactableFindingLine): string {
     typeof line.locator === "string"
       ? clampItemId(line.locator, REPORT_LIMITS.maxMediumString)
       : "";
-  return JSON.stringify([line.normalizedUrl, line.ruleId, line.checkName, locator]);
+  return JSON.stringify([
+    line.normalizedUrl,
+    line.ruleId,
+    line.checkName,
+    locator,
+  ]);
 }
 
 /**
@@ -1830,7 +2000,9 @@ export function findingLineKey(line: RedactableFindingLine): string {
  * one key (`?sid=<a>` and `?sid=<b>` are one page), so a producer counts the
  * lines after this, not before.
  */
-export function dedupeFindingLines<L extends RedactableFindingLine>(lines: readonly L[]): L[] {
+export function dedupeFindingLines<L extends RedactableFindingLine>(
+  lines: readonly L[]
+): L[] {
   const byKey = new Map<string, L>();
   for (const line of lines) byKey.set(findingLineKey(line), line);
   return [...byKey.values()];

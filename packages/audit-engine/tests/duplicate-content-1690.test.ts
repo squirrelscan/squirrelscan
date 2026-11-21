@@ -2,19 +2,25 @@
 // the body fingerprint page-time, and the rule fires from ctx.collectedSignals. v1
 // (documents present) must judge the same crawl identically. Matched by the Engine Golden Gates CI glob.
 
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { runStreamingRules } from "@squirrelscan/audit-engine";
 import { parsePage } from "@squirrelscan/parser";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
+import {
+  getGoldenBaselineConfig,
+  run,
+  runV1Pipeline,
+} from "./helpers/golden-baseline";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-duplicate-content-"));
 afterAll(() => {
@@ -43,32 +49,56 @@ describe("duplicate content through the streaming engine (#1690)", () => {
       maxPageSizeBytes: 2_000,
       cleanRatio: 1,
     });
-    const { storage, crawlId } = await writeCrawlToStorage(model, join(tmpDir, "crawl.sqlite"));
+    const { storage, crawlId } = await writeCrawlToStorage(
+      model,
+      join(tmpDir, "crawl.sqlite")
+    );
     try {
       const records = await run(storage.getPages(crawlId));
       expect(records.length).toBe(3);
-      const bodies = [words(150, "shared"), words(150, "shared"), words(150, "unique")];
+      const bodies = [
+        words(150, "shared"),
+        words(150, "shared"),
+        words(150, "unique"),
+      ];
       const urls: string[] = [];
       for (const [i, record] of records.entries()) {
         const html = page(`Title ${i}`, bodies[i]!);
-        const { document: _doc, ...parsed } = parsePage(html, record.finalUrl ?? record.url);
+        const { document: _doc, ...parsed } = parsePage(
+          html,
+          record.finalUrl ?? record.url
+        );
         await run(
-          storage.upsertPage(crawlId, { ...record, html, parsedData: JSON.stringify(parsed) }),
+          storage.upsertPage(crawlId, {
+            ...record,
+            html,
+            parsedData: JSON.stringify(parsed),
+          })
         );
         if (i < 2) urls.push(record.normalizedUrl);
       }
 
       const config = getGoldenBaselineConfig();
       const pick = (map: Map<string, { checks: CheckResult[] }>) =>
-        map.get("content/duplicate-content")?.checks.find((c) => c.name === "duplicate-content");
+        map
+          .get("content/duplicate-content")
+          ?.checks.find((c) => c.name === "duplicate-content");
       const streaming = pick(
-        (await run(runStreamingRules(storage, crawlId, config, ASSETS))).ruleResultsMap,
+        (await run(runStreamingRules(storage, crawlId, config, ASSETS)))
+          .ruleResultsMap
       );
-      const v1 = pick((await runV1Pipeline(storage, crawlId, config)).ruleResults.ruleResultsMap);
+      const v1 = pick(
+        (await runV1Pipeline(storage, crawlId, config)).ruleResults
+          .ruleResultsMap
+      );
 
       expect(streaming?.status).toBe("warn");
-      expect(streaming?.message).toBe("1 duplicate content group(s) found across 2 pages");
-      expect([...(streaming?.items?.[0]?.sourcePages ?? [])].sort()).toEqual([...urls].sort());
+      expect(streaming?.message).toBe(
+        "1 duplicate content group(s) found across 2 pages"
+      );
+      expect([...(streaming?.items?.[0]?.sourcePages ?? [])].sort()).toEqual(
+        [...urls].sort()
+      );
       expect(v1).toEqual(streaming);
     } finally {
       await run(storage.close());

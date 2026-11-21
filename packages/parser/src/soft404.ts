@@ -104,7 +104,9 @@ const NOT_FOUND_PHRASE_RE =
 const LEADING_404_RE = /^\s*(?:error\s*)?404(?:\b|[\s:|/–\u2014-])/i;
 
 /** True when a title/heading string reads as "page not found". */
-export function looksLikeNotFoundText(text: string | null | undefined): boolean {
+export function looksLikeNotFoundText(
+  text: string | null | undefined
+): boolean {
   if (!text) return false;
   const t = text.trim();
   if (!t) return false;
@@ -154,7 +156,9 @@ export function detectSoft404(input: Soft404Input): Soft404Detection {
       detail: `"Not found" title: ${JSON.stringify(input.title)}`,
     });
   }
-  const notFoundHeading = (input.h1Texts ?? []).find((h) => looksLikeNotFoundText(h));
+  const notFoundHeading = (input.h1Texts ?? []).find((h) =>
+    looksLikeNotFoundText(h)
+  );
   if (notFoundHeading) {
     signals.push({
       name: "not-found-heading",

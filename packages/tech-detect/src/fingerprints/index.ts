@@ -1,20 +1,21 @@
 import type { TechFingerprint } from "../types";
-import { CMS_FINGERPRINTS } from "./cms";
-import { FRAMEWORK_FINGERPRINTS } from "./frameworks";
+
+import { AD_FINGERPRINTS } from "./ads";
 import { ANALYTICS_FINGERPRINTS } from "./analytics";
 import { CDN_FINGERPRINTS } from "./cdn";
-import { SERVER_FINGERPRINTS } from "./servers";
-import { HOSTING_FINGERPRINTS } from "./hosting";
-import { TAG_MANAGER_FINGERPRINTS } from "./tag-managers";
-import { PAYMENT_FINGERPRINTS } from "./payments";
 import { CHAT_FINGERPRINTS } from "./chat";
-import { AD_FINGERPRINTS } from "./ads";
-import { SECURITY_FINGERPRINTS } from "./security";
+import { CMS_FINGERPRINTS } from "./cms";
 import { FONT_FINGERPRINTS } from "./fonts";
-import { OTHER_FINGERPRINTS } from "./other";
+import { FRAMEWORK_FINGERPRINTS } from "./frameworks";
 import { GENERATED_FINGERPRINTS } from "./generated";
-import { WORDPRESS_FINGERPRINTS } from "./wordpress";
+import { HOSTING_FINGERPRINTS } from "./hosting";
+import { OTHER_FINGERPRINTS } from "./other";
+import { PAYMENT_FINGERPRINTS } from "./payments";
+import { SECURITY_FINGERPRINTS } from "./security";
+import { SERVER_FINGERPRINTS } from "./servers";
 import { STACK_FINGERPRINTS } from "./stack";
+import { TAG_MANAGER_FINGERPRINTS } from "./tag-managers";
+import { WORDPRESS_FINGERPRINTS } from "./wordpress";
 
 export const ALL_FINGERPRINTS: TechFingerprint[] = [
   ...CMS_FINGERPRINTS,

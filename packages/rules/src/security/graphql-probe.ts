@@ -45,7 +45,10 @@ import type { RuleContext } from "../types";
 import { readCapped } from "./probe-http";
 
 /** Paths probed on every site, besides the ones the discovery pass found. */
-export const GRAPHQL_CONVENTION_PATHS: readonly string[] = ["/graphql", "/api/graphql"];
+export const GRAPHQL_CONVENTION_PATHS: readonly string[] = [
+  "/graphql",
+  "/api/graphql",
+];
 
 /** Endpoints one rule probes per run. */
 export const MAX_GRAPHQL_ENDPOINTS = 5;
@@ -142,7 +145,10 @@ export function isStateChangingPath(pathname: string): boolean {
   const words = pathWords(pathname);
   for (let i = 0; i < words.length; i++) {
     if (STATE_CHANGING_WORDS.has(words[i]!)) return true;
-    if (i + 1 < words.length && STATE_CHANGING_PAIRS.has(`${words[i]} ${words[i + 1]}`)) {
+    if (
+      i + 1 < words.length &&
+      STATE_CHANGING_PAIRS.has(`${words[i]} ${words[i + 1]}`)
+    ) {
       return true;
     }
   }
@@ -229,7 +235,10 @@ export function selectGraphqlCandidates(
     if (!isGraphqlPath(u.pathname)) return;
     const url = `${u.origin}${u.pathname}`;
     if (seen.has(url)) return;
-    if (isStateChangingPath(u.pathname) || (method && UNSAFE_METHODS.has(method.toUpperCase()))) {
+    if (
+      isStateChangingPath(u.pathname) ||
+      (method && UNSAFE_METHODS.has(method.toUpperCase()))
+    ) {
       seen.add(url);
       skippedStateChanging++;
       return;
@@ -289,13 +298,18 @@ export function buildGraphqlProbe(
     Accept: "application/graphql-response+json, application/json;q=0.9",
     "User-Agent": SQUIRRELSCAN_USER_AGENT,
   };
-  const base: RequestInit = { credentials: "omit", redirect: "manual", headers };
+  const base: RequestInit = {
+    credentials: "omit",
+    redirect: "manual",
+    headers,
+  };
   if (request.method === "GET") {
     u.searchParams.set("query", query);
     return { url: u.href, init: { ...base, method: "GET" } };
   }
   // POST is only ever the introspection query.
-  if (request.op !== "introspection") throw new Error("only introspection may be sent as POST");
+  if (request.op !== "introspection")
+    throw new Error("only introspection may be sent as POST");
   return {
     url: u.href,
     init: {
@@ -318,7 +332,8 @@ export async function sendGraphqlProbe(
   request: GraphqlProbeRequest
 ): Promise<GraphqlProbeOutcome> {
   const kind = request.method === "GET" ? "quiet" : "loud";
-  if (!probe || !probe.allows(kind)) return { sent: false, reason: "not-allowed" };
+  if (!probe || !probe.allows(kind))
+    return { sent: false, reason: "not-allowed" };
   const { url, init } = buildGraphqlProbe(endpointUrl, request);
   // Aborted once the probe is done: cancelling a body does not close the
   // connection in Bun, which keeps downloading the rest until the request's
@@ -336,7 +351,10 @@ export async function sendGraphqlProbe(
     // Never `fetch` itself: Bun inflates a Content-Encoding body in full as it
     // arrives, before any capped read (#722, as #2717 was for the crawl).
     const res = await fetchUndecoded(url, { ...init, signal });
-    const { text, truncated } = await readCapped(res, GRAPHQL_RESPONSE_CAPS[request.op]);
+    const { text, truncated } = await readCapped(
+      res,
+      GRAPHQL_RESPONSE_CAPS[request.op]
+    );
     return {
       sent: true,
       response: {
@@ -347,7 +365,10 @@ export async function sendGraphqlProbe(
       },
     };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || err.message : String(err),
+    };
   } finally {
     done.abort();
   }
@@ -379,7 +400,9 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * carry a string `message`. A catch-all page, an HTML error, a REST error body
  * or a JSON:API error object is null. The status is not read here.
  */
-export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | null {
+export function parseGraphqlBody(
+  response: GraphqlProbeResponse
+): GraphqlBody | null {
   if (response.truncated) return null;
   if (response.contentType.includes("html")) return null;
   const text = response.body.trim();
@@ -392,7 +415,8 @@ export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | 
   }
   if (!isPlainObject(json)) return null;
   const keys = Object.keys(json);
-  if (keys.length === 0 || !keys.every((k) => GRAPHQL_TOP_LEVEL_KEYS.has(k))) return null;
+  if (keys.length === 0 || !keys.every((k) => GRAPHQL_TOP_LEVEL_KEYS.has(k)))
+    return null;
   const hasData = "data" in json;
   const hasErrors = "errors" in json;
   if (!hasData && !hasErrors) return null;
@@ -415,7 +439,8 @@ export function parseGraphqlBody(response: GraphqlProbeResponse): GraphqlBody | 
   return { data, errors };
 }
 
-const TRUNCATED_SCHEMA_PREFIX_RE = /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
+const TRUNCATED_SCHEMA_PREFIX_RE =
+  /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*\{\s*"types"\s*:\s*\[/;
 
 /**
  * The truncated verdict: type names seen in the first bytes of an introspection
@@ -426,11 +451,14 @@ const TRUNCATED_SCHEMA_PREFIX_RE = /^\s*\{\s*"data"\s*:\s*\{\s*"__schema"\s*:\s*
  * no complete `"name":"..."` pair fits in the cap: the schema is open either
  * way, only its size is unknown.
  */
-export function truncatedSchemaTypeNames(response: GraphqlProbeResponse): string[] | null {
+export function truncatedSchemaTypeNames(
+  response: GraphqlProbeResponse
+): string[] | null {
   if (!response.truncated || response.contentType.includes("html")) return null;
   if (!TRUNCATED_SCHEMA_PREFIX_RE.test(response.body)) return null;
   const names: string[] = [];
-  for (const m of response.body.matchAll(/"name"\s*:\s*"([^"\\]{1,200})"/g)) names.push(m[1]!);
+  for (const m of response.body.matchAll(/"name"\s*:\s*"([^"\\]{1,200})"/g))
+    names.push(m[1]!);
   return names;
 }
 

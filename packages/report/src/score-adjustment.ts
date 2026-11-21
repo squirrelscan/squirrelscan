@@ -18,24 +18,33 @@ export interface ScoreAdjustment {
   crawlSetup: boolean;
 }
 
-const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const finite = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
 
 /**
  * The adjustment behind the overall score, or null when there is none to show: no overall (N/A), a report
  * that predates `debug`, or an adjustment under 1%. Partial runs carry no score, so none shows there.
  */
 export function scoreAdjustment(
-  score: Pick<HealthScore, "overall" | "debug" | "groups"> | null | undefined,
+  score: Pick<HealthScore, "overall" | "debug" | "groups"> | null | undefined
 ): ScoreAdjustment | null {
   const overall = score?.overall;
   const debug = score?.debug;
   // The sentence compares the overall with the section scores, so it needs sections to compare with.
-  if (!finite(overall) || !debug || !finite(debug.curved) || !score?.groups?.length) return null;
+  if (
+    !finite(overall) ||
+    !debug ||
+    !finite(debug.curved) ||
+    !score?.groups?.length
+  )
+    return null;
   const before = Math.round(debug.curved);
   if (before <= 0 || before > 100 || overall >= before) return null;
   const percent = Math.round(((before - overall) / before) * 100);
   if (percent < 1) return null;
-  const density = finite(debug.issuePenalty) ? Math.max(0, debug.issuePenalty) : 0;
+  const density = finite(debug.issuePenalty)
+    ? Math.max(0, debug.issuePenalty)
+    : 0;
   const total = finite(debug.penalties) ? Math.max(0, debug.penalties) : 0;
   return {
     overall,
@@ -58,7 +67,7 @@ export function scoreAdjustmentNote(adjustment: ScoreAdjustment): string {
 
 /** The note for a report's health score, or null when there is nothing to explain. */
 export function scoreAdjustmentNoteFor(
-  score: Pick<HealthScore, "overall" | "debug" | "groups"> | null | undefined,
+  score: Pick<HealthScore, "overall" | "debug" | "groups"> | null | undefined
 ): string | null {
   const adjustment = scoreAdjustment(score);
   return adjustment ? scoreAdjustmentNote(adjustment) : null;

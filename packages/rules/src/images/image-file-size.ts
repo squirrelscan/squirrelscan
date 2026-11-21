@@ -1,10 +1,15 @@
 // images/image-file-size - Detect oversized image files
 
+import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
-import type { Rule, RuleContext, RuleResult, CheckResult, CheckItem } from "../types";
-
-import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  CheckItem,
+} from "../types";
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) {
@@ -46,7 +51,9 @@ function sizedItem(resource: SizedImage): CheckItem {
       contentType: resource.contentType ?? undefined,
       pageCount: pages.length,
       ...(pages.length > 0 ? { pages: pages.slice(0, MAX_PAGES_IN_META) } : {}),
-      ...(pages.length > MAX_PAGES_IN_META ? { pagesNotListed: pages.length - MAX_PAGES_IN_META } : {}),
+      ...(pages.length > MAX_PAGES_IN_META
+        ? { pagesNotListed: pages.length - MAX_PAGES_IN_META }
+        : {}),
     },
   };
 }
@@ -83,7 +90,9 @@ export const imageFileSizeRule: Rule = {
     // The file a browser downloads, not every file the markup names (#1251): an
     // <img src> that only sits behind a srcset whose selected candidate is
     // another file is measured for other rules but is not what visitors load.
-    const resources = (ctx.site?.resourceSizes?.images ?? []).filter((r) => !r.fallbackOnly);
+    const resources = (ctx.site?.resourceSizes?.images ?? []).filter(
+      (r) => !r.fallbackOnly
+    );
 
     if (resources.length === 0) {
       checks.push({

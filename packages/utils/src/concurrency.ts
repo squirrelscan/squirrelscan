@@ -10,7 +10,7 @@
  */
 export async function mapWithConcurrency<T>(
   tasks: ReadonlyArray<() => Promise<T>>,
-  concurrency: number,
+  concurrency: number
 ): Promise<T[]> {
   const results = new Array<T>(tasks.length);
   if (tasks.length === 0) return results;

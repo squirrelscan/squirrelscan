@@ -1,9 +1,9 @@
 // Query-string variants of a page (#858): the storage readers. The pure fold (`canonicalVariantMap`,
 // `foldChecksToCanonical`) is in canonical-fold.ts, which the Worker-clean smart-audits entry imports.
 
-import { Effect } from "effect";
-
 import type { CrawlStorage } from "@squirrelscan/core-contracts/storage";
+
+import { Effect } from "effect";
 
 import { canonicalVariantMap } from "./canonical-fold";
 
@@ -15,14 +15,18 @@ export function readCanonicalVariants(
   crawlId: string,
   batchSize: number,
   /** Set `unreadable` when the storage has no page features or a read failed: the map is then not "no variants". */
-  health?: { unreadable: boolean },
+  health?: { unreadable: boolean }
 ): Effect.Effect<Map<string, string>, never, never> {
   return Effect.gen(function* () {
     const reader = storage as unknown as {
       getPageFeaturesPage?: (
         crawlId: string,
-        opts?: { after?: string; limit?: number },
-      ) => Effect.Effect<Array<{ normalizedUrl: string; canonical: string | null }>, unknown, never>;
+        opts?: { after?: string; limit?: number }
+      ) => Effect.Effect<
+        Array<{ normalizedUrl: string; canonical: string | null }>,
+        unknown,
+        never
+      >;
     };
     if (!reader.getPageFeaturesPage) {
       if (health) health.unreadable = true;
@@ -36,11 +40,14 @@ export function readCanonicalVariants(
         .pipe(
           Effect.catchAll(() => {
             if (health) health.unreadable = true;
-            return Effect.succeed([] as Array<{ normalizedUrl: string; canonical: string | null }>);
-          }),
+            return Effect.succeed(
+              [] as Array<{ normalizedUrl: string; canonical: string | null }>
+            );
+          })
         );
       if (batch.length === 0) break;
-      for (const row of batch) rows.push({ url: row.normalizedUrl, canonical: row.canonical });
+      for (const row of batch)
+        rows.push({ url: row.normalizedUrl, canonical: row.canonical });
       after = batch[batch.length - 1]!.normalizedUrl;
       if (batch.length < batchSize) break;
     }
@@ -57,24 +64,39 @@ export function entityMapVariantKeys(
   storage: CrawlStorage,
   crawlId: string,
   variantOf: ReadonlyMap<string, string>,
-  batchSize: number,
+  batchSize: number
 ): Effect.Effect<Map<string, string>, never, never> {
   return Effect.gen(function* () {
     const out = new Map<string, string>();
     const reader = storage as unknown as {
       getPagesWithoutBodies?: (
         crawlId: string,
-        opts?: { limit?: number; offset?: number },
-      ) => Effect.Effect<Array<{ normalizedUrl: string; url: string; finalUrl: string | null }>, unknown, never>;
+        opts?: { limit?: number; offset?: number }
+      ) => Effect.Effect<
+        Array<{ normalizedUrl: string; url: string; finalUrl: string | null }>,
+        unknown,
+        never
+      >;
     };
     if (variantOf.size === 0 || !reader.getPagesWithoutBodies) return out;
     const keyOf = new Map<string, string>();
     for (let offset = 0; ; offset += batchSize) {
       const batch = yield* reader
         .getPagesWithoutBodies(crawlId, { limit: batchSize, offset })
-        .pipe(Effect.catchAll(() => Effect.succeed([] as Array<{ normalizedUrl: string; url: string; finalUrl: string | null }>)));
+        .pipe(
+          Effect.catchAll(() =>
+            Effect.succeed(
+              [] as Array<{
+                normalizedUrl: string;
+                url: string;
+                finalUrl: string | null;
+              }>
+            )
+          )
+        );
       if (batch.length === 0) break;
-      for (const page of batch) keyOf.set(page.normalizedUrl, page.finalUrl || page.url);
+      for (const page of batch)
+        keyOf.set(page.normalizedUrl, page.finalUrl || page.url);
       if (batch.length < batchSize) break;
     }
     for (const [variant, canonical] of variantOf) {

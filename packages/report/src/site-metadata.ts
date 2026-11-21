@@ -37,7 +37,9 @@ function humanizeEnum(value: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .map(
-      (word) => ENUM_WORD_LABELS[word.toLowerCase()] ?? word.charAt(0).toUpperCase() + word.slice(1),
+      (word) =>
+        ENUM_WORD_LABELS[word.toLowerCase()] ??
+        word.charAt(0).toUpperCase() + word.slice(1)
     )
     .join(" ");
 }
@@ -78,7 +80,8 @@ export function formatAudienceLine(meta: SiteMetadata): string | null {
   const scope = formatAudienceScope(meta);
   if (scope) parts.push(scope);
   if (meta.primaryCountry) parts.push(meta.primaryCountry);
-  if (meta.languages && meta.languages.length > 0) parts.push(meta.languages.join(", "));
+  if (meta.languages && meta.languages.length > 0)
+    parts.push(meta.languages.join(", "));
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
@@ -90,7 +93,10 @@ export function formatAudienceLine(meta: SiteMetadata): string | null {
 export function formatIdentityLine(meta: SiteMetadata): string | null {
   const name = meta.entityName ?? meta.title;
   if (!name) return null;
-  const type = meta.entityType && meta.entityType !== "unknown" ? ` (${meta.entityType})` : "";
+  const type =
+    meta.entityType && meta.entityType !== "unknown"
+      ? ` (${meta.entityType})`
+      : "";
   return `${name}${type}`;
 }
 
@@ -123,7 +129,9 @@ export function domainAgeYears(meta: SiteMetadata): number | null {
  */
 export function formatDomainAgeLine(meta: SiteMetadata): string | null {
   const years = domainAgeYears(meta);
-  const registeredDate = meta.registeredAt ? meta.registeredAt.slice(0, 10) : null;
+  const registeredDate = meta.registeredAt
+    ? meta.registeredAt.slice(0, 10)
+    : null;
   if (years != null) {
     const label = `${years} year${years === 1 ? "" : "s"}`;
     return registeredDate ? `${label} (registered ${registeredDate})` : label;
@@ -197,4 +205,5 @@ export function siteProfileFlags(meta: SiteMetadata): string | null {
 }
 
 /** Standard one-line note shown above the section in every format. */
-export const SITE_PROFILE_NOTE = "Resolved site context: informational, not part of the score.";
+export const SITE_PROFILE_NOTE =
+  "Resolved site context: informational, not part of the score.";

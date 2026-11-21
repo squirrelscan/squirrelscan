@@ -1,8 +1,8 @@
 // a11y/duplicate-id-active - No duplicate IDs on focusable elements
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { getAttrCI } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const NATIVE_FOCUSABLE_WITH_ID_SELECTOR = [
   "a[href][id]",

@@ -11,13 +11,22 @@
 // external and an uncrawled target, meta and header noindex, a 404, hidden pages in and out of the
 // sitemap, and an entry URL.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type {
+  LinkData,
+  PageRecord,
+  SitemapDiscovery,
+} from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  ParsedPage,
+  Rule,
+  RuleContext,
+} from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
-import type { CheckResult, ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { LinkData, PageRecord, SitemapDiscovery } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { buildHeadersMap } from "../src/adapter";
 import { createSiteQuery, extractPageFeatures } from "../src/index";
@@ -49,8 +58,17 @@ const nofollow = (url: string): LinkData => ({
   isNofollow: true,
   rel: ["nofollow"],
 });
-const chrome = (url: string): LinkData => ({ url, text: "c", isInternal: true, isChrome: true });
-const external = (url: string): LinkData => ({ url, text: "e", isInternal: false });
+const chrome = (url: string): LinkData => ({
+  url,
+  text: "c",
+  isInternal: true,
+  isChrome: true,
+});
+const external = (url: string): LinkData => ({
+  url,
+  text: "e",
+  isInternal: false,
+});
 
 interface Spec {
   url: string;
@@ -64,7 +82,12 @@ function mkPage(spec: Spec): { page: PageRecord; parsed: ParsedPage } {
   const links = spec.links ?? [];
   const parsed = {
     links,
-    meta: { title: "T", description: "D", canonical: null, robots: spec.robots ?? null },
+    meta: {
+      title: "T",
+      description: "D",
+      canonical: null,
+      robots: spec.robots ?? null,
+    },
     schemas: { types: [], valid: true, errors: [], raw: null },
     content: { wordCount: 100 },
     pageType: "generic",
@@ -149,11 +172,18 @@ const FIXTURE: Spec[] = [
   { url: P("hub"), links: [link("/l1"), link("/e")] },
   { url: P("l1"), links: [link("/l2")] },
   { url: P("l2"), links: [link("/l3")] },
-  { url: P("l3"), links: [link("/l4"), link("/deep-header-noindex"), link("/deep-404")] },
+  {
+    url: P("l3"),
+    links: [link("/l4"), link("/deep-header-noindex"), link("/deep-404")],
+  },
   { url: P("l4"), links: [link("/l5"), link("/deep-meta-noindex")] },
   { url: P("l5"), links: [link("/l6")] },
   { url: P("l6") },
-  { url: P("deep-meta-noindex"), robots: "noindex,follow", links: [link("/after-noindex")] },
+  {
+    url: P("deep-meta-noindex"),
+    robots: "noindex,follow",
+    links: [link("/after-noindex")],
+  },
   { url: P("after-noindex") },
   { url: P("deep-header-noindex"), xRobotsTag: "noindex" },
   { url: P("deep-404"), status: 404, links: [link("/after-404")] },
@@ -185,7 +215,9 @@ async function seed(fixture: Spec[] = FIXTURE): Promise<Env> {
   const built = fixture.map(mkPage);
   for (const { page, parsed } of built) {
     await run(store.upsertPage(CRAWL, page));
-    await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+    await run(
+      store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+    );
   }
   built.sort((a, b) => (a.page.normalizedUrl < b.page.normalizedUrl ? -1 : 1));
   return { store, built };
@@ -222,13 +254,20 @@ async function runBothWays(
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
     options,
-    ...(extra.collectedSignals ? { collectedSignals: extra.collectedSignals } : {}),
+    ...(extra.collectedSignals
+      ? { collectedSignals: extra.collectedSignals }
+      : {}),
   };
-  const legacy = (await Promise.resolve(rule.run({ ...base, site: site(sitePages) } as RuleContext)))
-    .checks;
+  const legacy = (
+    await Promise.resolve(
+      rule.run({ ...base, site: site(sitePages) } as RuleContext)
+    )
+  ).checks;
   const siteQuery = await run(createSiteQuery(env.store, CRAWL));
   const streamed = (
-    await Promise.resolve(rule.run({ ...base, site: site([]), siteQuery } as RuleContext))
+    await Promise.resolve(
+      rule.run({ ...base, site: site([]), siteQuery } as RuleContext)
+    )
   ).checks;
   return { legacy: normalise(legacy), streamed: normalise(streamed) };
 }
@@ -237,7 +276,9 @@ function normalise(checks: CheckResult[]): CheckResult[] {
   return [...checks]
     .sort((a, b) => (a.name < b.name ? -1 : 1))
     .map((c) =>
-      c.items ? { ...c, items: [...c.items].sort((x, y) => (x.id < y.id ? -1 : 1)) } : c
+      c.items
+        ? { ...c, items: [...c.items].sort((x, y) => (x.id < y.id ? -1 : 1)) }
+        : c
     );
 }
 
@@ -249,7 +290,9 @@ const signals = (...urls: string[]) => ({ pages: urls.map(signalFor) });
 describe("SiteQuery dual-path: links/click-depth", () => {
   test("maxDepth 3 lists the same deep pages on both paths", async () => {
     const env = await seed();
-    const { legacy, streamed } = await runBothWays(env, clickDepthRule, { maxDepth: 3 });
+    const { legacy, streamed } = await runBothWays(env, clickDepthRule, {
+      maxDepth: 3,
+    });
     expect(streamed).toEqual(legacy);
     const check = legacy[0]!;
     expect(check.status).toBe("warn");
@@ -330,7 +373,9 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
       { sitemaps: SITEMAP_WITH_HIDDEN, ...withSignals }
     );
     expect(streamed).toEqual(legacy);
-    const ids = (legacy.find((c) => c.name === "orphan-page-review")?.items ?? []).map((i) => i.id);
+    const ids = (
+      legacy.find((c) => c.name === "orphan-page-review")?.items ?? []
+    ).map((i) => i.id);
     // In no sitemap and linked from nowhere (the query variant's link counts as inbound).
     expect(ids).toEqual([P("hidden-nosm")]);
     // A self-link counts as inbound, exactly like the legacy rule.
@@ -346,16 +391,26 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
 
   test("without a sitemap", async () => {
     const env = await seed();
-    const { legacy, streamed } = await runBothWays(env, orphanPageRule, { minPages: 3 }, withSignals);
+    const { legacy, streamed } = await runBothWays(
+      env,
+      orphanPageRule,
+      { minPages: 3 },
+      withSignals
+    );
     expect(streamed).toEqual(legacy);
-    const ids = (legacy.find((c) => c.name === "orphan-page-review")?.items ?? []).map((i) => i.id);
+    const ids = (
+      legacy.find((c) => c.name === "orphan-page-review")?.items ?? []
+    ).map((i) => i.id);
     expect(ids).toContain(P("hidden-insm"));
     await run(env.store.close());
   }, 30_000);
 
   test("a truncated sitemap is never escalated", async () => {
     const env = await seed();
-    const truncated = { ...SITEMAP_WITH_HIDDEN, truncated: true } as unknown as SitemapDiscovery;
+    const truncated = {
+      ...SITEMAP_WITH_HIDDEN,
+      truncated: true,
+    } as unknown as SitemapDiscovery;
     const { legacy, streamed } = await runBothWays(
       env,
       orphanPageRule,
@@ -374,7 +429,10 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
       env,
       orphanPageRule,
       { minPages: 3 },
-      { sitemaps: SITEMAP_WITH_HIDDEN, collectedSignals: signals(P("hidden-nosm")) }
+      {
+        sitemaps: SITEMAP_WITH_HIDDEN,
+        collectedSignals: signals(P("hidden-nosm")),
+      }
     );
     expect(streamed).toEqual(legacy);
     const fail = legacy.find((c) => c.name === "orphan-page")!;
@@ -385,7 +443,12 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
 
   test("minPages above the universe size skips on both paths", async () => {
     const env = await seed();
-    const { legacy, streamed } = await runBothWays(env, orphanPageRule, { minPages: 500 }, withSignals);
+    const { legacy, streamed } = await runBothWays(
+      env,
+      orphanPageRule,
+      { minPages: 500 },
+      withSignals
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]!.status).toBe("skipped");
     await run(env.store.close());
@@ -397,7 +460,13 @@ describe("SiteQuery dual-path: integrity/orphan-page", () => {
     const ctx = {
       page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
       parsed: {} as ParsedPage,
-      site: { baseUrl: BASE, entryUrls: [BASE, LANDING], pages: [], robotsTxt: null, sitemaps: null },
+      site: {
+        baseUrl: BASE,
+        entryUrls: [BASE, LANDING],
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+      },
       collectedSignals: signals(),
       options: { minPages: 3 },
     } as unknown as RuleContext;
@@ -424,7 +493,9 @@ describe("SiteQuery.outgoingEdges", () => {
     const all = await collect();
     for (const page of all) seen.set(page.source, page);
 
-    expect(all.map((p) => p.source)).toEqual(env.built.map((b) => b.page.normalizedUrl));
+    expect(all.map((p) => p.source)).toEqual(
+      env.built.map((b) => b.page.normalizedUrl)
+    );
     const home = seen.get(BASE)!;
     expect(home.sourceKey).toBe(BASE);
     expect(home.status).toBe(200);
@@ -450,7 +521,8 @@ describe("SiteQuery.outgoingEdges", () => {
       createSiteQuery(env.store, CRAWL, { universe: [BASE, P("a"), P("b")] })
     );
     const sources: string[] = [];
-    for await (const page of siteQuery.outgoingEdges!()) sources.push(page.source);
+    for await (const page of siteQuery.outgoingEdges!())
+      sources.push(page.source);
     expect(sources).toEqual([BASE, P("a"), P("b")]);
     await run(env.store.close());
   }, 30_000);
@@ -462,10 +534,13 @@ describe("SiteQuery.clickDepths", () => {
   test("roots outside the universe are ignored; only the first page per key is a source", async () => {
     const env = await seed();
     const siteQuery = await run(createSiteQuery(env.store, CRAWL));
-    const none = await siteQuery.clickDepths!(["https://other.com/x", P("not-crawled")], {
-      maxDepth: 50,
-      maxNodes: 1000,
-    });
+    const none = await siteQuery.clickDepths!(
+      ["https://other.com/x", P("not-crawled")],
+      {
+        maxDepth: 50,
+        maxNodes: 1000,
+      }
+    );
     expect(none.depths.size).toBe(0);
     expect(none.truncated).toBeNull();
 
@@ -490,7 +565,10 @@ describe("SiteQuery.clickDepths", () => {
   async function chain(n: number): Promise<Env> {
     const specs: Spec[] = [];
     for (let i = 0; i < n; i++) {
-      specs.push({ url: P(`p${i}`), links: i + 1 < n ? [link(`/p${i + 1}`)] : [] });
+      specs.push({
+        url: P(`p${i}`),
+        links: i + 1 < n ? [link(`/p${i + 1}`)] : [],
+      });
     }
     return seed(specs);
   }
@@ -498,14 +576,20 @@ describe("SiteQuery.clickDepths", () => {
   test("maxNodes caps the depth map and reports it", async () => {
     const env = await chain(200);
     const siteQuery = await run(createSiteQuery(env.store, CRAWL));
-    const r = await siteQuery.clickDepths!([P("p0")], { maxDepth: 500, maxNodes: 25 });
+    const r = await siteQuery.clickDepths!([P("p0")], {
+      maxDepth: 500,
+      maxNodes: 25,
+    });
     expect(r.depths.size).toBeLessThanOrEqual(25);
     expect(r.depths.size).toBe(25);
     expect(r.truncated).toBe("maxNodes");
     // Every node still carries its status.
     for (const node of r.depths.values()) expect(node.status).toBe(200);
 
-    const empty = await siteQuery.clickDepths!([P("p0")], { maxDepth: 500, maxNodes: 0 });
+    const empty = await siteQuery.clickDepths!([P("p0")], {
+      maxDepth: 500,
+      maxNodes: 0,
+    });
     expect(empty.depths.size).toBe(0);
     expect(empty.truncated).toBe("maxNodes");
     await run(env.store.close());
@@ -514,7 +598,10 @@ describe("SiteQuery.clickDepths", () => {
   test("maxDepth stops the search one level past the limit and reports it", async () => {
     const env = await chain(200);
     const siteQuery = await run(createSiteQuery(env.store, CRAWL));
-    const r = await siteQuery.clickDepths!([P("p0")], { maxDepth: 10, maxNodes: 100_000 });
+    const r = await siteQuery.clickDepths!([P("p0")], {
+      maxDepth: 10,
+      maxNodes: 100_000,
+    });
     expect(Math.max(...[...r.depths.values()].map((n) => n.depth))).toBe(10);
     expect(r.depths.size).toBe(11);
     expect(r.truncated).toBe("maxDepth");
@@ -525,10 +612,16 @@ describe("SiteQuery.clickDepths", () => {
   test("a maxDepth that reaches the end of the chain is not truncated", async () => {
     const env = await chain(200);
     const siteQuery = await run(createSiteQuery(env.store, CRAWL));
-    const exact = await siteQuery.clickDepths!([P("p0")], { maxDepth: 199, maxNodes: 100_000 });
+    const exact = await siteQuery.clickDepths!([P("p0")], {
+      maxDepth: 199,
+      maxNodes: 100_000,
+    });
     expect(exact.depths.size).toBe(200);
     expect(exact.truncated).toBeNull();
-    const longer = await siteQuery.clickDepths!([P("p0")], { maxDepth: 200, maxNodes: 100_000 });
+    const longer = await siteQuery.clickDepths!([P("p0")], {
+      maxDepth: 200,
+      maxNodes: 100_000,
+    });
     expect(longer.depths.size).toBe(200);
     expect(longer.truncated).toBeNull();
     await run(env.store.close());
@@ -541,22 +634,31 @@ describe("SQLiteStorage.getPageLinkRowsByUrls", () => {
   test("returns only the requested rows, sorted, across chunk boundaries", async () => {
     const specs: Spec[] = [];
     for (let i = 0; i < 1200; i++) {
-      specs.push({ url: P(`r${String(i).padStart(4, "0")}`), links: [link("/x")] });
+      specs.push({
+        url: P(`r${String(i).padStart(4, "0")}`),
+        links: [link("/x")],
+      });
     }
     const store = await freshStore();
-    for (const { page } of specs.map(mkPage)) await run(store.upsertPage(CRAWL, page));
+    for (const { page } of specs.map(mkPage))
+      await run(store.upsertPage(CRAWL, page));
 
     // Every other page: 600 urls, more than one 500-url statement, plus one unknown url.
     const wanted = specs.filter((_, i) => i % 2 === 0).map((s) => s.url);
     const rows = await run(
-      store.getPageLinkRowsByUrls(CRAWL, [...wanted].reverse().concat(P("missing")))
+      store.getPageLinkRowsByUrls(
+        CRAWL,
+        [...wanted].reverse().concat(P("missing"))
+      )
     );
     expect(rows.map((r) => r.normalizedUrl)).toEqual(wanted);
     expect(rows[0]!.status).toBe(200);
     expect(rows[0]!.parsedData).toContain("/x");
 
     expect(await run(store.getPageLinkRowsByUrls(CRAWL, []))).toEqual([]);
-    expect(await run(store.getPageLinkRowsByUrls("other-crawl", wanted))).toEqual([]);
+    expect(
+      await run(store.getPageLinkRowsByUrls("other-crawl", wanted))
+    ).toEqual([]);
     await run(store.close());
   }, 30_000);
 });

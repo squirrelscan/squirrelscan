@@ -14,39 +14,47 @@ import {
 
 describe("maskLinkTokens", () => {
   test("every query value and token-like path segment is masked; the rest of the URL stays", () => {
-    expect(maskLinkTokens("https://mail.example/unsubscribe?token=0123456789abcdef0123&u=7")).toBe(
-      "https://mail.example/unsubscribe?token=…&u=…",
-    );
     expect(
       maskLinkTokens(
-        "https://auth.example/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q",
-      ),
+        "https://mail.example/unsubscribe?token=0123456789abcdef0123&u=7"
+      )
+    ).toBe("https://mail.example/unsubscribe?token=…&u=…");
+    expect(
+      maskLinkTokens(
+        "https://auth.example/magic-login/eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.SflKxwRJSMeKKF2Q"
+      )
     ).toBe("https://auth.example/magic-login/…");
     expect(maskLinkTokens("https://app.example/account/logout#top")).toBe(
-      "https://app.example/account/logout",
+      "https://app.example/account/logout"
     );
     expect(maskLinkTokens("https://cdn.example:8443/a.pdf?sig=x")).toBe(
-      "https://cdn.example:8443/a.pdf?sig=…",
+      "https://cdn.example:8443/a.pdf?sig=…"
     );
   });
 
   test("tokens as query keys, in matrix parameters, behind an encoded slash, and ids are masked", () => {
-    expect(maskLinkTokens("https://m.example/unsubscribe?0123456789abcdef0123456789abcdef")).toBe(
-      "https://m.example/unsubscribe?…=…",
-    );
-    expect(maskLinkTokens("https://m.example/logout;jsessionid=0123456789ABCDEF0123")).toBe(
-      "https://m.example/…",
-    );
-    expect(maskLinkTokens("https://m.example/a%2F0123456789abcdef0123/unsubscribe")).toBe(
-      "https://m.example/…/unsubscribe",
-    );
     expect(
-      maskLinkTokens("https://m.example/unsubscribe/123e4567-e89b-12d3-a456-426614174000"),
+      maskLinkTokens(
+        "https://m.example/unsubscribe?0123456789abcdef0123456789abcdef"
+      )
+    ).toBe("https://m.example/unsubscribe?…=…");
+    expect(
+      maskLinkTokens("https://m.example/logout;jsessionid=0123456789ABCDEF0123")
+    ).toBe("https://m.example/…");
+    expect(
+      maskLinkTokens("https://m.example/a%2F0123456789abcdef0123/unsubscribe")
+    ).toBe("https://m.example/…/unsubscribe");
+    expect(
+      maskLinkTokens(
+        "https://m.example/unsubscribe/123e4567-e89b-12d3-a456-426614174000"
+      )
     ).toBe("https://m.example/unsubscribe/…");
-    expect(maskLinkTokens("https://m.example/u/Ab3dE9xY/")).toBe("https://m.example/u/…/");
+    expect(maskLinkTokens("https://m.example/u/Ab3dE9xY/")).toBe(
+      "https://m.example/u/…/"
+    );
     // A file name keeps its name: it says where the link points.
     expect(maskLinkTokens("https://cdn.example/report2024.pdf?sig=x")).toBe(
-      "https://cdn.example/report2024.pdf?sig=…",
+      "https://cdn.example/report2024.pdf?sig=…"
     );
   });
 
@@ -58,13 +66,15 @@ describe("maskLinkTokens", () => {
       "/blog/top-10-tips/logout",
       "/iphone-15-pro",
     ]) {
-      expect(maskLinkTokens(`https://site.example${path}`)).toBe(`https://site.example${path}`);
+      expect(maskLinkTokens(`https://site.example${path}`)).toBe(
+        `https://site.example${path}`
+      );
     }
     expect(maskLinkTokens(`https://site.example/a?${"k".repeat(41)}=1`)).toBe(
-      "https://site.example/a?…=…",
+      "https://site.example/a?…=…"
     );
     expect(maskLinkTokens("https://site.example/%E0%A4%A/logout")).toBe(
-      "https://site.example/…/logout",
+      "https://site.example/…/logout"
     );
   });
 
@@ -76,7 +86,9 @@ describe("maskLinkTokens", () => {
 describe("the rules moved here unchanged", () => {
   test("still classify as the internal link probe did", () => {
     expect(looksLikeAnAction("https://example.com/logout")).toBe(true);
-    expect(looksLikeAnAction("https://example.com/blog/how-to-verify-your-domain")).toBe(false);
+    expect(
+      looksLikeAnAction("https://example.com/blog/how-to-verify-your-domain")
+    ).toBe(false);
     expect(linkTextLooksLikeAnAction("Log out", false)).toBe(true);
     expect(linkTextLooksLikeAnAction("Buy on Amazon", false)).toBe(false);
   });
@@ -135,12 +147,18 @@ describe("credential query parameters (#774)", () => {
       expect(CREDENTIAL_PARAM_NAMES).toContain(name);
       expect(looksLikeAnAction(`https://x.test/page?${name}=abc`)).toBe(true);
     }
-    expect(looksLikeAnAction("https://cdn.test/a.zip?X-Amz-Credential=AKIA%2F20260916")).toBe(true);
+    expect(
+      looksLikeAnAction(
+        "https://cdn.test/a.zip?X-Amz-Credential=AKIA%2F20260916"
+      )
+    ).toBe(true);
   });
 
   test("every name on the list counts, in any case, with its separators changed, or in brackets", () => {
     for (const name of CREDENTIAL_PARAM_NAMES) {
-      expect(looksLikeAnAction(`https://x.test/page?${name.toUpperCase()}=abc`)).toBe(true);
+      expect(
+        looksLikeAnAction(`https://x.test/page?${name.toUpperCase()}=abc`)
+      ).toBe(true);
     }
     for (const key of [
       "x_api_key",
@@ -154,7 +172,9 @@ describe("credential query parameters (#774)", () => {
       "jwt[1]",
     ]) {
       expect(isCredentialParam(key)).toBe(true);
-      expect(looksLikeAnAction(`https://x.test/page?${encodeURIComponent(key)}=abc`)).toBe(true);
+      expect(
+        looksLikeAnAction(`https://x.test/page?${encodeURIComponent(key)}=abc`)
+      ).toBe(true);
     }
   });
 
@@ -163,7 +183,9 @@ describe("credential query parameters (#774)", () => {
     expect(isCredentialParam("gift", jwt)).toBe(true);
     expect(isCredentialParam("page", "2")).toBe(false);
     expect(isCredentialParam("user[name]")).toBe(false);
-    expect(looksLikeAnAction("https://x.test/search?q=api+key&page=2")).toBe(false);
+    expect(looksLikeAnAction("https://x.test/search?q=api+key&page=2")).toBe(
+      false
+    );
   });
 });
 
@@ -196,27 +218,37 @@ describe("a credential in the fragment (squirrelscan/repo#2824)", () => {
   });
 
   test("the listed form of such a link drops the fragment", () => {
-    expect(maskLinkTokens("https://app.example/callback#access_token=abc123")).toBe(
-      "https://app.example/callback",
-    );
+    expect(
+      maskLinkTokens("https://app.example/callback#access_token=abc123")
+    ).toBe("https://app.example/callback");
   });
 });
 
 describe("an email address in a path segment is masked (#774)", () => {
   test("plain, encoded and with a plus sign; a handle stays", () => {
-    expect(maskLinkTokens("https://m.example/unsubscribe/user@example.com/77b1")).toBe(
-      "https://m.example/unsubscribe/…/77b1",
+    expect(
+      maskLinkTokens("https://m.example/unsubscribe/user@example.com/77b1")
+    ).toBe("https://m.example/unsubscribe/…/77b1");
+    expect(maskLinkTokens("https://m.example/u/user%40example.com")).toBe(
+      "https://m.example/u/…"
     );
-    expect(maskLinkTokens("https://m.example/u/user%40example.com")).toBe("https://m.example/u/…");
-    expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe("https://m.example/u/…/");
-    expect(maskLinkTokens("https://m.example/prefs;email=user@example.com")).toBe("https://m.example/…");
-    expect(maskLinkTokens("https://m.example/subscribers/user@example.com.json")).toBe(
-      "https://m.example/subscribers/…",
+    expect(maskLinkTokens("https://m.example/u/user+tag@example.co.uk/")).toBe(
+      "https://m.example/u/…/"
     );
-    expect(maskLinkTokens("https://m.example/u/(user@example.com)")).toBe("https://m.example/u/…");
-    expect(maskLinkTokens("https://m.example/u/user@m%C3%BCnchen.de")).toBe("https://m.example/u/…");
+    expect(
+      maskLinkTokens("https://m.example/prefs;email=user@example.com")
+    ).toBe("https://m.example/…");
+    expect(
+      maskLinkTokens("https://m.example/subscribers/user@example.com.json")
+    ).toBe("https://m.example/subscribers/…");
+    expect(maskLinkTokens("https://m.example/u/(user@example.com)")).toBe(
+      "https://m.example/u/…"
+    );
+    expect(maskLinkTokens("https://m.example/u/user@m%C3%BCnchen.de")).toBe(
+      "https://m.example/u/…"
+    );
     expect(maskLinkTokens("https://medium.example/@writer/a-post")).toBe(
-      "https://medium.example/@writer/a-post",
+      "https://medium.example/@writer/a-post"
     );
   });
 
@@ -230,7 +262,9 @@ describe("an email address in a path segment is masked (#774)", () => {
       "/@user.name",
       "/v1/repos/a@b.c/x",
     ]) {
-      expect(maskLinkTokens(`https://cdn.example${path}`)).toBe(`https://cdn.example${path}`);
+      expect(maskLinkTokens(`https://cdn.example${path}`)).toBe(
+        `https://cdn.example${path}`
+      );
     }
   });
 });
@@ -330,12 +364,18 @@ describe("a credential in a matrix parameter (#779)", () => {
   });
 
   test("a bare token value with no credential key needs a credential word, as in a path", () => {
-    expect(looksLikeAnAction("https://x.test/a;v=0123456789abcdef0123")).toBe(false); // pragma: allowlist secret
-    expect(looksLikeAnAction("https://x.test/reset;v=0123456789abcdef0123")).toBe(true); // pragma: allowlist secret
+    expect(looksLikeAnAction("https://x.test/a;v=0123456789abcdef0123")).toBe(
+      false
+    ); // pragma: allowlist secret
+    expect(
+      looksLikeAnAction("https://x.test/reset;v=0123456789abcdef0123")
+    ).toBe(true); // pragma: allowlist secret
   });
 
   test("a padded token in the path still counts, and a long digit run stays fast", () => {
-    expect(looksLikeAnAction("https://x.test/login/AbCdEfGhIjKlMnOpQr123456==")).toBe(true); // pragma: allowlist secret
+    expect(
+      looksLikeAnAction("https://x.test/login/AbCdEfGhIjKlMnOpQr123456==")
+    ).toBe(true); // pragma: allowlist secret
     const started = performance.now();
     looksLikeAnAction(`https://x.test/a-${"1".repeat(40_000)}x`);
     expect(performance.now() - started).toBeLessThan(200);

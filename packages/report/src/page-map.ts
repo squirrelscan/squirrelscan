@@ -6,12 +6,19 @@
 // building it costs no request and no credit. The `flags` column comes from the audit's own
 // rule results, so the table and the issue list agree.
 
-import { escapeJsonUnsafe, stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
+import {
+  escapeJsonUnsafe,
+  stripUnsafeLineText,
+} from "@squirrelscan/core-contracts/control-chars";
 
 import { csvRow } from "./entities-export";
 
 export { escapeJsonUnsafe };
-import { escapeMarkdownCell, escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
+import {
+  escapeMarkdownCell,
+  escapeMarkdownText,
+  markdownCodeSpan,
+} from "./output/markdown-escape";
 
 /** One crawled page. Every field is data the crawl stored; nothing here reads the page again. */
 export interface PageMapRow {
@@ -70,7 +77,8 @@ export const PAGE_MAP_FLAG_RULES: Readonly<Record<string, string>> = {
 };
 
 /** The rule ids {@link PAGE_MAP_FLAG_RULES} reads. */
-export const PAGE_MAP_RULE_IDS: readonly string[] = Object.keys(PAGE_MAP_FLAG_RULES);
+export const PAGE_MAP_RULE_IDS: readonly string[] =
+  Object.keys(PAGE_MAP_FLAG_RULES);
 
 /**
  * Where `--too-long` draws the line: the defaults of `core/meta-title` (`max_length` 75) and
@@ -79,7 +87,12 @@ export const PAGE_MAP_RULE_IDS: readonly string[] = Object.keys(PAGE_MAP_FLAG_RU
  */
 export const PAGE_MAP_TOO_LONG = { title: 75, description: 160 } as const;
 
-export const PAGE_MAP_MISSING = ["title", "description", "h1", "schema"] as const;
+export const PAGE_MAP_MISSING = [
+  "title",
+  "description",
+  "h1",
+  "schema",
+] as const;
 export type PageMapMissing = (typeof PAGE_MAP_MISSING)[number];
 export const PAGE_MAP_DUPLICATE = ["title", "description"] as const;
 export type PageMapDuplicate = (typeof PAGE_MAP_DUPLICATE)[number];
@@ -98,11 +111,11 @@ export interface PageMapFilters {
 export function hasPageMapFilters(filters: PageMapFilters): boolean {
   return Boolean(
     filters.missing?.length ||
-      filters.duplicate?.length ||
-      filters.tooLong ||
-      filters.orphan ||
-      filters.section ||
-      filters.page?.length,
+    filters.duplicate?.length ||
+    filters.tooLong ||
+    filters.orphan ||
+    filters.section ||
+    filters.page?.length
   );
 }
 
@@ -143,7 +156,10 @@ function inSection(rawPath: string, rawSection: string): boolean {
  * matches; across groups, all must. `--duplicate` and `--orphan` read the flags the audit's
  * own rules set, so they select exactly the pages the issue list names.
  */
-export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilters): PageMapRow[] {
+export function filterPageMap(
+  rows: readonly PageMapRow[],
+  filters: PageMapFilters
+): PageMapRow[] {
   return rows.filter((row) => {
     if (filters.missing?.length) {
       // A page that errored (4xx, 5xx) or was never parsed (a PDF, an image) has no title or schema
@@ -164,7 +180,12 @@ export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilte
       if (!hit) return false;
     }
     if (filters.duplicate?.length) {
-      if (!filters.duplicate.some((field) => row.flags.includes(`duplicate-${field}`))) return false;
+      if (
+        !filters.duplicate.some((field) =>
+          row.flags.includes(`duplicate-${field}`)
+        )
+      )
+        return false;
     }
     if (filters.tooLong) {
       if (
@@ -175,10 +196,12 @@ export function filterPageMap(rows: readonly PageMapRow[], filters: PageMapFilte
       }
     }
     if (filters.orphan && !row.flags.includes("orphan")) return false;
-    if (filters.section && !inSection(pathOf(row.url), filters.section)) return false;
+    if (filters.section && !inSection(pathOf(row.url), filters.section))
+      return false;
     if (filters.page?.length) {
       const url = comparablePath(row.url);
-      if (!filters.page.some((text) => url.includes(comparablePath(text)))) return false;
+      if (!filters.page.some((text) => url.includes(comparablePath(text))))
+        return false;
     }
     return true;
   });
@@ -247,7 +270,7 @@ export interface PageMapMeta {
 export function pageMapMeta(
   crawl: { id: string; baseUrl: string; startedAt: number },
   total: number,
-  storeIntegrity?: PageMapMeta["storeIntegrity"],
+  storeIntegrity?: PageMapMeta["storeIntegrity"]
 ): PageMapMeta {
   return {
     site: crawl.baseUrl,
@@ -258,20 +281,25 @@ export function pageMapMeta(
   };
 }
 
-export function renderPageMapJson(rows: readonly PageMapRow[], meta: PageMapMeta): string {
-  return `${escapeJsonUnsafe(JSON.stringify(
-    {
-      site: meta.site,
-      crawlId: meta.crawlId,
-      startedAt: new Date(meta.startedAt).toISOString(),
-      total: meta.total,
-      filtered: rows.length,
-      ...(meta.storeIntegrity ? { storeIntegrity: meta.storeIntegrity } : {}),
-      pages: rows,
-    },
-    null,
-    2,
-  ))}\n`;
+export function renderPageMapJson(
+  rows: readonly PageMapRow[],
+  meta: PageMapMeta
+): string {
+  return `${escapeJsonUnsafe(
+    JSON.stringify(
+      {
+        site: meta.site,
+        crawlId: meta.crawlId,
+        startedAt: new Date(meta.startedAt).toISOString(),
+        total: meta.total,
+        filtered: rows.length,
+        ...(meta.storeIntegrity ? { storeIntegrity: meta.storeIntegrity } : {}),
+        pages: rows,
+      },
+      null,
+      2
+    )
+  )}\n`;
 }
 
 /** One RFC 4180 table with a header row. List cells join with a space; every cell is spreadsheet-safe. */
@@ -284,8 +312,8 @@ export function renderPageMapCsv(rows: readonly PageMapRow[]): string {
           const value = row[column];
           if (Array.isArray(value)) return csvSafeText(value.join(" "));
           return typeof value === "string" ? csvSafeText(value) : value;
-        }),
-      ),
+        })
+      )
     );
   }
   return `${lines.join("\n")}\n`;
@@ -309,19 +337,24 @@ function cell(value: string | null | undefined, max = 80): string {
 }
 
 /** The pages as a markdown table: the columns a person scans, the rest in the JSON and CSV. */
-export function renderPageMapMarkdown(rows: readonly PageMapRow[], meta: PageMapMeta): string {
+export function renderPageMapMarkdown(
+  rows: readonly PageMapRow[],
+  meta: PageMapMeta
+): string {
   const out = [`# Page map: ${escapeMarkdownText(cleanText(meta.site))}`, ""];
   out.push(
     rows.length === meta.total
       ? `${meta.total} pages, from audit ${markdownCodeSpan(meta.crawlId.slice(0, 8))}.`
-      : `${rows.length} of ${meta.total} pages match, from audit ${markdownCodeSpan(meta.crawlId.slice(0, 8))}.`,
+      : `${rows.length} of ${meta.total} pages match, from audit ${markdownCodeSpan(meta.crawlId.slice(0, 8))}.`
   );
   out.push("");
-  out.push("| URL | Status | Title | Len | Description | Len | H1 | Words | Schema | In | Out | Flags |");
+  out.push(
+    "| URL | Status | Title | Len | Description | Len | H1 | Words | Schema | In | Out | Flags |"
+  );
   out.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const row of rows) {
     out.push(
-      `| ${urlCell(row.url)} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`,
+      `| ${urlCell(row.url)} | ${row.status} | ${cell(row.title)} | ${row.titleLength} | ${cell(row.description)} | ${row.descriptionLength} | ${row.h1Count ?? ""} | ${row.wordCount ?? ""} | ${cell(row.schemaTypes.join(", "), 40)} | ${row.inlinks} | ${row.internalOutlinks} | ${cell(row.flags.join(", "), 60)} |`
     );
   }
   return `${out.join("\n")}\n`;

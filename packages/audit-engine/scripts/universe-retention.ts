@@ -81,7 +81,8 @@ for (let offset = 0; offset < MAX; offset += BATCH) {
 
 Bun.gc(true);
 const after = process.memoryUsage();
-const held = after.heapUsed - before.heapUsed + (after.external - before.external);
+const held =
+  after.heapUsed - before.heapUsed + (after.external - before.external);
 console.log(
   JSON.stringify({
     db: DB.split("/").pop(),
@@ -90,8 +91,10 @@ console.log(
     retainedKB: Math.round(held / 1024),
     perPageKB: Math.round(held / n / 1024),
     heapPerPageKB: Math.round((after.heapUsed - before.heapUsed) / n / 1024),
-    externalPerPageKB: Math.round((after.external - before.external) / n / 1024),
+    externalPerPageKB: Math.round(
+      (after.external - before.external) / n / 1024
+    ),
     alive: retained.length,
-  }),
+  })
 );
 await run(storage.close());

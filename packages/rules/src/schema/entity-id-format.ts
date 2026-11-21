@@ -1,8 +1,8 @@
 // schema/entity-id-format — `@id`s that are not absolute URLs.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { isUnstableIdNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -41,9 +41,7 @@ export const entityIdFormatRule: Rule = {
     // here is already absolute in the common case. What survives as non-
     // absolute is an `@id` that could not be resolved at all — a bare word, a
     // urn, a mailto — plus blank nodes the site wrote itself.
-    const offenders = map.nodes
-      .filter(isUnstableIdNode)
-      .sort(byReach);
+    const offenders = map.nodes.filter(isUnstableIdNode).sort(byReach);
 
     if (offenders.length === 0) {
       return {

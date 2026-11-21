@@ -3,10 +3,15 @@
 // it. The rule's score is the same before and after, and a link is in exactly one of the two checks, so it is not
 // charged twice.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { loadAllRules, type Rule, type RuleMeta, type RuleRunResult } from "@squirrelscan/rules";
+
+import {
+  loadAllRules,
+  type Rule,
+  type RuleMeta,
+  type RuleRunResult,
+} from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { calculateHealthScore } from "../src/scoring";
 
@@ -24,12 +29,19 @@ function checksFor(sections: Array<string | undefined>): CheckResult[] {
     { url: gone, statusCode: 404, parsed: { links: [] } },
   ];
   const ctx = {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {},
     site: { baseUrl: BASE, robotsTxt: null, sitemaps: null, pages },
     options: {},
   };
-  return (brokenLinksRule.run(ctx as never) as { checks: CheckResult[] }).checks;
+  return (brokenLinksRule.run(ctx as never) as { checks: CheckResult[] })
+    .checks;
 }
 
 function score(checks: CheckResult[], meta: RuleMeta = brokenLinksRule.meta) {
@@ -51,7 +63,9 @@ describe("the score for one footer link before and after the split (#1772)", () 
   const after = checksFor(Array.from({ length: 50 }, () => "footer"));
 
   test("the rule now emits one failing site-wide check and no pass row beside it", () => {
-    expect(after.map((c) => `${c.name}:${c.status}`)).toEqual(["broken-links-sitewide:fail"]);
+    expect(after.map((c) => `${c.name}:${c.status}`)).toEqual([
+      "broken-links-sitewide:fail",
+    ]);
   });
 
   test("the score is the same as the single failing check it replaces", () => {

@@ -9,14 +9,18 @@
 // copy from the other path — so this drives the rule executor itself and asserts
 // on the check the rule actually produced.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, type PreFetchedAssets } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  type PreFetchedAssets,
+} from "../src/adapter";
 
 const EXISTS_RULE = "crawl/sitemap-exists";
 const VALID_RULE = "crawl/sitemap-valid";
@@ -28,9 +32,14 @@ const CONFIG = {
   rules: { enable: [EXISTS_RULE, VALID_RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
+const EMPTY_ASSETS = {
+  css: new Map(),
+  js: new Map(),
+  images: new Map(),
+} as unknown as PreFetchedAssets;
 
-const PAGE_HTML = "<!doctype html><html><head><title>t</title></head><body>x</body></html>";
+const PAGE_HTML =
+  "<!doctype html><html><head><title>t</title></head><body>x</body></html>";
 
 const BASE_STATS = {
   pagesTotal: 1,
@@ -46,7 +55,9 @@ const BASE_STATS = {
 
 // No sitemaps stored at all — the ambiguous state. Whether that means "this site
 // has none" or "we never finished looking" is exactly what the flag decides.
-async function sitemapChecks(truncated: boolean): Promise<Map<string, CheckResult[]>> {
+async function sitemapChecks(
+  truncated: boolean
+): Promise<Map<string, CheckResult[]>> {
   const storage = new SQLiteStorage(":memory:");
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -79,21 +90,34 @@ async function sitemapChecks(truncated: boolean): Promise<Map<string, CheckResul
       });
       const pages = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(pages);
-      const result = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+      const result = yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        CONFIG,
+        EMPTY_ASSETS
+      );
       return new Map([
         [EXISTS_RULE, result.ruleResultsMap.get(EXISTS_RULE)?.checks ?? []],
         [VALID_RULE, result.ruleResultsMap.get(VALID_RULE)?.checks ?? []],
       ]);
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
-const named = (checks: Map<string, CheckResult[]>, ruleId: string, name: string) =>
-  (checks.get(ruleId) ?? []).find((c) => c.name === name);
+const named = (
+  checks: Map<string, CheckResult[]>,
+  ruleId: string,
+  name: string
+) => (checks.get(ruleId) ?? []).find((c) => c.name === name);
 
 describe("truncated sitemap discovery reaches the rules (squirrelscan/repo#1733)", () => {
   test("a truncated walk does not produce the missing-sitemap failure", async () => {
-    const check = named(await sitemapChecks(true), EXISTS_RULE, "sitemap-exists");
+    const check = named(
+      await sitemapChecks(true),
+      EXISTS_RULE,
+      "sitemap-exists"
+    );
 
     expect(check).toBeDefined();
     expect(check!.status).toBe("info");
@@ -103,7 +127,11 @@ describe("truncated sitemap discovery reaches the rules (squirrelscan/repo#1733)
   test("a completed walk that found nothing still fails", async () => {
     // The other half: the flag must not blanket-suppress a real finding, or the
     // fix would trade a false positive for a false negative.
-    const check = named(await sitemapChecks(false), EXISTS_RULE, "sitemap-exists");
+    const check = named(
+      await sitemapChecks(false),
+      EXISTS_RULE,
+      "sitemap-exists"
+    );
 
     expect(check).toBeDefined();
     expect(check!.status).toBe("fail");
@@ -121,7 +149,11 @@ describe("truncated sitemap discovery reaches the rules (squirrelscan/repo#1733)
   });
 
   test("sitemap-valid still skips normally when the walk completed", async () => {
-    const check = named(await sitemapChecks(false), VALID_RULE, "sitemap-valid");
+    const check = named(
+      await sitemapChecks(false),
+      VALID_RULE,
+      "sitemap-valid"
+    );
 
     expect(check).toBeDefined();
     expect(check!.status).toBe("skipped");

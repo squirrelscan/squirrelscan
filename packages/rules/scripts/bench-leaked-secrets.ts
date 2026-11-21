@@ -14,13 +14,20 @@
 //
 // Deterministic: same seed, same corpus, same findings count. Times vary.
 
+import { parsePage } from "@squirrelscan/parser";
 import { writeFileSync } from "node:fs";
 
-import { parsePage } from "@squirrelscan/parser";
-
-import { scanContent, scanPageForSecrets } from "../src/security/leaked-secrets";
+import {
+  scanContent,
+  scanPageForSecrets,
+} from "../src/security/leaked-secrets";
 import { CASES } from "../tests/security/leaked-secrets/cases";
-import { mixedRun, runOf, seededRng, type Rng } from "../tests/security/leaked-secrets/generators";
+import {
+  mixedRun,
+  runOf,
+  seededRng,
+  type Rng,
+} from "../tests/security/leaked-secrets/generators";
 
 function arg(name: string, fallback: string): string {
   const idx = process.argv.indexOf(`--${name}`);
@@ -32,7 +39,11 @@ const PAGES = Number(arg("pages", "200"));
 const SEED = Number(arg("seed", "1"));
 const OUT = arg("out", "");
 
-type Body = { location: "html" | "inline-script" | "external-script"; text: string; url: string };
+type Body = {
+  location: "html" | "inline-script" | "external-script";
+  text: string;
+  url: string;
+};
 
 const LOWER = "abcdefghijklmnopqrstuvwxyz";
 const IDENT = LOWER + "0123456789_$";
@@ -50,17 +61,25 @@ function minifiedFiller(r: Rng, bytes: number): string {
     let chunk: string;
     if (kind === 0) chunk = `function ${a}(${b},t){return ${b}?t(${b}):null}`;
     else if (kind === 1) chunk = `var ${a}=${b}.exports={};`;
-    else if (kind === 2) chunk = `${a}.${b}=function(e){for(var n=0;n<e.length;n++)e[n]&&e[n]()};`;
-    else if (kind === 3) chunk = `${a}["${runOf(r, LOWER, 6)}"]=${Math.floor(r() * 1e6)};`;
-    else if (kind === 4) chunk = `if(${a}!==${b}){${a}=${b}.slice(0,${1 + Math.floor(r() * 9)})}`;
-    else chunk = `${a}.push({id:"${runOf(r, LOWER, 4)}-${runOf(r, "0123456789", 3)}",label:"${runOf(r, LOWER, 5)} ${runOf(r, LOWER, 7)}"});`;
+    else if (kind === 2)
+      chunk = `${a}.${b}=function(e){for(var n=0;n<e.length;n++)e[n]&&e[n]()};`;
+    else if (kind === 3)
+      chunk = `${a}["${runOf(r, LOWER, 6)}"]=${Math.floor(r() * 1e6)};`;
+    else if (kind === 4)
+      chunk = `if(${a}!==${b}){${a}=${b}.slice(0,${1 + Math.floor(r() * 9)})}`;
+    else
+      chunk = `${a}.push({id:"${runOf(r, LOWER, 4)}-${runOf(r, "0123456789", 3)}",label:"${runOf(r, LOWER, 5)} ${runOf(r, LOWER, 7)}"});`;
     // A brand keyword every ~2 KB, inside ordinary code so the window path runs
     // and finds nothing: a comment, a string, a property name.
     if (++n % 40 === 0) {
       const kw = KEYWORDS[n % KEYWORDS.length]!;
       const form = n % 3;
       chunk +=
-        form === 0 ? `/* ${kw} integration */` : form === 1 ? `${a}.provider="${kw}";` : `${a}.${kw}Enabled=!0;`;
+        form === 0
+          ? `/* ${kw} integration */`
+          : form === 1
+            ? `${a}.provider="${kw}";`
+            : `${a}.${kw}Enabled=!0;`;
     }
     parts.push(chunk);
     size += chunk.length;
@@ -68,7 +87,12 @@ function minifiedFiller(r: Rng, bytes: number): string {
   return parts.join("");
 }
 
-function buildCorpus(): { bodies: Body[]; bytes: number; pages: number; scripts: number } {
+function buildCorpus(): {
+  bodies: Body[];
+  bytes: number;
+  pages: number;
+  scripts: number;
+} {
   const r = seededRng(SEED);
   const bodies: Body[] = [];
   let pages = 0;
@@ -77,16 +101,22 @@ function buildCorpus(): { bodies: Body[]; bytes: number; pages: number; scripts:
   // 1. Half the page budget is corpus cases, sampled evenly across the list so
   //    every context and tier is represented, serialized the way the rule
   //    sees them.
-  const all = CASES.filter((c) => c.id !== "probe:no-size-cap-on-external-script");
+  const all = CASES.filter(
+    (c) => c.id !== "probe:no-size-cap-on-external-script"
+  );
   const budget = Math.min(all.length, Math.floor(PAGES / 2));
   const step = all.length / budget;
-  const sampled = Array.from({ length: budget }, (_, i) => all[Math.floor(i * step)]!);
+  const sampled = Array.from(
+    { length: budget },
+    (_, i) => all[Math.floor(i * step)]!
+  );
   for (const c of sampled) {
     const doc = parsePage(c.html, c.url).document!;
     bodies.push({ location: "html", text: doc.toString(), url: c.url });
     for (const s of doc.querySelectorAll("script:not([src])")) {
       const t = s.textContent || "";
-      if (t.trim()) bodies.push({ location: "inline-script", text: t, url: c.url });
+      if (t.trim())
+        bodies.push({ location: "inline-script", text: t, url: c.url });
     }
     for (const s of c.scripts ?? []) {
       bodies.push({ location: "external-script", text: s.content, url: s.url });
@@ -101,8 +131,16 @@ function buildCorpus(): { bodies: Body[]; bytes: number; pages: number; scripts:
     const kb = 50 + Math.floor(r() * 450);
     const inlineJs = minifiedFiller(r, kb * 1024);
     const html = `<!DOCTYPE html><html><head><title>p${pages}</title></head><body><div id="root"></div><script>${inlineJs}</script></body></html>`;
-    bodies.push({ location: "html", text: html, url: `https://bench.test/p${pages}` });
-    bodies.push({ location: "inline-script", text: inlineJs, url: `https://bench.test/p${pages}` });
+    bodies.push({
+      location: "html",
+      text: html,
+      url: `https://bench.test/p${pages}`,
+    });
+    bodies.push({
+      location: "inline-script",
+      text: inlineJs,
+      url: `https://bench.test/p${pages}`,
+    });
     if (pages % 4 === 0) {
       bodies.push({
         location: "external-script",
@@ -119,8 +157,13 @@ function buildCorpus(): { bodies: Body[]; bytes: number; pages: number; scripts:
   for (let i = 0; i < 3; i++) {
     const mb = 2 + Math.floor(r() * 4);
     let text = minifiedFiller(r, mb * 1024 * 1024);
-    if (i === 0) text += `var t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${mixedRun(r, 36)}"};`;
-    bodies.push({ location: "external-script", text, url: `https://bench.test/static/vendor-${i}.js` });
+    if (i === 0)
+      text += `var t={${["gh", "p_"].join("")}:"${["gh", "p_"].join("")}${mixedRun(r, 36)}"};`;
+    bodies.push({
+      location: "external-script",
+      text,
+      url: `https://bench.test/static/vendor-${i}.js`,
+    });
     scripts++;
   }
 

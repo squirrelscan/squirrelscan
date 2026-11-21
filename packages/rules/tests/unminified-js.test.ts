@@ -4,18 +4,19 @@
 // it carried 4 preserved license comments. Banners must be stripped before
 // the minification heuristic runs, without masking genuinely unminified code.
 
-import { describe, expect, test } from "bun:test";
-
 import type { ScriptContentData } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { RuleContext } from "../src/types";
 
 import { unminifiedJsRule } from "../src/performance/unminified-js";
-import type { RuleContext } from "../src/types";
 
 function ctx(scripts: ScriptContentData[]): RuleContext {
   const url = "https://example.com/";
-  const html = "<!DOCTYPE html><html><head><title>t</title></head><body></body></html>";
+  const html =
+    "<!DOCTYPE html><html><head><title>t</title></head><body></body></html>";
   return {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
@@ -42,7 +43,10 @@ function scriptEntry(url: string, content: string): ScriptContentData {
   };
 }
 
-function checkNamed(checks: Awaited<ReturnType<typeof unminifiedJsRule.run>>["checks"], name: string) {
+function checkNamed(
+  checks: Awaited<ReturnType<typeof unminifiedJsRule.run>>["checks"],
+  name: string
+) {
   return checks.find((c) => c.name === name);
 }
 
@@ -61,49 +65,58 @@ const MINIFIED_BODY = `(function(){"use strict";var a=1,b=2,c=function(d,e){retu
 const UNMINIFIED_BODY = `function outerWrapperFunction() {\n${Array.from(
   { length: 60 },
   (_, i) =>
-    `  function processUserRequestNumber${i}(inputArgument) {\n    var localResultValue = inputArgument + ${i};\n    return localResultValue;\n  }`,
+    `  function processUserRequestNumber${i}(inputArgument) {\n    var localResultValue = inputArgument + ${i};\n    return localResultValue;\n  }`
 ).join("\n")}\n}`;
 
 describe("perf/unminified-js — license banner handling", () => {
   test("#698: minified Vite bundle with 4 license banners is NOT flagged", async () => {
     const content = `${LICENSE_BANNERS}\n${MINIFIED_BODY}`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-abc123.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/index-abc123.js", content)])
+    );
     expect(checkNamed(checks, "unminified-js")).toBeUndefined();
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });
 
   test("review regression: CRLF-terminated //! banners are stripped too", async () => {
-    const crlfBanners = "//! license line one\r\n//! license line two\r\n/*! bundled-lib v1 */\r\n";
-    const { checks } = (await unminifiedJsRule.run(
+    const crlfBanners =
+      "//! license line one\r\n//! license line two\r\n/*! bundled-lib v1 */\r\n";
+    const { checks } = await unminifiedJsRule.run(
       ctx([
-        scriptEntry("https://example.com/assets/index-crlf.js", `${crlfBanners}${MINIFIED_BODY}`),
-      ]),
-    ));
+        scriptEntry(
+          "https://example.com/assets/index-crlf.js",
+          `${crlfBanners}${MINIFIED_BODY}`
+        ),
+      ])
+    );
     expect(checkNamed(checks, "unminified-js")).toBeUndefined();
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });
 
   test("baseline: minified bundle with no banner at all still passes", async () => {
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-abc123.js", MINIFIED_BODY)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([
+        scriptEntry(
+          "https://example.com/assets/index-abc123.js",
+          MINIFIED_BODY
+        ),
+      ])
+    );
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });
 
   test("true positive preserved: unminified code with NO banner is still flagged", async () => {
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/app.js", UNMINIFIED_BODY)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/app.js", UNMINIFIED_BODY)])
+    );
     expect(checkNamed(checks, "unminified-js")?.status).toBe("warn");
   });
 
   test("true positive preserved: unminified code WITH a license banner is still flagged (no masking)", async () => {
     const content = `${LICENSE_BANNERS}\n${UNMINIFIED_BODY}`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/app.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/app.js", content)])
+    );
     expect(checkNamed(checks, "unminified-js")?.status).toBe("warn");
   });
 
@@ -113,9 +126,9 @@ describe("perf/unminified-js — license banner handling", () => {
     // unminified, indented, long-named code. Only leading banners get
     // stripped, so this unminified tail must still be detected.
     const content = `(function(){"use strict";var a=1;/*! not a real banner, mid-file */${UNMINIFIED_BODY}})();`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/app.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/app.js", content)])
+    );
     expect(checkNamed(checks, "unminified-js")?.status).toBe("warn");
   });
 });
@@ -141,14 +154,19 @@ const URLS = [
 // matters — the old regex consumed to end of line, so same-line URLs hid behind
 // the first match; spread across lines they each scored as a separate comment.
 const MINIFIED_WITH_URLS = `${URLS.map(
-  (u, i) => `var a${i}=[${JSON.stringify(u)},"${"y".repeat(400)}"];`,
+  (u, i) => `var a${i}=[${JSON.stringify(u)},"${"y".repeat(400)}"];`
 ).join("\n")}\nwindow.__u=[a0,a1,a2,a3,a4,a5];`;
 
 describe("perf/unminified-js — string-aware comment detection (#142)", () => {
   test("#142: a minified bundle whose only slashes are URLs in string literals is NOT flagged", async () => {
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-DAwQ9g4m.js", MINIFIED_WITH_URLS)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([
+        scriptEntry(
+          "https://example.com/assets/index-DAwQ9g4m.js",
+          MINIFIED_WITH_URLS
+        ),
+      ])
+    );
     expect(checkNamed(checks, "unminified-js")).toBeUndefined();
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });
@@ -158,11 +176,15 @@ describe("perf/unminified-js — string-aware comment detection (#142)", () => {
     // newline ratio. Only the newlines are recoverable; before the fix the six
     // URLs each contributed their ~400-byte line tail to the savings (~2.4KB on
     // a 2.8KB file, the same nonsense as "295KB savings" on a 330KB bundle).
-    const padding = Array.from({ length: 20 }, (_, i) => `x${i}=${i};`).join("\n");
+    const padding = Array.from({ length: 20 }, (_, i) => `x${i}=${i};`).join(
+      "\n"
+    );
     const content = `${MINIFIED_WITH_URLS}\n${padding}`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-newlines.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([
+        scriptEntry("https://example.com/assets/index-newlines.js", content),
+      ])
+    );
     const warn = checkNamed(checks, "unminified-js");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toContain("high newlines");
@@ -187,9 +209,11 @@ describe("perf/unminified-js — string-aware comment detection (#142)", () => {
     const content = `${templates
       .map((t, i) => `${t}var p${i}="${"z".repeat(400)}";`)
       .join("\n")}\nwindow.__t=[b,c,e,f,g];`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-template.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([
+        scriptEntry("https://example.com/assets/index-template.js", content),
+      ])
+    );
     expect(checkNamed(checks, "unminified-js")).toBeUndefined();
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });
@@ -197,11 +221,13 @@ describe("perf/unminified-js — string-aware comment detection (#142)", () => {
   test("true positive preserved: real `//` comments are still counted and flagged", async () => {
     // Six genuine line comments over a body that is otherwise minified-looking,
     // so "comments" is the only reason the rule can fire.
-    const comments = Array.from({ length: 6 }, (_, i) => `// step ${i}`).join("\n");
+    const comments = Array.from({ length: 6 }, (_, i) => `// step ${i}`).join(
+      "\n"
+    );
     const content = `${comments}\nvar a=1,b="${"q".repeat(2400)}";window.__c=[a,b];`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/app-commented.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/app-commented.js", content)])
+    );
     const warn = checkNamed(checks, "unminified-js");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("6 comments");
@@ -210,12 +236,12 @@ describe("perf/unminified-js — string-aware comment detection (#142)", () => {
   test("true positive preserved: a `//` comment after a string on the same line is still counted", async () => {
     const lines = Array.from(
       { length: 6 },
-      (_, i) => `var u${i}="https://example.com/page/${i}"; // note ${i}`,
+      (_, i) => `var u${i}="https://example.com/page/${i}"; // note ${i}`
     ).join("\n");
     const content = `${lines}\nvar z="${"w".repeat(2400)}";window.__z=z;`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/app-trailing.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/app-trailing.js", content)])
+    );
     const warn = checkNamed(checks, "unminified-js");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toContain("6 comments");
@@ -232,9 +258,9 @@ describe("perf/unminified-js — string-aware comment detection (#142)", () => {
     const content = `${patterns
       .map((p, i) => `${p}var q${i}="${"r".repeat(400)}";`)
       .join("\n")}\nwindow.__r=[a,b,c,d,e];`;
-    const { checks } = (await unminifiedJsRule.run(
-      ctx([scriptEntry("https://example.com/assets/index-regex.js", content)]),
-    ));
+    const { checks } = await unminifiedJsRule.run(
+      ctx([scriptEntry("https://example.com/assets/index-regex.js", content)])
+    );
     expect(checkNamed(checks, "unminified-js")).toBeUndefined();
     expect(checkNamed(checks, "minified-js")?.status).toBe("pass");
   });

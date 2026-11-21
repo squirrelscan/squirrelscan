@@ -10,38 +10,6 @@
 // never imports adapter — adapter imports buildV1Report/buildRobotsData back, and a
 // cycle would otherwise form.
 
-import { Effect } from "effect";
-
-import { pageTypeFromUrl } from "@squirrelscan/parser";
-
-import {
-  capChecksForPublish,
-  capMixedRuleChecksForPublish,
-  clampCheckItemsOverflow,
-  maxChecksTruncated,
-  stampChecksTruncated,
-} from "@squirrelscan/rules";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-import { parseRobotsTxt, resolveRobotsSitemapUrls } from "@squirrelscan/utils/robots-txt";
-
-import { logger } from "./adapter-logger";
-import { foldChecksToCanonical, readCanonicalVariants } from "./canonical-groups";
-import {
-  calculateHealthScore,
-  calculateHealthScoreFromTallies,
-  deriveAuditStatus,
-  deriveAuditStatusFromPages,
-  withoutUnobservedScores,
-  type RuleTally,
-} from "./scoring";
-
-import type {
-  CrawlStorage,
-  FrontierRecord,
-  RobotsTxtRecord,
-  ImageAppearanceRecord,
-} from "@squirrelscan/core-contracts/storage";
 import type {
   AuditReport,
   AuditStatus,
@@ -64,9 +32,45 @@ import type {
   SitemapUrlStatusData,
   TwitterData,
 } from "@squirrelscan/core-contracts";
+import type {
+  CrawlStorage,
+  FrontierRecord,
+  RobotsTxtRecord,
+  ImageAppearanceRecord,
+} from "@squirrelscan/core-contracts/storage";
 import type { ParsedPage, RuleRunResult } from "@squirrelscan/rules";
+
 import { isScoreless } from "@squirrelscan/core-contracts";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+import { pageTypeFromUrl } from "@squirrelscan/parser";
+import {
+  capChecksForPublish,
+  capMixedRuleChecksForPublish,
+  clampCheckItemsOverflow,
+  maxChecksTruncated,
+  stampChecksTruncated,
+} from "@squirrelscan/rules";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+import {
+  parseRobotsTxt,
+  resolveRobotsSitemapUrls,
+} from "@squirrelscan/utils/robots-txt";
+import { Effect } from "effect";
+
+import { logger } from "./adapter-logger";
+import {
+  foldChecksToCanonical,
+  readCanonicalVariants,
+} from "./canonical-groups";
 import { isRedirectSourcePage } from "./redirect-source";
+import {
+  calculateHealthScore,
+  calculateHealthScoreFromTallies,
+  deriveAuditStatus,
+  deriveAuditStatusFromPages,
+  withoutUnobservedScores,
+  type RuleTally,
+} from "./scoring";
 
 // ============================================
 // SITE-RECORD BUILDERS
@@ -78,7 +82,10 @@ import { isRedirectSourcePage } from "./redirect-source";
  * list, so the base URL is the honest answer here. Empty when nothing was rate
  * limited, which makes the reason fall back to "the host".
  */
-function rateLimitedHostsFor(baseUrl: string, rateLimitedCount: number): string[] {
+function rateLimitedHostsFor(
+  baseUrl: string,
+  rateLimitedCount: number
+): string[] {
   if (rateLimitedCount <= 0) return [];
   try {
     return [new URL(baseUrl).hostname];
@@ -98,9 +105,11 @@ function rateLimitedHostsFor(baseUrl: string, rateLimitedCount: number): string[
  */
 export function unfetchedFrontierCount(
   storage: CrawlStorage,
-  crawlId: string,
+  crawlId: string
 ): Effect.Effect<number, never, never> {
-  return storage.getPendingCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+  return storage
+    .getPendingCount(crawlId)
+    .pipe(Effect.catchAll(() => Effect.succeed(0)));
 }
 
 /**
@@ -109,9 +118,11 @@ export function unfetchedFrontierCount(
  */
 export function robotsBlockedFrontierCount(
   storage: CrawlStorage,
-  crawlId: string,
+  crawlId: string
 ): Effect.Effect<number, never, never> {
-  return storage.getRobotsDisallowedCount(crawlId).pipe(Effect.catchAll(() => Effect.succeed(0)));
+  return storage
+    .getRobotsDisallowedCount(crawlId)
+    .pipe(Effect.catchAll(() => Effect.succeed(0)));
 }
 
 /**
@@ -119,7 +130,10 @@ export function robotsBlockedFrontierCount(
  * run executed, the page cap, ...) and whether the crawl honoured robots.txt. The builders add
  * `robotsBlockedPages` from the frontier, so the two robots fields always come from the same crawl.
  */
-export type EngineScanScopeInput = Omit<ScanScope, "respectRobots" | "robotsBlockedPages"> & {
+export type EngineScanScopeInput = Omit<
+  ScanScope,
+  "respectRobots" | "robotsBlockedPages"
+> & {
   respectRobots: boolean;
 };
 
@@ -131,14 +145,19 @@ function engineScanScope(
   storage: CrawlStorage,
   crawlId: string,
   input: EngineScanScopeInput | undefined,
-  errorPages = 0,
+  errorPages = 0
 ): Effect.Effect<ScanScope | undefined, never, never> {
   if (!input) return Effect.succeed(undefined);
   // Crawled pages that answered 4xx/5xx (repo#2404): kept as pages, never rule-audited.
   const errors = errorPages > 0 ? { errorPages } : {};
-  if (!input.respectRobots) return Effect.succeed({ ...input, ...errors, robotsBlockedPages: 0 });
+  if (!input.respectRobots)
+    return Effect.succeed({ ...input, ...errors, robotsBlockedPages: 0 });
   return robotsBlockedFrontierCount(storage, crawlId).pipe(
-    Effect.map((robotsBlockedPages) => ({ ...input, ...errors, robotsBlockedPages })),
+    Effect.map((robotsBlockedPages) => ({
+      ...input,
+      ...errors,
+      robotsBlockedPages,
+    }))
   );
 }
 
@@ -152,7 +171,7 @@ function engineScanScope(
  */
 export function pageTypeCoverage(
   auditedUrls: Iterable<string>,
-  pendingUrls: Iterable<string>,
+  pendingUrls: Iterable<string>
 ): ScanScopePageType[] {
   const rows = new Map<string, ScanScopePageType>();
   const row = (url: string): ScanScopePageType => {
@@ -171,7 +190,7 @@ export function pageTypeCoverage(
   }
   for (const url of pendingUrls) row(url).discovered += 1;
   return [...rows.values()].sort(
-    (a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type),
+    (a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type)
   );
 }
 
@@ -182,16 +201,18 @@ export function pageTypeCoverage(
 export function pageTypeCoverageFor(
   storage: CrawlStorage,
   crawlId: string,
-  auditedUrls: Iterable<string>,
+  auditedUrls: Iterable<string>
 ): Effect.Effect<ScanScopePageType[], never, never> {
   return storage.getAllFrontierEntries(crawlId).pipe(
     Effect.map((entries) =>
       pageTypeCoverage(
         auditedUrls,
-        entries.filter((e) => e.status === "pending").map((e) => e.normalizedUrl),
-      ),
+        entries
+          .filter((e) => e.status === "pending")
+          .map((e) => e.normalizedUrl)
+      )
     ),
-    Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[])),
+    Effect.catchAll(() => Effect.succeed([] as ScanScopePageType[]))
   );
 }
 
@@ -201,7 +222,9 @@ export function pageTypeCoverageFor(
  * population as `pagesCrawled + unfetched`; skipped (out of scope, robots, dedupe) and failed rows are not
  * pages of the site. Frontier rows are unique by normalised URL, so the count is already deduped. Pure.
  */
-export function discoveredCoverage(entries: readonly FrontierRecord[]): ScanScopeDiscovered {
+export function discoveredCoverage(
+  entries: readonly FrontierRecord[]
+): ScanScopeDiscovered {
   let sitemap = 0;
   let links = 0;
   for (const e of entries) {
@@ -215,14 +238,14 @@ export function discoveredCoverage(entries: readonly FrontierRecord[]): ScanScop
 /** {@link discoveredCoverage} for a stored crawl. A failed read gives none, never a failed report. */
 export function discoveredCoverageFor(
   storage: CrawlStorage,
-  crawlId: string,
+  crawlId: string
 ): Effect.Effect<ScanScopeDiscovered | undefined, never, never> {
   return storage.getAllFrontierEntries(crawlId).pipe(
     Effect.map((entries) => {
       const d = discoveredCoverage(entries);
       return d.total > 0 ? d : undefined;
     }),
-    Effect.catchAll(() => Effect.succeed(undefined)),
+    Effect.catchAll(() => Effect.succeed(undefined))
   );
 }
 
@@ -244,7 +267,7 @@ const TARGETED_UNAUDITED_MAX = 100;
 export function targetedCoverage(
   entries: readonly FrontierRecord[],
   redirectSources: Iterable<string>,
-  overLimit = 0,
+  overLimit = 0
 ): ScanScopeTargeted {
   const redirects = new Set<string>(redirectSources);
   const redirectDestinations = new Map<string, string>();
@@ -288,7 +311,7 @@ export function targetedCoverage(
 /** {@link targetedCoverage} for a stored crawl. A failed read gives an empty answer, never a failed report. */
 export function targetedCoverageFor(
   storage: CrawlStorage,
-  crawlId: string,
+  crawlId: string
 ): Effect.Effect<ScanScopeTargeted, never, never> {
   return Effect.gen(function* () {
     const entries = yield* storage.getAllFrontierEntries(crawlId);
@@ -296,15 +319,30 @@ export function targetedCoverageFor(
     // legacy-redirect test needs it, so a single `getPages(crawlId)` would hold every body at once.
     const redirectSources: string[] = [];
     for (let offset = 0; ; offset += TARGETED_PAGE_BATCH) {
-      const batch = yield* storage.getPages(crawlId, { limit: TARGETED_PAGE_BATCH, offset });
+      const batch = yield* storage.getPages(crawlId, {
+        limit: TARGETED_PAGE_BATCH,
+        offset,
+      });
       if (batch.length === 0) break;
-      for (const page of batch) if (isRedirectSourcePage(page)) redirectSources.push(page.normalizedUrl);
+      for (const page of batch)
+        if (isRedirectSourcePage(page))
+          redirectSources.push(page.normalizedUrl);
       if (batch.length < TARGETED_PAGE_BATCH) break;
     }
     const stats = yield* storage.getStats(crawlId);
-    return targetedCoverage(entries, redirectSources, stats?.targetsOverLimit ?? 0);
+    return targetedCoverage(
+      entries,
+      redirectSources,
+      stats?.targetsOverLimit ?? 0
+    );
   }).pipe(
-    Effect.catchAll(() => Effect.succeed({ requested: 0, audited: 0, unaudited: [] } as ScanScopeTargeted)),
+    Effect.catchAll(() =>
+      Effect.succeed({
+        requested: 0,
+        audited: 0,
+        unaudited: [],
+      } as ScanScopeTargeted)
+    )
   );
 }
 
@@ -325,12 +363,12 @@ function unfetchedUrlCount(
   storage: CrawlStorage,
   crawlId: string,
   crawl: { stats?: { pagesRateLimited?: number } } | null | undefined,
-  rateLimitedCount: number,
+  rateLimitedCount: number
 ): Effect.Effect<number, never, never> {
   if (rateLimitedCount <= 0) return Effect.succeed(0);
   const abandoned = crawl?.stats?.pagesRateLimited ?? 0;
   return unfetchedFrontierCount(storage, crawlId).pipe(
-    Effect.map((pending) => abandoned + pending),
+    Effect.map((pending) => abandoned + pending)
   );
 }
 
@@ -341,10 +379,15 @@ function unfetchedUrlCount(
  * Undefined otherwise, so reports for the overwhelmingly common no-redirect and
  * same-site-redirect cases are unchanged.
  */
-function offSiteSeedRedirect(baseUrl: string, seedUrl: string | undefined): string | undefined {
+function offSiteSeedRedirect(
+  baseUrl: string,
+  seedUrl: string | undefined
+): string | undefined {
   if (!seedUrl || !baseUrl) return undefined;
   try {
-    return new URL(seedUrl).origin === new URL(baseUrl).origin ? undefined : seedUrl;
+    return new URL(seedUrl).origin === new URL(baseUrl).origin
+      ? undefined
+      : seedUrl;
   } catch {
     return undefined;
   }
@@ -360,7 +403,9 @@ function hasAltAttribute(appearance: ImageAppearanceRecord): boolean {
   return appearance.alt !== undefined && appearance.alt !== null;
 }
 
-export function buildRobotsData(robots: RobotsTxtRecord | null): RobotsTxtData | null {
+export function buildRobotsData(
+  robots: RobotsTxtRecord | null
+): RobotsTxtData | null {
   if (!robots) return null;
 
   let rules: RobotsTxtData["rules"] = [];
@@ -424,7 +469,7 @@ export interface RuleExecutionResult {
 /** The report's `javascript` field, shared by both builders so v1 and v2 agree. */
 function javascriptBlock(
   ruleResults: Pick<RuleExecutionResult, "javascript">,
-  crawl: { javascript?: JavascriptShipped } | null | undefined,
+  crawl: { javascript?: JavascriptShipped } | null | undefined
 ): { javascript?: JavascriptShipped } {
   const javascript = ruleResults.javascript ?? crawl?.javascript;
   return javascript ? { javascript } : {};
@@ -445,7 +490,7 @@ export function emptyRuleExecutionResult(): RuleExecutionResult {
 }
 
 function toReportRuleResults(
-  ruleResults: Map<string, RuleRunResult>,
+  ruleResults: Map<string, RuleRunResult>
 ): Record<string, ReportRuleResult> {
   const entries: Array<[string, ReportRuleResult]> = [];
 
@@ -500,18 +545,25 @@ function toReportRuleResults(
  * checks into `details.checksTruncated` — and warn, so the failure mode is
  * loud rather than a report that merely looks complete.
  */
-function sanitizeReportRuleResults(ruleResults: Record<string, ReportRuleResult>): void {
+function sanitizeReportRuleResults(
+  ruleResults: Record<string, ReportRuleResult>
+): void {
   for (const [ruleId, ruleResult] of Object.entries(ruleResults)) {
     // Display-string clamps, unchanged: in-place, and `name` IS clamped here
     // (unlike clampCheckStrings, which leaves it alone as a fold join key) —
     // fold has already run, so nothing downstream joins on it.
     for (const check of ruleResult.checks) {
-      if (check.message.length > 1000) check.message = `${check.message.slice(0, 997)}...`;
-      if (check.name.length > 255) check.name = `${check.name.slice(0, 252)}...`;
+      if (check.message.length > 1000)
+        check.message = `${check.message.slice(0, 997)}...`;
+      if (check.name.length > 255)
+        check.name = `${check.name.slice(0, 252)}...`;
     }
 
     // Rolls the drop into `details.additional` instead of slicing items away.
-    let checks = clampCheckItemsOverflow(ruleResult.checks, REPORT_LIMITS.maxItemsPerCheck);
+    let checks = clampCheckItemsOverflow(
+      ruleResult.checks,
+      REPORT_LIMITS.maxItemsPerCheck
+    );
 
     if (checks.length > REPORT_LIMITS.maxChecksPerRule) {
       // Reconciled against any marker an upstream cap already left, so a
@@ -519,7 +571,7 @@ function sanitizeReportRuleResults(ruleResults: Record<string, ReportRuleResult>
       const total = Math.max(checks.length, maxChecksTruncated(checks));
       logger.warn(
         `report: rule ${ruleId} emitted ${total} checks past the fold, capping at ` +
-          `${REPORT_LIMITS.maxChecksPerRule} (details.checksTruncated records the total)`,
+          `${REPORT_LIMITS.maxChecksPerRule} (details.checksTruncated records the total)`
       );
       checks = checks.slice(0, REPORT_LIMITS.maxChecksPerRule);
       const lastIndex = checks.length - 1;
@@ -544,7 +596,12 @@ export interface PageAudit {
   twitter: TwitterData;
   schema: SchemaData;
   links: Array<{ url: string; text: string; isInternal: boolean }>;
-  images: Array<{ src: string; alt: string | null; width: string | null; height: string | null }>;
+  images: Array<{
+    src: string;
+    alt: string | null;
+    width: string | null;
+    height: string | null;
+  }>;
   h1Count: number;
   h1Text: string[];
   checks: CheckResult[];
@@ -627,7 +684,7 @@ export function buildV1Report(
   storage: CrawlStorage,
   crawlId: string,
   ruleResults: RuleExecutionResult,
-  options?: BuildV1ReportOptions,
+  options?: BuildV1ReportOptions
 ): Effect.Effect<FullAuditReport, never, never> {
   return Effect.gen(function* () {
     const reportSpan = logger.traceStart("generateReportFromStorage");
@@ -649,14 +706,17 @@ export function buildV1Report(
       if (list) list.push(variant);
       else variantsOfCanonical.set(canonical, [variant]);
     }
-    const exportOn = !!options?.exportCanonicalVariants && !options.foldCanonicalVariants;
+    const exportOn =
+      !!options?.exportCanonicalVariants && !options.foldCanonicalVariants;
     const variantRead = { unreadable: false };
     const exportedVariants = exportOn
       ? yield* readCanonicalVariants(storage, crawlId, batchSize, variantRead)
       : new Map<string, string>();
     let variantPages = 0;
 
-    const links = yield* storage.getLinks(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
+    const links = yield* storage
+      .getLinks(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed([])));
 
     const images = yield* storage
       .getImages(crawlId)
@@ -696,11 +756,16 @@ export function buildV1Report(
 
     // Batch fetch all image appearances if available
     const hasBatchImageMethod = "getAllImageAppearancesBySrc" in storage;
-    const allImageAppearancesBySrc: Map<string, ImageAppearanceRecord[]> = hasBatchImageMethod
-      ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
-          .getAllImageAppearancesBySrc(crawlId)
-          .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, ImageAppearanceRecord[]>())))
-      : new Map<string, ImageAppearanceRecord[]>();
+    const allImageAppearancesBySrc: Map<string, ImageAppearanceRecord[]> =
+      hasBatchImageMethod
+        ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
+            .getAllImageAppearancesBySrc(crawlId)
+            .pipe(
+              Effect.catchAll(() =>
+                Effect.succeed(new Map<string, ImageAppearanceRecord[]>())
+              )
+            )
+        : new Map<string, ImageAppearanceRecord[]>();
 
     let imageQueryCount = 0;
     for (const image of images) {
@@ -736,7 +801,8 @@ export function buildV1Report(
     // After the score: every variant page keeps its own checks, so folding never moves it (#858).
     if (variantOf.size > 0) {
       const checks: CheckResult[] = [];
-      for (const rr of ruleResults.ruleResultsMap.values()) checks.push(...rr.checks);
+      for (const rr of ruleResults.ruleResultsMap.values())
+        checks.push(...rr.checks);
       for (const list of ruleResults.pageResults.values()) checks.push(...list);
       checks.push(...ruleResults.siteResults);
       // Idempotent and safe on checks shared between the maps, so one pass over the union is enough.
@@ -785,17 +851,25 @@ export function buildV1Report(
         const parsed = ruleResults.parsedPages.get(page.normalizedUrl) ?? null;
         const pageChecks = [
           ...(ruleResults.pageResults.get(page.normalizedUrl) ?? []),
-          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap((v) => ruleResults.pageResults.get(v) ?? []),
+          ...(variantsOfCanonical.get(page.normalizedUrl) ?? []).flatMap(
+            (v) => ruleResults.pageResults.get(v) ?? []
+          ),
         ];
 
         if (parsed) {
-          if (!parsed.meta.title) summary.missingTitles.push(page.normalizedUrl);
-          if (!parsed.meta.description) summary.missingDescriptions.push(page.normalizedUrl);
-          if (!parsed.og.title && !parsed.og.image) summary.missingOgTags.push(page.normalizedUrl);
-          if (!parsed.twitter.card) summary.missingTwitterCards.push(page.normalizedUrl);
-          if (!parsed.schema.types.length) summary.missingSchemas.push(page.normalizedUrl);
+          if (!parsed.meta.title)
+            summary.missingTitles.push(page.normalizedUrl);
+          if (!parsed.meta.description)
+            summary.missingDescriptions.push(page.normalizedUrl);
+          if (!parsed.og.title && !parsed.og.image)
+            summary.missingOgTags.push(page.normalizedUrl);
+          if (!parsed.twitter.card)
+            summary.missingTwitterCards.push(page.normalizedUrl);
+          if (!parsed.schema.types.length)
+            summary.missingSchemas.push(page.normalizedUrl);
           if (parsed.h1.count > 1) summary.multipleH1s.push(page.normalizedUrl);
-          if (parsed.content.isThinContent) summary.thinContentPages.push(page.normalizedUrl);
+          if (parsed.content.isThinContent)
+            summary.thinContentPages.push(page.normalizedUrl);
         }
 
         // Get links for this page using per-page index lookup
@@ -862,7 +936,10 @@ export function buildV1Report(
           // unstripped, so an over-cap single page hit the schema's silent
           // slice. A page's checks mix many DIFFERENT rules, so this must NOT
           // fold by (name,status) like capChecksForPublish does (see its doc).
-          checks: capMixedRuleChecksForPublish(pageChecks, REPORT_LIMITS.maxChecksPerPage),
+          checks: capMixedRuleChecksForPublish(
+            pageChecks,
+            REPORT_LIMITS.maxChecksPerPage
+          ),
           redirectChain: page.redirectChain,
           fetcherId: page.fetcherId,
           fallbackReason: page.fallbackReason,
@@ -895,11 +972,19 @@ export function buildV1Report(
     // #512: pages whose render was blocked (403/WAF) and recovered via a
     // non-browser fallback fetch — surfaced as an informational report note.
     const renderBlockRecovered = pageAudits.filter(
-      (p) => p.fallbackReason === "render-block",
+      (p) => p.fallbackReason === "render-block"
     ).length;
 
-    const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
-    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope, errorPages);
+    const refusedSeedRedirect = offSiteSeedRedirect(
+      crawl?.baseUrl ?? "",
+      crawl?.seedUrl
+    );
+    const scanScope = yield* engineScanScope(
+      storage,
+      crawlId,
+      options?.scanScope,
+      errorPages
+    );
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
@@ -911,7 +996,9 @@ export function buildV1Report(
       passed,
       warnings,
       failed,
-      ...(renderBlockRecovered > 0 ? { fetchFallbacks: { recovered: renderBlockRecovered } } : {}),
+      ...(renderBlockRecovered > 0
+        ? { fetchFallbacks: { recovered: renderBlockRecovered } }
+        : {}),
       // The list is always sent when it could be read, an empty one included: it is how a server learns that a
       // page it once recorded as a variant is not one any more. `canonicalVariantsComplete: false` says the list
       // was clipped, so a server only adds from it. Unreadable page features send nothing (unknown).
@@ -928,7 +1015,9 @@ export function buildV1Report(
       ...(variantPages > 0
         ? {
             canonicalVariants: variantPages,
-            canonicalVariantPages: [...variantOf].slice(0, 100).map(([page, canonical]) => ({ page, canonical })),
+            canonicalVariantPages: [...variantOf]
+              .slice(0, 100)
+              .map(([page, canonical]) => ({ page, canonical })),
           }
         : {}),
       // #1003: 500 matches the publish schema's siteChecks cap
@@ -983,8 +1072,16 @@ export function buildV1Report(
     const rateLimitedCount =
       (crawl?.stats?.pagesRateLimited ?? 0) +
       pageStatuses.filter((page) => isRateLimitStatus(page.status)).length;
-    const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
-    const unfetched = yield* unfetchedUrlCount(storage, crawlId, crawl, rateLimitedCount);
+    const rateLimitedHosts = rateLimitedHostsFor(
+      result.baseUrl,
+      rateLimitedCount
+    );
+    const unfetched = yield* unfetchedUrlCount(
+      storage,
+      crawlId,
+      crawl,
+      rateLimitedCount
+    );
     if (rateLimitedCount > 0) {
       result.rateLimited = {
         pages: rateLimitedCount,
@@ -1023,7 +1120,7 @@ export function buildV1Report(
       crawl?.stats?.rootFailure,
       crawl?.stats?.pagesUndecodable ?? 0,
       // #1253: a blocked seed fails the audit whatever else was crawled.
-      crawl?.stats?.wafBlocked?.seed,
+      crawl?.stats?.wafBlocked?.seed
     );
     if (runStatus.status !== "completed") {
       result.status = runStatus.status;
@@ -1111,7 +1208,7 @@ export function buildV2Report(
   storage: CrawlStorage,
   crawlId: string,
   input: StreamingReportInput,
-  options?: BuildV2ReportOptions,
+  options?: BuildV2ReportOptions
 ): Effect.Effect<FullAuditReport, never, never> {
   return Effect.gen(function* () {
     const reportSpan = logger.traceStart("buildV2Report");
@@ -1170,19 +1267,38 @@ export function buildV2Report(
         const parsed = input.parsedPages.get(page.normalizedUrl);
         if (!parsed) continue;
 
-        if (!parsed.meta.title && summary.missingTitles.length < maxSummaryItems)
+        if (
+          !parsed.meta.title &&
+          summary.missingTitles.length < maxSummaryItems
+        )
           summary.missingTitles.push(page.normalizedUrl);
-        if (!parsed.meta.description && summary.missingDescriptions.length < maxSummaryItems)
+        if (
+          !parsed.meta.description &&
+          summary.missingDescriptions.length < maxSummaryItems
+        )
           summary.missingDescriptions.push(page.normalizedUrl);
-        if (!parsed.og.title && !parsed.og.image && summary.missingOgTags.length < maxSummaryItems)
+        if (
+          !parsed.og.title &&
+          !parsed.og.image &&
+          summary.missingOgTags.length < maxSummaryItems
+        )
           summary.missingOgTags.push(page.normalizedUrl);
-        if (!parsed.twitter.card && summary.missingTwitterCards.length < maxSummaryItems)
+        if (
+          !parsed.twitter.card &&
+          summary.missingTwitterCards.length < maxSummaryItems
+        )
           summary.missingTwitterCards.push(page.normalizedUrl);
-        if (!parsed.schema.types.length && summary.missingSchemas.length < maxSummaryItems)
+        if (
+          !parsed.schema.types.length &&
+          summary.missingSchemas.length < maxSummaryItems
+        )
           summary.missingSchemas.push(page.normalizedUrl);
         if (parsed.h1.count > 1 && summary.multipleH1s.length < maxSummaryItems)
           summary.multipleH1s.push(page.normalizedUrl);
-        if (parsed.content.isThinContent && summary.thinContentPages.length < maxSummaryItems)
+        if (
+          parsed.content.isThinContent &&
+          summary.thinContentPages.length < maxSummaryItems
+        )
           summary.thinContentPages.push(page.normalizedUrl);
       }
       options?.onBatch?.({ pagesDone: pagesCrawled });
@@ -1192,13 +1308,20 @@ export function buildV2Report(
     // Missing alt text — same source + order as v1 (getImages × appearances),
     // capped at maxSummaryItems. Batch query when available, else per-image.
     const imageAppearancesSpan = logger.traceStart("v2:imageAppearances");
-    const images = yield* storage.getImages(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])));
+    const images = yield* storage
+      .getImages(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed([])));
     const hasBatchImageMethod = "getAllImageAppearancesBySrc" in storage;
-    const allImageAppearancesBySrc: Map<string, ImageAppearanceRecord[]> = hasBatchImageMethod
-      ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
-          .getAllImageAppearancesBySrc(crawlId)
-          .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, ImageAppearanceRecord[]>())))
-      : new Map<string, ImageAppearanceRecord[]>();
+    const allImageAppearancesBySrc: Map<string, ImageAppearanceRecord[]> =
+      hasBatchImageMethod
+        ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
+            .getAllImageAppearancesBySrc(crawlId)
+            .pipe(
+              Effect.catchAll(() =>
+                Effect.succeed(new Map<string, ImageAppearanceRecord[]>())
+              )
+            )
+        : new Map<string, ImageAppearanceRecord[]>();
 
     for (const image of images) {
       if (summary.missingAltText.length >= maxSummaryItems) break;
@@ -1212,7 +1335,10 @@ export function buildV2Report(
       for (const appearance of appearances) {
         if (summary.missingAltText.length >= maxSummaryItems) break;
         if (hasAltAttribute(appearance)) continue;
-        summary.missingAltText.push({ page: appearance.pageUrl, image: image.src });
+        summary.missingAltText.push({
+          page: appearance.pageUrl,
+          image: image.src,
+        });
       }
     }
     logger.traceEnd(imageAppearancesSpan, { images: images.length });
@@ -1223,7 +1349,7 @@ export function buildV2Report(
     // robots/sitemap lookup, which reads the same rows either way.
     const healthScore: HealthScore = calculateHealthScoreFromTallies(
       input.tallies,
-      input.ruleResultsMap,
+      input.ruleResultsMap
     );
 
     // Totals from the folded tallies (item-aware advisory logic already applied at
@@ -1245,8 +1371,16 @@ export function buildV2Report(
       .pipe(Effect.catchAll(() => Effect.succeed([])));
     const robotsData = buildRobotsData(robots);
 
-    const refusedSeedRedirect = offSiteSeedRedirect(crawl?.baseUrl ?? "", crawl?.seedUrl);
-    const scanScope = yield* engineScanScope(storage, crawlId, options?.scanScope, errorPages);
+    const refusedSeedRedirect = offSiteSeedRedirect(
+      crawl?.baseUrl ?? "",
+      crawl?.seedUrl
+    );
+    const scanScope = yield* engineScanScope(
+      storage,
+      crawlId,
+      options?.scanScope,
+      errorPages
+    );
 
     const result: FullAuditReport = {
       baseUrl: crawl?.baseUrl ?? "",
@@ -1298,9 +1432,18 @@ export function buildV2Report(
 
     // Audit validity (#489) — same signals as v1's deriveAuditStatusFromPages,
     // fed from the streamed counts so no pages[] is needed.
-    const rateLimitedCount = (crawl?.stats?.pagesRateLimited ?? 0) + rateLimitedPages;
-    const rateLimitedHosts = rateLimitedHostsFor(result.baseUrl, rateLimitedCount);
-    const unfetched = yield* unfetchedUrlCount(storage, crawlId, crawl, rateLimitedCount);
+    const rateLimitedCount =
+      (crawl?.stats?.pagesRateLimited ?? 0) + rateLimitedPages;
+    const rateLimitedHosts = rateLimitedHostsFor(
+      result.baseUrl,
+      rateLimitedCount
+    );
+    const unfetched = yield* unfetchedUrlCount(
+      storage,
+      crawlId,
+      crawl,
+      rateLimitedCount
+    );
     if (rateLimitedCount > 0) {
       result.rateLimited = {
         pages: rateLimitedCount,

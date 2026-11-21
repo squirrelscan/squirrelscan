@@ -14,33 +14,53 @@
 // matchSubprocessorLink) so the collected value and the legacy value are produced
 // by the SAME code — the per-rule byte-identical golden gate.
 
-import type { IntegritySignal, PageSignalContext } from "./integrity/signals";
-import type { LeakedSecret } from "./security/leaked-secrets";
-import type { PageFingerprint } from "./integrity/fingerprint";
-import type { PageMisspellings } from "./content/common-misspellings";
-import type { ParsedPage } from "./types";
-import type { HreflangPageSignal } from "./i18n/hreflang-signal";
-import { buildHreflangSignal } from "./i18n/hreflang-signal";
-import { extractFontUsage, type FontUsageSignal } from "./content/font-consistency";
-import { extractColorUsage, type ColorUsageSignal } from "./content/color-sprawl";
-import { fingerprintForPage, type ContentFingerprint } from "./content/duplicate-content";
-
-import { logger, profileRules } from "./logger";
-import { detectPageSignals } from "./integrity/signals";
-import { extractPageByteSignal } from "./performance/total-byte-weight";
-import { fingerprintPage } from "./integrity/fingerprint";
-import { hasCommercialOfferLink, matchSubprocessorLink } from "./legal/subprocessor-disclosure";
-import { pageScriptSrcs } from "./adblock/blocked-links";
-import type { PageAnchorSignal } from "./links/page-anchors";
-import { buildPageAnchorSignal } from "./links/page-anchors";
-import { buildInPageSectionSignal } from "./shared/inpage-section";
-import type { InPageSectionSignal } from "./shared/inpage-section";
-import { scanPageForMisspellings } from "./content/common-misspellings";
-import { RULE_TIME_BUDGET_MS, RuleTimeoutError, runWithinBudget } from "./rule-budget";
-import { startPageScan, type SiteFindingBudget } from "./security/leaked-secrets";
-import { extractContentSentences } from "./shared/content-in-script";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
+
+import type { PageMisspellings } from "./content/common-misspellings";
+import type { HreflangPageSignal } from "./i18n/hreflang-signal";
+import type { PageFingerprint } from "./integrity/fingerprint";
+import type { IntegritySignal, PageSignalContext } from "./integrity/signals";
+import type { PageAnchorSignal } from "./links/page-anchors";
+import type { LeakedSecret } from "./security/leaked-secrets";
+import type { InPageSectionSignal } from "./shared/inpage-section";
+import type { ParsedPage } from "./types";
+
+import { pageScriptSrcs } from "./adblock/blocked-links";
+import {
+  extractColorUsage,
+  type ColorUsageSignal,
+} from "./content/color-sprawl";
+import { scanPageForMisspellings } from "./content/common-misspellings";
+import {
+  fingerprintForPage,
+  type ContentFingerprint,
+} from "./content/duplicate-content";
+import {
+  extractFontUsage,
+  type FontUsageSignal,
+} from "./content/font-consistency";
+import { buildHreflangSignal } from "./i18n/hreflang-signal";
+import { fingerprintPage } from "./integrity/fingerprint";
+import { detectPageSignals } from "./integrity/signals";
+import {
+  hasCommercialOfferLink,
+  matchSubprocessorLink,
+} from "./legal/subprocessor-disclosure";
+import { buildPageAnchorSignal } from "./links/page-anchors";
+import { logger, profileRules } from "./logger";
+import { extractPageByteSignal } from "./performance/total-byte-weight";
+import {
+  RULE_TIME_BUDGET_MS,
+  RuleTimeoutError,
+  runWithinBudget,
+} from "./rule-budget";
+import {
+  startPageScan,
+  type SiteFindingBudget,
+} from "./security/leaked-secrets";
+import { extractContentSentences } from "./shared/content-in-script";
 import { detached, detachedList, detachedSet } from "./shared/detach";
+import { buildInPageSectionSignal } from "./shared/inpage-section";
 
 /**
  * The per-page DOM-derived signal for the six all-pages site rules, captured while
@@ -139,7 +159,14 @@ export interface CollectedPageSignal {
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
    */
-  timedOut?: { budgetMs: number; ruleIds: string[]; /** Observed ms per rule id before it was stopped (pub#960). */ elapsedMs?: Record<string, number> };
+  timedOut?: {
+    budgetMs: number;
+    ruleIds: string[];
+    /** Observed ms per rule id before it was stopped (pub#960). */ elapsedMs?: Record<
+      string,
+      number
+    >;
+  };
 }
 
 /** The collected per-page signals for one crawl, in page-stream (crawl) order. */
@@ -150,7 +177,9 @@ export interface CollectedSiteSignals {
 }
 
 /** The fingerprint with every string copied out of the page (a new object: the caller's own is left as it is). */
-export function detachFingerprint(fp: PageFingerprint | null): PageFingerprint | null {
+export function detachFingerprint(
+  fp: PageFingerprint | null
+): PageFingerprint | null {
   if (!fp) return fp;
   return {
     ...fp,
@@ -164,7 +193,9 @@ export function detachFingerprint(fp: PageFingerprint | null): PageFingerprint |
 }
 
 /** The anchor signal with every string copied out of the page. */
-export function detachAnchors(a: PageAnchorSignal | null): PageAnchorSignal | null {
+export function detachAnchors(
+  a: PageAnchorSignal | null
+): PageAnchorSignal | null {
   if (!a) return a;
   return {
     ...a,
@@ -180,7 +211,11 @@ export function detachFontUsage(f: FontUsageSignal): FontUsageSignal {
   return {
     families: detachedList(f.families),
     referenced: detachedList(f.referenced),
-    faces: f.faces.map((x) => ({ family: detached(x.family), weight: detached(x.weight), style: detached(x.style) })),
+    faces: f.faces.map((x) => ({
+      family: detached(x.family),
+      weight: detached(x.weight),
+      style: detached(x.style),
+    })),
     linkedStylesheets: f.linkedStylesheets,
   };
 }
@@ -198,7 +233,10 @@ export function detachColorUsage(c: ColorUsageSignal): ColorUsageSignal {
 /** The hreflang signal with every string copied out of the page. */
 export function detachHreflang(h: HreflangPageSignal): HreflangPageSignal {
   return {
-    alternates: h.alternates.map((a) => ({ hreflang: detached(a.hreflang), href: detached(a.href) })),
+    alternates: h.alternates.map((a) => ({
+      hreflang: detached(a.hreflang),
+      href: detached(a.href),
+    })),
     noindex: h.noindex,
     canonical: h.canonical === null ? null : detached(h.canonical),
   };
@@ -257,8 +295,18 @@ export function buildCollectedPageSignal(input: {
       edgeMarkers: [],
       hreflang: buildHreflangSignal(parsed, input.headers, url),
       contentFingerprint: null,
-      fontUsage: { families: [], referenced: [], faces: [], linkedStylesheets: false },
-      colorUsage: { colors: [], tokenColors: 0, varRefs: 0, linkedStylesheets: false },
+      fontUsage: {
+        families: [],
+        referenced: [],
+        faces: [],
+        linkedStylesheets: false,
+      },
+      colorUsage: {
+        colors: [],
+        tokenColors: 0,
+        varRefs: 0,
+        linkedStylesheets: false,
+      },
     };
   }
 
@@ -287,7 +335,13 @@ export function buildCollectedPageSignal(input: {
       out = runWithinBudget(fn, budgetMs);
     } catch (e) {
       if (!(e instanceof RuleTimeoutError)) throw e;
-      logger.warn("rule timed out", { ruleId, scope: "collect", pageUrl: url, budgetMs, elapsedMs: e.elapsedMs });
+      logger.warn("rule timed out", {
+        ruleId,
+        scope: "collect",
+        pageUrl: url,
+        budgetMs,
+        elapsedMs: e.elapsedMs,
+      });
       if (!timedOutRuleIds.includes(ruleId)) timedOutRuleIds.push(ruleId);
       if (e.elapsedMs !== undefined) timedOutElapsedMs[ruleId] = e.elapsedMs;
       out = fallback;
@@ -311,7 +365,13 @@ export function buildCollectedPageSignal(input: {
 
   const byteSignal = timed(
     "perf/total-byte-weight",
-    { inlineCssLen: 0, inlineJsLen: 0, externalCssCount: 0, externalJsCount: 0, imageCount: 0 },
+    {
+      inlineCssLen: 0,
+      inlineJsLen: 0,
+      externalCssCount: 0,
+      externalJsCount: 0,
+      imageCount: 0,
+    },
     () => extractPageByteSignal(doc)
   );
 
@@ -323,7 +383,12 @@ export function buildCollectedPageSignal(input: {
   const signal: CollectedPageSignal = {
     url,
     secrets: scanned.secrets,
-    ...(scanned.omitted > 0 ? { secretsOmitted: scanned.omitted, secretsOmittedSerious: scanned.omittedSerious } : {}),
+    ...(scanned.omitted > 0
+      ? {
+          secretsOmitted: scanned.omitted,
+          secretsOmittedSerious: scanned.omittedSerious,
+        }
+      : {}),
     inlineCssLen: byteSignal.inlineCssLen,
     inlineJsLen: byteSignal.inlineJsLen,
     htmlBytes,
@@ -338,9 +403,17 @@ export function buildCollectedPageSignal(input: {
     fingerprint:
       input.fingerprint !== undefined
         ? input.fingerprint
-        : detachFingerprint(timed("integrity/template-discontinuity", null, () => fingerprintPage(parsed, url))),
-    signals: timed("integrity/orphan-page", [], () => [...detectPageSignals(signalCtx)]),
-    scriptSrcs: detachedList(timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc))),
+        : detachFingerprint(
+            timed("integrity/template-discontinuity", null, () =>
+              fingerprintPage(parsed, url)
+            )
+          ),
+    signals: timed("integrity/orphan-page", [], () => [
+      ...detectPageSignals(signalCtx),
+    ]),
+    scriptSrcs: detachedList(
+      timed("adblock/blocked-links", [] as string[], () => pageScriptSrcs(doc))
+    ),
     subprocessorMatch: timed("legal/subprocessor-disclosure", null, () =>
       matchSubprocessorLink(doc, url)
     ),
@@ -348,36 +421,54 @@ export function buildCollectedPageSignal(input: {
       hasCommercialOfferLink(doc)
     ),
     anchors: detachAnchors(
-      timed("links/broken-anchors", null, () => buildPageAnchorSignal({ parsed, rendered: input.rendered === true }))
+      timed("links/broken-anchors", null, () =>
+        buildPageAnchorSignal({ parsed, rendered: input.rendered === true })
+      )
     ),
-    inPageSections: timed("eeat/about-page", null, () => buildInPageSectionSignal(doc)),
-    misspellings: timed("content/common-misspellings", { english: false, occurrences: [] }, () =>
-      scanPageForMisspellings(doc)
+    inPageSections: timed("eeat/about-page", null, () =>
+      buildInPageSectionSignal(doc)
+    ),
+    misspellings: timed(
+      "content/common-misspellings",
+      { english: false, occurrences: [] },
+      () => scanPageForMisspellings(doc)
     ),
     // A browser-rendered page has its copy in the script that rendered it, by necessity: no sentences.
     contentSentences:
       input.rendered === true
         ? []
-        : timed("perf/content-in-js-bundle", [] as string[], () => extractContentSentences(doc)),
+        : timed("perf/content-in-js-bundle", [] as string[], () =>
+            extractContentSentences(doc)
+          ),
     ...(input.rendered === true ? { contentRendered: true as const } : {}),
-    edgeMarkers: timed("perf/bad-caching", [] as string[], () => (hasJavaScriptDetections(doc) ? ["cf-jsd"] : [])),
+    edgeMarkers: timed("perf/bad-caching", [] as string[], () =>
+      hasJavaScriptDetections(doc) ? ["cf-jsd"] : []
+    ),
     // Strings cut from the page are copied so the record does not keep it (#1565).
     hreflang: detachHreflang(buildHreflangSignal(parsed, input.headers, url)),
-    contentFingerprint: timed("content/duplicate-content", null as ContentFingerprint | null, () =>
-      fingerprintForPage(doc, url, finalUrl)
+    contentFingerprint: timed(
+      "content/duplicate-content",
+      null as ContentFingerprint | null,
+      () => fingerprintForPage(doc, url, finalUrl)
     ),
     fontUsage: detachFontUsage(
-      timed("content/font-consistency", extractFontUsage(null), () => extractFontUsage(doc))
+      timed("content/font-consistency", extractFontUsage(null), () =>
+        extractFontUsage(doc)
+      )
     ),
     colorUsage: detachColorUsage(
-      timed("content/color-sprawl", extractColorUsage(null), () => extractColorUsage(doc))
+      timed("content/color-sprawl", extractColorUsage(null), () =>
+        extractColorUsage(doc)
+      )
     ),
   };
   // The one record serves both rules: a timeout is reported against both.
-  if (timedOutRuleIds.includes("eeat/about-page")) timedOutRuleIds.push("eeat/contact-page");
+  if (timedOutRuleIds.includes("eeat/about-page"))
+    timedOutRuleIds.push("eeat/contact-page");
   if (timedOutRuleIds.length > 0) {
     signal.timedOut = { budgetMs, ruleIds: timedOutRuleIds };
-    if (Object.keys(timedOutElapsedMs).length > 0) signal.timedOut.elapsedMs = timedOutElapsedMs;
+    if (Object.keys(timedOutElapsedMs).length > 0)
+      signal.timedOut.elapsedMs = timedOutElapsedMs;
   }
   return signal;
 }
@@ -387,15 +478,34 @@ export function buildCollectedPageSignal(input: {
  * the site had no room for are counted in `secretsOmitted`. The record the rule cache stores is the page's own, untouched:
  * the decision depends on the pages before it, so it belongs to this crawl and not to the page.
  */
-export function applySiteFindingBudget(signal: CollectedPageSignal, budget: SiteFindingBudget): CollectedPageSignal {
+export function applySiteFindingBudget(
+  signal: CollectedPageSignal,
+  budget: SiteFindingBudget
+): CollectedPageSignal {
   if (signal.secrets.length === 0) return signal;
   const admitted = budget.admit(signal.secrets);
-  if (admitted.omitted === 0 && admitted.secrets.length === signal.secrets.length) return signal;
+  if (
+    admitted.omitted === 0 &&
+    admitted.secrets.length === signal.secrets.length
+  )
+    return signal;
   const omitted = (signal.secretsOmitted ?? 0) + admitted.omitted;
   const { secretsOmitted: _a, secretsOmittedSerious: _b, ...rest } = signal;
   void [_a, _b];
-  const serious = admitted.omittedSerious || (signal.secretsOmitted ? (signal.secretsOmittedSerious ?? true) : false);
-  return { ...rest, secrets: admitted.secrets, ...(omitted > 0 ? { secretsOmitted: omitted, secretsOmittedSerious: serious } : {}) };
+  const serious =
+    admitted.omittedSerious ||
+    (signal.secretsOmitted ? (signal.secretsOmittedSerious ?? true) : false);
+  return {
+    ...rest,
+    secrets: admitted.secrets,
+    ...(omitted > 0
+      ? { secretsOmitted: omitted, secretsOmittedSerious: serious }
+      : {}),
+  };
 }
 
-export { createSiteFindingBudget, SITE_FINDINGS_CAP, type SiteFindingBudget } from "./security/leaked-secrets";
+export {
+  createSiteFindingBudget,
+  SITE_FINDINGS_CAP,
+  type SiteFindingBudget,
+} from "./security/leaked-secrets";

@@ -4,15 +4,22 @@
 // rides on the check result into the stored link row, so a re-rendered report
 // and `squirrel analyze` keep it.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
-import { checkExternalLinks, type ExternalCheckResult } from "../src/external-checker";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
+import {
+  checkExternalLinks,
+  type ExternalCheckResult,
+} from "../src/external-checker";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -27,7 +34,10 @@ function serve(): string {
     async fetch(req) {
       const path = new URL(req.url).pathname;
       if (path === "/wall") {
-        return new Response("Forbidden", { status: 403, headers: { server: "cloudflare", "cf-ray": "8a1b2c3d4e5f-SYD" } });
+        return new Response("Forbidden", {
+          status: 403,
+          headers: { server: "cloudflare", "cf-ray": "8a1b2c3d4e5f-SYD" },
+        });
       }
       if (path === "/stall") {
         await Bun.sleep(3_000);
@@ -42,7 +52,10 @@ function serve(): string {
 
 function check(
   urls: string[],
-  extra: { timeoutMs?: number; bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>> } = {},
+  extra: {
+    timeoutMs?: number;
+    bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>;
+  } = {}
 ): Promise<Map<string, ExternalCheckResult>> {
   return Effect.runPromise(
     checkExternalLinks(urls, null, {
@@ -51,16 +64,26 @@ function check(
       userAgent: "squirrel-test",
       egress: { allowPrivateNetwork: true },
       ...(extra.bulkChecker ? { bulkChecker: extra.bulkChecker } : {}),
-    }),
+    })
   ).then((results) => new Map(results.map((r) => [r.href, r])));
 }
 
 describe("why a link is unverifiable (pub#821)", () => {
   test("the local checker calls a wall blocked and a stall unreachable; a 404 has no reason", async () => {
     const base = serve();
-    const results = await check([`${base}/wall`, `${base}/stall`, `${base}/gone`], { timeoutMs: 500 });
-    expect(results.get(`${base}/wall`)).toMatchObject({ wafBlocked: true, wafProvider: "cloudflare", unverifiedReason: "blocked" });
-    expect(results.get(`${base}/stall`)).toMatchObject({ wafBlocked: true, unverifiedReason: "unreachable" });
+    const results = await check(
+      [`${base}/wall`, `${base}/stall`, `${base}/gone`],
+      { timeoutMs: 500 }
+    );
+    expect(results.get(`${base}/wall`)).toMatchObject({
+      wafBlocked: true,
+      wafProvider: "cloudflare",
+      unverifiedReason: "blocked",
+    });
+    expect(results.get(`${base}/stall`)).toMatchObject({
+      wafBlocked: true,
+      unverifiedReason: "unreachable",
+    });
     expect(results.get(`${base}/gone`)?.status).toBe(404);
     expect(results.get(`${base}/gone`)?.unverifiedReason).toBeUndefined();
   });
@@ -85,7 +108,10 @@ describe("why a link is unverifiable (pub#821)", () => {
           ],
         ]),
     });
-    expect(results.get(url)).toMatchObject({ wafBlocked: true, unverifiedReason: "awaiting-confirmation" });
+    expect(results.get(url)).toMatchObject({
+      wafBlocked: true,
+      unverifiedReason: "awaiting-confirmation",
+    });
   });
 
   test("the stored link row keeps the reason, and drops a value it does not know", async () => {
@@ -111,7 +137,7 @@ describe("why a link is unverifiable (pub#821)", () => {
             bytesTotal: 0,
             avgLoadTimeMs: 0,
           },
-        } as never),
+        } as never)
       );
       const row = (href: string, unverifiedReason?: string) =>
         Effect.runPromise(
@@ -121,16 +147,21 @@ describe("why a link is unverifiable (pub#821)", () => {
             checkedAt: Date.now(),
             wafBlocked: true,
             wafProvider: "unknown",
-            ...(unverifiedReason ? { unverifiedReason: unverifiedReason as never } : {}),
-          }),
+            ...(unverifiedReason
+              ? { unverifiedReason: unverifiedReason as never }
+              : {}),
+          })
         );
       await row("https://pending.example.com/", "awaiting-confirmation");
       await row("https://stalls.example.com/", "unreachable");
       await row("https://future.example.com/", "rate-wobble");
       await row("https://older.example.com/");
       const links = await Effect.runPromise(storage.getLinks(crawlId));
-      const reason = (href: string) => links.find((l) => l.href === href)?.unverifiedReason;
-      expect(reason("https://pending.example.com/")).toBe("awaiting-confirmation");
+      const reason = (href: string) =>
+        links.find((l) => l.href === href)?.unverifiedReason;
+      expect(reason("https://pending.example.com/")).toBe(
+        "awaiting-confirmation"
+      );
       expect(reason("https://stalls.example.com/")).toBe("unreachable");
       expect(reason("https://future.example.com/")).toBeUndefined();
       expect(reason("https://older.example.com/")).toBeUndefined();
@@ -150,14 +181,20 @@ function serveSite(): { home: string; walled: string } {
       if (url.pathname === "/") {
         return new Response(
           `<!doctype html><html><head><title>Fixture</title></head><body><a href="${third}/wall">Partner</a> <a href="${PENDING}">Supplier</a></body></html>`,
-          { headers: { "content-type": "text/html; charset=utf-8" } },
+          { headers: { "content-type": "text/html; charset=utf-8" } }
         );
       }
-      return new Response("Forbidden", { status: 403, headers: { server: "cloudflare", "cf-ray": "8a1b2c3d4e5f-SYD" } });
+      return new Response("Forbidden", {
+        status: 403,
+        headers: { server: "cloudflare", "cf-ray": "8a1b2c3d4e5f-SYD" },
+      });
     },
   });
   servers.push(server);
-  return { home: `http://localhost:${server.port}/`, walled: `http://127.0.0.1:${server.port}/wall` };
+  return {
+    home: `http://localhost:${server.port}/`,
+    walled: `http://127.0.0.1:${server.port}/wall`,
+  };
 }
 
 const PENDING = "https://pending.example.com/page";
@@ -180,14 +217,19 @@ for (const engine of ["v1", "v2"] as const) {
             incremental: false,
             useCacheControl: false,
           },
-        }),
+        })
       );
       const storage = crawler.storage as SQLiteStorage;
       const config = {
         rule_options: {},
         rules: { enable: ["links/broken-external-links"] },
         crawler: { max_pages: 1, exclude: [] },
-        external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+        external_links: {
+          enabled: true,
+          concurrency: 1,
+          timeout_ms: 5_000,
+          cache_ttl_days: 1,
+        },
         internal_links: { enabled: false },
       } as unknown as Config;
       const crawlId = await Effect.runPromise(crawler.start(home, home));
@@ -212,29 +254,48 @@ for (const engine of ["v1", "v2"] as const) {
                       wafProvider: "unknown",
                       unverifiedReason: "awaiting-confirmation",
                     } satisfies ExternalCheckResult,
-                  ]),
+                  ])
               ),
           },
-        }),
+        })
       );
       const ran = await Effect.runPromise(
         Effect.gen(function* () {
           if (engine === "v1") {
             const stored = yield* storage.getPages(crawlId);
             const siteContext = yield* buildSiteContext(stored);
-            return yield* runRulesOnStorage(storage, crawlId, siteContext, config, pre.assets);
+            return yield* runRulesOnStorage(
+              storage,
+              crawlId,
+              siteContext,
+              config,
+              pre.assets
+            );
           }
           return yield* runStreamingRules(storage, crawlId, config, pre.assets);
-        }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+        }) as unknown as Effect.Effect<
+          { siteRuleResults: Map<string, CheckResult[]> },
+          never,
+          never
+        >
       );
-      const checks = ran.siteRuleResults.get("links/broken-external-links") ?? [];
+      const checks =
+        ran.siteRuleResults.get("links/broken-external-links") ?? [];
       // #1739: the cloud's first-404 answer is likely broken: its own warning check, not listed as blocked.
-      const awaiting = checks.find((c) => c.name === "awaiting-confirmation-external-links");
+      const awaiting = checks.find(
+        (c) => c.name === "awaiting-confirmation-external-links"
+      );
       expect(awaiting?.status).toBe("warn");
-      expect(awaiting?.items?.map((i) => i.label)).toEqual([`${PENDING} (failed once, being confirmed)`]);
+      expect(awaiting?.items?.map((i) => i.label)).toEqual([
+        `${PENDING} (failed once, being confirmed)`,
+      ]);
       const row = checks.find((c) => c.name === "waf-blocked-external-links");
-      expect(row?.items?.map((i) => i.label)).toEqual([`${walled} (unverified: cloudflare)`]);
-      expect(row?.items?.find((i) => i.id === walled)?.meta).toMatchObject({ unverifiedReason: "blocked" });
+      expect(row?.items?.map((i) => i.label)).toEqual([
+        `${walled} (unverified: cloudflare)`,
+      ]);
+      expect(row?.items?.find((i) => i.id === walled)?.meta).toMatchObject({
+        unverifiedReason: "blocked",
+      });
     });
   });
 }

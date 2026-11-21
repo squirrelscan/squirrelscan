@@ -86,7 +86,9 @@ export const ENTITY_MAP_PAGE_LOCAL_TYPES = [
   "WebPage",
 ] as const;
 
-const PAGE_LOCAL_TYPE_SET: ReadonlySet<string> = new Set(ENTITY_MAP_PAGE_LOCAL_TYPES);
+const PAGE_LOCAL_TYPE_SET: ReadonlySet<string> = new Set(
+  ENTITY_MAP_PAGE_LOCAL_TYPES
+);
 
 /**
  * Whether an entity describes one page rather than the site's subject matter.
@@ -94,7 +96,10 @@ const PAGE_LOCAL_TYPE_SET: ReadonlySet<string> = new Set(ENTITY_MAP_PAGE_LOCAL_T
  * Shared by the builder (which stamps `pageLocal`) and by any consumer that has
  * to make the same call on a node it did not build, so the two can never drift.
  */
-export function isPageLocalEntity(primaryType: string, name: string | null): boolean {
+export function isPageLocalEntity(
+  primaryType: string,
+  name: string | null
+): boolean {
   if (PAGE_LOCAL_TYPE_SET.has(primaryType)) return true;
   return primaryType === "ImageObject" && !name;
 }
@@ -325,7 +330,9 @@ export const EntityMapConflictValueSchema = Type.Object({
   morePages: Type.Integer({ minimum: 0 }),
 });
 
-export type EntityMapConflictValue = Static<typeof EntityMapConflictValueSchema>;
+export type EntityMapConflictValue = Static<
+  typeof EntityMapConflictValueSchema
+>;
 
 /**
  * One property on which two occurrences of the same node disagree — the
@@ -625,7 +632,9 @@ export const EntityMapDiffOccurrenceSchema = Type.Object({
   delta: Type.Integer(),
 });
 
-export type EntityMapDiffOccurrence = Static<typeof EntityMapDiffOccurrenceSchema>;
+export type EntityMapDiffOccurrence = Static<
+  typeof EntityMapDiffOccurrenceSchema
+>;
 
 /** A conflicting property that appeared or went away. */
 export const EntityMapDiffConflictSchema = Type.Object({

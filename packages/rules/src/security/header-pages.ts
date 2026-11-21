@@ -23,7 +23,7 @@ export function headerPages(ctx: RuleContext): SitePage[] {
 export function judgeHeaderPages(
   ctx: RuleContext,
   pages: readonly SitePage[],
-  judge: (page: SitePage) => CheckResult[],
+  judge: (page: SitePage) => CheckResult[]
 ): CheckResult[] {
   if (ctx.site?.targetedRun !== true) return pages.flatMap((p) => judge(p));
   const rows = new Map<string, { check: CheckResult; pages: string[] }>();
@@ -53,7 +53,9 @@ function sameFinding(check: CheckResult): string {
   return JSON.stringify([rest, details ? withoutPageUrl(details) : null]);
 }
 
-function withoutPageUrl(details: Record<string, unknown>): Record<string, unknown> {
+function withoutPageUrl(
+  details: Record<string, unknown>
+): Record<string, unknown> {
   const { pageUrl: _pageUrl, ...rest } = details;
   return rest;
 }

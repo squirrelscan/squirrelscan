@@ -1,6 +1,7 @@
+import type { SVGProps } from "react";
+
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { SVGProps } from "react";
 
 import { cn } from "./utils";
 

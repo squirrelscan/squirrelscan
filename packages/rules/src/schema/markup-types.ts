@@ -24,7 +24,8 @@ export const MAX_JSONLD_DEPTH = 8;
 export const MAX_JSONLD_VALUES = 2_000;
 
 /** The info check message when a scan hit a bound: the page's markup was not read in full, so no schema is claimed missing. */
-export const UNREADABLE_MESSAGE = "Page markup too large to judge structured data";
+export const UNREADABLE_MESSAGE =
+  "Page markup too large to judge structured data";
 
 export interface TypeScan {
   /** Bare type names, in the spelling the page used. May hold duplicates. */
@@ -68,7 +69,8 @@ export function jsonLdTypes(nodes: readonly unknown[]): TypeScan {
   let complete = true;
   let visited = 0;
   const stack: Array<{ value: unknown; depth: number }> = [];
-  for (let i = nodes.length - 1; i >= 0; i--) stack.push({ value: nodes[i], depth: 0 });
+  for (let i = nodes.length - 1; i >= 0; i--)
+    stack.push({ value: nodes[i], depth: 0 });
 
   while (stack.length > 0) {
     const { value, depth } = stack.pop()!;
@@ -79,7 +81,8 @@ export function jsonLdTypes(nodes: readonly unknown[]): TypeScan {
       continue;
     }
     if (Array.isArray(value)) {
-      for (let i = value.length - 1; i >= 0; i--) stack.push({ value: value[i], depth });
+      for (let i = value.length - 1; i >= 0; i--)
+        stack.push({ value: value[i], depth });
       continue;
     }
     const record = value as Record<string, unknown>;
@@ -100,7 +103,9 @@ export function jsonLdTypes(nodes: readonly unknown[]): TypeScan {
  * budget, an annotated-element budget and a per-attribute token cap. A page with no
  * document cannot be read at all, which is `complete: false`.
  */
-export function microdataAndRdfaTypes(doc: Document | null | undefined): TypeScan {
+export function microdataAndRdfaTypes(
+  doc: Document | null | undefined
+): TypeScan {
   const root = doc?.documentElement;
   if (!root) return { types: [], complete: false };
 

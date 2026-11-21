@@ -1,9 +1,9 @@
 // a11y/color-contrast - Color contrast ratio check
 // Based on WCAG 2.1 Success Criterion 1.4.3 Contrast (Minimum) (Level AA)
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
 import type {
   Rule,
   RuleContext,
@@ -109,7 +109,9 @@ export const colorContrastRule: Rule = {
 
     for (const el of doc.querySelectorAll("[style]")) {
       const color = winner(
-        parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "color")
+        parseDeclarations(el.getAttribute("style") || "").filter(
+          (d) => d.property === "color"
+        )
       );
       if (!color || CSS_WIDE_KEYWORDS.has(color.value.toLowerCase())) continue;
       if (!el.textContent?.trim()) continue;
@@ -136,7 +138,8 @@ export const colorContrastRule: Rule = {
       measuredPairs++;
       const ratio = calculateContrastRatio(fgRgb, bg.rgb);
       const size = textSizeOf(el);
-      const required = size === "large" ? CONTRAST_RATIO_LARGE : CONTRAST_RATIO_NORMAL;
+      const required =
+        size === "large" ? CONTRAST_RATIO_LARGE : CONTRAST_RATIO_NORMAL;
       if (ratio < required) {
         lowContrast.push({ element, fg: color.value, bg: bg.raw, ratio, size });
       }
@@ -153,8 +156,12 @@ export const colorContrastRule: Rule = {
           )
         ),
       ];
-      const largeFailures = lowContrast.filter((i) => i.size === "large").length;
-      const unknownSize = lowContrast.filter((i) => i.size === "unknown").length;
+      const largeFailures = lowContrast.filter(
+        (i) => i.size === "large"
+      ).length;
+      const unknownSize = lowContrast.filter(
+        (i) => i.size === "unknown"
+      ).length;
 
       checks.push({
         name: "color-contrast",
@@ -174,7 +181,9 @@ export const colorContrastRule: Rule = {
                   "The text size could not be read from inline styles, so these pairs were held to 4.5:1. Text of 18pt or larger, or 14pt bold, needs only 3:1",
               }
             : {}),
-          ...(uniqueIssues.length > 10 ? { additional: uniqueIssues.length - 10 } : {}),
+          ...(uniqueIssues.length > 10
+            ? { additional: uniqueIssues.length - 10 }
+            : {}),
         },
       });
     } else {
@@ -198,7 +207,8 @@ export const colorContrastRule: Rule = {
 
     if (unresolved.length > 0) {
       const reasons: Partial<Record<UnresolvedReason, number>> = {};
-      for (const u of unresolved) reasons[u.reason] = (reasons[u.reason] ?? 0) + 1;
+      for (const u of unresolved)
+        reasons[u.reason] = (reasons[u.reason] ?? 0) + 1;
       const why = (Object.keys(reasons) as UnresolvedReason[])
         .map((r) => UNRESOLVED_REASON_TEXT[r])
         .join("; ");
@@ -214,7 +224,8 @@ export const colorContrastRule: Rule = {
           reasons,
           ...(ids.length > 10 ? { additional: ids.length - 10 } : {}),
         },
-        value: "Check these with browser DevTools or the WebAIM Contrast Checker",
+        value:
+          "Check these with browser DevTools or the WebAIM Contrast Checker",
       });
     }
 
@@ -241,13 +252,25 @@ const FONT_SIZE_KEYWORDS: Record<string, number> = {
   "xxx-large": 48,
 };
 
-const BOLD_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "b", "strong", "th"]);
+const BOLD_TAGS = new Set([
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "b",
+  "strong",
+  "th",
+]);
 
 /** Declared font size in px from inline styles up the ancestors, or null when it cannot be told. */
 function fontSizePx(el: Element | null, depth = 0): number | null {
   if (!el || depth > 50) return null;
   const decl = winner(
-    parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "font-size")
+    parseDeclarations(el.getAttribute("style") || "").filter(
+      (d) => d.property === "font-size"
+    )
   );
   if (!decl) return fontSizePx(el.parentElement, depth + 1);
   const value = decl.value.trim().toLowerCase();
@@ -274,7 +297,9 @@ function fontSizePx(el: Element | null, depth = 0): number | null {
 function isBold(el: Element | null, depth = 0): boolean | null {
   if (!el || depth > 50) return false;
   const decl = winner(
-    parseDeclarations(el.getAttribute("style") || "").filter((d) => d.property === "font-weight")
+    parseDeclarations(el.getAttribute("style") || "").filter(
+      (d) => d.property === "font-weight"
+    )
   );
   if (decl) {
     const v = decl.value.trim().toLowerCase();
@@ -299,7 +324,14 @@ function textSizeOf(el: Element): TextSize {
   }
   return "normal";
 }
-const CSS_WIDE_KEYWORDS = new Set(["inherit", "initial", "unset", "revert", "revert-layer", "currentcolor"]);
+const CSS_WIDE_KEYWORDS = new Set([
+  "inherit",
+  "initial",
+  "unset",
+  "revert",
+  "revert-layer",
+  "currentcolor",
+]);
 
 type UnresolvedReason = "stylesheet" | "image" | "color";
 
@@ -328,10 +360,14 @@ const NO_BACKGROUND: Background = { kind: "none" };
  */
 function backgroundOf(declarations: Declaration[]): Background {
   const background = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-color")
+    declarations.filter(
+      (d) => d.property === "background" || d.property === "background-color"
+    )
   );
   const image = winner(
-    declarations.filter((d) => d.property === "background" || d.property === "background-image")
+    declarations.filter(
+      (d) => d.property === "background" || d.property === "background-image"
+    )
   );
   if (!background && !image) return NO_BACKGROUND;
   // A one-color `background` shorthand resets the image to none; any other
@@ -366,7 +402,10 @@ const MAX_AT_RULE_DEPTH = 8;
 /** Selector matches the guard may spend per page before the rest is read as not provable. */
 const GUARD_MATCH_BUDGET = 500_000;
 
-function styleBlockRules(css: string, level = 0): {
+function styleBlockRules(
+  css: string,
+  level = 0
+): {
   html: Declaration[];
   body: Declaration[];
   otherBackground: boolean;
@@ -403,7 +442,12 @@ function styleBlockRules(css: string, level = 0): {
     if (selector.startsWith("@")) {
       const mentionsBackground = /background/i.test(block);
       if (mentionsBackground) otherBackground = true;
-      if (!/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(selector) && depth === 0) {
+      if (
+        !/^@(font-face|keyframes|-webkit-keyframes|property)\b/i.test(
+          selector
+        ) &&
+        depth === 0
+      ) {
         if (level >= MAX_AT_RULE_DEPTH) {
           // Nested past what is read: a background in there is not provable, so it is never a color.
           if (mentionsBackground) {
@@ -416,10 +460,16 @@ function styleBlockRules(css: string, level = 0): {
           const inner = styleBlockRules(block, level + 1);
           const sets = (d: Declaration[]): boolean =>
             d.some((x) => /^background(-color|-image)?$/.test(x.property));
-          if (sets(inner.html) || sets(inner.body) || inner.atRuleRootBackground) atRuleRootBackground = true;
+          if (
+            sets(inner.html) ||
+            sets(inner.body) ||
+            inner.atRuleRootBackground
+          )
+            atRuleRootBackground = true;
           if (mentionsBackground) {
             for (const sel of inner.otherSelectors) {
-              if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+              if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS)
+                otherSelectorsTruncated = true;
               else otherSelectors.push(sel);
             }
             if (inner.otherSelectorsTruncated) otherSelectorsTruncated = true;
@@ -431,18 +481,28 @@ function styleBlockRules(css: string, level = 0): {
     for (const part of selector.split(",")) {
       const target = part.trim().toLowerCase();
       // Looped, not spread: a block with a few hundred thousand declarations would overflow the call's arguments.
-      if (target === "body") for (const d of parseDeclarations(block)) body.push(d);
-      else if (target === "html" || target === ":root") for (const d of parseDeclarations(block)) html.push(d);
+      if (target === "body")
+        for (const d of parseDeclarations(block)) body.push(d);
+      else if (target === "html" || target === ":root")
+        for (const d of parseDeclarations(block)) html.push(d);
       else if (/background/i.test(block)) {
         otherBackground = true;
         if (part.trim()) {
-          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS) otherSelectorsTruncated = true;
+          if (otherSelectors.length >= MAX_BACKGROUND_SELECTORS)
+            otherSelectorsTruncated = true;
           else otherSelectors.push(part.trim());
         }
       }
     }
   }
-  return { html, body, otherBackground, atRuleRootBackground, otherSelectors, otherSelectorsTruncated };
+  return {
+    html,
+    body,
+    otherBackground,
+    atRuleRootBackground,
+    otherSelectors,
+    otherSelectorsTruncated,
+  };
 }
 
 function stripCssComments(css: string): string {
@@ -473,7 +533,9 @@ export function stylesheetBackgroundOf(css: string): StylesheetBackground {
   if (/@import/i.test(text)) return { kind: "unresolved" };
   const rules = styleBlockRules(text);
   if (rules.atRuleRootBackground) return { kind: "unresolved" };
-  const found = [backgroundOf(rules.body), backgroundOf(rules.html)].find((b) => b.kind !== "none");
+  const found = [backgroundOf(rules.body), backgroundOf(rules.html)].find(
+    (b) => b.kind !== "none"
+  );
   if (!found) return { kind: "none" };
   if (found.kind === "color") return { kind: "color", value: found.raw };
   return { kind: "unresolved" };
@@ -484,9 +546,15 @@ export function stylesheetBackgroundOf(css: string): StylesheetBackground {
  * container such as `.hero { background: #111 }` can paint under text whose own color is light. The
  * resolver does not read their colors; it treats text that sits inside a match as not measurable.
  */
-export function stylesheetBackgroundSelectorsOf(css: string): { selectors: string[]; truncated: boolean } {
+export function stylesheetBackgroundSelectorsOf(css: string): {
+  selectors: string[];
+  truncated: boolean;
+} {
   const rules = styleBlockRules(stripCssComments(css));
-  return { selectors: rules.otherSelectors, truncated: rules.otherSelectorsTruncated };
+  return {
+    selectors: rules.otherSelectors,
+    truncated: rules.otherSelectorsTruncated,
+  };
 }
 
 function createBackgroundResolver(
@@ -498,7 +566,10 @@ function createBackgroundResolver(
   let page: ResolvedBackground | null = null;
   // Backgrounds a linked stylesheet gives other selectors (#1756): its html/body rule is read, a container
   // painting under the text is not, so text inside a match is unresolved rather than measured against the page.
-  const guard: { selectors: string[]; all: boolean } = { selectors: [], all: false };
+  const guard: { selectors: string[]; all: boolean } = {
+    selectors: [],
+    all: false,
+  };
   // One answer per node (does it, or an ancestor, match a guarded selector), and a bound on the matching work:
   // up to 5000 selectors against every ancestor of every inline-colored element is attacker-sized on a big page.
   const guardMemo = new Map<Element, boolean>();
@@ -548,7 +619,10 @@ function createBackgroundResolver(
     // A stylesheet in <noscript> never loads for a browser running scripts.
     const linkedUrls: string[] = [];
     let linkedUnknown = false;
-    for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="stylesheet" i]')) {
+    for (const link of querySelectorAllOutsideNoscript(
+      doc,
+      'link[rel~="stylesheet" i]'
+    )) {
       const href = link.getAttribute("href");
       try {
         if (!href) throw new Error("no href");
@@ -575,7 +649,9 @@ function createBackgroundResolver(
     if (fromStyle?.kind === "unresolved") return (page = fromStyle);
     const sources: Array<{ kind: "color"; rgb: Rgb; raw: string }> = [];
     if (fromStyle) sources.push(fromStyle);
-    const byUrl = new Map((stylesheets ?? []).map((s) => [s.url, s.background]));
+    const byUrl = new Map(
+      (stylesheets ?? []).map((s) => [s.url, s.background])
+    );
     const dataByUrl = new Map((stylesheets ?? []).map((s) => [s.url, s]));
     for (const url of new Set(linkedUrls)) {
       const data = dataByUrl.get(url);
@@ -597,14 +673,16 @@ function createBackgroundResolver(
       return (page = { kind: "unresolved", reason: "stylesheet" });
     }
     if (first) page = first;
-    else if (setsBackground) page = { kind: "unresolved", reason: "stylesheet" };
+    else if (setsBackground)
+      page = { kind: "unresolved", reason: "stylesheet" };
     else page = { kind: "color", rgb: WHITE, raw: "white" };
     return page;
   };
 
   const own = (el: Element): Background => {
     // A legacy `bgcolor` attribute sets a background this rule does not read.
-    if (el.hasAttribute("bgcolor")) return { kind: "unresolved", reason: "color" };
+    if (el.hasAttribute("bgcolor"))
+      return { kind: "unresolved", reason: "color" };
     const style = el.getAttribute("style");
     return style ? backgroundOf(parseDeclarations(style)) : NO_BACKGROUND;
   };
@@ -636,7 +714,11 @@ function createBackgroundResolver(
       for (const visited of chain) memo.set(visited, result);
       // The page background was the answer (not an inline one on an ancestor): a linked stylesheet's container
       // rule may sit under the text. Judged per element, not per memoized chain, so a sibling is not skipped.
-      if (result === pageResult && result.kind === "color" && insideGuardedSelector(el)) {
+      if (
+        result === pageResult &&
+        result.kind === "color" &&
+        insideGuardedSelector(el)
+      ) {
         return { kind: "unresolved", reason: "stylesheet" };
       }
       return result;
@@ -753,11 +835,15 @@ function parseColor(color: string): Rgb | null {
 
   const rgb = RGB_COLOR.exec(c);
   if (rgb) {
-    const channels = [rgb[1], rgb[2], rgb[3]].map((v) => Number.parseInt(v!, 10));
+    const channels = [rgb[1], rgb[2], rgb[3]].map((v) =>
+      Number.parseInt(v!, 10)
+    );
     if (channels.some((v) => v > 255)) return null;
     const alpha = rgb[4];
     if (alpha !== undefined) {
-      const value = alpha.endsWith("%") ? Number.parseFloat(alpha) / 100 : Number.parseFloat(alpha);
+      const value = alpha.endsWith("%")
+        ? Number.parseFloat(alpha) / 100
+        : Number.parseFloat(alpha);
       if (!(value >= 1)) return null;
     }
     return channels as Rgb;

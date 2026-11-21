@@ -150,16 +150,24 @@ function finiteOr(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegistry {
-  const configuredConcurrency = Math.max(1, finiteOr(options.perHostConcurrency, 1));
-  const maxBackoffMs = Math.max(0, finiteOr(options.maxBackoffMs, DEFAULT_MAX_BACKOFF_MS));
+export function createHostBackoff(
+  options: HostBackoffOptions
+): HostBackoffRegistry {
+  const configuredConcurrency = Math.max(
+    1,
+    finiteOr(options.perHostConcurrency, 1)
+  );
+  const maxBackoffMs = Math.max(
+    0,
+    finiteOr(options.maxBackoffMs, DEFAULT_MAX_BACKOFF_MS)
+  );
   const baseBackoffMs = Math.max(
     1,
-    finiteOr(options.baseBackoffMs, DEFAULT_RATE_LIMIT_BASE_BACKOFF_MS),
+    finiteOr(options.baseBackoffMs, DEFAULT_RATE_LIMIT_BASE_BACKOFF_MS)
   );
   const recoverySuccesses = Math.max(
     1,
-    finiteOr(options.recoverySuccesses, DEFAULT_RECOVERY_SUCCESSES),
+    finiteOr(options.recoverySuccesses, DEFAULT_RECOVERY_SUCCESSES)
   );
   const now = options.now ?? Date.now;
   const random = options.random;
@@ -168,14 +176,20 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
 
   const rampCeiling = Math.max(
     configuredConcurrency,
-    Math.floor(finiteOr(options.maxPerHostConcurrency, configuredConcurrency)),
+    Math.floor(finiteOr(options.maxPerHostConcurrency, configuredConcurrency))
   );
-  const rampSuccessesNeeded = Math.max(1, finiteOr(options.rampSuccesses, DEFAULT_RAMP_SUCCESSES));
+  const rampSuccessesNeeded = Math.max(
+    1,
+    finiteOr(options.rampSuccesses, DEFAULT_RAMP_SUCCESSES)
+  );
   // Hosts running above the configured value, and their clean-response streaks.
   // Kept apart from `hosts` so a ramped host is never reported as throttled.
   const ramped = new Map<string, { concurrency: number; successes: number }>();
 
-  const noteRateLimited = (host: string, retryAfterMs?: number): RateLimitOutcome => {
+  const noteRateLimited = (
+    host: string,
+    retryAfterMs?: number
+  ): RateLimitOutcome => {
     // A refusal ends any ramp: recovery climbs back only to the configured value.
     ramped.delete(host);
     const state = hosts.get(host) ?? {
@@ -237,11 +251,18 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     };
   };
 
-  const noteSuccess = (host: string, opts: { rampAllowed?: boolean } = {}): void => {
+  const noteSuccess = (
+    host: string,
+    opts: { rampAllowed?: boolean } = {}
+  ): void => {
     const state = hosts.get(host);
     if (!state) {
-      if (rampCeiling <= configuredConcurrency || opts.rampAllowed === false) return;
-      const ramp = ramped.get(host) ?? { concurrency: configuredConcurrency, successes: 0 };
+      if (rampCeiling <= configuredConcurrency || opts.rampAllowed === false)
+        return;
+      const ramp = ramped.get(host) ?? {
+        concurrency: configuredConcurrency,
+        successes: 0,
+      };
       if (ramp.concurrency >= rampCeiling) return;
       ramp.successes += 1;
       if (ramp.successes >= rampSuccessesNeeded) {
@@ -266,7 +287,10 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
     // Fully recovered — drop the record so the host pays nothing, and give it a
     // fresh backoff budget. An exhausted host can climb all the way back this
     // way, which is what "without recovering" in the cap's definition means.
-    if (state.concurrency >= configuredConcurrency && state.delayMultiplier === 1) {
+    if (
+      state.concurrency >= configuredConcurrency &&
+      state.delayMultiplier === 1
+    ) {
       hosts.delete(host);
       return;
     }
@@ -282,7 +306,9 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
       return Math.max(0, state.nextAttemptAt - now());
     },
     concurrencyFor: (host) =>
-      hosts.get(host)?.concurrency ?? ramped.get(host)?.concurrency ?? configuredConcurrency,
+      hosts.get(host)?.concurrency ??
+      ramped.get(host)?.concurrency ??
+      configuredConcurrency,
     maxConcurrency: () => rampCeiling,
     delayFor: (host, configuredDelayMs) => {
       const state = hosts.get(host);
@@ -291,7 +317,8 @@ export function createHostBackoff(options: HostBackoffOptions): HostBackoffRegis
       if (!state || state.delayMultiplier <= 1) return configuredDelayMs;
       // Substitute the floor BEFORE multiplying, so recovery still steps the
       // delay down proportionally instead of being pinned to a flat minimum.
-      const base = configuredDelayMs > 0 ? configuredDelayMs : THROTTLED_MIN_DELAY_MS;
+      const base =
+        configuredDelayMs > 0 ? configuredDelayMs : THROTTLED_MIN_DELAY_MS;
       return base * state.delayMultiplier;
     },
     isExhausted: (host) => hosts.get(host)?.exhausted === true,

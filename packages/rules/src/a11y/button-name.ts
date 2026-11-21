@@ -1,12 +1,22 @@
 // a11y/button-name - Buttons have accessible names
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
-
-import { createStaticVisibility, unconfirmedItem, unconfirmedMessage } from "../shared/static-hidden";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
+
+import {
+  createStaticVisibility,
+  unconfirmedItem,
+  unconfirmedMessage,
+} from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element): boolean {
   // Check aria-label
@@ -96,7 +106,10 @@ export const buttonNameRule: Rule = {
         const tagName = btn.tagName.toLowerCase();
         const id = btn.getAttribute("id");
         const cls = btn.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
-        classify(btn, id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName);
+        classify(
+          btn,
+          id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName
+        );
       }
     }
 
@@ -104,7 +117,10 @@ export const buttonNameRule: Rule = {
       if (!hasAccessibleName(input)) {
         const type = input.getAttribute("type");
         const name = input.getAttribute("name");
-        classify(input, name ? `input[name="${name}"]` : `input[type="${type}"]`);
+        classify(
+          input,
+          name ? `input[name="${name}"]` : `input[type="${type}"]`
+        );
       }
     }
 
@@ -127,7 +143,10 @@ export const buttonNameRule: Rule = {
       checks.push({
         name: `button-name${UNCONFIRMED_CHECK_SUFFIX}`,
         status: "warn",
-        message: unconfirmedMessage("button(s) without accessible names", unconfirmed),
+        message: unconfirmedMessage(
+          "button(s) without accessible names",
+          unconfirmed
+        ),
         items: unconfirmed.slice(0, 10),
         details:
           unconfirmed.length > 10

@@ -4,13 +4,14 @@
 // but results MUST be assembled in registration order (not completion order) and
 // must match fully-sequential execution exactly.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
 import type { RuleNamespace } from "../src/loader";
-import { RuleRunner, type RulesConfig } from "../src/runner";
 import type { PageData, ParsedPage, Rule, SiteData } from "../src/types";
+
+import { RuleRunner, type RulesConfig } from "../src/runner";
 
 // Build N page-scope rules. Rule k emits a single pass check and resolves after
 // a delay that is LARGEST for the lowest index — so without order-preserving
@@ -72,7 +73,13 @@ function makePage(): PageData {
 function makeSiteData(): SiteData {
   return {
     baseUrl: "https://example.com",
-    pages: [{ url: "https://example.com/", statusCode: 200, parsed: {} as ParsedPage }],
+    pages: [
+      {
+        url: "https://example.com/",
+        statusCode: 200,
+        parsed: {} as ParsedPage,
+      },
+    ],
     robotsTxt: null,
     sitemaps: null,
   };
@@ -99,19 +106,47 @@ describe("runner bounded concurrency", () => {
   test("a rule throwing still yields a deterministic fail check in order", async () => {
     const rules: Rule[] = [
       {
-        meta: { id: "test/ok-a", name: "A", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
-        run: () => ({ checks: [{ name: "test/ok-a", status: "pass", message: "a" }] }),
+        meta: {
+          id: "test/ok-a",
+          name: "A",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
+        run: () => ({
+          checks: [{ name: "test/ok-a", status: "pass", message: "a" }],
+        }),
       },
       {
-        meta: { id: "test/boom", name: "Boom", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/boom",
+          name: "Boom",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 1));
           throw new Error("kaboom");
         },
       },
       {
-        meta: { id: "test/ok-b", name: "B", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
-        run: () => ({ checks: [{ name: "test/ok-b", status: "pass", message: "b" }] }),
+        meta: {
+          id: "test/ok-b",
+          name: "B",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
+        run: () => ({
+          checks: [{ name: "test/ok-b", status: "pass", message: "b" }],
+        }),
       },
     ];
 
@@ -131,13 +166,31 @@ describe("runner bounded concurrency", () => {
     // All three rules have a sync run() — the common case (#521). Output must be
     // ordered + complete with no awaiting needed for any of them.
     const rules: Rule[] = ["a", "b", "c"].map((k) => ({
-      meta: { id: `test/sync-${k}`, name: k, description: "", category: "core", scope: "page", severity: "info", weight: 1 },
-      run: () => ({ checks: [{ name: `test/sync-${k}`, status: "pass", message: k }] }),
+      meta: {
+        id: `test/sync-${k}`,
+        name: k,
+        description: "",
+        category: "core",
+        scope: "page",
+        severity: "info",
+        weight: 1,
+      },
+      run: () => ({
+        checks: [{ name: `test/sync-${k}`, status: "pass", message: k }],
+      }),
     }));
 
     const result = await makeRunner(rules, 8).runPageRules(makePage());
-    expect(result.checks.map((c) => c.name)).toEqual(["test/sync-a", "test/sync-b", "test/sync-c"]);
-    expect([...result.ruleResults.keys()]).toEqual(["test/sync-a", "test/sync-b", "test/sync-c"]);
+    expect(result.checks.map((c) => c.name)).toEqual([
+      "test/sync-a",
+      "test/sync-b",
+      "test/sync-c",
+    ]);
+    expect([...result.ruleResults.keys()]).toEqual([
+      "test/sync-a",
+      "test/sync-b",
+      "test/sync-c",
+    ]);
   });
 
   test("mixed sync + async page rules land in registration order", async () => {
@@ -145,27 +198,61 @@ describe("runner bounded concurrency", () => {
     // fully resolved (not pending Promises) and assembled in registration order.
     const rules: Rule[] = [
       {
-        meta: { id: "test/async-a", name: "A", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/async-a",
+          name: "A",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 4));
-          return { checks: [{ name: "test/async-a", status: "pass", message: "a" }] };
+          return {
+            checks: [{ name: "test/async-a", status: "pass", message: "a" }],
+          };
         },
       },
       {
-        meta: { id: "test/sync-b", name: "B", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
-        run: () => ({ checks: [{ name: "test/sync-b", status: "pass", message: "b" }] }),
+        meta: {
+          id: "test/sync-b",
+          name: "B",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
+        run: () => ({
+          checks: [{ name: "test/sync-b", status: "pass", message: "b" }],
+        }),
       },
       {
-        meta: { id: "test/async-c", name: "C", description: "", category: "core", scope: "page", severity: "info", weight: 1 },
+        meta: {
+          id: "test/async-c",
+          name: "C",
+          description: "",
+          category: "core",
+          scope: "page",
+          severity: "info",
+          weight: 1,
+        },
         async run() {
           await new Promise((r) => setTimeout(r, 1));
-          return { checks: [{ name: "test/async-c", status: "pass", message: "c" }] };
+          return {
+            checks: [{ name: "test/async-c", status: "pass", message: "c" }],
+          };
         },
       },
     ];
 
     const result = await makeRunner(rules, 8).runPageRules(makePage());
-    expect(result.checks.map((c) => c.name)).toEqual(["test/async-a", "test/sync-b", "test/async-c"]);
+    expect(result.checks.map((c) => c.name)).toEqual([
+      "test/async-a",
+      "test/sync-b",
+      "test/async-c",
+    ]);
     expect(result.checks.every((c) => c.status === "pass")).toBe(true);
   });
 

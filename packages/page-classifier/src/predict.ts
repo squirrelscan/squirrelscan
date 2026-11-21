@@ -16,6 +16,8 @@
 // every page, with or without an artifact, and wins over the section head.
 
 import { parseHTML } from "@squirrelscan/parser/dom";
+
+import { commentRule, type CommentSection } from "./comments-rule";
 import {
   featurizeDocument,
   FEATURIZER_VERSION,
@@ -33,9 +35,12 @@ import {
   thresholdsFor,
   type Model,
 } from "./model-format";
-import { commentRule, type CommentSection } from "./comments-rule";
 import { platformBucket, platformOf } from "./platform";
-import { chromeIndices, chromeMass, SITE_CHROME_THRESHOLD } from "./region-groups";
+import {
+  chromeIndices,
+  chromeMass,
+  SITE_CHROME_THRESHOLD,
+} from "./region-groups";
 import {
   declaresOwnRegion,
   isRootPath,
@@ -162,11 +167,17 @@ const DEFAULT_BUDGET_MS = 500;
 const DEFAULT_SCORING_BATCH = 32;
 
 /** Parse an artifact, returning null (never throwing) when it cannot be used. */
-export function tryLoadModel(json: unknown): { model: Model | null; reason: string } {
+export function tryLoadModel(json: unknown): {
+  model: Model | null;
+  reason: string;
+} {
   try {
     return { model: loadModel(json), reason: "" };
   } catch (error) {
-    const reason = error instanceof ArtifactError ? error.message : "artifact failed to parse";
+    const reason =
+      error instanceof ArtifactError
+        ? error.message
+        : "artifact failed to parse";
     return { model: null, reason };
   }
 }
@@ -198,7 +209,7 @@ export function selectPageType(
   probabilities: ArrayLike<number>,
   classes: readonly string[],
   thresholds: ArrayLike<number>,
-  allowHomepage: boolean,
+  allowHomepage: boolean
 ): PageTypePick {
   let index = -1;
   let best = -Infinity;
@@ -219,7 +230,7 @@ export function selectPageType(
 export function classifyPage(
   html: string,
   url: string,
-  options: ClassifyOptions = {},
+  options: ClassifyOptions = {}
 ): PageClassification {
   const { document } = parseHTML(html);
   return classifyDocument(document, url, { html, ...options });
@@ -229,7 +240,7 @@ export function classifyPage(
 export function classifyDocument(
   document: unknown,
   url: string,
-  options: ClassifyOptions = {},
+  options: ClassifyOptions = {}
 ): PageClassification {
   const started = Date.now();
   const budget = options.budgetMs ?? DEFAULT_BUDGET_MS;
@@ -242,7 +253,11 @@ export function classifyDocument(
     return elapsed;
   };
   const elements = options.elementsOut ?? [];
-  const attributes: WalkAttributes = { classAttr: [], idAttr: [], subtreeSize: [] };
+  const attributes: WalkAttributes = {
+    classAttr: [],
+    idAttr: [],
+    subtreeSize: [],
+  };
   const featurized = featurizeDocument(document as never, url, {
     elementsOut: elements,
     attributesOut: attributes,
@@ -288,10 +303,10 @@ export function classifyDocument(
         featurized.page.tokens,
         usable.pageFeatureCount,
         null,
-        null,
+        null
       ),
       usable.pageType.extraFeatureCount,
-      options.siteFeatures ?? null,
+      options.siteFeatures ?? null
     );
     const scores = new Float32Array(usable.pageType.numClass);
     scoreRow(usable.pageType, values, scores);
@@ -302,7 +317,12 @@ export function classifyDocument(
       options.threshold !== undefined
         ? new Float64Array(usable.pageType.numClass).fill(options.threshold)
         : thresholdsFor(usable.pageType, platform);
-    const pick = selectPageType(scores, usable.pageType.classes, thresholds, rootPath);
+    const pick = selectPageType(
+      scores,
+      usable.pageType.classes,
+      thresholds,
+      rootPath
+    );
     pageType = pick.fires
       ? {
           label: usable.pageType.classes[pick.index] as PageTypeLabel,
@@ -311,13 +331,19 @@ export function classifyDocument(
         }
       : { label: ruleType, confidence: pick.probability, source: "rules" };
   } else {
-    pageType = { label: ruleType, confidence: ruleType === "unknown" ? 0 : 1, source: "rules" };
+    pageType = {
+      label: ruleType,
+      confidence: ruleType === "unknown" ? 0 : 1,
+      source: "rules",
+    };
   }
 
   if (timings) timings.pageTypeMs = lap();
   const nodes: NodePrediction[] = [];
   const scores = usable ? new Float32Array(usable.region.numClass) : null;
-  const regionThresholds = usable ? thresholdsFor(usable.region, platform) : null;
+  const regionThresholds = usable
+    ? thresholdsFor(usable.region, platform)
+    : null;
   const chrome =
     usable && (options.groupFallback ?? true) && options.threshold === undefined
       ? chromeIndices(usable.region.classes, regionThresholds!)
@@ -326,7 +352,10 @@ export function classifyDocument(
   let previousTokens: number[] | null = null;
   let budgetSpent = false;
 
-  const batch = Math.max(1, Math.floor(options.scoringBatch ?? DEFAULT_SCORING_BATCH));
+  const batch = Math.max(
+    1,
+    Math.floor(options.scoringBatch ?? DEFAULT_SCORING_BATCH)
+  );
   const width = usable ? usable.nodeFeatureCount + TOKEN_BUCKETS : 0;
   const matrix = usable && batch > 1 ? new Float32Array(batch * width) : null;
   if (matrix && usable && scores) {
@@ -353,7 +382,7 @@ export function classifyDocument(
             rows++ * width,
             all[i]!,
             usable.nodeFeatureCount,
-            usable.region.readsText,
+            usable.region.readsText
           );
         }
       }
@@ -361,7 +390,11 @@ export function classifyDocument(
       let row = 0;
       for (let i = start; i < end; i++) {
         const node = all[i]!;
-        const nodeRef = { nodeId: node.nodeId, tag: node.tag, elementId: node.elementId };
+        const nodeRef = {
+          nodeId: node.nodeId,
+          tag: node.tag,
+          elementId: node.elementId,
+        };
         if (!asked[i - start]) {
           nodes.push({ nodeRef, ...withRules(node, byId) });
           continue;
@@ -371,7 +404,9 @@ export function classifyDocument(
         const { index, probability } = softmax(rowScores);
         const threshold = options.threshold ?? regionThresholds![index]!;
         const mass =
-          probability >= threshold || chrome.length === 0 ? 0 : chromeMass(rowScores, chrome);
+          probability >= threshold || chrome.length === 0
+            ? 0
+            : chromeMass(rowScores, chrome);
         nodes.push(
           probability >= threshold
             ? {
@@ -381,7 +416,12 @@ export function classifyDocument(
                 source: "model",
               }
             : mass >= SITE_CHROME_THRESHOLD
-              ? { nodeRef, label: "site_chrome", confidence: mass, source: "model" }
+              ? {
+                  nodeRef,
+                  label: "site_chrome",
+                  confidence: mass,
+                  source: "model",
+                }
               : {
                   nodeRef,
                   label: "unknown",
@@ -389,13 +429,17 @@ export function classifyDocument(
                   source: "model",
                   rawLabel: usable.region.classes[index],
                   rawConfidence: probability,
-                },
+                }
         );
       }
     }
   } else {
     for (const node of featurized.nodes) {
-      const nodeRef = { nodeId: node.nodeId, tag: node.tag, elementId: node.elementId };
+      const nodeRef = {
+        nodeId: node.nodeId,
+        tag: node.tag,
+        elementId: node.elementId,
+      };
       if (!usable || !scores || budgetSpent) {
         nodes.push({ nodeRef, ...withRules(node, byId) });
         continue;
@@ -429,7 +473,7 @@ export function classifyDocument(
         regionTokens,
         usable.nodeFeatureCount,
         values,
-        previousTokens,
+        previousTokens
       );
       previousTokens = regionTokens;
       scoreRow(usable.region, values, scores);
@@ -438,7 +482,10 @@ export function classifyDocument(
       // precision curves differ by 40 points, and the single value the old rule
       // selected (0.95) left two thirds of nodes unnamed.
       const threshold = options.threshold ?? regionThresholds![index]!;
-      const mass = probability >= threshold || chrome.length === 0 ? 0 : chromeMass(scores, chrome);
+      const mass =
+        probability >= threshold || chrome.length === 0
+          ? 0
+          : chromeMass(scores, chrome);
       if (probability >= threshold) {
         nodes.push({
           nodeRef,
@@ -447,7 +494,12 @@ export function classifyDocument(
           source: "model",
         });
       } else if (mass >= SITE_CHROME_THRESHOLD) {
-        nodes.push({ nodeRef, label: "site_chrome", confidence: mass, source: "model" });
+        nodes.push({
+          nodeRef,
+          label: "site_chrome",
+          confidence: mass,
+          source: "model",
+        });
       } else {
         // The model was asked and declined. That is a MODEL answer of "unknown",
         // not a rules answer: saying `source: "rules"` here would claim the
@@ -488,17 +540,21 @@ export function classifyDocument(
             (i - start) * width,
             all[i]!,
             usable!.nodeFeatureCount,
-            section.readsText,
+            section.readsText
           );
         }
         scoreRows(section, matrix, width, end - start, chunkScores);
         for (let i = start; i < end; i++) {
           const { index, probability } = softmax(
-            chunkScores.subarray((i - start) * k, (i - start + 1) * k),
+            chunkScores.subarray((i - start) * k, (i - start + 1) * k)
           );
           const label = section.classes[index]!;
           if (label !== "none" && probability >= sectionThresholds[index]!)
-            nodes[i]!.section = { label, confidence: probability, source: "model" };
+            nodes[i]!.section = {
+              label,
+              confidence: probability,
+              source: "model",
+            };
         }
       }
     } else {
@@ -519,14 +575,18 @@ export function classifyDocument(
           nodeTokens,
           usable!.nodeFeatureCount,
           sectionValues,
-          sectionTokens,
+          sectionTokens
         );
         sectionTokens = nodeTokens;
         scoreRow(section, sectionValues, sectionScores);
         const { index, probability } = softmax(sectionScores);
         const label = section.classes[index]!;
         if (label !== "none" && probability >= sectionThresholds[index]!)
-          nodes[i]!.section = { label, confidence: probability, source: "model" };
+          nodes[i]!.section = {
+            label,
+            confidence: probability,
+            source: "model",
+          };
       }
     }
   }
@@ -541,12 +601,14 @@ export function classifyDocument(
       nodeId: index,
       label: match.label,
       evidence: match.token,
-    }),
+    })
   );
   // Only a node inside a thread can match. Finding those is a pointer walk;
   // reading markup for all 400 nodes is what costs.
   if (commentSections.length > 0) {
-    const threads = new Set(commentSections.map((thread) => elements[thread.nodeId]));
+    const threads = new Set(
+      commentSections.map((thread) => elements[thread.nodeId])
+    );
     for (const node of nodes) {
       const element = elements[node.nodeRef.nodeId] as Element;
       if (!insideAny(element, threads)) continue;
@@ -565,7 +627,10 @@ export function classifyDocument(
   return { pageType, nodes, degraded, platform, commentSections };
 }
 
-function insideAny(element: Element, containers: ReadonlySet<unknown>): boolean {
+function insideAny(
+  element: Element,
+  containers: ReadonlySet<unknown>
+): boolean {
   for (let el: Element | null = element; el; el = el.parentElement)
     if (containers.has(el)) return true;
   return false;
@@ -573,7 +638,7 @@ function insideAny(element: Element, containers: ReadonlySet<unknown>): boolean 
 
 function withRules(
   node: NodeFeatures,
-  byId: ReadonlyMap<number, NodeFeatures>,
+  byId: ReadonlyMap<number, NodeFeatures>
 ): Prediction<RegionLabel> {
   const label = ruleRegion(node, byId);
   return { label, confidence: label === "unknown" ? 0 : 1, source: "rules" };
@@ -585,12 +650,15 @@ function writeRow(
   offset: number,
   node: NodeFeatures,
   numericCount: number,
-  withText = false,
+  withText = false
 ): void {
   matrix.fill(0, offset + numericCount, offset + numericCount + TOKEN_BUCKETS);
-  for (let i = 0; i < numericCount; i++) matrix[offset + i] = node.features[i] ?? 0;
+  for (let i = 0; i < numericCount; i++)
+    matrix[offset + i] = node.features[i] ?? 0;
   for (const bucket of node.tokens) matrix[offset + numericCount + bucket] = 1;
-  if (withText) for (const bucket of node.textTokens) matrix[offset + numericCount + bucket] = 1;
+  if (withText)
+    for (const bucket of node.textTokens)
+      matrix[offset + numericCount + bucket] = 1;
 }
 
 /**
@@ -607,7 +675,7 @@ export function toVector(
   tokens: number[],
   numericCount: number,
   reuse: Float32Array | null,
-  previousTokens: number[] | null,
+  previousTokens: number[] | null
 ): Float32Array {
   const width = numericCount + TOKEN_BUCKETS;
   const out = reuse && reuse.length === width ? reuse : new Float32Array(width);
@@ -629,20 +697,30 @@ export function toVector(
 export function withExtraBlock(
   base: Float32Array,
   extraCount: number,
-  extra: ArrayLike<number> | null,
+  extra: ArrayLike<number> | null
 ): Float32Array {
   if (extraCount === 0) return base;
   const out = new Float32Array(base.length + extraCount);
   out.set(base);
   const complete = extra !== null && extra.length === extraCount;
-  for (let i = 0; i < extraCount; i++) out[base.length + i] = complete ? extra[i]! : Number.NaN;
+  for (let i = 0; i < extraCount; i++)
+    out[base.length + i] = complete ? extra[i]! : Number.NaN;
   return out;
 }
 
 /** The region head's raw class probabilities for one node, for evaluation and
  *  for the parity fixture. Returns a copy, not the reused buffer. */
-export function regionProbabilities(model: Model, node: NodeFeatures): Float32Array {
-  const values = toVector(node.features, node.tokens, model.nodeFeatureCount, null, null);
+export function regionProbabilities(
+  model: Model,
+  node: NodeFeatures
+): Float32Array {
+  const values = toVector(
+    node.features,
+    node.tokens,
+    model.nodeFeatureCount,
+    null,
+    null
+  );
   const scores = new Float32Array(model.region.numClass);
   scoreRow(model.region, values, scores);
   softmax(scores);

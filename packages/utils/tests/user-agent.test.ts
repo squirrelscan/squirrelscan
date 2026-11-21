@@ -22,56 +22,56 @@ describe("isModernUserAgentString", () => {
   test("accepts a current Chrome major", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      ),
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      )
     ).toBe(true);
   });
 
   test("rejects a 2017-era Chrome major", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36",
-      ),
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"
+      )
     ).toBe(false);
   });
 
   test("accepts a current Firefox major", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
-      ),
+        "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+      )
     ).toBe(true);
   });
 
   test("rejects an old Firefox major", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0",
-      ),
+        "Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0"
+      )
     ).toBe(false);
   });
 
   test("accepts a current Safari version (distinct from the WebKit build number)", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
-      ),
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+      )
     ).toBe(true);
   });
 
   test("rejects an old Safari version", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8",
-      ),
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/603.3.8 (KHTML, like Gecko) Version/10.1.2 Safari/603.3.8"
+      )
     ).toBe(false);
   });
 
   test("accepts a current Edge major (Chrome-derived UA, gated on the Edg/ token)", () => {
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
-      ),
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0"
+      )
     ).toBe(true);
   });
 
@@ -79,8 +79,8 @@ describe("isModernUserAgentString", () => {
     // Edge's own version can trail the Chromium version it's built on; gate on Edg/ first.
     expect(
       isModernUserAgentString(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/90.0.818.42",
-      ),
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/90.0.818.42"
+      )
     ).toBe(false);
   });
 
@@ -127,7 +127,10 @@ describe("isModernUserAgentString", () => {
 // isModernUserAgentString so this test doesn't just tautologically re-check
 // the function under test against its own output.
 const MIN_EDGE_MAJOR = 120;
-function independentlyParsedMajor(ua: string): { family: string; major: number } {
+function independentlyParsedMajor(ua: string): {
+  family: string;
+  major: number;
+} {
   const edge = ua.match(/Edg(?:A|iOS)?\/(\d+)/);
   if (edge) return { family: "Edge", major: Number(edge[1]) };
   const chrome = ua.match(/(?:Chrome|CriOS)\/(\d+)/);
@@ -183,7 +186,9 @@ describe("resolveUserAgent", () => {
   test("returns a modern random UA for empty string", () => {
     const ua = resolveUserAgent("");
     expect(ua).not.toBe("");
-    expect(isModernUserAgentString(ua) || ua === FALLBACK_USER_AGENT).toBe(true);
+    expect(isModernUserAgentString(ua) || ua === FALLBACK_USER_AGENT).toBe(
+      true
+    );
   });
 
   test("returns custom value when provided", () => {

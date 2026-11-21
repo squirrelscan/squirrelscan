@@ -7,16 +7,21 @@
 // attributes. Every judgement call is biased toward precision — telling a site
 // it is cloaking text when it is not is far more damaging than missing a page.
 
-import { z } from "zod";
-
 import type { Document, Element } from "linkedom";
 
 import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-
-import { skipComment, skipString, stepBlocks, stripComments } from "../shared/css-tokens";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import { getTextExcludingScripts } from "./text-content";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { z } from "zod";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import {
+  skipComment,
+  skipString,
+  stepBlocks,
+  stripComments,
+} from "../shared/css-tokens";
+import { getTextExcludingScripts } from "./text-content";
 
 export const optionsSchema = z.object({
   min_hidden_chars: z
@@ -33,11 +38,15 @@ export const optionsSchema = z.object({
     // A collapsed submenu or a responsive footer copy routinely holds a handful
     // of links, so a low bar here turns ordinary chrome into a link-cloaking
     // accusation. A block hidden to feed a crawler carries many more.
-    .describe("Hidden links before the finding escalates from a warning to a failure"),
+    .describe(
+      "Hidden links before the finding escalates from a warning to a failure"
+    ),
   offscreen_px_threshold: z
     .number()
     .default(-999)
-    .describe("Offsets at or below this many pixels count as pushed off-screen"),
+    .describe(
+      "Offsets at or below this many pixels count as pushed off-screen"
+    ),
   a11y_classes: z
     .array(z.string())
     .default([])
@@ -203,10 +212,24 @@ const INTERACTIVE_ROLES = new Set([
 ]);
 
 /** Tags that are containers for interactive or stateful UI. */
-const INTERACTIVE_TAGS = new Set(["dialog", "details", "summary", "nav", "menu"]);
+const INTERACTIVE_TAGS = new Set([
+  "dialog",
+  "details",
+  "summary",
+  "nav",
+  "menu",
+]);
 
 /** Never walked into: not indexable content, or handled by other rules. */
-const SKIPPED_TAGS = new Set(["script", "style", "noscript", "template", "iframe", "svg", "canvas"]);
+const SKIPPED_TAGS = new Set([
+  "script",
+  "style",
+  "noscript",
+  "template",
+  "iframe",
+  "svg",
+  "canvas",
+]);
 
 /** Attribute prefixes used by toggle libraries (Bootstrap, Radix, Headless UI, Alpine). */
 const TOGGLE_ATTR_RE =
@@ -311,7 +334,12 @@ export function parseColor(raw: string): Rgba | null {
     }
     if (/^[0-9a-f]{6}$/.test(hex) || /^[0-9a-f]{8}$/.test(hex)) {
       const byte = (i: number) => Number.parseInt(hex.slice(i, i + 2), 16);
-      return { r: byte(0), g: byte(2), b: byte(4), a: hex.length === 8 ? byte(6) / 255 : 1 };
+      return {
+        r: byte(0),
+        g: byte(2),
+        b: byte(4),
+        a: hex.length === 8 ? byte(6) / 255 : 1,
+      };
     }
     return null;
   }
@@ -334,7 +362,9 @@ export function parseColor(raw: string): Rgba | null {
   if (r === null || g === null || b === null) return null;
   let a = 1;
   if (parts[3] !== undefined) {
-    a = parts[3].endsWith("%") ? Number.parseFloat(parts[3]) / 100 : Number.parseFloat(parts[3]);
+    a = parts[3].endsWith("%")
+      ? Number.parseFloat(parts[3]) / 100
+      : Number.parseFloat(parts[3]);
     if (Number.isNaN(a)) a = 1;
   }
   return { r, g, b, a };
@@ -345,7 +375,12 @@ function backgroundColorOf(decls: Declarations): Rgba | null {
   const explicit = decls.get("background-color");
   if (explicit) return parseColor(explicit);
   const shorthand = decls.get("background");
-  if (!shorthand || shorthand.includes("url(") || shorthand.includes("gradient")) return null;
+  if (
+    !shorthand ||
+    shorthand.includes("url(") ||
+    shorthand.includes("gradient")
+  )
+    return null;
   for (const token of shorthand.split(/\s+/)) {
     const color = parseColor(token);
     if (color) return color;
@@ -380,7 +415,9 @@ export function parseLengthPx(raw: string): number | null {
 }
 
 function isZeroLength(raw: string): boolean {
-  return /^-?0*(?:\.0+)?(?:px|em|rem|pt|%|vh|vw|ex|ch)?$/.test(raw.trim().toLowerCase());
+  return /^-?0*(?:\.0+)?(?:px|em|rem|pt|%|vh|vw|ex|ch)?$/.test(
+    raw.trim().toLowerCase()
+  );
 }
 
 /**
@@ -510,7 +547,13 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       i = skipString(css, i);
       continue;
     }
-    if (closers.length > 0 || ch === "(" || ch === "[" || ch === "u" || ch === "U") {
+    if (
+      closers.length > 0 ||
+      ch === "(" ||
+      ch === "[" ||
+      ch === "u" ||
+      ch === "U"
+    ) {
       i = stepBlocks(css, i, closers);
       continue;
     }
@@ -575,7 +618,9 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
       body: css.slice(bodyStart, bodyClosers.length === 0 ? j - 1 : css.length),
       conditional: atDepth > 0,
       // Capped: a rule nested deeper is read as generic conditional, and the copy stays O(1) (pub#988).
-      ...(atDepth > 0 && atStack.length <= MAX_AT_DEPTH ? { at: atStack.slice() } : {}),
+      ...(atDepth > 0 && atStack.length <= MAX_AT_DEPTH
+        ? { at: atStack.slice() }
+        : {}),
     });
     i = j;
     preludeStart = i;
@@ -585,7 +630,11 @@ export function parseRules(css: string, maxRules: number): RawRule[] {
 }
 
 /** Adds every class / id token a selector chunk mentions to the given sets. */
-function harvestSelectorTokens(text: string, classes: Set<string>, ids: Set<string>): void {
+function harvestSelectorTokens(
+  text: string,
+  classes: Set<string>,
+  ids: Set<string>
+): void {
   for (const cls of text.matchAll(/\.([-_a-zA-Z0-9]+)/g)) classes.add(cls[1]);
   for (const id of text.matchAll(/#([-_a-zA-Z0-9]+)/g)) ids.add(id[1]);
 }
@@ -600,7 +649,7 @@ function mergeInto(
   target: Map<string, Declarations>,
   contested: Set<string>,
   key: string,
-  decls: Declarations,
+  decls: Declarations
 ): void {
   const existing = target.get(key);
   if (!existing) {
@@ -638,7 +687,11 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
       ruleBudget--;
 
       if (rule.conditional) {
-        harvestSelectorTokens(rule.selector, index.ambiguousClasses, index.ambiguousIds);
+        harvestSelectorTokens(
+          rule.selector,
+          index.ambiguousClasses,
+          index.ambiguousIds
+        );
         continue;
       }
 
@@ -649,13 +702,22 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
       // named, so `.card { opacity:0 }` + `.card.in { transition:opacity .3s }`
       // reads as a scroll reveal rather than as concealed text.
       if (hasAnimation(decls)) {
-        harvestSelectorTokens(rule.selector, index.animatedClasses, index.animatedIds);
+        harvestSelectorTokens(
+          rule.selector,
+          index.animatedClasses,
+          index.animatedIds
+        );
       }
 
       for (const rawSelector of rule.selector.split(",")) {
         const selector = rawSelector.trim();
         if (/^\.[-_a-zA-Z0-9]+$/.test(selector)) {
-          mergeInto(index.byClass, index.ambiguousClasses, selector.slice(1), decls);
+          mergeInto(
+            index.byClass,
+            index.ambiguousClasses,
+            selector.slice(1),
+            decls
+          );
           continue;
         }
         if (/^#[-_a-zA-Z0-9]+$/.test(selector)) {
@@ -664,7 +726,11 @@ export function buildStyleIndex(styleTexts: string[]): StyleIndex {
         }
         // Anything else (descendant, compound, pseudo, attribute) is not
         // resolved; it only marks the tokens it mentions as untrustworthy.
-        harvestSelectorTokens(selector, index.ambiguousClasses, index.ambiguousIds);
+        harvestSelectorTokens(
+          selector,
+          index.ambiguousClasses,
+          index.ambiguousIds
+        );
       }
     }
   }
@@ -712,8 +778,13 @@ function tagOf(el: Element): string {
  */
 function resolveDeclarations(
   el: Element,
-  index: StyleIndex,
-): { resolved: Declarations; inline: Declarations; ambiguous: boolean; animated: boolean } {
+  index: StyleIndex
+): {
+  resolved: Declarations;
+  inline: Declarations;
+  ambiguous: boolean;
+  animated: boolean;
+} {
   const resolved: Declarations = new Map();
   let ambiguous = false;
   let animated = false;
@@ -742,7 +813,11 @@ function resolveDeclarations(
 const NO_DECLARATIONS: Declarations = new Map();
 
 /** True when this element declares itself legitimate hidden UI. */
-function hasLegitimateMarker(el: Element, decls: Declarations, opts: ResolvedOptions): boolean {
+function hasLegitimateMarker(
+  el: Element,
+  decls: Declarations,
+  opts: ResolvedOptions
+): boolean {
   // The platform's own toggle markers. Without a CSSOM we cannot distinguish a
   // JS-toggled region from a permanently hidden one, and these attributes are
   // an explicit statement of intent, so they exempt rather than incriminate.
@@ -792,7 +867,10 @@ function hasLegitimateMarker(el: Element, decls: Declarations, opts: ResolvedOpt
  * `.cookie-banner` container does — so a hidden element nested inside declared
  * interactive UI is treated as part of that UI.
  */
-function ancestorHasLegitimateMarker(el: Element, opts: ResolvedOptions): boolean {
+function ancestorHasLegitimateMarker(
+  el: Element,
+  opts: ResolvedOptions
+): boolean {
   let current = el.parentElement as Element | null;
   let depth = 0;
   while (current && depth < MAX_ANCESTOR_DEPTH) {
@@ -807,7 +885,8 @@ function ancestorHasLegitimateMarker(el: Element, opts: ResolvedOptions): boolea
 /** A declared transition or animation. Used both per-element and to index selectors. */
 function hasAnimation(decls: Declarations): boolean {
   for (const prop of decls.keys()) {
-    if (prop.startsWith("transition") || prop.startsWith("animation")) return true;
+    if (prop.startsWith("transition") || prop.startsWith("animation"))
+      return true;
   }
   return false;
 }
@@ -844,7 +923,14 @@ function hasBackgroundImage(decls: Declarations): boolean {
  * subtree the technique actually hides; `label` is what the report shows.
  */
 export interface Technique {
-  kind: "display" | "visibility" | "opacity" | "font-size" | "offscreen" | "zero-size" | "color";
+  kind:
+    | "display"
+    | "visibility"
+    | "opacity"
+    | "font-size"
+    | "offscreen"
+    | "zero-size"
+    | "color";
   label: string;
 }
 
@@ -852,7 +938,11 @@ export interface Technique {
  * Techniques a toggle library also writes, so they carry no weight on an element
  * the page's own scripts address. The rest have no legitimate scripted use.
  */
-const WEAK_TECHNIQUES = new Set<Technique["kind"]>(["display", "visibility", "opacity"]);
+const WEAK_TECHNIQUES = new Set<Technique["kind"]>([
+  "display",
+  "visibility",
+  "opacity",
+]);
 
 /**
  * The hiding techniques declared on one element. `decls` is what we trust for
@@ -864,12 +954,14 @@ export function detectTechniques(
   guards: Declarations,
   offscreenThreshold: number,
   /** The element is animated by a rule elsewhere in the sheet (scroll reveal). */
-  animatedElsewhere = false,
+  animatedElsewhere = false
 ): Technique[] {
   const techniques: Technique[] = [];
-  const animated = animatedElsewhere || hasAnimation(guards) || hasEntranceTransform(guards);
+  const animated =
+    animatedElsewhere || hasAnimation(guards) || hasEntranceTransform(guards);
 
-  if (decls.get("display") === "none") techniques.push({ kind: "display", label: "display:none" });
+  if (decls.get("display") === "none")
+    techniques.push({ kind: "display", label: "display:none" });
 
   // `visibility:hidden` and `opacity:0` alongside a transition or animation are
   // the universal fade-in / crossfade idiom, not concealment.
@@ -894,8 +986,13 @@ export function detectTechniques(
     const textIndent = decls.get("text-indent");
     if (textIndent !== undefined) {
       const px = parseLengthPx(textIndent);
-      const pct = textIndent.endsWith("%") ? Number.parseFloat(textIndent) : null;
-      if ((px !== null && px <= offscreenThreshold) || (pct !== null && pct <= -100)) {
+      const pct = textIndent.endsWith("%")
+        ? Number.parseFloat(textIndent)
+        : null;
+      if (
+        (px !== null && px <= offscreenThreshold) ||
+        (pct !== null && pct <= -100)
+      ) {
         techniques.push({ kind: "offscreen", label: "text-indent off-screen" });
       }
     }
@@ -925,14 +1022,22 @@ export function detectTechniques(
 
   // Zero-size clipping. An animated collapse (`max-height:0` + transition) is an
   // accordion mid-flight, so the animation guard applies here too.
-  const overflow = guards.get("overflow") ?? guards.get("overflow-y") ?? guards.get("overflow-x");
+  const overflow =
+    guards.get("overflow") ??
+    guards.get("overflow-y") ??
+    guards.get("overflow-x");
   if (overflow === "hidden" && !animated) {
-    const collapsed = (["height", "width", "max-height", "max-width"] as const).find((prop) => {
+    const collapsed = (
+      ["height", "width", "max-height", "max-width"] as const
+    ).find((prop) => {
       const value = decls.get(prop);
       return value !== undefined && isZeroLength(value);
     });
     if (collapsed) {
-      techniques.push({ kind: "zero-size", label: `${collapsed}:0 with overflow:hidden` });
+      techniques.push({
+        kind: "zero-size",
+        label: `${collapsed}:0 with overflow:hidden`,
+      });
     }
   }
 
@@ -947,11 +1052,12 @@ export function detectTechniques(
 function detectColorOnColor(
   decls: Declarations,
   guards: Declarations,
-  backdrop: Rgba | null,
+  backdrop: Rgba | null
 ): Technique | null {
   // A gradient/clipped fill legitimately sets a transparent colour.
   if (guards.has("-webkit-text-fill-color")) return null;
-  const clip = guards.get("background-clip") ?? guards.get("-webkit-background-clip");
+  const clip =
+    guards.get("background-clip") ?? guards.get("-webkit-background-clip");
   if (clip === "text") return null;
 
   const rawColor = decls.get("color");
@@ -967,7 +1073,10 @@ function detectColorOnColor(
   if (!against || against.a !== 1 || color.a !== 1) return null;
   if (colorDistance(color, against) > COLOR_MATCH_DISTANCE) return null;
 
-  return { kind: "color", label: `color ${rawColor} on background ${rawBg ?? "inherited"}` };
+  return {
+    kind: "color",
+    label: `color ${rawColor} on background ${rawBg ?? "inherited"}`,
+  };
 }
 
 /**
@@ -977,7 +1086,11 @@ function detectColorOnColor(
  * has a second escape: a descendant that paints its own opaque background is no
  * longer the colour-on-colour the ancestor set up, whatever it inherited.
  */
-function descendantDeclares(el: Element, index: StyleIndex, prop: string): boolean {
+function descendantDeclares(
+  el: Element,
+  index: StyleIndex,
+  prop: string
+): boolean {
   const stack: Element[] = [...el.children] as Element[];
   let budget = 400;
   while (stack.length > 0) {
@@ -986,7 +1099,10 @@ function descendantDeclares(el: Element, index: StyleIndex, prop: string): boole
     if (SKIPPED_TAGS.has(tagOf(current))) continue;
     const { resolved } = resolveDeclarations(current, index);
     if (resolved.has(prop)) return true;
-    if (prop === "color" && (backgroundColorOf(resolved) || hasBackgroundImage(resolved))) {
+    if (
+      prop === "color" &&
+      (backgroundColorOf(resolved) || hasBackgroundImage(resolved))
+    ) {
       return true;
     }
     for (const child of current.children) stack.push(child as Element);
@@ -1054,10 +1170,12 @@ function collectScriptText(doc: Document): string {
 function isScriptReferenced(el: Element, scriptText: string): boolean {
   if (!scriptText) return false;
   const id = (el.getAttribute("id") || "").toLowerCase();
-  if (id.length >= MIN_SCRIPT_TOKEN_LENGTH && scriptText.includes(id)) return true;
+  if (id.length >= MIN_SCRIPT_TOKEN_LENGTH && scriptText.includes(id))
+    return true;
   for (const token of classTokens(el)) {
     const lower = token.toLowerCase();
-    if (lower.length >= MIN_SCRIPT_TOKEN_LENGTH && scriptText.includes(lower)) return true;
+    if (lower.length >= MIN_SCRIPT_TOKEN_LENGTH && scriptText.includes(lower))
+      return true;
   }
   return false;
 }
@@ -1088,13 +1206,19 @@ function describeElement(el: Element): string {
   let label = tagOf(el) || "element";
   const id = el.getAttribute("id");
   if (id) label += `#${id}`;
-  const classes = (el.getAttribute("class") || "").split(CLASS_SPLIT).filter(Boolean);
+  const classes = (el.getAttribute("class") || "")
+    .split(CLASS_SPLIT)
+    .filter(Boolean);
   for (const cls of classes.slice(0, 2)) label += `.${cls}`;
   return label;
 }
 
 /** The colour the page paints behind everything: `<body>`'s background, else `<html>`'s. */
-function pageBackdrop(root: Element | null, body: Element, index: StyleIndex): Rgba | null {
+function pageBackdrop(
+  root: Element | null,
+  body: Element,
+  index: StyleIndex
+): Rgba | null {
   for (const el of [body, root]) {
     if (!el) continue;
     const decls = resolveDeclarations(el, index).resolved;
@@ -1127,7 +1251,8 @@ export const hiddenTextRule: Rule = {
   meta: {
     id: "content/hidden-text",
     name: "Hidden Text & Links",
-    description: "Detects text and links hidden from users but left visible to search engines",
+    description:
+      "Detects text and links hidden from users but left visible to search engines",
     solution:
       "Google's spam policies treat text or links that are visible to crawlers but hidden from visitors as deceptive, and pages doing it can lose rankings or be removed from search entirely. Delete the hidden block, or make it genuinely visible to users. If the content is only meant for screen readers, use the standard visually-hidden pattern (a 1x1 clipped box, or a class named sr-only / visually-hidden) so it is recognisable as an accessibility affordance. If it is interactive UI that starts collapsed, mark it up as such with aria-hidden, the hidden attribute or a role like tabpanel or dialog, so its hidden state reads as intentional. Never place keywords or links behind display:none, opacity:0, a zero font size, an off-screen offset or same-on-same colour in order to reach a crawler.",
     category: "content",
@@ -1169,7 +1294,9 @@ export const hiddenTextRule: Rule = {
     // Built on first use: most pages never reach a weak-technique candidate.
     let scriptText: string | undefined;
 
-    const styleTexts = [...doc.querySelectorAll("style")].map((el) => el.textContent || "");
+    const styleTexts = [...doc.querySelectorAll("style")].map(
+      (el) => el.textContent || ""
+    );
     const index = buildStyleIndex(styleTexts);
 
     const findings: HiddenFinding[] = [];
@@ -1183,7 +1310,10 @@ export const hiddenTextRule: Rule = {
     // one finding instead of one per descendant.
     const stack: Element[] = [...body.children].reverse() as Element[];
     const backdrops = new Map<Element, Rgba | null>();
-    backdrops.set(body as Element, pageBackdrop(doc.documentElement as Element, body as Element, index));
+    backdrops.set(
+      body as Element,
+      pageBackdrop(doc.documentElement as Element, body as Element, index)
+    );
 
     while (stack.length > 0) {
       const el = stack.pop() as Element;
@@ -1194,7 +1324,10 @@ export const hiddenTextRule: Rule = {
       const tag = tagOf(el);
       if (SKIPPED_TAGS.has(tag)) continue;
 
-      const { resolved, inline, ambiguous, animated } = resolveDeclarations(el, index);
+      const { resolved, inline, ambiguous, animated } = resolveDeclarations(
+        el,
+        index
+      );
 
       // Track the painted backdrop for descendants: background is not inherited,
       // but what shows behind an element is its nearest painting ancestor.
@@ -1214,7 +1347,12 @@ export const hiddenTextRule: Rule = {
       // selector we could not parse is dropped: the unparsed rule may be the one
       // that reveals it. Inline styles are unambiguous and always count.
       const detectFrom = ambiguous ? inline : resolved;
-      const techniques = detectTechniques(detectFrom, resolved, opts.offscreenThreshold, animated);
+      const techniques = detectTechniques(
+        detectFrom,
+        resolved,
+        opts.offscreenThreshold,
+        animated
+      );
       // The inherited backdrop is only trusted for elements that sit in normal
       // flow and whose own rules we fully resolved. Positioned elements float
       // over content we cannot see, and a text-shadow is an author telling us
@@ -1229,14 +1367,19 @@ export const hiddenTextRule: Rule = {
       const colorFinding = detectColorOnColor(
         detectFrom,
         resolved,
-        backdropTrusted ? backdrop : null,
+        backdropTrusted ? backdrop : null
       );
       if (colorFinding) techniques.push(colorFinding);
 
       // `visibility` is inherited but a descendant can set `visibility:visible`
       // and come back into view, so that claim is dropped when one does.
-      const visibilityIndex = techniques.findIndex((t) => t.kind === "visibility");
-      if (visibilityIndex !== -1 && descendantDeclares(el, index, "visibility")) {
+      const visibilityIndex = techniques.findIndex(
+        (t) => t.kind === "visibility"
+      );
+      if (
+        visibilityIndex !== -1 &&
+        descendantDeclares(el, index, "visibility")
+      ) {
         techniques.splice(visibilityIndex, 1);
       }
 
@@ -1244,23 +1387,31 @@ export const hiddenTextRule: Rule = {
       // toggle library writes, so on an element the page's own scripts address
       // they say nothing. The unambiguous techniques below them are kept: no
       // toggle library has ever shipped `text-indent:-9999px`.
-      if (techniques.length > 0 && techniques.some((t) => WEAK_TECHNIQUES.has(t.kind))) {
+      if (
+        techniques.length > 0 &&
+        techniques.some((t) => WEAK_TECHNIQUES.has(t.kind))
+      ) {
         scriptText ??= collectScriptText(doc);
         if (isScriptReferenced(el, scriptText) || isPageWrapper(el)) {
           for (let i = techniques.length - 1; i >= 0; i--) {
-            if (WEAK_TECHNIQUES.has(techniques[i].kind)) techniques.splice(i, 1);
+            if (WEAK_TECHNIQUES.has(techniques[i].kind))
+              techniques.splice(i, 1);
           }
         }
       }
 
       if (techniques.length === 0) {
         // Visible (as far as we can tell) — its children are judged on their own.
-        for (let i = el.children.length - 1; i >= 0; i--) stack.push(el.children[i] as Element);
+        for (let i = el.children.length - 1; i >= 0; i--)
+          stack.push(el.children[i] as Element);
         continue;
       }
 
       // Hidden, but declared as an accessibility affordance or as interactive UI.
-      if (hasLegitimateMarker(el, resolved, opts) || ancestorHasLegitimateMarker(el, opts)) {
+      if (
+        hasLegitimateMarker(el, resolved, opts) ||
+        ancestorHasLegitimateMarker(el, opts)
+      ) {
         continue;
       }
 
@@ -1272,7 +1423,7 @@ export const hiddenTextRule: Rule = {
       // shrinks to this element's own text nodes — which is also why the
       // `.grid { font-size: 0 }` whitespace hack (no direct text) never reports.
       const hidesSubtree = techniques.some(
-        (t) => t.kind !== "font-size" && t.kind !== "color",
+        (t) => t.kind !== "font-size" && t.kind !== "color"
       )
         ? true
         : !techniques.some((t) => descendantDeclares(el, index, t.kind));
@@ -1302,15 +1453,19 @@ export const hiddenTextRule: Rule = {
           ? {
               name: "hidden-text",
               status: "skipped",
-              message: "Page too large to scan in full; no hidden text in the part scanned",
+              message:
+                "Page too large to scan in full; no hidden text in the part scanned",
               skipReason: SCAN_TRUNCATED_SKIP_REASON,
-              details: { scanTruncated: true, foldKey: SCAN_TRUNCATED_SKIP_REASON },
+              details: {
+                scanTruncated: true,
+                foldKey: SCAN_TRUNCATED_SKIP_REASON,
+              },
             }
           : {
               name: "hidden-text",
               status: "pass",
               message: "No hidden text or links detected",
-            },
+            }
       );
       return { checks };
     }
@@ -1343,7 +1498,9 @@ export const hiddenTextRule: Rule = {
         hiddenElements: findings.length,
         hiddenLinks: totalLinks,
         hiddenChars: totalChars,
-        ...(findings.length > MAX_ITEMS ? { additional: findings.length - MAX_ITEMS } : {}),
+        ...(findings.length > MAX_ITEMS
+          ? { additional: findings.length - MAX_ITEMS }
+          : {}),
         // Always present, so a reader can tell "walked the whole page" from a
         // publisher too old to say.
         scanTruncated,

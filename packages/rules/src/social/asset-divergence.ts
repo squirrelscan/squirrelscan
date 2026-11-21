@@ -53,12 +53,22 @@
 // emitted, so the output is byte-identical by construction and independent of
 // crawl order (same shape as content/duplicate-title, #1021/#1022).
 
-import type { Rule, RuleContext, RuleResult, CheckResult, ParsedPage } from "../types";
-import type { CheckItem, HreflangAlternate, SiteQuery } from "@squirrelscan/core-contracts";
-
-import { getAttrCI } from "@squirrelscan/utils";
+import type {
+  CheckItem,
+  HreflangAlternate,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { getAttrCI } from "@squirrelscan/utils";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  ParsedPage,
+} from "../types";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { identity } from "../shared/region-variants";
@@ -160,7 +170,10 @@ function absolute(value: string | null, baseUrl: string): string | null {
 
 /** `rel` token list of a `<link>`, lowercased. */
 function relTokens(el: Element): string[] {
-  return (getAttrCI(el, "rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  return (getAttrCI(el, "rel") ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 /**
@@ -189,7 +202,8 @@ function primaryFavicon(doc: Document, baseUrl: string): string | null {
 function declaredThemeColor(doc: Document): string | null {
   let fallback: string | null = null;
   for (const meta of doc.querySelectorAll("meta")) {
-    if ((getAttrCI(meta, "name") ?? "").toLowerCase() !== "theme-color") continue;
+    if ((getAttrCI(meta, "name") ?? "").toLowerCase() !== "theme-color")
+      continue;
     const content = bounded(getAttrCI(meta, "content"));
     if (content === null) continue;
     if (getAttrCI(meta, "media") === null) return content.toLowerCase();
@@ -329,7 +343,12 @@ interface AxisVerdict {
 }
 
 function emptyRollup(): ChromeRollup {
-  return { pageCount: 0, skippedNoindexPages: 0, samples: [], alternates: new Map() };
+  return {
+    pageCount: 0,
+    skippedNoindexPages: 0,
+    samples: [],
+    alternates: new Map(),
+  };
 }
 
 /**
@@ -442,12 +461,17 @@ function votersFor(axis: Axis, samples: ChromeSample[]): Voter[] {
 function judgeAxis(axis: Axis, samples: ChromeSample[]): AxisVerdict | null {
   const voters = votersFor(axis, samples);
   const votes = new Map<string, number>();
-  for (const voter of voters) votes.set(voter.value, (votes.get(voter.value) ?? 0) + 1);
+  for (const voter of voters)
+    votes.set(voter.value, (votes.get(voter.value) ?? 0) + 1);
   if (voters.length < ASSET_NORM_MIN_SAMPLE) return null;
 
   let best: { value: string; count: number } | null = null;
   for (const [value, count] of votes) {
-    if (best === null || count > best.count || (count === best.count && value < best.value)) {
+    if (
+      best === null ||
+      count > best.count ||
+      (count === best.count && value < best.value)
+    ) {
       best = { value, count };
     }
   }
@@ -467,7 +491,9 @@ function judgeAxis(axis: Axis, samples: ChromeSample[]): AxisVerdict | null {
     share,
     deviants: voters
       .filter((voter) => voter.value !== norm)
-      .flatMap((voter) => voter.members.map((url) => ({ url, value: voter.value })))
+      .flatMap((voter) =>
+        voter.members.map((url) => ({ url, value: voter.value }))
+      )
       .sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)),
   };
 }
@@ -493,7 +519,10 @@ function joinLabels(labels: string[]): string {
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the sampled subset.
  */
-function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: ChromeRollup,
+  crawlPageCount: number
+): CheckResult[] {
   // Every page that answered is noindex: nothing is left to compare, which is not
   // a pass. Reported as not applicable.
   if (rollup.skippedNoindexPages > 0 && rollup.samples.length === 0) {
@@ -570,8 +599,13 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
 
   // Group by (axis, deviant value) so one finding names one stale template
   // instead of one page.
-  const groups: Array<{ axis: Axis; value: string; norm: string; voters: number; urls: string[] }> =
-    [];
+  const groups: Array<{
+    axis: Axis;
+    value: string;
+    norm: string;
+    voters: number;
+    urls: string[];
+  }> = [];
   for (const verdict of verdicts) {
     const byValue = new Map<string, string[]>();
     for (const deviant of verdict.deviants) {
@@ -599,17 +633,19 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
       (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
   );
 
-  const items: CheckItem[] = ordered.slice(0, ASSET_NORM_MAX_ITEMS).map((group) => ({
-    id: `${group.axis.key}:${group.value}`,
-    label: `${group.urls.length} of ${group.voters} page(s) ${group.axis.verb} "${group.value}" but the site norm is "${group.norm}"`,
-    sourcePages: group.urls.slice(0, ASSET_NORM_MAX_URLS),
-    meta: {
-      dimension: group.axis.key,
-      value: group.value,
-      norm: group.norm,
-      pageCount: group.urls.length,
-    },
-  }));
+  const items: CheckItem[] = ordered
+    .slice(0, ASSET_NORM_MAX_ITEMS)
+    .map((group) => ({
+      id: `${group.axis.key}:${group.value}`,
+      label: `${group.urls.length} of ${group.voters} page(s) ${group.axis.verb} "${group.value}" but the site norm is "${group.norm}"`,
+      sourcePages: group.urls.slice(0, ASSET_NORM_MAX_URLS),
+      meta: {
+        dimension: group.axis.key,
+        value: group.value,
+        norm: group.norm,
+        pageCount: group.urls.length,
+      },
+    }));
 
   const share = flaggedPages.size / judgedPages.size;
   return [
@@ -634,7 +670,10 @@ function buildChecks(rollup: ChromeRollup, crawlPageCount: number): CheckResult[
  * That is a property of this seam shared with every site rule on it (see
  * content/duplicate-title), not something specific to this rule.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {

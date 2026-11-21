@@ -4,18 +4,23 @@
 // this pins the public half of that contract. The probe is a stub: no DNS and
 // no socket.
 
+import type { Config } from "@squirrelscan/config";
+import type { CheckResult } from "@squirrelscan/core-contracts";
+import type {
+  TlsProbeFn,
+  TlsTarget,
+} from "@squirrelscan/utils/tls-certificate";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import type { TlsProbeFn, TlsTarget } from "@squirrelscan/utils/tls-certificate";
 
 import { runStreamingRules } from "../src/adapter";
 
@@ -35,9 +40,19 @@ const CONFIG = {
   internal_links: { enabled: false },
 } as unknown as Config;
 
-async function auditChecks(tlsProbe?: TlsProbeFn, hosted = false): Promise<CheckResult[]> {
-  const model = generateSiteModel({ seed: "tls-threading-3922", pageCount: 3, templateCount: 1 });
-  const dbPath = join(tmpDir, `${tlsProbe ? "with" : "without"}-probe-${hosted ? "hosted" : "local"}.sqlite`);
+async function auditChecks(
+  tlsProbe?: TlsProbeFn,
+  hosted = false
+): Promise<CheckResult[]> {
+  const model = generateSiteModel({
+    seed: "tls-threading-3922",
+    pageCount: 3,
+    templateCount: 1,
+  });
+  const dbPath = join(
+    tmpDir,
+    `${tlsProbe ? "with" : "without"}-probe-${hosted ? "hosted" : "local"}.sqlite`
+  );
   const { storage: writer } = await writeCrawlToStorage(model, dbPath, {
     baseUrl: `https://${HOST}`,
   });
@@ -53,9 +68,12 @@ async function auditChecks(tlsProbe?: TlsProbeFn, hosted = false): Promise<Check
         crawlId,
         CONFIG,
         {} as never,
-        { ...(tlsProbe ? { tlsProbe } : {}), ...(hosted ? { hosted: true } : {}) },
-        { batchSize: 10 },
-      ),
+        {
+          ...(tlsProbe ? { tlsProbe } : {}),
+          ...(hosted ? { hosted: true } : {}),
+        },
+        { batchSize: 10 }
+      )
     );
     return (result.ruleResultsMap.get(RULE)?.checks ?? []) as CheckResult[];
   } finally {
@@ -108,15 +126,24 @@ describe("runStreamingRules threads tlsProbe to security/tls-certificate (#3922)
       trustError: "CERT_HAS_EXPIRED",
     });
     const checks = await auditChecks(probe);
-    expect(checks.some((c) => c.status === "fail" && c.message.includes("expired"))).toBe(true);
+    expect(
+      checks.some((c) => c.status === "fail" && c.message.includes("expired"))
+    ).toBe(true);
     expect(checks.some((c) => c.status === "skipped")).toBe(false);
   }, 30_000);
 
   test("a hosted run without a probe reports not checked in the hosted wording", async () => {
     const checks = await auditChecks(undefined, true);
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "skipped", details: { environment: "cloud" } });
-    expect(checks[0]!.message).toContain("the hosted audit could not open a TLS connection");
-    expect(checks[0]!.message).not.toMatch(/[Pp]roxy|--offline|[Nn]etwork|CONNECT/);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      details: { environment: "cloud" },
+    });
+    expect(checks[0]!.message).toContain(
+      "the hosted audit could not open a TLS connection"
+    );
+    expect(checks[0]!.message).not.toMatch(
+      /[Pp]roxy|--offline|[Nn]etwork|CONNECT/
+    );
   }, 30_000);
 });

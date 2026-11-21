@@ -178,7 +178,10 @@ export function normaliseName(name: string): string {
 export function primaryOrganization(map: EntityMap): EntityMapNode | null {
   const candidates = map.nodes.filter((node) =>
     node.types.some(
-      (type) => type === "Organization" || type === "Corporation" || isLocalBusinessType(type)
+      (type) =>
+        type === "Organization" ||
+        type === "Corporation" ||
+        isLocalBusinessType(type)
     )
   );
   if (candidates.length === 0) return null;
@@ -302,7 +305,9 @@ export function groupByIdentity(map: EntityMap): Map<string, EntityMapNode[]> {
   return groupNodesByIdentity(map.nodes);
 }
 
-function groupNodesByIdentity(nodes: readonly EntityMapNode[]): Map<string, EntityMapNode[]> {
+function groupNodesByIdentity(
+  nodes: readonly EntityMapNode[]
+): Map<string, EntityMapNode[]> {
   const out = new Map<string, EntityMapNode[]>();
   for (const node of nodes) {
     const identity = identityOf(node);
@@ -340,17 +345,22 @@ export function sharesAPage(group: readonly EntityMapNode[]): boolean {
  * different places, are not a split.
  */
 export function splitIdentityGroups(
-  nodes: readonly EntityMapNode[],
+  nodes: readonly EntityMapNode[]
 ): Array<{ nodes: EntityMapNode[]; ids: string[] }> {
   const splits: Array<{ nodes: EntityMapNode[]; ids: string[] }> = [];
   for (const group of groupNodesByIdentity(nodes).values()) {
     if (group.length < 2) continue;
     const ids = [
-      ...new Set(group.map((node) => node.id).filter((id): id is string => id !== null)),
+      ...new Set(
+        group.map((node) => node.id).filter((id): id is string => id !== null)
+      ),
     ].sort(compareStrings);
     if (ids.length < 2) continue;
     if (!sharesAPage(group)) continue;
-    splits.push({ nodes: [...group].sort((a, b) => pageTotal(b) - pageTotal(a)), ids });
+    splits.push({
+      nodes: [...group].sort((a, b) => pageTotal(b) - pageTotal(a)),
+      ids,
+    });
   }
   return splits;
 }
@@ -361,12 +371,17 @@ export function isNoIdIdentityNode(node: EntityMapNode): boolean {
     node.id === null &&
     node.name !== null &&
     pageTotal(node) > 1 &&
-    node.types.some((type) => (IDENTITY_TYPES as readonly string[]).includes(type))
+    node.types.some((type) =>
+      (IDENTITY_TYPES as readonly string[]).includes(type)
+    )
   );
 }
 
 /** Has an `@id`, nothing references it, declared once, and not a page subject. */
-export function isOrphanNode(node: EntityMapNode, referenced: ReadonlySet<string>): boolean {
+export function isOrphanNode(
+  node: EntityMapNode,
+  referenced: ReadonlySet<string>
+): boolean {
   return (
     node.id !== null &&
     !referenced.has(node.key) &&
@@ -388,7 +403,10 @@ export function isUnstableIdNode(node: EntityMapNode): boolean {
 export function sameAsProfiles(node: EntityMapNode): string[] {
   const sameAs = (node.properties as Record<string, unknown>).sameAs;
   return Array.isArray(sameAs)
-    ? sameAs.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+    ? sameAs.filter(
+        (entry): entry is string =>
+          typeof entry === "string" && entry.length > 0
+      )
     : typeof sameAs === "string" && sameAs.length > 0
       ? [sameAs]
       : [];
@@ -404,7 +422,8 @@ export function isIdentifiedEntity(node: EntityMapNode): boolean {
   const hasSameAs = Array.isArray(properties.sameAs)
     ? properties.sameAs.length > 0
     : typeof properties.sameAs === "string" && properties.sameAs.length > 0;
-  const hasUrl = typeof properties.url === "string" && properties.url.length > 0;
+  const hasUrl =
+    typeof properties.url === "string" && properties.url.length > 0;
   return hasSameAs || hasUrl;
 }
 
@@ -415,13 +434,20 @@ export function isIdentifiedEntity(node: EntityMapNode): boolean {
 export function judgedPeople(map: EntityMap): EntityMapNode[] {
   const people = map.nodes.filter((node) => node.types.includes("Person"));
   const authorKeys = new Set(
-    map.edges.filter((edge) => edge.predicate === "author").map((edge) => edge.target),
+    map.edges
+      .filter((edge) => edge.predicate === "author")
+      .map((edge) => edge.target)
   );
-  return authorKeys.size > 0 ? people.filter((node) => authorKeys.has(node.key)) : people;
+  return authorKeys.size > 0
+    ? people.filter((node) => authorKeys.has(node.key))
+    : people;
 }
 
 /** A LocalBusiness declared on so many pages it is repeated rather than referenced. */
-export function isLocalBusinessPerPageNode(node: EntityMapNode, pagesCrawled: number): boolean {
+export function isLocalBusinessPerPageNode(
+  node: EntityMapNode,
+  pagesCrawled: number
+): boolean {
   return (
     pagesCrawled >= LOCAL_BUSINESS_MIN_PAGES &&
     node.types.some((type) => isLocalBusinessType(type)) &&
@@ -430,10 +456,15 @@ export function isLocalBusinessPerPageNode(node: EntityMapNode, pagesCrawled: nu
 }
 
 /** How the site's publisher references split, heaviest first. Null with none. */
-export function publisherWeights(
-  map: EntityMap,
-): { ranked: Array<[string, number]>; canonical: string; outliers: Array<[string, number]>; looksLikeDrift: boolean } | null {
-  const publisherEdges = map.edges.filter((edge) => edge.predicate === "publisher");
+export function publisherWeights(map: EntityMap): {
+  ranked: Array<[string, number]>;
+  canonical: string;
+  outliers: Array<[string, number]>;
+  looksLikeDrift: boolean;
+} | null {
+  const publisherEdges = map.edges.filter(
+    (edge) => edge.predicate === "publisher"
+  );
   if (publisherEdges.length === 0) return null;
   // Counted by DECLARING WEIGHT, not by distinct target: one publisher named by
   // 200 articles and another by 1 is not a 50/50 disagreement.
@@ -441,7 +472,9 @@ export function publisherWeights(
   for (const edge of publisherEdges) {
     weight.set(edge.target, (weight.get(edge.target) ?? 0) + edge.occurrences);
   }
-  const ranked = [...weight.entries()].sort((a, b) => b[1] - a[1] || compareStrings(a[0], b[0]));
+  const ranked = [...weight.entries()].sort(
+    (a, b) => b[1] - a[1] || compareStrings(a[0], b[0])
+  );
   const total = ranked.reduce((sum, [, count]) => sum + count, 0);
   return {
     ranked,
@@ -487,10 +520,13 @@ export type EntityProblemClass = (typeof ENTITY_PROBLEM_CLASSES)[number];
  * organization, that publisher.
  */
 export function entityProblemNodes(
-  map: EntityMap,
+  map: EntityMap
 ): Partial<Record<EntityProblemClass, EntityMapNode[]>> {
   const out: Partial<Record<EntityProblemClass, EntityMapNode[]>> = {};
-  const add = (cls: EntityProblemClass, node: EntityMapNode | undefined): void => {
+  const add = (
+    cls: EntityProblemClass,
+    node: EntityMapNode | undefined
+  ): void => {
     if (node === undefined) return;
     const list = out[cls];
     if (list) list.push(node);
@@ -507,14 +543,16 @@ export function entityProblemNodes(
     if (isNoIdIdentityNode(node)) add("no-id", node);
     if (isOrphanNode(node, referenced)) add("orphan", node);
     if (isUnstableIdNode(node)) add("id-format", node);
-    if (isLocalBusinessPerPageNode(node, pagesCrawled)) add("local-business-per-page", node);
+    if (isLocalBusinessPerPageNode(node, pagesCrawled))
+      add("local-business-per-page", node);
   }
   for (const split of splitIdentityGroups(map.nodes)) {
     for (const node of split.nodes) add("split-identity", node);
   }
 
   const primary = primaryOrganization(map);
-  if (primary && sameAsProfiles(primary).length === 0) add("sameas-missing", primary);
+  if (primary && sameAsProfiles(primary).length === 0)
+    add("sameas-missing", primary);
 
   const publishers = publisherWeights(map);
   if (publishers) {
@@ -523,7 +561,8 @@ export function entityProblemNodes(
     // rule describes without accusing, and which reserves nothing here.
     if (publishers.outliers.length > 0) {
       if (publishers.looksLikeDrift) {
-        for (const [key] of publishers.outliers) add("publisher-mismatch", byKey.get(key));
+        for (const [key] of publishers.outliers)
+          add("publisher-mismatch", byKey.get(key));
       }
     } else if (primary && publishers.canonical !== primary.key) {
       add("publisher-mismatch", byKey.get(publishers.canonical));

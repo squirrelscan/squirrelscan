@@ -10,9 +10,14 @@
 // streaming path groups fingerprints in memory and reads page metadata (status,
 // noindex, canonical, hreflang) only for the groups that hold two or more pages.
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import type { HreflangAlternate, SiteQuery } from "@squirrelscan/core-contracts";
+import type {
+  HreflangAlternate,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { noindexSource } from "../shared/noindex";
 import { identity, RegionVariantIndex } from "../shared/region-variants";
@@ -82,7 +87,9 @@ function hex32(n: number): string {
  * body. One plain loop (no regex over page text): two independent 32-bit lanes in
  * the cyrb53 style over the lowercased text with each whitespace run read as one space.
  */
-export function buildContentFingerprint(doc: Document): ContentFingerprint | null {
+export function buildContentFingerprint(
+  doc: Document
+): ContentFingerprint | null {
   let body: Element | null = null;
   try {
     body = doc.body;
@@ -113,13 +120,20 @@ export function buildContentFingerprint(doc: Document): ContentFingerprint | nul
     }
     mix(c);
   }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return { hash: hex32(h2) + hex32(h1), words };
 }
 
 /** A page whose finalUrl is a different page than the one requested (a redirect). */
-export function isRedirectedPage(url: string, finalUrl: string | null | undefined): boolean {
+export function isRedirectedPage(
+  url: string,
+  finalUrl: string | null | undefined
+): boolean {
   return !!finalUrl && normalizePageUrl(finalUrl) !== normalizePageUrl(url);
 }
 
@@ -127,7 +141,7 @@ export function isRedirectedPage(url: string, finalUrl: string | null | undefine
 export function fingerprintForPage(
   doc: Document | null | undefined,
   url: string,
-  finalUrl: string | null | undefined,
+  finalUrl: string | null | undefined
 ): ContentFingerprint | null {
   if (!doc || isRedirectedPage(url, finalUrl)) return null;
   return buildContentFingerprint(doc);
@@ -143,12 +157,24 @@ export function isPaginatedUrl(url: string): boolean {
   }
   for (const key of parsed.searchParams.keys()) {
     const k = key.toLowerCase();
-    if (k === "page" || k === "p" || k === "pg" || k === "offset" || k === "start") return true;
+    if (
+      k === "page" ||
+      k === "p" ||
+      k === "pg" ||
+      k === "offset" ||
+      k === "start"
+    )
+      return true;
   }
   const segs = parsed.pathname.split("/");
   while (segs.length > 0 && segs[segs.length - 1] === "") segs.pop();
   const last = segs[segs.length - 1];
-  if (segs.length < 2 || segs[segs.length - 2]!.toLowerCase() !== "page" || !last) return false;
+  if (
+    segs.length < 2 ||
+    segs[segs.length - 2]!.toLowerCase() !== "page" ||
+    !last
+  )
+    return false;
   for (let i = 0; i < last.length; i++) {
     const c = last.charCodeAt(i);
     if (c < 48 || c > 57) return false;
@@ -228,7 +254,7 @@ function groupByHash(fingerprints: ReadonlyMap<string, ContentFingerprint>): {
 
 /** Urls in hash groups of two or more: the only pages whose metadata is needed. */
 export function urlsNeedingMeta(
-  fingerprints: ReadonlyMap<string, ContentFingerprint>,
+  fingerprints: ReadonlyMap<string, ContentFingerprint>
 ): Set<string> {
   const out = new Set<string>();
   for (const g of groupByHash(fingerprints).groups.values()) {
@@ -291,11 +317,17 @@ export function buildCheck(input: ContentInput): CheckResult {
       name: "duplicate-content",
       status: "pass",
       message: "No pages share identical body content",
-      details: { excluded, canonicalisedGroups: canonicalised, minWords: MIN_WORDS },
+      details: {
+        excluded,
+        canonicalisedGroups: canonicalised,
+        minWords: MIN_WORDS,
+      },
     };
   }
 
-  found.sort((a, b) => b.urls.length - a.urls.length || cmp(a.urls[0]!, b.urls[0]!));
+  found.sort(
+    (a, b) => b.urls.length - a.urls.length || cmp(a.urls[0]!, b.urls[0]!)
+  );
   const totalPages = found.reduce((sum, g) => sum + g.urls.length, 0);
   const shown = found.slice(0, MAX_GROUPS);
   return {
@@ -339,10 +371,11 @@ export function buildCheck(input: ContentInput): CheckResult {
 /** Distinct pages once pages listing each other as hreflang alternates (any language) are joined. */
 export function countComponents(
   urls: readonly string[],
-  metas: ReadonlyMap<string, PageMeta>,
+  metas: ReadonlyMap<string, PageMeta>
 ): number {
   // No alternates anywhere: nothing can join.
-  if (!urls.some((u) => (metas.get(u)?.alternates?.length ?? 0) > 0)) return urls.length;
+  if (!urls.some((u) => (metas.get(u)?.alternates?.length ?? 0) > 0))
+    return urls.length;
   const index = new RegionVariantIndex();
   for (const url of urls) {
     const m = metas.get(url);
@@ -389,18 +422,21 @@ export function countComponents(
 
 async function runStreaming(
   ctx: RuleContext,
-  siteQuery: SiteQuery | undefined,
+  siteQuery: SiteQuery | undefined
 ): Promise<RuleResult> {
   const fingerprints = new Map<string, ContentFingerprint>();
   for (const page of ctx.collectedSignals?.pages ?? []) {
     // Absent field: a record cached before the fingerprint existed is not judged.
-    if (page.contentFingerprint) fingerprints.set(page.url, page.contentFingerprint);
+    if (page.contentFingerprint)
+      fingerprints.set(page.url, page.contentFingerprint);
   }
   const wanted = urlsNeedingMeta(fingerprints);
   const meta = new Map<string, PageMeta>();
   if (wanted.size > 0) {
     if (siteQuery) {
-      for await (const row of siteQuery.pagesMatching((r) => wanted.has(r.normalizedUrl))) {
+      for await (const row of siteQuery.pagesMatching((r) =>
+        wanted.has(r.normalizedUrl)
+      )) {
         meta.set(row.normalizedUrl, {
           status: row.status,
           noindex: row.robotsNoindex,
@@ -418,7 +454,7 @@ async function runStreaming(
 function addLegacyMeta(
   ctx: RuleContext,
   wanted: ReadonlySet<string>,
-  meta: Map<string, PageMeta>,
+  meta: Map<string, PageMeta>
 ): void {
   for (const page of ctx.site?.pages ?? []) {
     if (!wanted.has(page.url)) continue;
@@ -435,7 +471,11 @@ function runLegacy(ctx: RuleContext): RuleResult {
   const fingerprints = new Map<string, ContentFingerprint>();
   const pages = ctx.site?.pages ?? [];
   for (const page of pages) {
-    const fp = fingerprintForPage(page.parsed?.document, page.url, page.finalUrl);
+    const fp = fingerprintForPage(
+      page.parsed?.document,
+      page.url,
+      page.finalUrl
+    );
     if (fp) fingerprints.set(page.url, fp);
   }
   const meta = new Map<string, PageMeta>();

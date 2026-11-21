@@ -16,17 +16,22 @@
 //      it recovers from the seed page's own links even when the probe is
 //      refused for reasons the crawler cannot fix.
 
+import type { CrawlerEvent } from "@squirrelscan/core-contracts";
+
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
-import type { CrawlerEvent } from "@squirrelscan/core-contracts";
+import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig } from "../src/core/types";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import { SQLiteStorage } from "../src/storage/sqlite";
 import { isInScope } from "../src/frontier";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
+import { SQLiteStorage } from "../src/storage/sqlite";
 
 const APEX = "https://example.com";
 const WWW = "https://www.example.com";
@@ -85,7 +90,10 @@ interface Page {
  * tests stub separately so the two vantages can disagree — which is the whole
  * failure being reproduced.
  */
-function buildFetcher(site: Record<string, Page>, fetched: string[]): CrawlFetcher {
+function buildFetcher(
+  site: Record<string, Page>,
+  fetched: string[]
+): CrawlFetcher {
   return (url) =>
     Effect.gen(function* () {
       fetched.push(url);
@@ -153,10 +161,20 @@ let probes: ProbeLog[];
  * servers in seed-redirect-pinning.test.ts.
  */
 function stubRefusedPreamble(): void {
-  globalThis.fetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+  globalThis.fetch = ((
+    input: Parameters<typeof fetch>[0],
+    init?: RequestInit
+  ) => {
     const url =
-      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    probes.push({ url, userAgent: new Headers(init?.headers).get("user-agent") });
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    probes.push({
+      url,
+      userAgent: new Headers(init?.headers).get("user-agent"),
+    });
 
     if (url === `${APEX}/`) {
       // A WAF refusal: readable, HTML, and carrying no redirect whatsoever.
@@ -164,7 +182,7 @@ function stubRefusedPreamble(): void {
         new Response("<html><body>Access denied</body></html>", {
           status: 403,
           headers: { "content-type": "text/html" },
-        }),
+        })
       );
     }
 
@@ -205,7 +223,11 @@ async function crawl(site: Record<string, Page>): Promise<CrawlResult> {
   const stored = await Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ fetcher, storage, config: CONFIG });
+      const crawler = yield* createCrawler({
+        fetcher,
+        storage,
+        config: CONFIG,
+      });
       // Subscribed BEFORE start(), or the seed page's warning is published to
       // nobody and the assertion below passes against a crawler that never
       // emits one.
@@ -217,7 +239,7 @@ async function crawl(site: Record<string, Page>): Promise<CrawlResult> {
             if (event.type === "warning") {
               warnings.push({ code: event.code, message: event.message });
             }
-          }),
+          })
       ).pipe(Effect.fork);
       yield* Effect.yieldNow();
       const crawlId = yield* crawler.start(`${APEX}/`, `${APEX}/`);
@@ -226,8 +248,10 @@ async function crawl(site: Record<string, Page>): Promise<CrawlResult> {
       // both must fail the test rather than leave the arrays quietly short.
       yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(10)));
       const pages = yield* storage.getPages(crawlId);
-      return pages.filter((page) => page.status === 200).map((page) => page.normalizedUrl);
-    }),
+      return pages
+        .filter((page) => page.status === 200)
+        .map((page) => page.normalizedUrl);
+    })
   );
   return { fetched, stored, warnings, events };
 }
@@ -239,7 +263,10 @@ describe("seed probe refused (#1899)", () => {
       // The page fetch uses the crawl's own user agent and its retry stack, so
       // it gets through where the bare preamble probe did not — and it lands on
       // www, which is where the apex was redirecting all along.
-      [`${APEX}/`]: { body: linksTo(`${WWW}/a`, `${WWW}/b`), finalUrl: `${WWW}/` },
+      [`${APEX}/`]: {
+        body: linksTo(`${WWW}/a`, `${WWW}/b`),
+        finalUrl: `${WWW}/`,
+      },
       // The redirect's destination is a page of its own (#1762): the apex row is a marker with no
       // body, so the links come from the page it lands on.
       [`${WWW}/`]: { body: linksTo(`${WWW}/a`, `${WWW}/b`) },
@@ -300,7 +327,9 @@ describe("seed probe refused (#1899)", () => {
     });
 
     expect(warnings.map((w) => w.code)).toEqual(["seed-base-mismatch"]);
-    expect(warnings[0]?.message).toContain("without ever linking back to the base");
+    expect(warnings[0]?.message).toContain(
+      "without ever linking back to the base"
+    );
   });
 
   test("an in-page anchor or mailto link cannot veto the link evidence", async () => {
@@ -395,15 +424,22 @@ describe("apex/www scope (#1899)", () => {
   const scope = { include: [], exclude: [], allowedDomains: [] };
 
   test("a crawl based on the apex keeps its www host in scope", () => {
-    expect(isInScope(`${WWW}/a`, { ...scope, baseUrl: APEX }).allowed).toBe(true);
+    expect(isInScope(`${WWW}/a`, { ...scope, baseUrl: APEX }).allowed).toBe(
+      true
+    );
   });
 
   test("the apex's own paths stay in scope", () => {
-    expect(isInScope(`${APEX}/a`, { ...scope, baseUrl: APEX }).allowed).toBe(true);
+    expect(isInScope(`${APEX}/a`, { ...scope, baseUrl: APEX }).allowed).toBe(
+      true
+    );
   });
 
   test("a different subdomain is still cross_domain", () => {
-    const decision = isInScope(`https://blog.example.com/a`, { ...scope, baseUrl: APEX });
+    const decision = isInScope(`https://blog.example.com/a`, {
+      ...scope,
+      baseUrl: APEX,
+    });
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe("cross_domain");
   });
@@ -417,7 +453,10 @@ describe("apex/www scope (#1899)", () => {
   });
 
   test("a lookalike host that merely starts with the base is still refused", () => {
-    const decision = isInScope("https://wwwexample.com/a", { ...scope, baseUrl: APEX });
+    const decision = isInScope("https://wwwexample.com/a", {
+      ...scope,
+      baseUrl: APEX,
+    });
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe("cross_domain");
   });
@@ -435,17 +474,24 @@ describe("apex/www scope (#1899)", () => {
 
   test("the port travels with the host", () => {
     expect(
-      isInScope("https://www.example.com:8443/a", { ...scope, baseUrl: "https://example.com:8443" })
-        .allowed,
+      isInScope("https://www.example.com:8443/a", {
+        ...scope,
+        baseUrl: "https://example.com:8443",
+      }).allowed
     ).toBe(true);
     expect(
-      isInScope("https://www.example.com/a", { ...scope, baseUrl: "https://example.com:8443" })
-        .allowed,
+      isInScope("https://www.example.com/a", {
+        ...scope,
+        baseUrl: "https://example.com:8443",
+      }).allowed
     ).toBe(false);
   });
 
   test("case is normalized by the URL parser, so an uppercase host still matches", () => {
-    expect(isInScope("https://WWW.EXAMPLE.COM/a", { ...scope, baseUrl: APEX }).allowed).toBe(true);
+    expect(
+      isInScope("https://WWW.EXAMPLE.COM/a", { ...scope, baseUrl: APEX })
+        .allowed
+    ).toBe(true);
   });
 
   test("a base that is a public suffix is not an apex", () => {
@@ -465,7 +511,10 @@ describe("apex/www scope (#1899)", () => {
     // parser will produce, so such a candidate never reaches the scope check.
     for (const baseUrl of ["http://localhost:3000", "https://co.uk"]) {
       const base = new URL(baseUrl);
-      const decision = isInScope(`${base.protocol}//www.${base.host}/a`, { ...scope, baseUrl });
+      const decision = isInScope(`${base.protocol}//www.${base.host}/a`, {
+        ...scope,
+        baseUrl,
+      });
       expect(decision.allowed).toBe(false);
       expect(decision.reason).toBe("cross_domain");
     }

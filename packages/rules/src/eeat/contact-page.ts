@@ -1,20 +1,22 @@
 // eeat/contact-page - Contact page with multiple methods
 
+import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
-import { getPathname } from "@squirrelscan/utils";
-
+import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
 import {
   INPAGE_SECTIONS_UNMEASURED_MESSAGE,
   describeSectionPage,
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
-import { eeatPathsSchema, matchesConfiguredPaths } from "../shared/eeat-paths";
-import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
+import {
+  findLinkedUncrawledPage,
+  linkedUncrawledCheck,
+} from "../shared/linked-uncrawled-page";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
@@ -92,7 +94,7 @@ export const contactPageRule: Rule = {
                 status: "info",
                 message: `Contact section exists on ${where} but has no email, phone or form`,
                 value: "Add a mailto: or tel: link, or a contact form",
-              },
+              }
         );
         return { checks };
       }
@@ -107,7 +109,11 @@ export const contactPageRule: Rule = {
       }
       // pub#740: a Contact page the pages link to but the crawl never fetched
       // is unverified, not missing. Its contact methods cannot be read.
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isContactPath(url, paths) }) : null;
+      const linked = ctx.site
+        ? findLinkedUncrawledPage(ctx.site, {
+            href: (url) => isContactPath(url, paths),
+          })
+        : null;
       checks.push(
         linked
           ? linkedUncrawledCheck("contact-page", "Contact page", linked)
@@ -116,7 +122,7 @@ export const contactPageRule: Rule = {
               status: "warn",
               message: "No Contact page found",
               value: "Create /contact page",
-            },
+            }
       );
       return { checks };
     }

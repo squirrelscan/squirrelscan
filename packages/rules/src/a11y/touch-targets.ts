@@ -1,6 +1,7 @@
 // a11y/touch-targets - Minimum touch target size
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const touchTargetsRule: Rule = {

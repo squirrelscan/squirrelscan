@@ -1,6 +1,7 @@
 // ax/content-without-js - flag main content that only exists after JS (invisible to raw-HTML agents)
 
 import type { RenderResultItem } from "@squirrelscan/core-contracts";
+
 import { extractContent, parseDocument } from "@squirrelscan/parser";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -56,7 +57,11 @@ export const contentWithoutJsRule: Rule = {
     }
 
     // Render is a cloud service — absent on CLI-only / non-rendered audits.
-    const envelope = readCloudResult<RenderResultItem>(ctx.cloudResults, "render", ctx.page.url);
+    const envelope = readCloudResult<RenderResultItem>(
+      ctx.cloudResults,
+      "render",
+      ctx.page.url
+    );
     if (!envelope || envelope.status === "skipped") {
       const reason = envelope?.skipReason ?? "not-prefetched";
       checks.push({
@@ -82,10 +87,14 @@ export const contentWithoutJsRule: Rule = {
 
     // Same extraction pipeline as ctx.parsed.content, so raw vs rendered compare like-for-like.
     const rawWords = ctx.parsed.content.wordCount;
-    const renderedWords = extractContent(parseDocument(renderedHtml), renderedHtml).wordCount;
+    const renderedWords = extractContent(
+      parseDocument(renderedHtml),
+      renderedHtml
+    ).wordCount;
     const jsOnlyWords = Math.max(0, renderedWords - rawWords);
     // Clamp coverage to [0,1]: raw can exceed rendered (e.g. noscript stripped on render).
-    const rawCoverage = renderedWords > 0 ? Math.min(1, rawWords / renderedWords) : 1;
+    const rawCoverage =
+      renderedWords > 0 ? Math.min(1, rawWords / renderedWords) : 1;
     const jsOnlyPct = Math.round((1 - rawCoverage) * 100);
     const details = { rawWords, renderedWords, jsOnlyWords, jsOnlyPct };
 

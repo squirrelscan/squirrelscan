@@ -89,7 +89,8 @@ export const entityWebsiteMissingRule: Rule = {
           {
             name: CHECK,
             status: "info",
-            message: "The WebSite entity has no @id, so nothing can reference it",
+            message:
+              "The WebSite entity has no @id, so nothing can reference it",
             value: entityLabel(websites[0]!),
             expected: "an absolute @id on the WebSite",
           },
@@ -102,7 +103,10 @@ export const entityWebsiteMissingRule: Rule = {
     const websiteKeys = new Set(identified.map((node) => node.key));
     const linkedSources = new Set(
       map.edges
-        .filter((edge) => edge.predicate === "isPartOf" && websiteKeys.has(edge.target))
+        .filter(
+          (edge) =>
+            edge.predicate === "isPartOf" && websiteKeys.has(edge.target)
+        )
         .map((edge) => edge.source)
     );
 

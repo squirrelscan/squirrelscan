@@ -53,7 +53,8 @@ export interface CommentMatch {
   token: string;
 }
 
-const COMMENT_WORD = /^comments?(?:list|box|area|wrap|block|section|thread|form)?$/;
+const COMMENT_WORD =
+  /^comments?(?:list|box|area|wrap|block|section|thread|form)?$/;
 const WHOLE_IDS = new Set(["respond", "disqus_thread"]);
 const STOP = new Set([
   "count",
@@ -110,31 +111,47 @@ const MAY_HOLD = /comment/i;
 
 /** The first comment-section token among an id and a class list (id first),
  *  or undefined. */
-function commentToken(id: string | null, cls: string | null): [string, "id" | "class"] | undefined {
+function commentToken(
+  id: string | null,
+  cls: string | null
+): [string, "id" | "class"] | undefined {
   if (id !== null && id.length > MAX_ID_CHARS) id = id.slice(0, MAX_ID_CHARS);
-  if (cls !== null && cls.length > MAX_CLASS_CHARS) cls = cls.slice(0, MAX_CLASS_CHARS);
-  const idMay = id !== null && (MAY_HOLD.test(id) || WHOLE_IDS.has(id.trim().toLowerCase()));
+  if (cls !== null && cls.length > MAX_CLASS_CHARS)
+    cls = cls.slice(0, MAX_CLASS_CHARS);
+  const idMay =
+    id !== null &&
+    (MAY_HOLD.test(id) || WHOLE_IDS.has(id.trim().toLowerCase()));
   if (!idMay && (cls === null || !MAY_HOLD.test(cls))) return undefined;
-  return tokensFrom(id, cls).find(([token, kind]) => isCommentToken(token, kind));
+  return tokensFrom(id, cls).find(([token, kind]) =>
+    isCommentToken(token, kind)
+  );
 }
 
-function tokensFrom(id: string | null, cls: string | null): Array<[string, "id" | "class"]> {
+function tokensFrom(
+  id: string | null,
+  cls: string | null
+): Array<[string, "id" | "class"]> {
   const out: Array<[string, "id" | "class"]> = [];
   if (id) out.push([id.slice(0, MAX_ID_CHARS).trim(), "id"]);
   if (cls) {
     let kept = 0;
     for (const c of cls.slice(0, MAX_CLASS_CHARS).split(CLASS_SPLIT)) {
       if (!c) continue;
-      out.push([c.length > MAX_TOKEN_CHARS ? c.slice(0, MAX_TOKEN_CHARS) : c, "class"]);
+      out.push([
+        c.length > MAX_TOKEN_CHARS ? c.slice(0, MAX_TOKEN_CHARS) : c,
+        "class",
+      ]);
       if (++kept === MAX_CLASS_TOKENS) break;
     }
   }
   return out;
 }
 
-const tokensOf = (el: El) => tokensFrom(el.getAttribute("id"), el.getAttribute("class"));
+const tokensOf = (el: El) =>
+  tokensFrom(el.getAttribute("id"), el.getAttribute("class"));
 
-const fold = (token: string) => token.toLowerCase().replace(/\d+/g, "N").slice(0, 60);
+const fold = (token: string) =>
+  token.toLowerCase().replace(/\d+/g, "N").slice(0, 60);
 
 /** The id and class values and subtree sizes of `elements`, by position, as
  *  the featurizer's walk recorded them (FeaturizeOptions.attributesOut). */
@@ -171,7 +188,7 @@ export interface CommentRule {
    */
   outermost(
     elements: ArrayLike<unknown>,
-    attributes?: ElementAttributes,
+    attributes?: ElementAttributes
   ): Array<{ index: number; match: CommentMatch }>;
 }
 
@@ -229,7 +246,11 @@ function makeRule(indexH1s: boolean): CommentRule {
         // (candidates x h1s) as `h1s.some(contains)` did.
         holders = new Set<object>();
         for (const h1 of root.querySelectorAll("h1")) {
-          for (let up: El | null = h1.parentElement; up && !holders.has(up); up = up.parentElement) {
+          for (
+            let up: El | null = h1.parentElement;
+            up && !holders.has(up);
+            up = up.parentElement
+          ) {
             holders.add(up);
           }
         }
@@ -250,7 +271,11 @@ function makeRule(indexH1s: boolean): CommentRule {
     const path: El[] = [];
     let answer = false;
     let settled = true;
-    for (let el: El | null = start; el && el.localName !== "body"; el = el.parentElement) {
+    for (
+      let el: El | null = start;
+      el && el.localName !== "body";
+      el = el.parentElement
+    ) {
       const known = underReviews.get(el);
       if (known !== undefined) {
         answer = known;
@@ -312,7 +337,11 @@ function makeRule(indexH1s: boolean): CommentRule {
       for (let i = 0; i < path.length; i++) {
         nearest.set(
           path[i]!,
-          base && { container: base.container, dist: base.dist + (path.length - i), token: base.token },
+          base && {
+            container: base.container,
+            dist: base.dist + (path.length - i),
+            token: base.token,
+          }
         );
       }
     }
@@ -329,8 +358,15 @@ function makeRule(indexH1s: boolean): CommentRule {
     // A wrapper that holds the page title holds the article too: no ancestor
     // above it can be a thread either.
     if (containsH1(hit.container)) return null;
-    const label: CommentSection = inReviews(hit.container) ? "reviews" : "comments";
-    return { label, container: hit.container, hops: hit.dist, token: hit.token };
+    const label: CommentSection = inReviews(hit.container)
+      ? "reviews"
+      : "comments";
+    return {
+      label,
+      container: hit.container,
+      hops: hit.dist,
+      token: hit.token,
+    };
   };
 
   const sectionOf = (start: Element): CommentMatch | null => {
@@ -340,14 +376,17 @@ function makeRule(indexH1s: boolean): CommentRule {
 
   const outermost = (
     elements: ArrayLike<unknown>,
-    attributes?: ElementAttributes,
+    attributes?: ElementAttributes
   ): Array<{ index: number; match: CommentMatch }> => {
     const out: Array<{ index: number; match: CommentMatch }> = [];
     let latest: El | null = null;
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i] as El;
       const hit = attributes
-        ? commentToken(attributes.idAttr[i] ?? null, attributes.classAttr[i] ?? null)
+        ? commentToken(
+            attributes.idAttr[i] ?? null,
+            attributes.classAttr[i] ?? null
+          )
         : commentToken(el.getAttribute("id"), el.getAttribute("class"));
       if (!hit) continue;
       // In document order a section's descendants come straight after it, so
@@ -380,7 +419,7 @@ export function commentLookupOf(start: Element): CommentLookup {
 /** `CommentRule.outermost` as one pass. */
 export function outermostCommentSections(
   elements: ArrayLike<unknown>,
-  attributes?: ElementAttributes,
+  attributes?: ElementAttributes
 ): Array<{ index: number; match: CommentMatch }> {
   return commentRule().outermost(elements, attributes);
 }
@@ -388,7 +427,10 @@ export function outermostCommentSections(
 /** Does the anchor carry rel="ugc" (Google's user-generated-content marker,
  *  which WordPress puts on comment author links)? */
 export function hasUgcRel(anchor: Element): boolean {
-  return (anchor.getAttribute("rel") ?? "").toLowerCase().split(/\s+/).includes("ugc");
+  return (anchor.getAttribute("rel") ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .includes("ugc");
 }
 
 /** Outermost comment-section containers in a parsed document, for tagging a

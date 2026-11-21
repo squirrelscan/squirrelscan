@@ -1,8 +1,7 @@
 // A node with both @graph and its own @type keeps both (#341).
 
-import { describe, expect, test } from "bun:test";
-
 import { flattenJsonLdNodes } from "@squirrelscan/utils/schema-rich-results";
+import { describe, expect, test } from "bun:test";
 
 import { parsePage } from "../src/index";
 

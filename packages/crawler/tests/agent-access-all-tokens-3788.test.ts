@@ -1,10 +1,9 @@
 // squirrelscan/repo#3788: the opt-in all-token agent access probe. Default sends exactly the old
 // three requests; allTokens sends one per registry bot and records each response's X-Robots-Tag.
 
+import { AGENT_ACCESS_BOTS } from "@squirrelscan/core-contracts/storage";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { AGENT_ACCESS_BOTS } from "@squirrelscan/core-contracts/storage";
 
 import { probeAgentAccess } from "../src/agent-access";
 
@@ -35,21 +34,40 @@ function serve(): { url: string; uas: string[] } {
 describe("probeAgentAccess all tokens (#3788)", () => {
   test("default sends exactly the browser, GPTBot and Claude-User requests", async () => {
     const origin = serve();
-    const data = await Effect.runPromise(probeAgentAccess(origin.url, "browser-ua"));
-    expect(origin.uas.toSorted()).toEqual(
-      ["browser-ua", GPTBOT.userAgentString, CLAUDE_USER.userAgentString].toSorted(),
+    const data = await Effect.runPromise(
+      probeAgentAccess(origin.url, "browser-ua")
     );
-    expect(data.probes.map((p) => p.userAgent)).toEqual(["browser", "gptbot", "claude-user"]);
+    expect(origin.uas.toSorted()).toEqual(
+      [
+        "browser-ua",
+        GPTBOT.userAgentString,
+        CLAUDE_USER.userAgentString,
+      ].toSorted()
+    );
+    expect(data.probes.map((p) => p.userAgent)).toEqual([
+      "browser",
+      "gptbot",
+      "claude-user",
+    ]);
   });
 
   test("allTokens probes every registry bot once and records X-Robots-Tag per probe", async () => {
     const origin = serve();
     const data = await Effect.runPromise(
-      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, { allTokens: true }),
+      probeAgentAccess(
+        origin.url,
+        "browser-ua",
+        undefined,
+        undefined,
+        undefined,
+        { allTokens: true }
+      )
     );
     expect(origin.uas).toHaveLength(1 + AGENT_ACCESS_BOTS.length);
     for (const bot of AGENT_ACCESS_BOTS) {
-      expect(origin.uas.filter((ua) => ua === bot.userAgentString)).toHaveLength(1);
+      expect(
+        origin.uas.filter((ua) => ua === bot.userAgentString)
+      ).toHaveLength(1);
     }
     expect(data.probes).toHaveLength(1 + AGENT_ACCESS_BOTS.length);
     for (const p of data.probes) {
@@ -60,7 +78,14 @@ describe("probeAgentAccess all tokens (#3788)", () => {
   test("allTokens false behaves as the default", async () => {
     const origin = serve();
     const data = await Effect.runPromise(
-      probeAgentAccess(origin.url, "browser-ua", undefined, undefined, undefined, { allTokens: false }),
+      probeAgentAccess(
+        origin.url,
+        "browser-ua",
+        undefined,
+        undefined,
+        undefined,
+        { allTokens: false }
+      )
     );
     expect(origin.uas).toHaveLength(3);
   });

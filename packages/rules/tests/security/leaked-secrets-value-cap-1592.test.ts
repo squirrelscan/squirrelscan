@@ -3,9 +3,10 @@
 // assignment with a 1 MB value: before the fix both the page pass and the
 // inline-script pass kept the whole value (two records of 1,024,022 chars).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../../src/types";
 
 import {
   leakedSecretsRule,
@@ -13,7 +14,6 @@ import {
   STORED_VALUE_MAX_LENGTH,
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
-import type { RuleContext } from "../../src/types";
 
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const run = (seed: number, n: number): string => {
@@ -55,7 +55,9 @@ describe("stored value length cap (#1592)", () => {
       expect(f.length).toBe(body.length);
       // The stored generic value carries its key and quotes, so the cut
       // keeps the recognisable head of the match.
-      expect(f.value).toBe(`password="${body}`.slice(0, STORED_VALUE_MAX_LENGTH));
+      expect(f.value).toBe(
+        `password="${body}`.slice(0, STORED_VALUE_MAX_LENGTH)
+      );
     }
   }, 30_000);
 
@@ -89,7 +91,11 @@ describe("stored value length cap (#1592)", () => {
       site: {
         baseUrl: "https://shop.example",
         pages: [
-          { url, statusCode: 200, parsed: parsePage(pageWithSecret(run(11, 1_024_011)), url) },
+          {
+            url,
+            statusCode: 200,
+            parsed: parsePage(pageWithSecret(run(11, 1_024_011)), url),
+          },
         ],
         robotsTxt: null,
         sitemaps: null,
@@ -97,8 +103,10 @@ describe("stored value length cap (#1592)", () => {
       },
       options: {},
     } as unknown as RuleContext;
-    const result = (await leakedSecretsRule.run(ctx));
-    const medium = result.checks.find((c) => c.name === "leaked-secrets-medium");
+    const result = await leakedSecretsRule.run(ctx);
+    const medium = result.checks.find(
+      (c) => c.name === "leaked-secrets-medium"
+    );
     expect(medium).toBeDefined();
     expect(medium!.items!.length).toBeGreaterThan(0);
     for (const item of medium!.items!) {

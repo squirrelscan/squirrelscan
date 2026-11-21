@@ -4,11 +4,17 @@
 import type { Effect } from "effect";
 
 import type { AuditFailureDetail } from "./failure-reason";
-import type { ClassifiedPageType, LinkSection, LinkSectionCounts, ScanScope, SitemapReadState } from "./index";
+import type {
+  ClassifiedPageType,
+  LinkSection,
+  LinkSectionCounts,
+  ScanScope,
+  SitemapReadState,
+} from "./index";
 import type { JavascriptShipped } from "./javascript-shipped";
 import type { RefusedFetch } from "./refused-fetch";
-import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 import type { UnverifiedReason } from "./services";
+import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -65,7 +71,10 @@ export interface RedirectChain {
  * `displayUrl` overrides the text for the URL part, for rules that show a
  * pathname instead of the whole URL.
  */
-export function formatRedirectHop(hop: RedirectHop, displayUrl?: string): string {
+export function formatRedirectHop(
+  hop: RedirectHop,
+  displayUrl?: string
+): string {
   const url = displayUrl ?? hop.url;
   return hop.statusCode > 0 ? `${url} (${hop.statusCode})` : url;
 }
@@ -110,7 +119,8 @@ export class StorageError extends Error {
   readonly cause?: unknown;
 
   constructor(operation: string, cause?: unknown) {
-    const causeText = cause instanceof Error ? cause.message : String(cause ?? "");
+    const causeText =
+      cause instanceof Error ? cause.message : String(cause ?? "");
     const lower = causeText.toLowerCase();
     const isDbLocked =
       lower.includes("database is locked") ||
@@ -203,18 +213,38 @@ export type CrawlStatus =
  * failed     running, paused   the crawl could not continue
  * ```
  */
-export const CRAWL_STATUS_TRANSITIONS: Readonly<Record<CrawlStatus, readonly CrawlStatus[]>> = {
-  running: ["running", "paused", "crawled", "analyzed", "completed", "stopped", "failed"],
+export const CRAWL_STATUS_TRANSITIONS: Readonly<
+  Record<CrawlStatus, readonly CrawlStatus[]>
+> = {
+  running: [
+    "running",
+    "paused",
+    "crawled",
+    "analyzed",
+    "completed",
+    "stopped",
+    "failed",
+  ],
   paused: ["running", "paused"],
   completed: ["running", "paused", "completed"],
   stopped: ["running", "paused", "stopped"],
   crawled: ["running", "paused", "completed", "stopped", "crawled"],
-  analyzed: ["running", "paused", "completed", "stopped", "crawled", "analyzed"],
+  analyzed: [
+    "running",
+    "paused",
+    "completed",
+    "stopped",
+    "crawled",
+    "analyzed",
+  ],
   failed: ["running", "paused", "failed"],
 };
 
 /** Whether a crawl whose status is `from` may be written `to`. */
-export function canTransitionCrawl(from: CrawlStatus, to: CrawlStatus): boolean {
+export function canTransitionCrawl(
+  from: CrawlStatus,
+  to: CrawlStatus
+): boolean {
   return CRAWL_STATUS_TRANSITIONS[to].includes(from);
 }
 
@@ -381,12 +411,20 @@ export interface CrawlStats {
     checked: number;
     cap: number;
     notRequested?: number;
-    notRequestedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    notRequestedLinks?: Array<{
+      href: string;
+      sourcePages: string[];
+      pageCount?: number;
+    }>;
     /** pub#770: links never requested because the egress policy refuses their address. */
     refused?: number;
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
-    refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    refusedLinks?: Array<{
+      href: string;
+      sourcePages: string[];
+      pageCount?: number;
+    }>;
     /**
      * repo#2613: of the `checked` links, the ones the check's time budget ran
      * out on before they were answered. Never requested or never waited on,
@@ -648,7 +686,12 @@ export interface PageRecord {
 // FRONTIER RECORDS
 // ============================================
 
-export type FrontierStatus = "pending" | "fetching" | "done" | "failed" | "skipped";
+export type FrontierStatus =
+  | "pending"
+  | "fetching"
+  | "done"
+  | "failed"
+  | "skipped";
 
 /**
  * The legal moves of `frontier.status` (#1659), as "to: the statuses it may be written from". A URL
@@ -665,7 +708,9 @@ export type FrontierStatus = "pending" | "fetching" | "done" | "failed" | "skipp
  * pending   fetching       resetStaleFetching on resume
  * ```
  */
-export const FRONTIER_STATUS_TRANSITIONS: Readonly<Record<FrontierStatus, readonly FrontierStatus[]>> = {
+export const FRONTIER_STATUS_TRANSITIONS: Readonly<
+  Record<FrontierStatus, readonly FrontierStatus[]>
+> = {
   pending: ["fetching"],
   fetching: ["pending"],
   done: ["fetching"],
@@ -674,7 +719,10 @@ export const FRONTIER_STATUS_TRANSITIONS: Readonly<Record<FrontierStatus, readon
 };
 
 /** Whether a frontier entry whose status is `from` may be written `to`. */
-export function canTransitionFrontier(from: FrontierStatus, to: FrontierStatus): boolean {
+export function canTransitionFrontier(
+  from: FrontierStatus,
+  to: FrontierStatus
+): boolean {
   return FRONTIER_STATUS_TRANSITIONS[to].includes(from);
 }
 
@@ -700,7 +748,13 @@ export interface FrontierRecord {
 // LINK RECORDS
 // ============================================
 
-export type LinkPosition = "header" | "footer" | "nav" | "content" | "sidebar" | "unknown";
+export type LinkPosition =
+  | "header"
+  | "footer"
+  | "nav"
+  | "content"
+  | "sidebar"
+  | "unknown";
 
 export interface LinkRecord {
   href: string;
@@ -1356,7 +1410,10 @@ export interface SiteQuery {
    * with `truncated` "maxNodes" when any root exists. Optional: rules fall back to their legacy
    * path when absent.
    */
-  clickDepths?(entryUrls: readonly string[], opts: ClickDepthOptions): Promise<ClickDepthResult>;
+  clickDepths?(
+    entryUrls: readonly string[],
+    opts: ClickDepthOptions
+  ): Promise<ClickDepthResult>;
   /** Normalized URLs of pages classified as `type`. */
   pagesByType(type: string): string[];
   /** URL sets sharing one template fingerprint (count > 1). */
@@ -1368,7 +1425,9 @@ export interface SiteQuery {
   /** The homepage (shallowest) page-features row, or null for an empty crawl. */
   homepage(): PageFeatureRow | null;
   /** Cursor over every page row (never a full resident array), predicate-filtered. */
-  pagesMatching(pred: (row: PageFeatureRow) => boolean): AsyncIterable<PageFeatureRow>;
+  pagesMatching(
+    pred: (row: PageFeatureRow) => boolean
+  ): AsyncIterable<PageFeatureRow>;
 }
 
 // ============================================
@@ -1494,7 +1553,13 @@ export type WellKnownPath = (typeof WELL_KNOWN_PATHS)[number];
  * no enabled rule reads is never sent. A probe that was not sent, or got no
  * answer, is reported "not checked" by its readers, never as a missing file.
  */
-export type DiscoveryProbe = "llms-txt" | "markdown" | "agent-access" | "rsl" | "configured-pages" | WellKnownPath;
+export type DiscoveryProbe =
+  | "llms-txt"
+  | "markdown"
+  | "agent-access"
+  | "rsl"
+  | "configured-pages"
+  | WellKnownPath;
 
 /** Every discovery probe, in the order the crawl preamble sends them. */
 export const DISCOVERY_PROBES: readonly DiscoveryProbe[] = [
@@ -1627,8 +1692,7 @@ export const AGENT_ACCESS_BOTS = [
   {
     id: "ccbot",
     token: "CCBot",
-    userAgentString:
-      "CCBot/2.0 (https://commoncrawl.org/faq/)",
+    userAgentString: "CCBot/2.0 (https://commoncrawl.org/faq/)",
     userAction: false,
   },
   {
@@ -1692,7 +1756,10 @@ export const AGENT_ACCESS_BOTS = [
 export type AgentAccessBotId = (typeof AGENT_ACCESS_BOTS)[number]["id"];
 
 /** The bots probed when the all-token flag is off (unchanged from before #3788). */
-export const DEFAULT_AGENT_ACCESS_BOT_IDS: readonly AgentAccessBotId[] = ["gptbot", "claude-user"];
+export const DEFAULT_AGENT_ACCESS_BOT_IDS: readonly AgentAccessBotId[] = [
+  "gptbot",
+  "claude-user",
+];
 
 export type AgentAccessUserAgent = "browser" | AgentAccessBotId;
 
@@ -1745,7 +1812,8 @@ export const PROBE_PATH_NOT_APPROVED_ERROR = "path not approved";
  * or whose redirect to another path was not followed (#1655). "Not checked", never missing.
  */
 export const PROBE_STOPPED_ERROR = "stopped after a block signal";
-export const PROBE_REDIRECT_NOT_FOLLOWED_ERROR = "redirect to another path not followed";
+export const PROBE_REDIRECT_NOT_FOLLOWED_ERROR =
+  "redirect to another path not followed";
 
 /** Every `error` marker that means the request never produced an answer by design. */
 export const PROBE_NOT_SENT_ERRORS: readonly string[] = [
@@ -1763,14 +1831,18 @@ export const LLMS_TXT_PATHS = ["/llms.txt", "/llms-full.txt"] as const;
  * sweep and the two llms files. The markdown, agent-access and RSL probes are not path-shaped and
  * stay under rule selection.
  */
-export const APPROVABLE_PROBE_PATHS: readonly string[] = [...LLMS_TXT_PATHS, ...WELL_KNOWN_PATHS];
+export const APPROVABLE_PROBE_PATHS: readonly string[] = [
+  ...LLMS_TXT_PATHS,
+  ...WELL_KNOWN_PATHS,
+];
 
 /**
  * Recorded against a sitemap the walk stopped before reaching. Distinct from a
  * fetch failure: nothing was requested, so it is not evidence the sitemap is
  * broken or absent (squirrelscan/repo#1733).
  */
-export const SITEMAP_NOT_CHECKED_ERROR = "sitemap walk stopped before reaching this location";
+export const SITEMAP_NOT_CHECKED_ERROR =
+  "sitemap walk stopped before reaching this location";
 
 /**
  * Recorded against a sitemap that robots.txt names on another site when the
@@ -1778,7 +1850,8 @@ export const SITEMAP_NOT_CHECKED_ERROR = "sitemap walk stopped before reaching t
  * squirrelscan/squirrelscan#819). Like {@link SITEMAP_NOT_CHECKED_ERROR}, nothing
  * was requested, so it is no evidence the sitemap is broken or absent.
  */
-export const SITEMAP_OFF_SITE_SKIPPED_ERROR = "sitemap on another site not requested (offline audit)";
+export const SITEMAP_OFF_SITE_SKIPPED_ERROR =
+  "sitemap on another site not requested (offline audit)";
 
 export interface RslLicenseDoc {
   url: string;
@@ -1864,20 +1937,31 @@ export interface CrawlStorage {
   close(): Effect.Effect<void, StorageError, never>;
 
   // Crawl session
-  createCrawl(metadata: Omit<CrawlMetadata, "id">): Effect.Effect<string, StorageError, never>;
-  getCrawl(id: string): Effect.Effect<CrawlMetadata | null, StorageError, never>;
+  createCrawl(
+    metadata: Omit<CrawlMetadata, "id">
+  ): Effect.Effect<string, StorageError, never>;
+  getCrawl(
+    id: string
+  ): Effect.Effect<CrawlMetadata | null, StorageError, never>;
   updateCrawl(
     id: string,
-    updates: Partial<Omit<CrawlMetadata, "id">>,
+    updates: Partial<Omit<CrawlMetadata, "id">>
   ): Effect.Effect<void, StorageError, never>;
-  listCrawls(limit?: number): Effect.Effect<CrawlMetadata[], StorageError, never>;
-  getCrawlByUrl(baseUrl: string): Effect.Effect<CrawlMetadata | null, StorageError, never>;
+  listCrawls(
+    limit?: number
+  ): Effect.Effect<CrawlMetadata[], StorageError, never>;
+  getCrawlByUrl(
+    baseUrl: string
+  ): Effect.Effect<CrawlMetadata | null, StorageError, never>;
 
   // Pages
-  upsertPage(crawlId: string, page: PageRecord): Effect.Effect<void, StorageError, never>;
+  upsertPage(
+    crawlId: string,
+    page: PageRecord
+  ): Effect.Effect<void, StorageError, never>;
   getPage(
     crawlId: string,
-    normalizedUrl: string,
+    normalizedUrl: string
   ): Effect.Effect<PageRecord | null, StorageError, never>;
   /**
    * One page's stored `parsed_data` JSON and nothing else: a single-column read
@@ -1887,18 +1971,26 @@ export interface CrawlStorage {
    */
   getPageParsedData(
     crawlId: string,
-    normalizedUrl: string,
+    normalizedUrl: string
   ): Effect.Effect<string | null, StorageError, never>;
   getPages(
     crawlId: string,
-    options?: PaginationOptions,
+    options?: PaginationOptions
   ): Effect.Effect<PageRecord[], StorageError, never>;
   getPageCount(crawlId: string): Effect.Effect<number, StorageError, never>;
-  hasPage(crawlId: string, normalizedUrl: string): Effect.Effect<boolean, StorageError, never>;
-  getCachedPage(normalizedUrl: string): Effect.Effect<PageRecord | null, StorageError, never>;
+  hasPage(
+    crawlId: string,
+    normalizedUrl: string
+  ): Effect.Effect<boolean, StorageError, never>;
+  getCachedPage(
+    normalizedUrl: string
+  ): Effect.Effect<PageRecord | null, StorageError, never>;
 
   // Frontier
-  upsertFrontier(crawlId: string, entry: FrontierRecord): Effect.Effect<void, StorageError, never>;
+  upsertFrontier(
+    crawlId: string,
+    entry: FrontierRecord
+  ): Effect.Effect<void, StorageError, never>;
   /**
    * Existence-only frontier lookup for the enqueue path, which asks once per
    * discovered link and only needs to know whether the URL is already known.
@@ -1906,138 +1998,188 @@ export interface CrawlStorage {
    */
   hasFrontierEntry(
     crawlId: string,
-    normalizedUrl: string,
+    normalizedUrl: string
   ): Effect.Effect<boolean, StorageError, never>;
   getFrontierEntry(
     crawlId: string,
-    normalizedUrl: string,
+    normalizedUrl: string
   ): Effect.Effect<FrontierRecord | null, StorageError, never>;
-  popNextUrl(crawlId: string): Effect.Effect<FrontierRecord | null, StorageError, never>;
+  popNextUrl(
+    crawlId: string
+  ): Effect.Effect<FrontierRecord | null, StorageError, never>;
   // perHostLimit (#440): cap URLs per host within a batch so a busy host can't
   // reserve the whole batch while its per-host throttle stalls the extra workers.
   popNextUrls(
     crawlId: string,
     count: number,
-    perHostLimit?: number,
+    perHostLimit?: number
   ): Effect.Effect<FrontierRecord[], StorageError, never>;
   getPendingCount(crawlId: string): Effect.Effect<number, StorageError, never>;
   /** Frontier URLs skipped because robots.txt disallows them (`reason = 'robots_disallowed'`, #1782). */
-  getRobotsDisallowedCount(crawlId: string): Effect.Effect<number, StorageError, never>;
+  getRobotsDisallowedCount(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never>;
   getFetchingCount(crawlId: string): Effect.Effect<number, StorageError, never>;
   updateFrontierStatus(
     crawlId: string,
     normalizedUrl: string,
     status: FrontierStatus,
-    reason?: string,
+    reason?: string
   ): Effect.Effect<void, StorageError, never>;
-  resetStaleFetching(crawlId: string): Effect.Effect<number, StorageError, never>;
-  getAllFrontierEntries(crawlId: string): Effect.Effect<FrontierRecord[], StorageError, never>;
+  resetStaleFetching(
+    crawlId: string
+  ): Effect.Effect<number, StorageError, never>;
+  getAllFrontierEntries(
+    crawlId: string
+  ): Effect.Effect<FrontierRecord[], StorageError, never>;
   clearFrontier(crawlId: string): Effect.Effect<void, StorageError, never>;
   clearCrawlData(crawlId: string): Effect.Effect<void, StorageError, never>;
 
   // Links
-  upsertLink(crawlId: string, link: LinkRecord): Effect.Effect<void, StorageError, never>;
-  getLink(crawlId: string, href: string): Effect.Effect<LinkRecord | null, StorageError, never>;
+  upsertLink(
+    crawlId: string,
+    link: LinkRecord
+  ): Effect.Effect<void, StorageError, never>;
+  getLink(
+    crawlId: string,
+    href: string
+  ): Effect.Effect<LinkRecord | null, StorageError, never>;
   addLinkAppearance(
     crawlId: string,
-    appearance: LinkAppearanceRecord,
+    appearance: LinkAppearanceRecord
   ): Effect.Effect<void, StorageError, never>;
   addLinkAppearancesBatch(
     crawlId: string,
-    appearances: LinkAppearanceRecord[],
+    appearances: LinkAppearanceRecord[]
   ): Effect.Effect<void, StorageError, never>;
   getLinks(
     crawlId: string,
-    options?: { unchecked?: boolean },
+    options?: { unchecked?: boolean }
   ): Effect.Effect<LinkRecord[], StorageError, never>;
   getLinkAppearances(
     crawlId: string,
-    href: string,
+    href: string
   ): Effect.Effect<LinkAppearanceRecord[], StorageError, never>;
   getIncomingLinkCount(
     crawlId: string,
-    normalizedUrl: string,
+    normalizedUrl: string
   ): Effect.Effect<number, StorageError, never>;
   getAllIncomingLinkCounts(
-    crawlId: string,
+    crawlId: string
   ): Effect.Effect<Map<string, number>, StorageError, never>;
-  getLinksByPage(pageUrl: string): Effect.Effect<LinkRecord[], StorageError, never>;
+  getLinksByPage(
+    pageUrl: string
+  ): Effect.Effect<LinkRecord[], StorageError, never>;
 
   // Images
-  upsertImage(crawlId: string, image: ImageRecord): Effect.Effect<void, StorageError, never>;
-  getImage(crawlId: string, src: string): Effect.Effect<ImageRecord | null, StorageError, never>;
+  upsertImage(
+    crawlId: string,
+    image: ImageRecord
+  ): Effect.Effect<void, StorageError, never>;
+  getImage(
+    crawlId: string,
+    src: string
+  ): Effect.Effect<ImageRecord | null, StorageError, never>;
   addImageAppearance(
     crawlId: string,
-    appearance: ImageAppearanceRecord,
+    appearance: ImageAppearanceRecord
   ): Effect.Effect<void, StorageError, never>;
   getImages(crawlId: string): Effect.Effect<ImageRecord[], StorageError, never>;
   getImageAppearances(
     crawlId: string,
-    src: string,
+    src: string
   ): Effect.Effect<ImageAppearanceRecord[], StorageError, never>;
-  getImagesByPage(pageUrl: string): Effect.Effect<ImageRecord[], StorageError, never>;
+  getImagesByPage(
+    pageUrl: string
+  ): Effect.Effect<ImageRecord[], StorageError, never>;
 
   // Robots & Sitemaps
-  setRobotsTxt(crawlId: string, robots: RobotsTxtRecord): Effect.Effect<void, StorageError, never>;
-  getRobotsTxt(crawlId: string): Effect.Effect<RobotsTxtRecord | null, StorageError, never>;
-  setLlmsTxt(crawlId: string, llms: LlmsTxtRecord): Effect.Effect<void, StorageError, never>;
-  getLlmsTxt(crawlId: string): Effect.Effect<LlmsTxtRecord | null, StorageError, never>;
+  setRobotsTxt(
+    crawlId: string,
+    robots: RobotsTxtRecord
+  ): Effect.Effect<void, StorageError, never>;
+  getRobotsTxt(
+    crawlId: string
+  ): Effect.Effect<RobotsTxtRecord | null, StorageError, never>;
+  setLlmsTxt(
+    crawlId: string,
+    llms: LlmsTxtRecord
+  ): Effect.Effect<void, StorageError, never>;
+  getLlmsTxt(
+    crawlId: string
+  ): Effect.Effect<LlmsTxtRecord | null, StorageError, never>;
   setMarkdownProbe(
     crawlId: string,
-    probe: MarkdownProbeRecord,
+    probe: MarkdownProbeRecord
   ): Effect.Effect<void, StorageError, never>;
-  getMarkdownProbe(crawlId: string): Effect.Effect<MarkdownProbeRecord | null, StorageError, never>;
+  getMarkdownProbe(
+    crawlId: string
+  ): Effect.Effect<MarkdownProbeRecord | null, StorageError, never>;
   // AX prefetches — mirror the llms/markdown setter/getter shape.
   setWellKnownProbe(
     crawlId: string,
-    probe: WellKnownProbeRecord,
+    probe: WellKnownProbeRecord
   ): Effect.Effect<void, StorageError, never>;
   getWellKnownProbe(
-    crawlId: string,
+    crawlId: string
   ): Effect.Effect<WellKnownProbeRecord | null, StorageError, never>;
   setAgentAccess(
     crawlId: string,
-    access: AgentAccessRecord,
+    access: AgentAccessRecord
   ): Effect.Effect<void, StorageError, never>;
-  getAgentAccess(crawlId: string): Effect.Effect<AgentAccessRecord | null, StorageError, never>;
-  setRsl(crawlId: string, rsl: RslRecord): Effect.Effect<void, StorageError, never>;
+  getAgentAccess(
+    crawlId: string
+  ): Effect.Effect<AgentAccessRecord | null, StorageError, never>;
+  setRsl(
+    crawlId: string,
+    rsl: RslRecord
+  ): Effect.Effect<void, StorageError, never>;
   getRsl(crawlId: string): Effect.Effect<RslRecord | null, StorageError, never>;
-  addSitemap(crawlId: string, sitemap: SitemapRecord): Effect.Effect<void, StorageError, never>;
-  getSitemaps(crawlId: string): Effect.Effect<SitemapRecord[], StorageError, never>;
+  addSitemap(
+    crawlId: string,
+    sitemap: SitemapRecord
+  ): Effect.Effect<void, StorageError, never>;
+  getSitemaps(
+    crawlId: string
+  ): Effect.Effect<SitemapRecord[], StorageError, never>;
   addSitemapUrls(
     crawlId: string,
-    urls: SitemapUrlRecord[],
+    urls: SitemapUrlRecord[]
   ): Effect.Effect<void, StorageError, never>;
   getSitemapUrls(
     crawlId: string,
-    sitemapUrl: string,
+    sitemapUrl: string
   ): Effect.Effect<SitemapUrlRecord[], StorageError, never>;
 
   // Stats
   updateStats(
     crawlId: string,
-    updates: Partial<CrawlStats>,
+    updates: Partial<CrawlStats>
   ): Effect.Effect<void, StorageError, never>;
-  getStats(crawlId: string): Effect.Effect<CrawlStats | null, StorageError, never>;
+  getStats(
+    crawlId: string
+  ): Effect.Effect<CrawlStats | null, StorageError, never>;
   saveResourceSizes(
     crawlId: string,
-    records: ResourceSizeRecord[],
+    records: ResourceSizeRecord[]
   ): Effect.Effect<void, StorageError, never>;
-  getResourceSizes(crawlId: string): Effect.Effect<ResourceSizeRecord[], StorageError, never>;
+  getResourceSizes(
+    crawlId: string
+  ): Effect.Effect<ResourceSizeRecord[], StorageError, never>;
   /**
    * Most-recent sub-resource records from PRIOR crawls (excluding `crawlId`),
    * keyed by URL, for browser-like sub-resource cache reuse (#107). Each carries
    * the prior crawl's startedAt as `fetchedAt`. Empty when no prior crawl exists.
    */
   getCachedResources(
-    crawlId: string,
+    crawlId: string
   ): Effect.Effect<CachedResourceRecord[], StorageError, never>;
   saveSitemapUrlStatuses(
     crawlId: string,
-    statuses: SitemapUrlStatusRecord[],
+    statuses: SitemapUrlStatusRecord[]
   ): Effect.Effect<void, StorageError, never>;
   getSitemapUrlStatuses(
-    crawlId: string,
+    crawlId: string
   ): Effect.Effect<SitemapUrlStatusRecord[], StorageError, never>;
 
   // Rule results
@@ -2045,12 +2187,17 @@ export interface CrawlStorage {
     crawlId: string,
     pageUrl: string,
     ruleId: string,
-    checks: unknown[],
+    checks: unknown[]
   ): Effect.Effect<void, StorageError, never>;
-  getRuleResults(crawlId: string, pageUrl?: string): Effect.Effect<unknown[], StorageError, never>;
+  getRuleResults(
+    crawlId: string,
+    pageUrl?: string
+  ): Effect.Effect<unknown[], StorageError, never>;
 
   // Smart audits — site-scoped finding store (#110, gated by `smart_audits`)
-  upsertFindings(findings: PageFindingRecord[]): Effect.Effect<void, StorageError, never>;
+  upsertFindings(
+    findings: PageFindingRecord[]
+  ): Effect.Effect<void, StorageError, never>;
   /**
    * Load findings for a site. Pass `states` to restrict to those lifecycle
    * states — the merge hot-path passes `["open"]` so it never scans the
@@ -2058,16 +2205,20 @@ export interface CrawlStorage {
    */
   getFindings(
     siteKey: string,
-    states?: FindingState[],
+    states?: FindingState[]
   ): Effect.Effect<PageFindingRecord[], StorageError, never>;
   markPageRemoved(
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Effect.Effect<void, StorageError, never>;
-  upsertSitePages(pages: SitePageRecord[]): Effect.Effect<void, StorageError, never>;
-  getSitePages(siteKey: string): Effect.Effect<SitePageRecord[], StorageError, never>;
+  upsertSitePages(
+    pages: SitePageRecord[]
+  ): Effect.Effect<void, StorageError, never>;
+  getSitePages(
+    siteKey: string
+  ): Effect.Effect<SitePageRecord[], StorageError, never>;
   /**
    * Bounded single-site hygiene for churny sites (#197). Prunes ONLY terminal
    * rows for `siteKey` — `resolved`/`stale` findings and `removed` site_pages —
@@ -2078,13 +2229,18 @@ export interface CrawlStorage {
    */
   compactFindings(
     siteKey: string,
-    opts?: CompactFindingsOptions,
+    opts?: CompactFindingsOptions
   ): Effect.Effect<number, StorageError, never>;
 
   // Project meta — cross-crawl key/value store scoped to the project database
   // (e.g. the sticky random user-agent, #875).
-  getProjectMeta(key: string): Effect.Effect<string | null, StorageError, never>;
-  setProjectMeta(key: string, value: string): Effect.Effect<void, StorageError, never>;
+  getProjectMeta(
+    key: string
+  ): Effect.Effect<string | null, StorageError, never>;
+  setProjectMeta(
+    key: string,
+    value: string
+  ): Effect.Effect<void, StorageError, never>;
 }
 
 // ============================================

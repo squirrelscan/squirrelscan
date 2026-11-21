@@ -2,9 +2,9 @@
 
 import { getAttrCI, querySelectorByAttrValueCI } from "@squirrelscan/utils";
 
-import { getElementBoundaryProseText } from "./text-content";
-
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { getElementBoundaryProseText } from "./text-content";
 
 /**
  * UTF-8 bytes decoded as latin1/cp1252. Every one of these is a real UTF-8 lead byte
@@ -70,7 +70,7 @@ const MOJIBAKE_RE = new RegExp(
     // letter: all-caps text hyphenated after "Ã" (MANHÃ&shy;ZINHA) is valid copy.
     "Ã\u00AD(?!\\p{Lu})",
   ].join("|"),
-  "gu",
+  "gu"
 );
 
 /** Every corruption family present in `text`, with a sample and a count for each. */
@@ -91,29 +91,45 @@ export function findMojibake(text: string): Corruption[] {
 
   const replacements = text.split(REPLACEMENT_CHAR).length - 1;
   if (replacements > 0)
-    out.push({ kind: "replacement-char", sample: REPLACEMENT_CHAR, count: replacements });
+    out.push({
+      kind: "replacement-char",
+      sample: REPLACEMENT_CHAR,
+      count: replacements,
+    });
 
   const doubles = [...text.matchAll(DOUBLE_ENCODED_RE)];
   if (doubles.length > 0)
-    out.push({ kind: "double-encoded-entity", sample: doubles[0]![0], count: doubles.length });
+    out.push({
+      kind: "double-encoded-entity",
+      sample: doubles[0]![0],
+      count: doubles.length,
+    });
 
   return out;
 }
 
 /** The page's declared encoding, from `<meta charset>` or the http-equiv form, lowercased. */
 export function declaredCharset(
-  doc: NonNullable<RuleContext["parsed"]["document"]>,
+  doc: NonNullable<RuleContext["parsed"]["document"]>
 ): string | undefined {
   for (const meta of doc.querySelectorAll("meta")) {
     const val = getAttrCI(meta, "charset");
     if (val !== null && val.trim()) return val.trim().toLowerCase();
   }
-  const httpEquiv = querySelectorByAttrValueCI(doc, "meta", "http-equiv", "Content-Type");
-  const match = (httpEquiv?.getAttribute("content") || "").match(/charset=([^\s;]+)/i);
+  const httpEquiv = querySelectorByAttrValueCI(
+    doc,
+    "meta",
+    "http-equiv",
+    "Content-Type"
+  );
+  const match = (httpEquiv?.getAttribute("content") || "").match(
+    /charset=([^\s;]+)/i
+  );
   return match?.[1]?.trim().toLowerCase();
 }
 
-const isUtf8 = (charset: string | undefined): boolean => charset === "utf-8" || charset === "utf8";
+const isUtf8 = (charset: string | undefined): boolean =>
+  charset === "utf-8" || charset === "utf8";
 
 export const mojibakeRule: Rule = {
   meta: {
@@ -198,7 +214,11 @@ export const mojibakeRule: Rule = {
       value: total,
       details: {
         charset: charset ?? null,
-        kinds: found.map((f) => ({ kind: f.kind, sample: f.sample, count: f.count })),
+        kinds: found.map((f) => ({
+          kind: f.kind,
+          sample: f.sample,
+          count: f.count,
+        })),
       },
     });
     return { checks };

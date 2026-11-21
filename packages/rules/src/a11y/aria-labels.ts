@@ -1,9 +1,9 @@
 // a11y/aria-labels - Interactive elements need accessible names
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { hasAttrCI } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import {
   createStaticVisibility,

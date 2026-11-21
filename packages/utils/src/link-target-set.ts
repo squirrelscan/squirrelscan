@@ -23,6 +23,7 @@
 // container and the API Worker alike.
 
 import type { LinkTargetSet } from "@squirrelscan/core-contracts";
+
 import { normalizeUrl } from "./url";
 
 /** At most this many hashes per set (8 bytes each, about 11 base64 characters). */
@@ -53,7 +54,10 @@ export function linkTargetHash(url: string): string {
 function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 function fromBase64Url(text: string): Uint8Array | null {
@@ -75,7 +79,7 @@ function fromBase64Url(text: string): Uint8Array | null {
  */
 export function encodeLinkTargetSet(
   urls: Iterable<string>,
-  options: { partial?: boolean; maxHashes?: number } = {},
+  options: { partial?: boolean; maxHashes?: number } = {}
 ): LinkTargetSet {
   const max = options.maxHashes ?? LINK_TARGET_SET_MAX_HASHES;
   const hashes = [...new Set([...urls].map(linkTargetHash))].sort();
@@ -83,7 +87,10 @@ export function encodeLinkTargetSet(
   const bytes = new Uint8Array(kept.length * HASH_BYTES);
   kept.forEach((hex, i) => {
     for (let b = 0; b < HASH_BYTES; b++) {
-      bytes[i * HASH_BYTES + b] = Number.parseInt(hex.slice(b * 2, b * 2 + 2), 16);
+      bytes[i * HASH_BYTES + b] = Number.parseInt(
+        hex.slice(b * 2, b * 2 + 2),
+        16
+      );
     }
   });
   return {
@@ -97,7 +104,9 @@ export function encodeLinkTargetSet(
  * The hashes a set carries, as `linkTargetHash` spells them, or null for a
  * value that is not a well-formed set (a reader then treats the set as absent).
  */
-export function decodeLinkTargetSet(value: unknown): ReadonlySet<string> | null {
+export function decodeLinkTargetSet(
+  value: unknown
+): ReadonlySet<string> | null {
   if (!value || typeof value !== "object") return null;
   const hashes = (value as { hashes?: unknown }).hashes;
   if (typeof hashes !== "string") return null;
@@ -106,7 +115,8 @@ export function decodeLinkTargetSet(value: unknown): ReadonlySet<string> | null 
   const out = new Set<string>();
   for (let i = 0; i < bytes.length; i += HASH_BYTES) {
     let hex = "";
-    for (let b = 0; b < HASH_BYTES; b++) hex += bytes[i + b]!.toString(16).padStart(2, "0");
+    for (let b = 0; b < HASH_BYTES; b++)
+      hex += bytes[i + b]!.toString(16).padStart(2, "0");
     out.add(hex);
   }
   return out;

@@ -77,7 +77,7 @@ describe("seeded issue mix", () => {
     });
 
     const orphanPaths = new Set(
-      model.pages.filter((p) => p.issues.includes("orphan")).map((p) => p.path),
+      model.pages.filter((p) => p.issues.includes("orphan")).map((p) => p.path)
     );
     expect(orphanPaths.size).toBe(15);
     for (const path of orphanPaths) {
@@ -109,13 +109,22 @@ describe("seeded issue mix", () => {
     const model = generateSiteModel({
       seed: "oversize-threshold",
       pageCount: 300,
-      issues: { oversizeTitle: { count: 15 }, oversizeDescription: { count: 15 } },
+      issues: {
+        oversizeTitle: { count: 15 },
+        oversizeDescription: { count: 15 },
+      },
     });
-    for (const page of model.pages.filter((p) => p.issues.includes("oversize-title"))) {
+    for (const page of model.pages.filter((p) =>
+      p.issues.includes("oversize-title")
+    )) {
       expect(page.title.length).toBeGreaterThan(OVERSIZE_TITLE_MIN_LENGTH);
     }
-    for (const page of model.pages.filter((p) => p.issues.includes("oversize-description"))) {
-      expect(page.description.length).toBeGreaterThan(OVERSIZE_DESCRIPTION_MIN_LENGTH);
+    for (const page of model.pages.filter((p) =>
+      p.issues.includes("oversize-description")
+    )) {
+      expect(page.description.length).toBeGreaterThan(
+        OVERSIZE_DESCRIPTION_MIN_LENGTH
+      );
     }
   });
 
@@ -132,17 +141,22 @@ describe("seeded issue mix", () => {
     });
 
     const both = model.pages.filter(
-      (p) => p.issues.includes("oversize-title") && p.issues.includes("duplicate-title"),
+      (p) =>
+        p.issues.includes("oversize-title") &&
+        p.issues.includes("duplicate-title")
     );
     expect(both.length).toBe(0);
     const bothDesc = model.pages.filter(
       (p) =>
-        p.issues.includes("oversize-description") && p.issues.includes("duplicate-description"),
+        p.issues.includes("oversize-description") &&
+        p.issues.includes("duplicate-description")
     );
     expect(bothDesc.length).toBe(0);
 
     // And every tagged page's content actually reflects that tag.
-    for (const page of model.pages.filter((p) => p.issues.includes("oversize-title"))) {
+    for (const page of model.pages.filter((p) =>
+      p.issues.includes("oversize-title")
+    )) {
       expect(page.title.length).toBeGreaterThan(OVERSIZE_TITLE_MIN_LENGTH);
     }
   });
@@ -171,17 +185,24 @@ describe("seeded issue mix", () => {
       },
     });
 
-    const dupTitlePages = model.pages.filter((p) => p.issues.includes("duplicate-title"));
+    const dupTitlePages = model.pages.filter((p) =>
+      p.issues.includes("duplicate-title")
+    );
     const titleGroups = new Map<string, number>();
     for (const page of dupTitlePages) {
       titleGroups.set(page.title, (titleGroups.get(page.title) ?? 0) + 1);
     }
     expect([...titleGroups.values()].sort()).toEqual([4, 4, 4]);
 
-    const dupDescPages = model.pages.filter((p) => p.issues.includes("duplicate-description"));
+    const dupDescPages = model.pages.filter((p) =>
+      p.issues.includes("duplicate-description")
+    );
     const descGroups = new Map<string, number>();
     for (const page of dupDescPages) {
-      descGroups.set(page.description, (descGroups.get(page.description) ?? 0) + 1);
+      descGroups.set(
+        page.description,
+        (descGroups.get(page.description) ?? 0) + 1
+      );
     }
     expect([...descGroups.values()].sort()).toEqual([3, 3]);
   });
@@ -206,7 +227,9 @@ describe("seeded issue mix", () => {
       },
     });
 
-    const dupPages = model.pages.filter((p) => p.issues.includes("duplicate-title"));
+    const dupPages = model.pages.filter((p) =>
+      p.issues.includes("duplicate-title")
+    );
     const groups = new Map<string, number>();
     for (const page of dupPages) {
       groups.set(page.title, (groups.get(page.title) ?? 0) + 1);
@@ -224,7 +247,9 @@ describe("seeded issue mix", () => {
       pageCount: 200,
       issues: { noindexInSitemap: { count: 8 } },
     });
-    const conflicted = model.pages.filter((p) => p.issues.includes("noindex-in-sitemap"));
+    const conflicted = model.pages.filter((p) =>
+      p.issues.includes("noindex-in-sitemap")
+    );
     expect(conflicted.length).toBe(8);
     for (const page of conflicted) {
       expect(page.noindex).toBe(true);
@@ -243,7 +268,9 @@ describe("seeded issue mix", () => {
     const sources = model.pages.filter((p) => p.issues.includes("broken-link"));
     expect(sources.length).toBe(6);
     for (const page of sources) {
-      const brokenHref = page.outgoingLinks.find((l) => l.startsWith("/broken/"));
+      const brokenHref = page.outgoingLinks.find((l) =>
+        l.startsWith("/broken/")
+      );
       expect(brokenHref).toBeDefined();
       expect(byPath.has(brokenHref!)).toBe(false);
     }
@@ -288,7 +315,9 @@ describe("seeded issue mix", () => {
     }
 
     // Same templateId always carries the same fingerprint via `model.templates`.
-    const fingerprintById = new Map(model.templates.map((t) => [t.id, t.fingerprint]));
+    const fingerprintById = new Map(
+      model.templates.map((t) => [t.id, t.fingerprint])
+    );
     for (const page of model.pages) {
       if (page.templateId === "redirect-hop") continue;
       expect(fingerprintById.has(page.templateId)).toBe(true);
@@ -296,7 +325,10 @@ describe("seeded issue mix", () => {
   });
 
   test("cleanRatio-influenced defaults leave a meaningful share of pages issue-free", () => {
-    const model = generateSiteModel({ seed: "clean-ratio-default", pageCount: 2000 });
+    const model = generateSiteModel({
+      seed: "clean-ratio-default",
+      pageCount: 2000,
+    });
     expect(model.issueSummary.clean).toBeGreaterThan(model.pages.length * 0.4);
   });
 
@@ -314,16 +346,22 @@ describe("seeded issue mix", () => {
 
     // Same seed, only cleanRatio differs — dirtier config must inject strictly more issues.
     expect(mostlyDirty.issueSummary["long-h1"]).toBeGreaterThan(
-      mostlyClean.issueSummary["long-h1"],
+      mostlyClean.issueSummary["long-h1"]
     );
     expect(mostlyDirty.issueSummary["broken-link"]).toBeGreaterThan(
-      mostlyClean.issueSummary["broken-link"],
+      mostlyClean.issueSummary["broken-link"]
     );
-    expect(mostlyDirty.issueSummary.clean).toBeLessThan(mostlyClean.issueSummary.clean);
+    expect(mostlyDirty.issueSummary.clean).toBeLessThan(
+      mostlyClean.issueSummary.clean
+    );
   });
 
   test("cleanRatio: 1 produces (approximately) zero default-injected issues", () => {
-    const model = generateSiteModel({ seed: "clean-ratio-one", pageCount: 500, cleanRatio: 1 });
+    const model = generateSiteModel({
+      seed: "clean-ratio-one",
+      pageCount: 500,
+      cleanRatio: 1,
+    });
     for (const [tag, count] of Object.entries(model.issueSummary)) {
       if (tag === "clean") continue;
       expect(count).toBe(0);
@@ -367,7 +405,9 @@ describe("seeded issue mix", () => {
     });
     for (const page of model.pages) {
       if (page.path === "/") continue;
-      const homeOccurrences = page.outgoingLinks.filter((l) => l === "/").length;
+      const homeOccurrences = page.outgoingLinks.filter(
+        (l) => l === "/"
+      ).length;
       expect(homeOccurrences).toBeLessThanOrEqual(1);
     }
   });
@@ -387,14 +427,16 @@ describe("seeded issue mix", () => {
       },
     });
     for (const page of model.pages) {
-      const targetPaths = page.outgoingLinks.map((l) => (l.split("?")[0] ?? l).split("#")[0]);
+      const targetPaths = page.outgoingLinks.map(
+        (l) => (l.split("?")[0] ?? l).split("#")[0]
+      );
       expect(targetPaths).not.toContain(page.path);
     }
 
     const byPath = new Map(model.pages.map((p) => [p.path, p]));
     for (let c = 0; c < 20; c++) {
       const source = model.pages.find((p) =>
-        p.outgoingLinks.includes(`/redirect-chain/${c}/hop-0`),
+        p.outgoingLinks.includes(`/redirect-chain/${c}/hop-0`)
       );
       let current = byPath.get(`/redirect-chain/${c}/hop-0`);
       while (current && current.statusCode >= 300 && current.statusCode < 400) {

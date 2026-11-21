@@ -11,6 +11,9 @@
 // The skip rows share the reason `rule-timed-out`; `details.errored` tells them apart. `reason` is carried on every
 // entry so other skip reasons can be added without a shape change.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
 import {
   RULE_TIMED_OUT_SKIP_REASON,
   SCAN_TRUNCATED_SKIP_REASON,
@@ -21,8 +24,7 @@ import {
   skipReasonClass,
   type RuleOutcome,
 } from "@squirrelscan/core-contracts/rule-outcome";
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { stripUnsafeLineText } from "@squirrelscan/core-contracts/control-chars";
+
 import type { ReportRuleResult } from "./types";
 
 /** Skip reasons listed in the report. Extend here to widen coverage. */
@@ -38,7 +40,9 @@ const LISTED_SKIP_REASONS: ReadonlySet<string> = new Set([
 
 /** The outcome of a listed skip reason: `rule-errored` is the thrown rule, the rest are coded reasons. */
 function outcomeOfListedReason(reason: string): RuleOutcome {
-  return reason === RULE_ERRORED_REASON ? "errored" : (skipReasonClass(reason)?.outcome ?? "not_applicable");
+  return reason === RULE_ERRORED_REASON
+    ? "errored"
+    : (skipReasonClass(reason)?.outcome ?? "not_applicable");
 }
 
 export interface SkippedCheck {
@@ -66,7 +70,7 @@ export interface SkippedCheck {
  * pages are sorted, so the output is stable across runs.
  */
 export function collectSkippedChecks(
-  ruleResults: Record<string, ReportRuleResult>,
+  ruleResults: Record<string, ReportRuleResult>
 ): SkippedCheck[] {
   const out: SkippedCheck[] = [];
   for (const ruleId of Object.keys(ruleResults).sort()) {
@@ -80,8 +84,14 @@ export function collectSkippedChecks(
       const recorded = check.skipReason;
       // A rule that threw is recorded as a timed-out skip with `details.errored`.
       const reason =
-        classifyRuleOutcome(check) === "errored" ? RULE_ERRORED_REASON : recorded;
-      if (check.status !== "skipped" || reason === undefined || !LISTED_SKIP_REASONS.has(reason)) {
+        classifyRuleOutcome(check) === "errored"
+          ? RULE_ERRORED_REASON
+          : recorded;
+      if (
+        check.status !== "skipped" ||
+        reason === undefined ||
+        !LISTED_SKIP_REASONS.has(reason)
+      ) {
         continue;
       }
       const key = `${check.name}\u0000${reason}`;
@@ -101,18 +111,22 @@ export function collectSkippedChecks(
       // A timed-out rule is recorded once for the audit and counts the pages that
       // hit the budget in `details.pages`, which are not always listed by URL.
       const timedOutPages =
-        (reason === RULE_TIMED_OUT_SKIP_REASON || reason === RULE_ERRORED_REASON) &&
-          typeof check.details?.pages === "number"
+        (reason === RULE_TIMED_OUT_SKIP_REASON ||
+          reason === RULE_ERRORED_REASON) &&
+        typeof check.details?.pages === "number"
           ? Math.floor(check.details.pages)
           : 0;
       group.total = Math.max(
         group.total + listed,
-        typeof truncated === "number" && truncated > listed ? group.total + Math.floor(truncated) : 0,
-        timedOutPages,
+        typeof truncated === "number" && truncated > listed
+          ? group.total + Math.floor(truncated)
+          : 0,
+        timedOutPages
       );
     }
     for (const g of [...groups.values()].sort(
-      (a, b) => a.check.localeCompare(b.check) || a.reason.localeCompare(b.reason),
+      (a, b) =>
+        a.check.localeCompare(b.check) || a.reason.localeCompare(b.reason)
     )) {
       const pages = [...g.pages].sort();
       out.push({
@@ -167,12 +181,18 @@ export function parseSkippedChecks(value: unknown): SkippedCheck[] {
       .slice(0, MAX_RESTORED_PAGES);
     const count = e.pagesCount;
     const pagesCount =
-      typeof count === "number" && Number.isSafeInteger(count) && count >= pages.length && count <= MAX_RESTORED_COUNT
+      typeof count === "number" &&
+      Number.isSafeInteger(count) &&
+      count >= pages.length &&
+      count <= MAX_RESTORED_COUNT
         ? count
         : pages.length;
     out.push({
       ruleId: e.ruleId,
-      name: typeof e.name === "string" && e.name.length <= 200 ? stripUnsafeLineText(e.name) : e.ruleId,
+      name:
+        typeof e.name === "string" && e.name.length <= 200
+          ? stripUnsafeLineText(e.name)
+          : e.ruleId,
       check: stripUnsafeLineText(e.check),
       reason: e.reason,
       outcome: outcomeOfListedReason(e.reason),
@@ -195,7 +215,7 @@ export function parseSkippedChecks(value: unknown): SkippedCheck[] {
 export function restoreSkippedChecks(
   ruleResults: Record<string, ReportRuleResult>,
   skipped: readonly SkippedCheck[],
-  metaFor: (ruleId: string, name: string) => ReportRuleResult["meta"],
+  metaFor: (ruleId: string, name: string) => ReportRuleResult["meta"]
 ): void {
   for (const entry of skipped) {
     const errored = entry.reason === RULE_ERRORED_REASON;
@@ -208,11 +228,19 @@ export function restoreSkippedChecks(
       details: {
         ...(errored ? { errored: true } : {}),
         ...(entry.pagesHasMore ? { pagesTruncated: entry.pagesCount } : {}),
-        ...(entry.reason === RULE_TIMED_OUT_SKIP_REASON || errored ? { pages: entry.pagesCount } : {}),
+        ...(entry.reason === RULE_TIMED_OUT_SKIP_REASON || errored
+          ? { pages: entry.pagesCount }
+          : {}),
       },
     };
-    const existing = Object.hasOwn(ruleResults, entry.ruleId) ? ruleResults[entry.ruleId] : undefined;
+    const existing = Object.hasOwn(ruleResults, entry.ruleId)
+      ? ruleResults[entry.ruleId]
+      : undefined;
     if (existing) existing.checks.push(row);
-    else ruleResults[entry.ruleId] = { meta: metaFor(entry.ruleId, entry.name), checks: [row] };
+    else
+      ruleResults[entry.ruleId] = {
+        meta: metaFor(entry.ruleId, entry.name),
+        checks: [row],
+      };
   }
 }

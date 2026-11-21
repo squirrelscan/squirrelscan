@@ -2,8 +2,8 @@
 // every script, style, noscript and template in it. #1864 reads it from the text nodes' lengths instead, so the scripts'
 // text is not materialised twice; the number must be the same, nested elements included.
 
-import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
 import { visibleTextLength } from "../src/links/page-anchors";
 import { CASES } from "./security/leaked-secrets/cases";
@@ -13,7 +13,8 @@ const URL_ = "https://example.com/";
 /** The measurement as it was written before #1864. */
 function materialised(body: Element): number {
   let visible = (body.textContent ?? "").length;
-  for (const el of body.querySelectorAll("script, style, noscript, template")) visible -= (el.textContent ?? "").length;
+  for (const el of body.querySelectorAll("script, style, noscript, template"))
+    visible -= (el.textContent ?? "").length;
   return visible;
 }
 

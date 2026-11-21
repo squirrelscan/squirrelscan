@@ -23,7 +23,12 @@ describe("agent skills manifest", () => {
         version: "1",
         frontmatter: { name: "demo", description: "d" },
         files: [
-          { path: "SKILL.md", mimeType: "text/markdown", encoding: "utf8", content: text },
+          {
+            path: "SKILL.md",
+            mimeType: "text/markdown",
+            encoding: "utf8",
+            content: text,
+          },
           {
             path: "assets/a.png",
             mimeType: "image/png",
@@ -39,8 +44,16 @@ describe("agent skills manifest", () => {
       uri: "skill://demo/SKILL.md",
       frontmatter: { name: "demo", description: "d" },
       resources: [
-        { uri: "skill://demo/SKILL.md", digest: sha(textBytes), size: textBytes.byteLength },
-        { uri: "skill://demo/assets/a.png", digest: sha(png), size: png.byteLength },
+        {
+          uri: "skill://demo/SKILL.md",
+          digest: sha(textBytes),
+          size: textBytes.byteLength,
+        },
+        {
+          uri: "skill://demo/assets/a.png",
+          digest: sha(png),
+          size: png.byteLength,
+        },
       ],
     });
     const files = agentSkillFiles(bundle);
@@ -52,7 +65,10 @@ describe("agent skills manifest", () => {
   });
 
   test("the bundled skills are complete, named for their directory and within the limits", () => {
-    expect(AGENT_SKILLS_BUNDLE.map((s) => s.name).sort()).toEqual(["audit-website", "squirrelscan"]);
+    expect(AGENT_SKILLS_BUNDLE.map((s) => s.name).sort()).toEqual([
+      "audit-website",
+      "squirrelscan",
+    ]);
     for (const skill of AGENT_SKILLS_BUNDLE) {
       expect(skill.frontmatter.name).toBe(skill.name);
       expect(typeof skill.frontmatter.description).toBe("string");
@@ -63,7 +79,9 @@ describe("agent skills manifest", () => {
         .reduce((n, f) => n + f.bytes.byteLength, 0);
       expect(bytes).toBeLessThanOrEqual(SKILL_LIMITS.maxBytes);
     }
-    expect(readAgentSkillFile(skillUri("squirrelscan", "SKILL.md"))).toBeDefined();
+    expect(
+      readAgentSkillFile(skillUri("squirrelscan", "SKILL.md"))
+    ).toBeDefined();
     expect(readAgentSkillFile("skill://squirrelscan/nope.md")).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 // a11y/listitem - List items are in lists
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const listitemRule: Rule = {

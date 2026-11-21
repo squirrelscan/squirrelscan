@@ -22,13 +22,14 @@ import {
   PROBE_INCOMPLETE_SKIP_REASON,
   PROBE_LEVEL_TOO_LOW_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
+import { parseDocument } from "@squirrelscan/parser";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
-import { parseDocument } from "@squirrelscan/parser";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { readCappedBytes } from "../security/probe-http";
 import { hasRequestTool } from "../tools";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 const SOFT = "custom-404-soft";
 const REDIRECT = "custom-404-redirect";
@@ -47,14 +48,25 @@ export const CUSTOM_404_READ_CAP = 262_144;
 /** A page with less visible text than this and no chrome is a bare server default. */
 const BARE_TEXT_LIMIT = 400;
 
-const ENABLE_HINT = "Run with --probe active to check, on a site you own or may test.";
+const ENABLE_HINT =
+  "Run with --probe active to check, on a site you own or may test.";
 
 /** Text the stock error pages of common servers and frameworks carry. */
 const DEFAULT_SIGNATURES: Array<{ name: string; pattern: RegExp }> = [
   { name: "nginx", pattern: /<center>\s*nginx(?:\/[\d.]+)?\s*<\/center>/i },
-  { name: "Apache", pattern: /the requested url (?:\S+ )?was not found on this server/i },
-  { name: "IIS", pattern: /the resource you are looking for has been removed, had its name changed/i },
-  { name: "Express", pattern: /<pre>cannot (?:get|post|put|delete|head) [^<]*<\/pre>/i },
+  {
+    name: "Apache",
+    pattern: /the requested url (?:\S+ )?was not found on this server/i,
+  },
+  {
+    name: "IIS",
+    pattern:
+      /the resource you are looking for has been removed, had its name changed/i,
+  },
+  {
+    name: "Express",
+    pattern: /<pre>cannot (?:get|post|put|delete|head) [^<]*<\/pre>/i,
+  },
   { name: "Spring Boot", pattern: /whitelabel error page/i },
   { name: "Tomcat", pattern: /apache tomcat\/[\d.]+/i },
 ];
@@ -65,7 +77,6 @@ export interface NotFoundAnswer {
   headers: Headers;
   html: string;
 }
-
 
 type ProbeOutcome =
   | { kind: "not-allowed" }
@@ -90,16 +101,23 @@ function randomMissingPath(): string {
 }
 
 /** The exact URL and init of the probe. Exported so tests can pin what is sent. */
-export function buildNotFoundProbe(origin: string, path: string): { url: string; init: RequestInit } {
+export function buildNotFoundProbe(
+  origin: string,
+  path: string
+): { url: string; init: RequestInit } {
   const url = new URL(path, `${origin}/`);
-  if (url.origin !== origin) throw new Error("custom-404: probe left the audited origin");
+  if (url.origin !== origin)
+    throw new Error("custom-404: probe left the audited origin");
   return {
     url: url.href,
     init: {
       method: "GET",
       credentials: "omit",
       redirect: "manual",
-      headers: { Accept: "text/html,*/*;q=0.8", "User-Agent": SQUIRRELSCAN_USER_AGENT },
+      headers: {
+        Accept: "text/html,*/*;q=0.8",
+        "User-Agent": SQUIRRELSCAN_USER_AGENT,
+      },
     },
   };
 }
@@ -122,7 +140,10 @@ export function redactLocation(raw: string | null, base: string): string {
   }
 }
 
-async function sendProbe(ctx: RuleContext, origin: string): Promise<ProbeOutcome> {
+async function sendProbe(
+  ctx: RuleContext,
+  origin: string
+): Promise<ProbeOutcome> {
   const probe = ctx.probe;
   if (!probe || !probe.allows("quiet")) return { kind: "not-allowed" };
   const { url, init } = buildNotFoundProbe(origin, randomMissingPath());
@@ -168,15 +189,24 @@ export interface ErrorPageReading {
 const NOINDEX = /(?:^|[\s,])(?:noindex|none)(?:[\s,]|$)/i;
 
 /** What an HTML 404 page offers. Pure, so tests can feed it fixtures directly. */
-export function readErrorPage(html: string, origin: string, headers: Headers): ErrorPageReading {
-  const defaultServer = DEFAULT_SIGNATURES.find((s) => s.pattern.test(html))?.name ?? null;
+export function readErrorPage(
+  html: string,
+  origin: string,
+  headers: Headers
+): ErrorPageReading {
+  const defaultServer =
+    DEFAULT_SIGNATURES.find((s) => s.pattern.test(html))?.name ?? null;
   const document = parseDocument(html);
 
   const metaNoindex = [...document.querySelectorAll("meta[name]")].some((m) => {
     const name = (m.getAttribute("name") ?? "").toLowerCase();
-    return (name === "robots" || name === "googlebot") && NOINDEX.test(m.getAttribute("content") ?? "");
+    return (
+      (name === "robots" || name === "googlebot") &&
+      NOINDEX.test(m.getAttribute("content") ?? "")
+    );
   });
-  const noindex = metaNoindex || NOINDEX.test(headers.get("x-robots-tag") ?? "");
+  const noindex =
+    metaNoindex || NOINDEX.test(headers.get("x-robots-tag") ?? "");
 
   let siteLinks = 0;
   for (const a of document.querySelectorAll("a[href]")) {
@@ -184,7 +214,11 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
     if (!href || href.startsWith("#")) continue;
     try {
       const u = new URL(href, `${origin}/`);
-      if (u.origin === origin && (u.protocol === "http:" || u.protocol === "https:")) siteLinks++;
+      if (
+        u.origin === origin &&
+        (u.protocol === "http:" || u.protocol === "https:")
+      )
+        siteLinks++;
     } catch {
       // Not a URL: not a route.
     }
@@ -199,13 +233,16 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
     document.querySelector("header a[href], footer a[href]") !== null;
 
   const body = document.body;
-  const textLength = (body?.textContent ?? "").replace(/\s+/g, " ").trim().length;
+  const textLength = (body?.textContent ?? "")
+    .replace(/\s+/g, " ")
+    .trim().length;
   return {
     defaultServer,
     hasNav,
     hasSearch,
     siteLinks,
-    hasStylesheet: document.querySelector('link[rel~="stylesheet"], style') !== null,
+    hasStylesheet:
+      document.querySelector('link[rel~="stylesheet"], style') !== null,
     textLength,
     noindex,
   };
@@ -214,10 +251,20 @@ export function readErrorPage(html: string, origin: string, headers: Headers): E
 /** A stock server page, or a bare page with no chrome of any kind. */
 export function isDefaultErrorPage(r: ErrorPageReading): boolean {
   if (r.defaultServer) return true;
-  return !r.hasNav && !r.hasSearch && r.siteLinks === 0 && !r.hasStylesheet && r.textLength < BARE_TEXT_LIMIT;
+  return (
+    !r.hasNav &&
+    !r.hasSearch &&
+    r.siteLinks === 0 &&
+    !r.hasStylesheet &&
+    r.textLength < BARE_TEXT_LIMIT
+  );
 }
 
-function skipped(message: string, skipReason: string | undefined, details?: Record<string, unknown>): RuleResult {
+function skipped(
+  message: string,
+  skipReason: string | undefined,
+  details?: Record<string, unknown>
+): RuleResult {
   return {
     checks: [
       {
@@ -239,7 +286,7 @@ export const custom404Rule: Rule = {
     description:
       "Requests one URL that cannot exist and judges the answer: a real 404 or 410 status (not a 200 or a redirect to the homepage), a branded page rather than a bare server default, a route back into the site, and noindex. Runs only when probing is active or higher.",
     solution:
-      "Serve missing URLs with a real 404 (or 410 for removed pages), never a 200 or a redirect to the homepage: search engines treat those as soft 404s, spend crawl budget on them and can index them as thin duplicates. Replace the server's stock error page with one in your site template: the header and navigation, a search box, and links to the homepage and the main sections, so a visitor or an agent that lands on a dead URL has somewhere to go. Add `<meta name=\"robots\" content=\"noindex\">` (or an `X-Robots-Tag: noindex` header) to the 404 template so it can never be indexed if a misconfiguration serves it with a 200. Check it with `curl -I https://your-site/some-missing-page`.",
+      'Serve missing URLs with a real 404 (or 410 for removed pages), never a 200 or a redirect to the homepage: search engines treat those as soft 404s, spend crawl budget on them and can index them as thin duplicates. Replace the server\'s stock error page with one in your site template: the header and navigation, a search box, and links to the homepage and the main sections, so a visitor or an agent that lands on a dead URL has somewhere to go. Add `<meta name="robots" content="noindex">` (or an `X-Robots-Tag: noindex` header) to the 404 template so it can never be indexed if a misconfiguration serves it with a 200. Check it with `curl -I https://your-site/some-missing-page`.',
     category: "crawl",
     scope: "site",
     findingScope: "page",
@@ -269,7 +316,8 @@ export const custom404Rule: Rule = {
       );
     }
     const origin = siteOrigin(ctx.site?.baseUrl);
-    if (!origin) return skipped("404 handling not checked: invalid base URL", undefined);
+    if (!origin)
+      return skipped("404 handling not checked: invalid base URL", undefined);
 
     const outcome = await sendProbe(ctx, origin);
     if (outcome.kind === "not-allowed") {
@@ -289,7 +337,13 @@ export const custom404Rule: Rule = {
     const { status } = answer;
     const details = { probeUrl: url, status };
 
-    if (status === 429 || status === 430 || status === 403 || status === 401 || status >= 500) {
+    if (
+      status === 429 ||
+      status === 430 ||
+      status === 403 ||
+      status === 401 ||
+      status >= 500
+    ) {
       return skipped(
         `404 handling not checked: the site answered the missing URL with HTTP ${status} (throttling, a bot wall or a server error), not a 404`,
         PROBE_INCOMPLETE_SKIP_REASON,

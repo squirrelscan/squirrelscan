@@ -16,11 +16,11 @@
 // a change that stops `entity-identity` firing on squirrelscan.com fails here
 // rather than in someone's report six months later.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult, EntityMap } from "@squirrelscan/core-contracts";
-import { loadAllRules } from "@squirrelscan/rules";
 import type { ParsedPage, RuleContext } from "@squirrelscan/rules";
+
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { createEntityMapCollector } from "../src/entity-map/collect";
 
@@ -39,7 +39,10 @@ function page(url: string, jsonLd: unknown): { url: string; raw: string } {
 }
 
 /** Run the real collector over the pages and return the finished map. */
-function mapOf(pages: Array<{ url: string; raw: string | null }>, site = BASE): EntityMap {
+function mapOf(
+  pages: Array<{ url: string; raw: string | null }>,
+  site = BASE
+): EntityMap {
   const collector = createEntityMapCollector();
   collector.absorb(
     pages.map((p) => ({
@@ -149,7 +152,9 @@ describe("the same site with no @id anywhere", () => {
   test("schema/entity-identity fires on the repeated Organization", async () => {
     const result = await check("schema/entity-identity", map);
     expect(result.status).toBe("fail");
-    expect(result.items?.some((item) => item.label?.includes("Example Ltd"))).toBe(true);
+    expect(
+      result.items?.some((item) => item.label?.includes("Example Ltd"))
+    ).toBe(true);
   });
 
   test("schema/entity-website-missing reports the absent WebSite", async () => {
@@ -197,7 +202,11 @@ describe("a publisher only the homepage declares", () => {
     page(BASE, {
       "@context": "https://schema.org",
       "@graph": [
-        { "@type": "Organization", "@id": `${BASE}#organization`, name: "Example Ltd" },
+        {
+          "@type": "Organization",
+          "@id": `${BASE}#organization`,
+          name: "Example Ltd",
+        },
       ],
     }),
     page(`${BASE}post-1`, {
@@ -241,7 +250,9 @@ describe("a publisher only the homepage declares", () => {
 });
 
 describe("a LocalBusiness on every page", () => {
-  const urls = Array.from({ length: 12 }, (_, i) => (i === 0 ? BASE : `${BASE}p${i}`));
+  const urls = Array.from({ length: 12 }, (_, i) =>
+    i === 0 ? BASE : `${BASE}p${i}`
+  );
   const map = mapOf(
     urls.map((url) =>
       page(url, {
@@ -336,9 +347,11 @@ describe("an inline author nested in an article", () => {
   ]);
 
   test("the builder found the nested Person", () => {
-    expect(map.nodes.some((n) => n.types.includes("Person") && n.name === "Ada Lovelace")).toBe(
-      true
-    );
+    expect(
+      map.nodes.some(
+        (n) => n.types.includes("Person") && n.name === "Ada Lovelace"
+      )
+    ).toBe(true);
   });
 
   test("schema/entity-authors reports it as unidentified", async () => {
@@ -372,13 +385,21 @@ describe("the acceptance-criteria snapshots", () => {
   test("schema/entity-identity fires on squirrelscan.com", async () => {
     // Organization "squirrelscan" is declared on all 60 crawled pages with no
     // @id, which is exactly the defect the rule exists for — on our own site.
-    const result = await check("schema/entity-identity", await load("squirrelscan-com"));
+    const result = await check(
+      "schema/entity-identity",
+      await load("squirrelscan-com")
+    );
     expect(result.status).toBe("fail");
-    expect(result.items?.some((item) => item.label?.includes("squirrelscan"))).toBe(true);
+    expect(
+      result.items?.some((item) => item.label?.includes("squirrelscan"))
+    ).toBe(true);
   });
 
   test("schema/entity-split-identity fires on kinsta.com", async () => {
-    const result = await check("schema/entity-split-identity", await load("kinsta-com"));
+    const result = await check(
+      "schema/entity-split-identity",
+      await load("kinsta-com")
+    );
     expect(result.status).toBe("fail");
     expect(result.value).toContain("data.wordlift.io");
     expect(result.value).toContain("kinsta.com/#organization");
@@ -400,7 +421,10 @@ describe("the acceptance-criteria snapshots", () => {
   test("the orphan rule stays readable on a real 40-page crawl", async () => {
     // Before articles and breadcrumbs were excluded this reported 79 entities
     // on kinsta.com, which is not a finding, it is the site's page count.
-    const result = await check("schema/entity-orphan", await load("kinsta-com"));
+    const result = await check(
+      "schema/entity-orphan",
+      await load("kinsta-com")
+    );
     if (result.status === "info") {
       const reported = Number(/^(\d+)/.exec(result.message)?.[1] ?? 0);
       expect(reported).toBeLessThan(15);
@@ -433,7 +457,10 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
   ];
   const alternatesFor = (url: string, reciprocal: boolean) =>
     reciprocal || url === EN ? alternates : [];
-  const viaPages = (entityMap: EntityMap, reciprocal: boolean): RuleContext => ({
+  const viaPages = (
+    entityMap: EntityMap,
+    reciprocal: boolean
+  ): RuleContext => ({
     ...ctx(entityMap),
     site: {
       baseUrl: BASE,
@@ -449,7 +476,10 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
       sitemaps: null,
     } as RuleContext["site"],
   });
-  const viaSiteQuery = (entityMap: EntityMap, reciprocal: boolean): RuleContext => {
+  const viaSiteQuery = (
+    entityMap: EntityMap,
+    reciprocal: boolean
+  ): RuleContext => {
     const rows = [EN, DK].map((url) => ({
       normalizedUrl: url,
       canonical: url,
@@ -480,8 +510,11 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
   ];
   for (const [path, build] of PATHS) {
     const run = async (entityMap: EntityMap, reciprocal: boolean) =>
-      (await Promise.resolve(rule("schema/entity-conflicts").run(build(entityMap, reciprocal))))
-        .checks[0]!;
+      (
+        await Promise.resolve(
+          rule("schema/entity-conflicts").run(build(entityMap, reciprocal))
+        )
+      ).checks[0]!;
 
     describe(path, () => {
       test("reciprocal alternates passes, one-way still warns", async () => {
@@ -498,19 +531,35 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
             name: "Other provider",
           },
         });
-        expect((await run(mapOf([serviceAt(EN), otherProvider]), true)).status).toBe("warn");
+        expect(
+          (await run(mapOf([serviceAt(EN), otherProvider]), true)).status
+        ).toBe("warn");
       });
 
       test("bare-string providers: identical on every page passes, differing or partial warns", async () => {
         const literal = (provider?: string) => (url: string) =>
-          serviceAt(url, provider === undefined ? { provider: undefined } : { provider });
-        const same = mapOf([literal("Acme GmbH")(EN), literal("acme  GmbH")(DK)]);
+          serviceAt(
+            url,
+            provider === undefined ? { provider: undefined } : { provider }
+          );
+        const same = mapOf([
+          literal("Acme GmbH")(EN),
+          literal("acme  GmbH")(DK),
+        ]);
         expect((await run(same, true)).status).toBe("pass");
-        const differing = mapOf([literal("Acme GmbH")(EN), literal("Totally Other Ltd")(DK)]);
+        const differing = mapOf([
+          literal("Acme GmbH")(EN),
+          literal("Totally Other Ltd")(DK),
+        ]);
         const result = await run(differing, true);
         expect(result.status).toBe("warn");
-        expect(result.items!.map((item) => item.meta?.property)).toEqual(["url"]);
-        const partial = mapOf([literal("Acme GmbH")(EN), literal(undefined)(DK)]);
+        expect(result.items!.map((item) => item.meta?.property)).toEqual([
+          "url",
+        ]);
+        const partial = mapOf([
+          literal("Acme GmbH")(EN),
+          literal(undefined)(DK),
+        ]);
         expect((await run(partial, true)).status).toBe("warn");
       });
 
@@ -521,8 +570,12 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
         ]);
         const result = await run(map, true);
         expect(result.status).toBe("warn");
-        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual(["url", "vatID"]);
-        const vat = result.items!.find((item) => item.meta?.property === "vatID")!;
+        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual(
+          ["url", "vatID"]
+        );
+        const vat = result.items!.find(
+          (item) => item.meta?.property === "vatID"
+        )!;
         expect(vat.label).toContain("DE 123 456 789");
         expect(vat.label).toContain("DK 12345678");
       });
@@ -533,10 +586,9 @@ describe("schema/entity-conflicts localized Service aliases (#1615)", () => {
           serviceAt(DK, { legalName: "Beispiel Handels GmbH" }),
         ]);
         const result = await run(map, true);
-        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual([
-          "legalName",
-          "url",
-        ]);
+        expect(result.items!.map((item) => item.meta?.property).sort()).toEqual(
+          ["legalName", "url"]
+        );
       });
     });
   }

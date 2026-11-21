@@ -4,8 +4,16 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { eeatPathsSchema, matchesConfiguredPaths, probedConfiguredPages, probedNote } from "../shared/eeat-paths";
-import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
+import {
+  eeatPathsSchema,
+  matchesConfiguredPaths,
+  probedConfiguredPages,
+  probedNote,
+} from "../shared/eeat-paths";
+import {
+  findLinkedUncrawledPage,
+  linkedUncrawledCheck,
+} from "../shared/linked-uncrawled-page";
 import {
   findPrivacyPage,
   isPrivacyLinkText,
@@ -65,7 +73,8 @@ export const privacyPolicyRule: Rule = {
       // missing. Same link acceptance as legal/privacy-policy: slug, then text.
       const linked = ctx.site
         ? findLinkedUncrawledPage(ctx.site, {
-            href: (url) => matchesConfiguredPaths(url, paths) || isPrivacyPath(url),
+            href: (url) =>
+              matchesConfiguredPaths(url, paths) || isPrivacyPath(url),
             text: isPrivacyLinkText,
           })
         : null;
@@ -78,19 +87,30 @@ export const privacyPolicyRule: Rule = {
           status: "pass",
           message: `Privacy Policy page exists (found by probing ${probedFound.path}, not reached by the crawl)`,
           value: probedFound.url,
-          details: { probed: true, path: probedFound.path, status: probedFound.status },
+          details: {
+            probed: true,
+            path: probedFound.path,
+            status: probedFound.status,
+          },
         });
       } else if (!linked) {
         checks.push({
           name: "privacy-policy",
           status: "warn",
-          message: probed.length > 0 ? `No Privacy Policy page found ${probedNote(probed)}` : "No Privacy Policy page found",
+          message:
+            probed.length > 0
+              ? `No Privacy Policy page found ${probedNote(probed)}`
+              : "No Privacy Policy page found",
           value: "Create /privacy-policy page",
-          ...(probed.length > 0 ? { details: { probed: true, paths: probed.map((p) => p.path) } } : {}),
+          ...(probed.length > 0
+            ? { details: { probed: true, paths: probed.map((p) => p.path) } }
+            : {}),
         });
         return { checks };
       } else {
-        checks.push(linkedUncrawledCheck("privacy-policy", "Privacy Policy", linked));
+        checks.push(
+          linkedUncrawledCheck("privacy-policy", "Privacy Policy", linked)
+        );
         // Coverage below counts href-slug links only, so it cannot measure a
         // policy recognised by its anchor text alone.
         if (linked.matchedBy === "text") return { checks };

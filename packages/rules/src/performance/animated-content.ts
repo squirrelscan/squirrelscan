@@ -1,10 +1,9 @@
 // performance/animated-content - GIF to video suggestion
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
 export const optionsSchema = z.object({
   gif_size_threshold_kb: z
@@ -56,7 +55,10 @@ export const animatedContentRule: Rule = {
     // These are harder to detect without fetching the file
 
     // Check picture elements for GIF sources
-    const pictureElements = querySelectorAllOutsideNoscript(doc, "picture source");
+    const pictureElements = querySelectorAllOutsideNoscript(
+      doc,
+      "picture source"
+    );
     for (const source of pictureElements) {
       const srcset = source.getAttribute("srcset") || "";
       const type = source.getAttribute("type") || "";
@@ -80,7 +82,9 @@ export const animatedContentRule: Rule = {
         details: {
           suggestion: "Convert to MP4/WebM with <video autoplay loop muted>",
           estimatedSavings: "50-90% smaller file sizes",
-          ...(gifImages.length > 10 ? { additional: gifImages.length - 10 } : {}),
+          ...(gifImages.length > 10
+            ? { additional: gifImages.length - 10 }
+            : {}),
         },
       });
     } else {

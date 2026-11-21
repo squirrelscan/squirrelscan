@@ -5,7 +5,6 @@ import { STRICT_PROBE_UNANSWERED_SKIP_REASON } from "@squirrelscan/core-contract
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { refusedCheck, refusedFor } from "../refused";
-
 import { NOT_CHECKED, notCheckedCheck } from "./discovery-probe-state";
 
 export const markdownResponseRule: Rule = {
@@ -33,8 +32,18 @@ export const markdownResponseRule: Rule = {
       const refused = refusedFor(ctx.site, "markdown");
       checks.push(
         refused.length > 0
-          ? refusedCheck("markdown-response", "Markdown response", refused, true)
-          : notCheckedCheck("markdown-response", "Markdown response", undefined, "no-result"),
+          ? refusedCheck(
+              "markdown-response",
+              "Markdown response",
+              refused,
+              true
+            )
+          : notCheckedCheck(
+              "markdown-response",
+              "Markdown response",
+              undefined,
+              "no-result"
+            )
       );
       return { checks };
     }
@@ -91,14 +100,16 @@ export const markdownResponseRule: Rule = {
       ? md.negotiatedContentType
       : (md.strictNegotiatedContentType ?? md.negotiatedContentType);
     const signals: string[] = [];
-    if (md.servesMarkdown) signals.push(`content negotiation (${negotiatedType})`);
+    if (md.servesMarkdown)
+      signals.push(`content negotiation (${negotiatedType})`);
     if (md.mdVariantExists) signals.push(`.md variant (${md.mdVariantUrl})`);
     // A `Link: rel="alternate"; type="text/markdown"` header is a first-class
     // way to serve Markdown: it advertises a machine-discoverable twin even
     // when the homepage itself renders HTML (e.g. an app shell whose content
     // pages carry the header). Without this, a site that does everything right
     // except expose /index.md is scored as absent.
-    if (md.alternateMarkdownUrl) signals.push(`link rel=alternate (${md.alternateMarkdownUrl})`);
+    if (md.alternateMarkdownUrl)
+      signals.push(`link rel=alternate (${md.alternateMarkdownUrl})`);
 
     if (signals.length > 0) {
       checks.push({
@@ -126,8 +137,8 @@ export const markdownResponseRule: Rule = {
             negotiatedStatus: md.negotiatedStatus ?? null,
             mdVariantUrl: md.mdVariantUrl,
           },
-          "no-answer",
-        ),
+          "no-answer"
+        )
       );
     } else {
       // warn-status in an info-severity rule surfaces as a Recommendation in
@@ -157,13 +168,15 @@ export const markdownResponseRule: Rule = {
       const mdTokens = Number(md.markdownTokensHeader);
       const origTokens = Number(md.originalTokensHeader);
       const pct =
-        Number.isFinite(mdTokens) && Number.isFinite(origTokens) && origTokens > 0
+        Number.isFinite(mdTokens) &&
+        Number.isFinite(origTokens) &&
+        origTokens > 0
           ? Math.round((mdTokens / origTokens) * 100)
           : null;
       headerSignals.push(
         `Cloudflare markdown-transform fingerprint (x-markdown-tokens: ${md.markdownTokensHeader}, x-original-tokens: ${md.originalTokensHeader}${
           pct !== null ? `, ~${pct}% of original` : ""
-        })`,
+        })`
       );
     }
     // alternateMarkdownUrl is reported as a primary signal above, so it is not

@@ -20,27 +20,43 @@ import { Database } from "bun:sqlite";
 
 export const SQLITE_BUSY_TIMEOUT_MS = 15000;
 
-const BUSY = /database is locked|database table is locked|sqlite_busy|sqlite_locked/i;
+const BUSY =
+  /database is locked|database table is locked|sqlite_busy|sqlite_locked/i;
 
 const BUSY_DETAIL_MARKER = "(database file: ";
 
-function describeBusy(error: unknown, path: string, startedAt: number): unknown {
-  if (!(error instanceof Error) || !BUSY.test(error.message) || error.message.includes(BUSY_DETAIL_MARKER)) {
+function describeBusy(
+  error: unknown,
+  path: string,
+  startedAt: number
+): unknown {
+  if (
+    !(error instanceof Error) ||
+    !BUSY.test(error.message) ||
+    error.message.includes(BUSY_DETAIL_MARKER)
+  ) {
     return error;
   }
   const waited = Math.round(performance.now() - startedAt);
-  const described = new Error(`${error.message} ${BUSY_DETAIL_MARKER}${path}, waited ${waited} ms)`, {
-    cause: error,
-  });
+  const described = new Error(
+    `${error.message} ${BUSY_DETAIL_MARKER}${path}, waited ${waited} ms)`,
+    {
+      cause: error,
+    }
+  );
   described.name = error.name;
   for (const key of ["code", "errno", "byteOffset"] as const) {
     const value = (error as unknown as Record<string, unknown>)[key];
-    if (value !== undefined) (described as unknown as Record<string, unknown>)[key] = value;
+    if (value !== undefined)
+      (described as unknown as Record<string, unknown>)[key] = value;
   }
   return described;
 }
 
-function guard<A extends unknown[], R>(path: string, fn: (...args: A) => R): (...args: A) => R {
+function guard<A extends unknown[], R>(
+  path: string,
+  fn: (...args: A) => R
+): (...args: A) => R {
   return (...args: A): R => {
     const startedAt = performance.now();
     try {
@@ -56,18 +72,29 @@ type Statement = { run: unknown; get: unknown; all: unknown; values: unknown };
 function guardStatement<S extends Statement>(path: string, statement: S): S {
   const wrapped = Object.create(statement) as S;
   for (const method of ["run", "get", "all", "values"] as const) {
-    const original = (statement as unknown as Record<string, (...a: unknown[]) => unknown>)[method];
+    const original = (
+      statement as unknown as Record<string, (...a: unknown[]) => unknown>
+    )[method];
     if (typeof original === "function") {
-      (wrapped as unknown as Record<string, unknown>)[method] = guard(path, original.bind(statement));
+      (wrapped as unknown as Record<string, unknown>)[method] = guard(
+        path,
+        original.bind(statement)
+      );
     }
   }
   // iterate() is lazy: a busy error surfaces on a later step, not on the call,
   // so the guard wraps the whole walk. Bound to the statement because a method
   // reached through Object.create cannot see the native private fields.
-  const iterate = (statement as unknown as Record<string, (...a: unknown[]) => Iterable<unknown>>)
-    .iterate;
+  const iterate = (
+    statement as unknown as Record<
+      string,
+      (...a: unknown[]) => Iterable<unknown>
+    >
+  ).iterate;
   if (typeof iterate === "function") {
-    (wrapped as unknown as Record<string, unknown>).iterate = function* (...args: unknown[]) {
+    (wrapped as unknown as Record<string, unknown>).iterate = function* (
+      ...args: unknown[]
+    ) {
       const startedAt = performance.now();
       try {
         yield* iterate.apply(statement, args);
@@ -84,11 +111,17 @@ function guardStatement<S extends Statement>(path: string, statement: S): S {
  * `busy_timeout` set first, `transaction()` taking the write lock up front, and
  * busy errors naming the file and the wait.
  */
-export function openSqlite(path: string, busyTimeoutMs: number = SQLITE_BUSY_TIMEOUT_MS): Database {
+export function openSqlite(
+  path: string,
+  busyTimeoutMs: number = SQLITE_BUSY_TIMEOUT_MS
+): Database {
   const db = new Database(path);
   db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
 
-  const target = db as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const target = db as unknown as Record<
+    string,
+    (...args: unknown[]) => unknown
+  >;
   for (const method of ["exec", "run"] as const) {
     target[method] = guard(path, target[method]!.bind(db));
   }
@@ -124,14 +157,21 @@ export function openSqlite(path: string, busyTimeoutMs: number = SQLITE_BUSY_TIM
  * pragma is retried here, with a short jittered pause, until `timeoutMs` is
  * spent. A database that is already WAL answers without a lock, the common case.
  */
-export function enableWal(db: Database, timeoutMs: number = SQLITE_BUSY_TIMEOUT_MS): void {
+export function enableWal(
+  db: Database,
+  timeoutMs: number = SQLITE_BUSY_TIMEOUT_MS
+): void {
   const deadline = performance.now() + timeoutMs;
   for (;;) {
     try {
       db.exec("PRAGMA journal_mode = WAL");
       return;
     } catch (error) {
-      if (!(error instanceof Error) || !BUSY.test(error.message) || performance.now() >= deadline) {
+      if (
+        !(error instanceof Error) ||
+        !BUSY.test(error.message) ||
+        performance.now() >= deadline
+      ) {
         throw error;
       }
       Bun.sleepSync(5 + Math.random() * 20);

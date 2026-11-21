@@ -1,10 +1,17 @@
 // performance/js-libraries - Detect known JS libraries and versions
 // Detects client-side JavaScript libraries and known vulnerabilities
 
+import {
+  querySelectorAllOutsideNoscript,
+  stripNoscriptMarkup,
+} from "@squirrelscan/utils";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { querySelectorAllOutsideNoscript, stripNoscriptMarkup } from "@squirrelscan/utils";
-
+import {
+  blankAndCutSpans,
+  scriptBodySpans,
+} from "../shared/inline-script-text";
 import {
   buildGramIndex,
   mandatoryLiterals,
@@ -12,7 +19,6 @@ import {
   type GramIndex,
   type MandatoryLiterals,
 } from "../shared/literal-prefilter";
-import { blankAndCutSpans, scriptBodySpans } from "../shared/inline-script-text";
 
 // Known library detection patterns
 interface LibraryPattern {
@@ -323,9 +329,8 @@ const PREFILTERED_LIBRARIES = libraryPatterns.map((lib) => ({
 
 /** Exported for tests/literal-prefilter.test.ts, which proves the derived
  *  literals really are mandatory for every one of these. */
-export const LIBRARY_INLINE_PATTERNS: readonly RegExp[] = libraryPatterns.flatMap(
-  (lib) => lib.inlinePatterns
-);
+export const LIBRARY_INLINE_PATTERNS: readonly RegExp[] =
+  libraryPatterns.flatMap((lib) => lib.inlinePatterns);
 
 export const jsLibrariesRule: Rule = {
   meta: {
@@ -400,11 +405,17 @@ export const jsLibrariesRule: Rule = {
     // inside the HTML found nothing new and doubled the rule's cost on a
     // script-heavy page (#1864). Each body is cut to a single space; one that
     // cannot be placed exactly is left in.
-    const markup = blankAndCutSpans(htmlContent, scriptBodySpans(htmlContent, pageInlineScripts), 1).text;
+    const markup = blankAndCutSpans(
+      htmlContent,
+      scriptBodySpans(htmlContent, pageInlineScripts),
+      1
+    ).text;
 
     // One pass per distinct body of text, reused by every library below. Short
     // scripts index to null and are simply scanned, as before.
-    const inlineIndexes: Array<GramIndex | null> = inlineScripts.map((c) => buildGramIndex(c));
+    const inlineIndexes: Array<GramIndex | null> = inlineScripts.map((c) =>
+      buildGramIndex(c)
+    );
     const htmlIndex = buildGramIndex(markup);
 
     // Check for libraries

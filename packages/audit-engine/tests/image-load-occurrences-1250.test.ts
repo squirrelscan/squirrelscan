@@ -1,9 +1,8 @@
 // The asset collector records which image file a browser downloads and whether it loads at page
 // load, so size and weight rules count what visitors fetch (#1250, #1251, #1252).
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
 import {
   absorbResourceOccurrences,
@@ -19,20 +18,24 @@ function collect(body: string, pageUrl = `${BASE}/p.html`) {
   absorbResourceOccurrences(
     occurrences,
     [{ url: pageUrl, finalUrl: pageUrl, parsed: parsePage(html, pageUrl) }],
-    BASE,
+    BASE
   );
   return occurrences;
 }
 
-const flags = (o: ReturnType<typeof collect>, path: string) => imageLoadFlags(o, `${BASE}${path}`);
+const flags = (o: ReturnType<typeof collect>, path: string) =>
+  imageLoadFlags(o, `${BASE}${path}`);
 
 describe("srcset candidate selection (#1251)", () => {
   const o = collect(
-    `<img src="big.jpg" srcset="small.jpg 400w, big.jpg 960w" sizes="180px" width="180" height="250" alt="Card">`,
+    `<img src="big.jpg" srcset="small.jpg 400w, big.jpg 960w" sizes="180px" width="180" height="250" alt="Card">`
   );
 
   test("both files are still measured, the fallback is marked as not downloaded", () => {
-    expect([...o.images.keys()].sort()).toEqual([`${BASE}/big.jpg`, `${BASE}/small.jpg`]);
+    expect([...o.images.keys()].sort()).toEqual([
+      `${BASE}/big.jpg`,
+      `${BASE}/small.jpg`,
+    ]);
     expect(flags(o, "/big.jpg")).toEqual({ fallbackOnly: true });
     expect(flags(o, "/small.jpg")).toEqual({});
   });
@@ -44,7 +47,7 @@ describe("srcset candidate selection (#1251)", () => {
 
   test("a file selected by any image is not a fallback", () => {
     const both = collect(
-      `<img src="x.jpg" srcset="y.jpg 400w, x.jpg 960w" sizes="180px" alt="A"><img src="y.jpg" alt="B">`,
+      `<img src="x.jpg" srcset="y.jpg 400w, x.jpg 960w" sizes="180px" alt="A"><img src="y.jpg" alt="B">`
     );
     expect(flags(both, "/y.jpg")).toEqual({});
     expect(flags(both, "/x.jpg")).toEqual({ fallbackOnly: true });
@@ -52,16 +55,18 @@ describe("srcset candidate selection (#1251)", () => {
 
   test("a srcset whose selected candidate is on another origin keeps the own-host src measured and counted", () => {
     const cdn = collect(
-      `<img src="local.jpg" srcset="https://cdn.other.example/a-400.jpg 400w, https://cdn.other.example/a-900.jpg 900w" sizes="180px" alt="A">`,
+      `<img src="local.jpg" srcset="https://cdn.other.example/a-400.jpg 400w, https://cdn.other.example/a-900.jpg 900w" sizes="180px" alt="A">`
     );
     expect(flags(cdn, "/local.jpg")).toEqual({});
     expect([...cdn.images.keys()]).toEqual([`${BASE}/local.jpg`]);
-    expect([...(cdn.imagesSelected?.keys() ?? [])]).toEqual([`${BASE}/local.jpg`]);
+    expect([...(cdn.imagesSelected?.keys() ?? [])]).toEqual([
+      `${BASE}/local.jpg`,
+    ]);
   });
 
   test("a picture's img keeps its src as the loaded file", () => {
     const pic = collect(
-      `<picture><source srcset="a.webp" type="image/webp"><img src="a.jpg" srcset="b.jpg 400w, a.jpg 960w" sizes="180px" alt="A"></picture>`,
+      `<picture><source srcset="a.webp" type="image/webp"><img src="a.jpg" srcset="b.jpg 400w, a.jpg 960w" sizes="180px" alt="A"></picture>`
     );
     expect(flags(pic, "/a.jpg")).toEqual({});
   });
@@ -69,14 +74,19 @@ describe("srcset candidate selection (#1251)", () => {
 
 describe("lazy images below the initial viewport (#1252)", () => {
   const lazyPage = [1, 2, 3, 4, 5, 6]
-    .map((n) => `<img src="lazy${n}.jpg" loading="lazy" width="400" height="300" alt="Item ${n}">`)
+    .map(
+      (n) =>
+        `<img src="lazy${n}.jpg" loading="lazy" width="400" height="300" alt="Item ${n}">`
+    )
     .join("");
   const o = collect(`<main>${lazyPage}</main>`);
 
   test("the first three content images are in the viewport, the rest are deferred on this page", () => {
     for (const n of [1, 2, 3]) expect(flags(o, `/lazy${n}.jpg`)).toEqual({});
     for (const n of [4, 5, 6]) {
-      expect(flags(o, `/lazy${n}.jpg`)).toEqual({ deferredPages: [`${BASE}/p.html`] });
+      expect(flags(o, `/lazy${n}.jpg`)).toEqual({
+        deferredPages: [`${BASE}/p.html`],
+      });
     }
   });
 
@@ -85,15 +95,16 @@ describe("lazy images below the initial viewport (#1252)", () => {
       .map((n) => `<img src="i${n}.svg" width="24" height="24" alt="">`)
       .join("");
     const withIcons = collect(
-      `${icons}<img src="hero.jpg" loading="lazy" width="400" height="120" alt="Hero">`,
+      `${icons}<img src="hero.jpg" loading="lazy" width="400" height="120" alt="Hero">`
     );
     expect(flags(withIcons, "/hero.jpg")).toEqual({});
   });
 
   test("an eager load of the same file on the page makes it count", () => {
-    const content = (n: number) => `<img src="c${n}.jpg" width="800" height="600" alt="">`;
+    const content = (n: number) =>
+      `<img src="c${n}.jpg" width="800" height="600" alt="">`;
     const mixed = collect(
-      `${[1, 2, 3].map(content).join("")}<img src="shared.jpg" loading="lazy" width="800" height="600" alt=""><img src="shared.jpg" width="800" height="600" alt="">`,
+      `${[1, 2, 3].map(content).join("")}<img src="shared.jpg" loading="lazy" width="800" height="600" alt=""><img src="shared.jpg" width="800" height="600" alt="">`
     );
     expect(flags(mixed, "/shared.jpg")).toEqual({});
   });
@@ -101,7 +112,8 @@ describe("lazy images below the initial viewport (#1252)", () => {
   test("deferred on one page, eager on another: only the first page is deferred", () => {
     const html = (body: string) =>
       `<!doctype html><html><head><title>Two pages fixture</title></head><body>${body}</body></html>`;
-    const content = (n: number) => `<img src="c${n}.jpg" width="800" height="600" alt="">`;
+    const content = (n: number) =>
+      `<img src="c${n}.jpg" width="800" height="600" alt="">`;
     const a = `${BASE}/a.html`;
     const b = `${BASE}/b.html`;
     const occurrences = emptySiteAssetOccurrences();
@@ -112,14 +124,22 @@ describe("lazy images below the initial viewport (#1252)", () => {
           url: a,
           finalUrl: a,
           parsed: parsePage(
-            html(`${[1, 2, 3].map(content).join("")}<img src="s.jpg" loading="lazy" alt="">`),
-            a,
+            html(
+              `${[1, 2, 3].map(content).join("")}<img src="s.jpg" loading="lazy" alt="">`
+            ),
+            a
           ),
         },
-        { url: b, finalUrl: b, parsed: parsePage(html(`<img src="s.jpg" alt="">`), b) },
+        {
+          url: b,
+          finalUrl: b,
+          parsed: parsePage(html(`<img src="s.jpg" alt="">`), b),
+        },
       ],
-      BASE,
+      BASE
     );
-    expect(imageLoadFlags(occurrences, `${BASE}/s.jpg`)).toEqual({ deferredPages: [a] });
+    expect(imageLoadFlags(occurrences, `${BASE}/s.jpg`)).toEqual({
+      deferredPages: [a],
+    });
   });
 });

@@ -2,9 +2,9 @@
 // row, so a multi-item check converted to a failure still counts as ONE failed
 // check on its page, not one per item.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { describe, expect, test } from "bun:test";
 
 import {
   addChecksToTally,

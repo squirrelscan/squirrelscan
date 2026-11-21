@@ -3,12 +3,12 @@
 // (#2764), so a hop the scope admits but the policy refuses (a link-local or
 // cloud metadata address) is never sent, whatever the scope config says.
 
+import type { Config } from "@squirrelscan/config";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import { probeLinkTargets } from "../src/link-target-probe";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
@@ -17,7 +17,9 @@ function fakeSite(routes: Record<string, () => Response>) {
   const calls: string[] = [];
   const send = async (url: string, _init: RequestInit) => {
     calls.push(url);
-    return routes[new URL(url).pathname]?.() ?? new Response(null, { status: 404 });
+    return (
+      routes[new URL(url).pathname]?.() ?? new Response(null, { status: 404 })
+    );
   };
   return { calls, send };
 }
@@ -58,13 +60,20 @@ describe("the internal link probe's egress (repo#2830)", () => {
           headers: { location: "http://metadata.google.internal/v1/" },
         }),
       "/go-v6": () =>
-        new Response(null, { status: 307, headers: { location: "http://[fe80::1]/x" } }),
+        new Response(null, {
+          status: 307,
+          headers: { location: "http://[fe80::1]/x" },
+        }),
     });
     const { results } = await Effect.runPromise(
       probeLinkTargets(
-        ["https://example.com/go-ip", "https://example.com/go-name", "https://example.com/go-v6"],
-        { ...base, send: site.send },
-      ),
+        [
+          "https://example.com/go-ip",
+          "https://example.com/go-name",
+          "https://example.com/go-v6",
+        ],
+        { ...base, send: site.send }
+      )
     );
     expect(results.map((r) => r.status)).toEqual([302, 301, 307]);
     expect(site.calls).toEqual([
@@ -77,7 +86,10 @@ describe("the internal link probe's egress (repo#2830)", () => {
   test("a target the policy refuses is never sent", async () => {
     const site = fakeSite({});
     const { results } = await Effect.runPromise(
-      probeLinkTargets(["http://169.254.169.254/latest/"], { ...base, send: site.send }),
+      probeLinkTargets(["http://169.254.169.254/latest/"], {
+        ...base,
+        send: site.send,
+      })
     );
     expect(results[0]).toMatchObject({ status: null, error: "not requested" });
     expect(site.calls).toEqual([]);
@@ -87,14 +99,23 @@ describe("the internal link probe's egress (repo#2830)", () => {
     resolved.length = 0;
     const site = fakeSite({
       "/moved": () =>
-        new Response(null, { status: 301, headers: { location: "http://intranet.test/new" } }),
+        new Response(null, {
+          status: 301,
+          headers: { location: "http://intranet.test/new" },
+        }),
       "/new": () => new Response(null, { status: 200 }),
     });
     const { results } = await Effect.runPromise(
-      probeLinkTargets(["https://example.com/moved"], { ...base, send: site.send }),
+      probeLinkTargets(["https://example.com/moved"], {
+        ...base,
+        send: site.send,
+      })
     );
     expect(results[0]?.status).toBe(200);
-    expect(site.calls).toEqual(["https://example.com/moved", "http://intranet.test/new"]);
+    expect(site.calls).toEqual([
+      "https://example.com/moved",
+      "http://intranet.test/new",
+    ]);
     // Only the hop off the site was looked up.
     expect(resolved).toEqual(["intranet.test"]);
   });
@@ -119,7 +140,7 @@ describe("the audit wires the probe to the site's egress policy (repo#2830)", ()
         if (url.pathname === "/") {
           return new Response(
             `<!doctype html><html><head><title>Home</title></head><body><a href="/go">Docs</a></body></html>`,
-            { headers: { "content-type": "text/html" } },
+            { headers: { "content-type": "text/html" } }
           );
         }
         if (url.pathname === "/go") {
@@ -138,10 +159,14 @@ describe("the audit wires the probe to the site's egress policy (repo#2830)", ()
     const domains = ["localhost", "metadata.google.internal"];
 
     const requested: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
       const url = input instanceof Request ? input.url : String(input);
       requested.push(url);
-      if (new URL(url).hostname === "metadata.google.internal") return new Response("metadata");
+      if (new URL(url).hostname === "metadata.google.internal")
+        return new Response("metadata");
       return realFetch(input, init);
     }) as typeof fetch;
 
@@ -161,27 +186,43 @@ describe("the audit wires the probe to the site's egress policy (repo#2830)", ()
           disableLinkDiscovery: true,
           allowedDomains: domains,
         },
-      }),
+      })
     );
-    const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+    const crawlId = await Effect.runPromise(
+      crawler.start(`${origin}/`, `${origin}/`)
+    );
     const config = {
       rule_options: {},
       rules: { enable: ["links/broken-links"] },
       project: { domains },
       crawler: { max_pages: 1, exclude: [] },
-      external_links: { enabled: false, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+      external_links: {
+        enabled: false,
+        concurrency: 1,
+        timeout_ms: 5_000,
+        cache_ttl_days: 1,
+      },
       internal_links: { enabled: true },
     } as unknown as Config;
     const { assets } = await Effect.runPromise(
-      runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}),
+      runStreamingPreRules(
+        crawler.storage as SQLiteStorage,
+        crawlId,
+        config,
+        {}
+      )
     );
 
     // Non-vacuous: the probe asked the link, and the redirect was its answer.
     expect(requested).toContain(`${origin}/go`);
-    const go = (assets.linkTargetStatuses ?? []).find((s) => new URL(s.url).pathname === "/go");
-    expect(go?.status).toBe(302);
-    expect(requested.filter((url) => new URL(url).hostname === "metadata.google.internal")).toEqual(
-      [],
+    const go = (assets.linkTargetStatuses ?? []).find(
+      (s) => new URL(s.url).pathname === "/go"
     );
+    expect(go?.status).toBe(302);
+    expect(
+      requested.filter(
+        (url) => new URL(url).hostname === "metadata.google.internal"
+      )
+    ).toEqual([]);
   });
 });

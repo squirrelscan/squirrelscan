@@ -1,6 +1,7 @@
 // a11y/aria-valid-attr-value - Valid values for ARIA attributes
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // ARIA attribute value types and valid values

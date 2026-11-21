@@ -18,12 +18,10 @@
 
 import { Effect } from "effect";
 
+import type { FreshnessOptions, FreshnessResult } from "./incremental";
 import type { CrawlStorage, PageRecord, StorageError } from "./storage/types";
+
 import { calculateFreshness, varyMatches } from "./incremental";
-import type {
-  FreshnessOptions,
-  FreshnessResult,
-} from "./incremental";
 
 /**
  * Request headers we vary the cache on. We send a small, stable set, so this is

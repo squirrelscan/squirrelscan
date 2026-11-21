@@ -39,7 +39,11 @@ export function parseXRobotsTag(value: string): XRobotsTagGroup[] {
     // tail of an unavailable_after date (`...15:00:00,5-08:00`) from reading as
     // a crawler name.
     const prefix = /^([A-Za-z0-9][\w.-]{0,63})\s*:\s*(.*)$/.exec(entry);
-    if (prefix && /[A-Za-z]/.test(prefix[1]) && !VALUE_DIRECTIVES.has(prefix[1].toLowerCase())) {
+    if (
+      prefix &&
+      /[A-Za-z]/.test(prefix[1]) &&
+      !VALUE_DIRECTIVES.has(prefix[1].toLowerCase())
+    ) {
       current = { agent: prefix[1].toLowerCase(), directives: prefix[2] };
       groups.push(current);
       continue;
@@ -72,7 +76,10 @@ const MAX_NAMED_AGENTS = 5;
  * "X-Robots-Tag header"; scoped groups add "for <agent>" and are folded away when
  * an unscoped group already declares the same directive.
  */
-function collectSources(meta: string | null, header: string | null): RobotsSources {
+function collectSources(
+  meta: string | null,
+  header: string | null
+): RobotsSources {
   const sources: RobotsSources = { noindex: [], nofollow: [] };
   const metaLower = meta?.toLowerCase() ?? "";
   for (const directive of ["noindex", "nofollow"] as const) {
@@ -82,7 +89,9 @@ function collectSources(meta: string | null, header: string | null): RobotsSourc
 
   const groups = parseXRobotsTag(header);
   for (const directive of ["noindex", "nofollow"] as const) {
-    const matching = groups.filter((g) => g.directives.toLowerCase().includes(directive));
+    const matching = groups.filter((g) =>
+      g.directives.toLowerCase().includes(directive)
+    );
     if (matching.some((g) => g.agent === null)) {
       sources[directive].push(HEADER_LABEL);
       continue;
@@ -91,7 +100,9 @@ function collectSources(meta: string | null, header: string | null): RobotsSourc
     if (agents.length === 0) continue;
     const named = agents.slice(0, MAX_NAMED_AGENTS).join(", ");
     const more = agents.length - MAX_NAMED_AGENTS;
-    sources[directive].push(`${HEADER_LABEL} for ${named}${more > 0 ? ` and ${more} more` : ""}`);
+    sources[directive].push(
+      `${HEADER_LABEL} for ${named}${more > 0 ? ` and ${more} more` : ""}`
+    );
   }
   return sources;
 }
@@ -105,7 +116,9 @@ function describeSources(sources: RobotsSources): string {
       ? `noindex and nofollow ${via(noindex)}`
       : `noindex ${via(noindex)}, nofollow ${via(nofollow)}`;
   }
-  return noindex.length > 0 ? `noindex ${via(noindex)}` : `nofollow ${via(nofollow)}`;
+  return noindex.length > 0
+    ? `noindex ${via(noindex)}`
+    : `nofollow ${via(nofollow)}`;
 }
 
 /** The meta value alone when there is no header, so existing reports read the same. */
@@ -119,7 +132,8 @@ export const robotsMetaRule: Rule = {
   meta: {
     id: "core/robots-meta",
     name: "Robots Meta",
-    description: "Checks the robots meta tag and X-Robots-Tag header for indexing directives",
+    description:
+      "Checks the robots meta tag and X-Robots-Tag header for indexing directives",
     solution:
       'The robots meta tag and the X-Robots-Tag response header control how search engines index and follow links on a page. Common directives include noindex, nofollow, noarchive, and nosnippet. If your page has noindex, it won\'t appear in search results. Review whether this is intentional; the report names the source, and a header set by a CDN, proxy or server config does not appear in the page source. For pages that should be indexed, remove the noindex directive or change it to "index, follow". Be careful with nofollow as it prevents link equity from flowing to linked pages.',
     category: "core",

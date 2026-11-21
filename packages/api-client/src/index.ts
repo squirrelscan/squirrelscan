@@ -33,7 +33,11 @@ export interface ApiClientConfig {
    *  overrides apply at request time rather than at construction. */
   baseUrl: string | (() => string);
   /** Resolve a bearer token per call. Sync or async; `null`/`undefined` = anon. */
-  getToken?: () => string | null | undefined | Promise<string | null | undefined>;
+  getToken?: () =>
+    | string
+    | null
+    | undefined
+    | Promise<string | null | undefined>;
   /** Static `User-Agent` header (e.g. `squirrel/0.0.50`). */
   userAgent?: string;
   /** Default per-request timeout. Default 10s. */
@@ -84,10 +88,13 @@ export interface ApiClient {
   fetch(
     path: string,
     init?: RequestInit,
-    opts?: { timeoutMs?: number; retries?: number },
+    opts?: { timeoutMs?: number; retries?: number }
   ): Promise<Response>;
   /** Awaited typed request; never throws for an HTTP status. */
-  request<T = unknown>(path: string, init?: ApiRequestInit): Promise<ApiResult<T>>;
+  request<T = unknown>(
+    path: string,
+    init?: ApiRequestInit
+  ): Promise<ApiResult<T>>;
   /** Fire-and-forget best-effort write; never throws. */
   send(path: string, init?: ApiRequestInit): Promise<void>;
 }
@@ -101,7 +108,9 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   const url = (path: string): string => `${resolveBase()}${path}`;
 
   const headers = (token?: string | null): Record<string, string> => {
-    const result: Record<string, string> = { "Content-Type": "application/json" };
+    const result: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
     if (config.userAgent) {
       result["User-Agent"] = config.userAgent;
     }
@@ -114,9 +123,10 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   const doFetch = async (
     path: string,
     init: RequestInit = {},
-    opts: { timeoutMs?: number; retries?: number } = {},
+    opts: { timeoutMs?: number; retries?: number } = {}
   ): Promise<Response> => {
-    const timeoutMs = opts.timeoutMs ?? config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutMs =
+      opts.timeoutMs ?? config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
     const attempts = Math.max(1, (opts.retries ?? 0) + 1);
     let lastError: unknown = new Error("unreachable");
 
@@ -153,7 +163,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
 
   const request = async <T = unknown>(
     path: string,
-    init: ApiRequestInit = {},
+    init: ApiRequestInit = {}
   ): Promise<ApiResult<T>> => {
     const token = await resolveToken(init);
     if (init.auth === "required" && !token) {
@@ -166,9 +176,11 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
         {
           method: init.method ?? (init.body !== undefined ? "POST" : "GET"),
           headers: headers(token),
-          ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+          ...(init.body !== undefined
+            ? { body: JSON.stringify(init.body) }
+            : {}),
         },
-        { timeoutMs: init.timeoutMs, retries: init.retries },
+        { timeoutMs: init.timeoutMs, retries: init.retries }
       );
       if (response.status === 401 && token) {
         try {
@@ -177,21 +189,30 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
           // A hook must not turn a 401 into a transport failure.
         }
       }
-      return { ok: response.ok, status: response.status, data: await parseJson<T>(response) };
+      return {
+        ok: response.ok,
+        status: response.status,
+        data: await parseJson<T>(response),
+      };
     } catch {
       return { ok: false, status: 0, data: null };
     }
   };
 
-  const send = async (path: string, init: ApiRequestInit = {}): Promise<void> => {
+  const send = async (
+    path: string,
+    init: ApiRequestInit = {}
+  ): Promise<void> => {
     const result = await request(path, init);
     if (!result.ok) {
       // Distinguish "server said no" (HTTP status) from "couldn't reach the
       // server" (status 0 — transport failure / missing required credential) so
       // a debug log can tell them apart.
       config.onDebug?.(
-        result.status === 0 ? "api-client: transport failure" : "api-client: non-2xx",
-        { path, status: result.status },
+        result.status === 0
+          ? "api-client: transport failure"
+          : "api-client: non-2xx",
+        { path, status: result.status }
       );
     }
   };

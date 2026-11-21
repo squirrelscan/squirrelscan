@@ -2,9 +2,9 @@
 // Reads only scalars from ctx.site.pages (url, status, headers, meta, h1, og, schemas.website,
 // isSoft404), never the DOM, so it behaves the same in the resident and streaming engines.
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { isPageIndexable } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const CHECK_NAME = "indexable-search-results";
 const SEARCH_PARAMS = ["s", "q", "query", "search", "keyword"];
@@ -32,7 +32,9 @@ interface PathTemplate {
 type SearchTemplate = QueryTemplate | PathTemplate;
 
 function templateKey(t: SearchTemplate): string {
-  return t.kind === "query" ? `q|${t.host}|${t.path}|${t.param}` : `p|${t.host}|${t.prefix}`;
+  return t.kind === "query"
+    ? `q|${t.host}|${t.path}|${t.param}`
+    : `p|${t.host}|${t.prefix}`;
 }
 
 function trimSlash(path: string): string {
@@ -87,7 +89,10 @@ function matchesTemplate(u: URL, templates: SearchTemplate[]): boolean {
     if (t.kind === "query") {
       if (trimSlash(u.pathname) !== t.path) continue;
       if ((u.searchParams.get(t.param) ?? "").trim() !== "") return true;
-    } else if (u.pathname.startsWith(t.prefix) && u.pathname.length > t.prefix.length) {
+    } else if (
+      u.pathname.startsWith(t.prefix) &&
+      u.pathname.length > t.prefix.length
+    ) {
       return true;
     }
   }
@@ -134,7 +139,9 @@ const MIN_EVIDENCE_LEN = 3;
 
 function containsWord(haystack: string, needle: string): boolean {
   const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "iu").test(haystack);
+  return new RegExp(`(?<![\\p{L}\\p{N}])${esc}(?![\\p{L}\\p{N}])`, "iu").test(
+    haystack
+  );
 }
 
 /**
@@ -150,9 +157,14 @@ function hasResultsEvidence(page: PageLike, u: URL): boolean {
   if (typeof ogTitle === "string") strong.push(normalizeText(ogTitle));
   const values = paramValues(u).filter((v) => v.length >= MIN_EVIDENCE_LEN);
   if (values.some((v) => strong.some((h) => containsWord(h, v)))) return true;
-  const schemas = page.parsed.schemas as { hasType?: (t: string) => boolean } | undefined;
+  const schemas = page.parsed.schemas as
+    | { hasType?: (t: string) => boolean }
+    | undefined;
   try {
-    return typeof schemas?.hasType === "function" && schemas.hasType("SearchResultsPage") === true;
+    return (
+      typeof schemas?.hasType === "function" &&
+      schemas.hasType("SearchResultsPage") === true
+    );
   } catch {
     return false;
   }
@@ -161,8 +173,12 @@ function hasResultsEvidence(page: PageLike, u: URL): boolean {
 /** Robots `none` means noindex,nofollow; shared isPageIndexable only checks "noindex". */
 function hasRobotsNone(page: PageLike): boolean {
   const tokens = (v: string | undefined | null) =>
-    (v ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean);
-  const meta = (page.parsed.meta as { robots?: string | null } | undefined)?.robots;
+    (v ?? "")
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter(Boolean);
+  const meta = (page.parsed.meta as { robots?: string | null } | undefined)
+    ?.robots;
   if (tokens(meta).includes("none")) return true;
   const xr = page.headers?.["x-robots-tag"];
   return tokens(xr).includes("none");
@@ -181,8 +197,11 @@ function targetStrings(target: unknown): string[] {
 function templatesFromPage(page: PageLike): SearchTemplate[] {
   let website: { potentialAction?: unknown } | null | undefined;
   try {
-    website = (page.parsed.schemas as { website?: { potentialAction?: unknown } } | undefined)
-      ?.website;
+    website = (
+      page.parsed.schemas as
+        | { website?: { potentialAction?: unknown } }
+        | undefined
+    )?.website;
   } catch {
     return [];
   }
@@ -259,12 +278,17 @@ export const indexableSearchResults: Rule = {
     >;
     const pages = allPages.filter(
       (p): p is PageLike =>
-        !!p.parsed && p.statusCode >= 200 && p.statusCode < 300 && p.parsed.isSoft404 !== true,
+        !!p.parsed &&
+        p.statusCode >= 200 &&
+        p.statusCode < 300 &&
+        p.parsed.isSoft404 !== true
     );
     if (pages.length === 0) return { checks: [SKIP_CHECK] };
 
     const templates = collectTemplates(pages);
-    const sorted = [...pages].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+    const sorted = [...pages].sort((a, b) =>
+      a.url < b.url ? -1 : a.url > b.url ? 1 : 0
+    );
 
     let found = 0;
     let unconfirmed = 0;
@@ -282,12 +306,13 @@ export const indexableSearchResults: Rule = {
       if (!isSearch) continue;
       found++;
 
-      const indexable = isPageIndexable(
-        page.parsed as Parameters<typeof isPageIndexable>[0],
-        page.headers,
-        page.url,
-        robotsTxt,
-      ).isIndexable && !hasRobotsNone(page);
+      const indexable =
+        isPageIndexable(
+          page.parsed as Parameters<typeof isPageIndexable>[0],
+          page.headers,
+          page.url,
+          robotsTxt
+        ).isIndexable && !hasRobotsNone(page);
       if (!indexable) {
         excluded++;
         continue;
@@ -296,7 +321,12 @@ export const indexableSearchResults: Rule = {
       if (typeof canonical === "string" && canonical.trim() !== "") {
         const c = safeUrl(canonical.trim(), page.url);
         // A canonical that still carries a search parameter is not proof of a non-search target: keep listing.
-        if (c && c.href !== u.href && !isPatternUrl(c, templates) && !hasParamB(c)) {
+        if (
+          c &&
+          c.href !== u.href &&
+          !isPatternUrl(c, templates) &&
+          !hasParamB(c)
+        ) {
           excluded++;
           continue;
         }
@@ -320,7 +350,9 @@ export const indexableSearchResults: Rule = {
             status: "pass",
             message: `${found} internal search result URL(s) found, none indexable`,
             ...(unconfirmed > 0
-              ? { value: `${unconfirmed} unconfirmed search-like URL(s) not counted` }
+              ? {
+                  value: `${unconfirmed} unconfirmed search-like URL(s) not counted`,
+                }
               : {}),
           },
         ],
@@ -328,9 +360,12 @@ export const indexableSearchResults: Rule = {
     }
 
     const lines = listed.slice(0, MAX_LISTED);
-    if (listed.length > MAX_LISTED) lines.push(`+${listed.length - MAX_LISTED} more`);
+    if (listed.length > MAX_LISTED)
+      lines.push(`+${listed.length - MAX_LISTED} more`);
     if (excluded > 0) {
-      lines.push(`${excluded} search URL(s) excluded by noindex, robots.txt or canonical`);
+      lines.push(
+        `${excluded} search URL(s) excluded by noindex, robots.txt or canonical`
+      );
     }
     if (unconfirmed > 0) {
       lines.push(`${unconfirmed} unconfirmed search-like URL(s) not counted`);

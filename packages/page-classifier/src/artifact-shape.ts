@@ -44,19 +44,26 @@ const TREE_BLOCK = /^U1FEQ[A-Za-z0-9+/]*={0,2}$/;
 export function findStrayStrings(artifact: unknown): string[] {
   const stray: string[] = [];
   const top = artifact as Record<string, unknown>;
-  for (const key of Object.keys(top)) if (!TOP_KEYS.has(key)) stray.push(`key ${key}`);
+  for (const key of Object.keys(top))
+    if (!TOP_KEYS.has(key)) stray.push(`key ${key}`);
   if (top.format !== ARTIFACT_FORMAT) stray.push("format value");
-  if (typeof top.featurizerVersion !== "string" || !VERSION.test(top.featurizerVersion)) {
+  if (
+    typeof top.featurizerVersion !== "string" ||
+    !VERSION.test(top.featurizerVersion)
+  ) {
     stray.push("featurizerVersion value");
   }
   for (const name of HEADS) {
     const head = top[name] as Record<string, unknown> | undefined;
     if (head === undefined) continue;
-    for (const key of Object.keys(head)) if (!HEAD_KEYS.has(key)) stray.push(`${name}.${key} key`);
+    for (const key of Object.keys(head))
+      if (!HEAD_KEYS.has(key)) stray.push(`${name}.${key} key`);
     for (const cls of (head.classes as unknown[]) ?? []) {
-      if (typeof cls !== "string" || !IDENT.test(cls)) stray.push(`${name}.classes entry`);
+      if (typeof cls !== "string" || !IDENT.test(cls))
+        stray.push(`${name}.classes entry`);
     }
-    for (const feature of (head.extraFeatureNames as unknown[] | undefined) ?? []) {
+    for (const feature of (head.extraFeatureNames as unknown[] | undefined) ??
+      []) {
       if (typeof feature !== "string" || !IDENT.test(feature)) {
         stray.push(`${name}.extraFeatureNames entry`);
       }
@@ -66,9 +73,11 @@ export function findStrayStrings(artifact: unknown): string[] {
       Record<string, unknown>
     >;
     for (const [platform, classes] of Object.entries(overrides)) {
-      if (!IDENT.test(platform)) stray.push(`${name}.platformClassThresholds platform`);
+      if (!IDENT.test(platform))
+        stray.push(`${name}.platformClassThresholds platform`);
       for (const [cls, value] of Object.entries(classes)) {
-        if (!IDENT.test(cls) || typeof value !== "number") stray.push(`${name}.platform class`);
+        if (!IDENT.test(cls) || typeof value !== "number")
+          stray.push(`${name}.platform class`);
       }
     }
     for (const stream of (head.tokenStreams as unknown[] | undefined) ?? []) {
@@ -118,10 +127,15 @@ export function findTopologyProblems(artifact: unknown): string[] {
 }
 
 /** The two files an install leaves in assets/, and nothing else. */
-export const EXPECTED_ASSET_FILES = ["classifier-v2.json", "classifier-v2.manifest.json"] as const;
+export const EXPECTED_ASSET_FILES = [
+  "classifier-v2.json",
+  "classifier-v2.manifest.json",
+] as const;
 
 /** Files in an assets listing that are not part of the expected layout. */
 export function findAssetLayoutProblems(files: readonly string[]): string[] {
   const expected = new Set<string>(EXPECTED_ASSET_FILES);
-  return files.filter((file) => !expected.has(file)).map((file) => `unexpected file ${file}`);
+  return files
+    .filter((file) => !expected.has(file))
+    .map((file) => `unexpected file ${file}`);
 }

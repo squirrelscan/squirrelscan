@@ -28,7 +28,9 @@ const FETCH_OPTIONS = {
 function stallingStream(): ReadableStream {
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(new TextEncoder().encode("<!doctype html><html><body>"));
+      controller.enqueue(
+        new TextEncoder().encode("<!doctype html><html><body>")
+      );
     },
   });
 }
@@ -46,7 +48,7 @@ function stallingStream(): ReadableStream {
 function serveStalling(
   seen: { aborted: boolean },
   status = 200,
-  extraHeaders: Record<string, string> = {},
+  extraHeaders: Record<string, string> = {}
 ): ReturnType<typeof Bun.serve> {
   return Bun.serve({
     port: 0,
@@ -82,7 +84,9 @@ describe("standard fetch body deadline (#1729)", () => {
     try {
       const startedAt = Date.now();
       const result = await Effect.runPromise(
-        Effect.either(fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)),
+        Effect.either(
+          fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
+        )
       );
       const elapsed = Date.now() - startedAt;
 
@@ -117,7 +121,7 @@ describe("standard fetch body deadline (#1729)", () => {
         fetchPage(`http://localhost:${server.port}/`, {
           ...FETCH_OPTIONS,
           timeoutMs: 60_000,
-        }).pipe(Effect.timeout(Duration.millis(300)), Effect.either),
+        }).pipe(Effect.timeout(Duration.millis(300)), Effect.either)
       );
       const elapsed = Date.now() - startedAt;
 
@@ -132,14 +136,16 @@ describe("standard fetch body deadline (#1729)", () => {
   });
 
   test("a normal body is still read in full and the deadline is released", async () => {
-    const body = "<!doctype html><html><head><title>ok</title></head><body>hi</body></html>";
+    const body =
+      "<!doctype html><html><head><title>ok</title></head><body>hi</body></html>";
     const server = Bun.serve({
       port: 0,
-      fetch: () => new Response(body, { headers: { "content-type": "text/html" } }),
+      fetch: () =>
+        new Response(body, { headers: { "content-type": "text/html" } }),
     });
     try {
       const result = await Effect.runPromise(
-        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS),
+        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
       );
       expect(result.status).toBe(200);
       expect(result.body).toBe(body);
@@ -161,13 +167,17 @@ describe("standard fetch body deadline (#1729)", () => {
     });
     try {
       const result = await Effect.runPromise(
-        Effect.either(fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)),
+        Effect.either(
+          fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
+        )
       );
 
       expect(result._tag).toBe("Left");
       if (result._tag === "Left") {
         expect(result.left.type).toBe("blocked");
-        expect(result.left.message).toBe("Blocked by Cloudflare challenge (403)");
+        expect(result.left.message).toBe(
+          "Blocked by Cloudflare challenge (403)"
+        );
       }
     } finally {
       server.stop(true);
@@ -181,7 +191,9 @@ describe("standard fetch body deadline (#1729)", () => {
     const server = serveStalling(seen, 403);
     try {
       const result = await Effect.runPromise(
-        Effect.either(fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)),
+        Effect.either(
+          fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
+        )
       );
 
       expect(result._tag).toBe("Left");
@@ -205,7 +217,9 @@ describe("standard fetch body deadline (#1729)", () => {
     const server = serveStalling(seen);
     try {
       const result = await Effect.runPromise(
-        Effect.either(fetchPage(`http://localhost:${server.port}/hop`, FETCH_OPTIONS)),
+        Effect.either(
+          fetchPage(`http://localhost:${server.port}/hop`, FETCH_OPTIONS)
+        )
       );
 
       expect(result._tag).toBe("Left");
@@ -227,7 +241,9 @@ describe("standard fetch body deadline (#1729)", () => {
     try {
       const startedAt = Date.now();
       const result = await Effect.runPromise(
-        Effect.either(fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)),
+        Effect.either(
+          fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
+        )
       );
       const elapsed = Date.now() - startedAt;
 
@@ -243,19 +259,28 @@ describe("standard fetch body deadline (#1729)", () => {
   test("a redirect chain still resolves once the abandoned hops are dropped", async () => {
     // The loop now aborts each superseded hop. The final response must survive
     // that, and the chain must still be recorded.
-    const body = "<!doctype html><html><head><title>done</title></head><body>x</body></html>";
+    const body =
+      "<!doctype html><html><head><title>done</title></head><body>x</body></html>";
     const server = Bun.serve({
       port: 0,
       fetch(req) {
         const path = new URL(req.url).pathname;
-        if (path === "/") return new Response(null, { status: 301, headers: { location: "/a" } });
-        if (path === "/a") return new Response(null, { status: 302, headers: { location: "/b" } });
+        if (path === "/")
+          return new Response(null, {
+            status: 301,
+            headers: { location: "/a" },
+          });
+        if (path === "/a")
+          return new Response(null, {
+            status: 302,
+            headers: { location: "/b" },
+          });
         return new Response(body, { headers: { "content-type": "text/html" } });
       },
     });
     try {
       const result = await Effect.runPromise(
-        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS),
+        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
       );
       expect(result.status).toBe(200);
       expect(result.body).toBe(body);

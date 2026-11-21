@@ -10,10 +10,10 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
 
 import type {
   CrawlMetadata,
@@ -21,6 +21,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -92,7 +93,10 @@ async function freshCrawl(store: SQLiteStorage): Promise<string> {
   return run(store.createCrawl(meta));
 }
 
-function page(normalizedUrl: string, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: normalizedUrl,
     normalizedUrl,
@@ -149,7 +153,10 @@ describe("getCachedPage rowid tie-break (#846)", () => {
     // higher rowid.
     const crawl2 = await freshCrawl(store);
     await run(
-      store.upsertPage(crawl2, page(url, { sourceHash: "fresh-normalized-source-hash" }))
+      store.upsertPage(
+        crawl2,
+        page(url, { sourceHash: "fresh-normalized-source-hash" })
+      )
     );
 
     const cached = await run(store.getCachedPage(url));
@@ -168,7 +175,9 @@ describe("getCachedPage rowid tie-break (#846)", () => {
     const crawl1 = await freshCrawl(store);
     await run(store.upsertPage(crawl1, page(url, { sourceHash: null })));
     const crawl2 = await freshCrawl(store);
-    await run(store.upsertPage(crawl2, page(url, { sourceHash: "reused-hash" })));
+    await run(
+      store.upsertPage(crawl2, page(url, { sourceHash: "reused-hash" }))
+    );
     await run(store.close());
 
     const reopened = new SQLiteStorage(path);

@@ -47,7 +47,11 @@ function domainHost(entry: string): string {
   const trimmed = entry.trim().replace(/^\*?\./, "");
   if (!trimmed) return "";
   try {
-    return normalizeHost(new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`).hostname);
+    return normalizeHost(
+      new URL(
+        /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+      ).hostname
+    );
   } catch {
     return "";
   }
@@ -58,7 +62,9 @@ function domainHost(entry: string): string {
  * shape `EgressPolicy.allowHost` is given). A matcher for an address with no
  * host matches nothing.
  */
-export function ownSiteHostMatcher(options: OwnSiteOptions): (hostname: string) => boolean {
+export function ownSiteHostMatcher(
+  options: OwnSiteOptions
+): (hostname: string) => boolean {
   const roots = new Set<string>();
   const add = (host: string) => {
     if (!host) return;
@@ -81,7 +87,9 @@ export function ownSiteHostMatcher(options: OwnSiteOptions): (hostname: string) 
 }
 
 /** The same predicate on a whole URL; an unparseable URL is not the site's. */
-export function ownSiteUrlMatcher(options: OwnSiteOptions): (url: string) => boolean {
+export function ownSiteUrlMatcher(
+  options: OwnSiteOptions
+): (url: string) => boolean {
   const ownHost = ownSiteHostMatcher(options);
   return (url) => ownHost(getHostname(url));
 }

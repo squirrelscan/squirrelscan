@@ -4,7 +4,8 @@ import { describe, expect, test } from "bun:test";
 
 import { CrawlerConfigSchema } from "../src/schema";
 
-const parse = (paths: string[]) => CrawlerConfigSchema.safeParse({ discovery_probe_paths: paths });
+const parse = (paths: string[]) =>
+  CrawlerConfigSchema.safeParse({ discovery_probe_paths: paths });
 
 describe("discovery_probe_paths", () => {
   test("unset stays unset: today's behaviour", () => {
@@ -12,12 +13,14 @@ describe("discovery_probe_paths", () => {
     expect(parsed.discovery_probe_paths).toBeUndefined();
   });
 
-  test.each(["/llms.txt", "/llms-full.txt", "/AGENTS.md", "/.well-known/mcp.json"])(
-    "accepts %s",
-    (path) => {
-      expect(parse([path]).success).toBe(true);
-    },
-  );
+  test.each([
+    "/llms.txt",
+    "/llms-full.txt",
+    "/AGENTS.md",
+    "/.well-known/mcp.json",
+  ])("accepts %s", (path) => {
+    expect(parse([path]).success).toBe(true);
+  });
 
   test.each([
     "llms.txt",

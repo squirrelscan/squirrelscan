@@ -3,25 +3,51 @@
 // assertions that group scores + group labels actually surface.
 
 import { describe, expect, test } from "bun:test";
+
 import type { AuditReport, ReportRuleResult } from "../src/types";
 
-import { groupIssuesByCategory, groupCategoriesByGroup } from "../src/grouping";
 import { GROUP_CODES } from "../src/categories";
-import { GROUP_COLORS, SCORE_INK_COLORS, getGroupColor, getScoreInkColor } from "../src/scoring";
-import { renderJson } from "../src/output/json";
-import { renderText } from "../src/output/text";
+import { groupIssuesByCategory, groupCategoriesByGroup } from "../src/grouping";
 import { renderHtml } from "../src/output/html";
+import { renderJson } from "../src/output/json";
 import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
+import {
+  GROUP_COLORS,
+  SCORE_INK_COLORS,
+  getGroupColor,
+  getScoreInkColor,
+} from "../src/scoring";
 
-function rule(id: string, category: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  category: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
-    meta: { id, name: id, description: "", category, scope: "page", severity: "error", weight: 5 },
+    meta: {
+      id,
+      name: id,
+      description: "",
+      category,
+      scope: "page",
+      severity: "error",
+      weight: 5,
+    },
     checks,
   };
 }
 
-const fail = (msg: string) => ({ name: "c", status: "fail" as const, message: msg });
-const warn = (msg: string) => ({ name: "c", status: "warn" as const, message: msg });
+const fail = (msg: string) => ({
+  name: "c",
+  status: "fail" as const,
+  message: msg,
+});
+const warn = (msg: string) => ({
+  name: "c",
+  status: "warn" as const,
+  message: msg,
+});
 
 // Categories spanning all four groups: core+links -> seo, perf -> performance,
 // security -> security, ax -> ai.
@@ -41,23 +67,34 @@ describe("groupCategoriesByGroup (#626)", () => {
     const groups = groupCategoriesByGroup(categories);
 
     // Only groups with ≥1 category, emitted in canonical display order.
-    expect(groups.map((g) => g.code)).toEqual(["seo", "performance", "security", "ai"]);
+    expect(groups.map((g) => g.code)).toEqual([
+      "seo",
+      "performance",
+      "security",
+      "ai",
+    ]);
     expect(groups.map((g) => g.code)).toEqual(
-      GROUP_CODES.filter((c) => groups.some((g) => g.code === c)),
+      GROUP_CODES.filter((c) => groups.some((g) => g.code === c))
     );
 
     const seo = groups.find((g) => g.code === "seo")!;
     expect(seo.categories.map((c) => c.code).sort()).toEqual(["core", "links"]);
-    expect(groups.find((g) => g.code === "performance")!.categories.map((c) => c.code)).toEqual([
-      "perf",
-    ]);
-    expect(groups.find((g) => g.code === "ai")!.categories.map((c) => c.code)).toEqual(["ax"]);
+    expect(
+      groups
+        .find((g) => g.code === "performance")!
+        .categories.map((c) => c.code)
+    ).toEqual(["perf"]);
+    expect(
+      groups.find((g) => g.code === "ai")!.categories.map((c) => c.code)
+    ).toEqual(["ax"]);
   });
 
   test("places every category exactly once", () => {
     const categories = groupIssuesByCategory(issuesAcrossGroups());
     const groups = groupCategoriesByGroup(categories);
-    const placed = groups.flatMap((g) => g.categories.map((c) => c.code)).sort();
+    const placed = groups
+      .flatMap((g) => g.categories.map((c) => c.code))
+      .sort();
     expect(placed).toEqual(categories.map((c) => c.code).sort());
     expect(placed.length).toBe(categories.length); // no category in two groups
   });
@@ -94,7 +131,15 @@ function reportWithGroups(): AuditReport {
       overall: 56,
       categories: [],
       groups: [
-        { group: "seo", name: "SEO", score: 49, passed: 0, warnings: 1, failed: 1, total: 2 },
+        {
+          group: "seo",
+          name: "SEO",
+          score: 49,
+          passed: 0,
+          warnings: 1,
+          failed: 1,
+          total: 2,
+        },
         {
           group: "performance",
           name: "Performance",
@@ -147,7 +192,9 @@ describe("renderers surface groups (#626)", () => {
     for (const issue of parsed.issues) {
       expect(["seo", "performance", "security", "ai"]).toContain(issue.group);
     }
-    expect(parsed.issues.find((i: { ruleId: string }) => i.ruleId === "ax/x").group).toBe("ai");
+    expect(
+      parsed.issues.find((i: { ruleId: string }) => i.ruleId === "ax/x").group
+    ).toBe("ai");
   });
 
   test("json: groups is [] when the report has no group scores", () => {
@@ -200,7 +247,10 @@ describe("renderers surface groups (#626)", () => {
     for (const g of r.healthScore!.groups!) {
       const at = html.indexOf(`data-group-score="${g.group}"`);
       const next = html.indexOf("data-group-score=", at + 1);
-      const card = html.slice(html.lastIndexOf("<", at), next === -1 ? undefined : next);
+      const card = html.slice(
+        html.lastIndexOf("<", at),
+        next === -1 ? undefined : next
+      );
       const ink = getScoreInkColor(g.score);
       // Ring stroke, score number and grade letter: the score band (red to green).
       expect(card).toContain(`stroke="${ink}"`);
@@ -218,11 +268,15 @@ describe("renderers surface groups (#626)", () => {
       return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
     };
     const luminance = (hex: string) => {
-      const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16)));
+      const [r, g, b] = [1, 3, 5].map((i) =>
+        channel(parseInt(hex.slice(i, i + 2), 16))
+      );
       return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
     };
     for (const color of Object.values(SCORE_INK_COLORS)) {
-      expect((1 + 0.05) / (luminance(color) + 0.05)).toBeGreaterThanOrEqual(4.5);
+      expect((1 + 0.05) / (luminance(color) + 0.05)).toBeGreaterThanOrEqual(
+        4.5
+      );
     }
   });
 
@@ -269,7 +323,9 @@ describe("severity headings replace the group headings (#1536)", () => {
     expect(html).not.toContain('class="group-heading"');
     // 5 rules → 5 tags; the seo group's two categories both label as "SEO".
     expect((html.match(/class="gtag"/g) || []).length).toBe(5);
-    expect((html.match(/data-g="seo" title="SEO">SEO<\/span>/g) || []).length).toBe(2);
+    expect(
+      (html.match(/data-g="seo" title="SEO">SEO<\/span>/g) || []).length
+    ).toBe(2);
     // Each pill is tinted with its group's accent (inline from GROUP_COLORS).
     for (const code of ["seo", "performance", "security", "ai"] as const) {
       expect(html).toContain(GROUP_COLORS[code].text);
@@ -313,7 +369,10 @@ describe("severity headings replace the group headings (#1536)", () => {
       warnings: 0,
       failed: 2,
       ruleResults: {
-        "blocking/tracker": { meta: meta("blocking/tracker", "ad"), checks: [fail("ad tracker")] },
+        "blocking/tracker": {
+          meta: meta("blocking/tracker", "ad"),
+          checks: [fail("ad tracker")],
+        },
         "blocking/pixel": {
           meta: meta("blocking/pixel", "privacy"),
           checks: [fail("privacy pixel")],
@@ -346,9 +405,10 @@ describe("severity headings replace the group headings (#1536)", () => {
     // both blocking rules sit in the security group section with its label.
     expect(html).not.toContain("subcategory-header");
     expect(html).toContain('id="g-security"');
-    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(
-      2,
-    );
+    expect(
+      (html.match(/data-g="security" title="Security">Security<\/span>/g) || [])
+        .length
+    ).toBe(2);
   });
 
   test("markdown: subcategories nest under the category (### sev → #### cat → ##### sub → ###### rule)", () => {
@@ -378,8 +438,9 @@ describe("severity headings replace the group headings (#1536)", () => {
     };
     const html = renderHtml(r);
     expect((html.match(/id="g-security"/g) || []).length).toBe(1);
-    expect((html.match(/data-g="security" title="Security">Security<\/span>/g) || []).length).toBe(
-      3,
-    );
+    expect(
+      (html.match(/data-g="security" title="Security">Security<\/span>/g) || [])
+        .length
+    ).toBe(3);
   });
 });

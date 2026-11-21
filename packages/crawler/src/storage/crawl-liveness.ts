@@ -26,10 +26,7 @@
 
 import { hostname } from "node:os";
 
-import {
-  CRAWL_LEASE_PID_TRUST_MS,
-  CRAWL_LEASE_STALE_MS,
-} from "./types";
+import { CRAWL_LEASE_PID_TRUST_MS, CRAWL_LEASE_STALE_MS } from "./types";
 
 export interface LeaseEnv {
   readonly now: () => number;
@@ -97,13 +94,14 @@ export interface LeaseCrawlRow {
  */
 export function isLeaseLive(
   row: Pick<LeaseCrawlRow, "heartbeat_at" | "owner_pid" | "owner_host">,
-  env: LeaseEnv,
+  env: LeaseEnv
 ): boolean {
   const hb = row.heartbeat_at;
   const hasOwner = row.owner_pid != null || row.owner_host != null;
   if (typeof hb !== "number" || !Number.isFinite(hb) || !hasOwner) return false;
   const age = env.now() - hb;
-  if (age < CRAWL_LEASE_STALE_MS && age > -CRAWL_LEASE_PID_TRUST_MS) return true;
+  if (age < CRAWL_LEASE_STALE_MS && age > -CRAWL_LEASE_PID_TRUST_MS)
+    return true;
   const pid = row.owner_pid;
   const host = row.owner_host;
   return (
@@ -119,7 +117,8 @@ export function isCrawlAbandoned(row: LeaseCrawlRow, env: LeaseEnv): boolean {
   const legacy = Number(row.legacy_abandoned) === 1;
   const hb = row.heartbeat_at;
   const hasOwner = row.owner_pid != null || row.owner_host != null;
-  if (typeof hb !== "number" || !Number.isFinite(hb) || !hasOwner) return legacy;
+  if (typeof hb !== "number" || !Number.isFinite(hb) || !hasOwner)
+    return legacy;
 
   const age = env.now() - hb;
   // A heartbeat more than a day in the future is a clock that is not ours or a
@@ -144,7 +143,8 @@ export function isCrawlAbandoned(row: LeaseCrawlRow, env: LeaseEnv): boolean {
   // `stopped`, `paused` and `failed` are what `--resume` continues and #945 keeps
   // them 7 days: an owner left behind by a kill -9 right after the status write
   // (or a failed release) must not shorten that.
-  if (row.status === "running") return age >= CRAWL_LEASE_PID_TRUST_MS || legacy;
+  if (row.status === "running")
+    return age >= CRAWL_LEASE_PID_TRUST_MS || legacy;
   if (row.status === "crawled") return true;
   return legacy;
 }

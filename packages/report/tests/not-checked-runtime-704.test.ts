@@ -1,15 +1,16 @@
 // #704: reliability/js-errors on pages the cloud render recorded no runtime data for is listed as
 // "Not checked" with its reason and a hint, never left out so the rule reads as clean.
 
+import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 import { notCheckedLines, notCheckedRules } from "../src/not-checked";
 import { renderJson } from "../src/output/json";
-import type { AuditReport } from "../src/types";
 
-const MESSAGE = "Partial check: 3 page(s) had no runtime data from the renderer";
+const MESSAGE =
+  "Partial check: 3 page(s) had no runtime data from the renderer";
 
 function report(): AuditReport {
   return {
@@ -34,7 +35,8 @@ function report(): AuditReport {
           {
             name: "js-errors",
             status: "fail",
-            message: "1 uncaught JavaScript error(s) thrown from first-party scripts",
+            message:
+              "1 uncaught JavaScript error(s) thrown from first-party scripts",
           },
           {
             name: "unchecked-pages",

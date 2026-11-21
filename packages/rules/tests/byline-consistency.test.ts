@@ -7,13 +7,19 @@
 // everywhere else. The precedence block proves such a page is reported once, here,
 // and not again by eeat/author-byline or eeat/content-dates.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
+import { ISSUE_PENALTY_THRESHOLD } from "@squirrelscan/utils/constants";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
+import { rules as eeatRules } from "../src/eeat";
 import { authorBylineRule } from "../src/eeat/author-byline";
-import { ISSUE_PENALTY_THRESHOLD } from "@squirrelscan/utils/constants";
-
 import {
   BYLINE_CONSISTENCY_RULE_ID,
   BYLINE_NORM_MAX_ITEMS,
@@ -23,10 +29,8 @@ import {
   bylineConsistencyRule,
 } from "../src/eeat/byline-consistency";
 import { contentDatesRule } from "../src/eeat/content-dates";
-import { rules as eeatRules } from "../src/eeat";
 import { getAllRuleIds, type RuleNamespace } from "../src/loader";
 import { RuleRunner } from "../src/runner";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 interface PageSpec {
   pageType: string | null;
@@ -49,7 +53,13 @@ function pages(count: number, spec: PageSpec): PageSpec[] {
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -69,7 +79,7 @@ function parsedFor(spec: PageSpec): ParsedPage {
 /** Legacy path: specs become `ctx.site.pages` in crawl (url ascending) order. */
 function legacyCtx(
   specs: PageSpec[],
-  opts: { siteIndexable?: boolean; ruleEnabled?: (id: string) => boolean } = {},
+  opts: { siteIndexable?: boolean; ruleEnabled?: (id: string) => boolean } = {}
 ): RuleContext {
   return {
     ...baseCtx,
@@ -170,9 +180,18 @@ async function checks(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
 }
 
 /** Run BOTH paths over one fixture, assert byte-identical output, return it. */
-async function bothPaths(specs: PageSpec[], siteIndexable?: boolean): Promise<CheckResult> {
-  const legacy = await checks(bylineConsistencyRule, legacyCtx(specs, { siteIndexable }));
-  const streamed = await checks(bylineConsistencyRule, siteQueryCtx(specs, siteIndexable));
+async function bothPaths(
+  specs: PageSpec[],
+  siteIndexable?: boolean
+): Promise<CheckResult> {
+  const legacy = await checks(
+    bylineConsistencyRule,
+    legacyCtx(specs, { siteIndexable })
+  );
+  const streamed = await checks(
+    bylineConsistencyRule,
+    siteQueryCtx(specs, siteIndexable)
+  );
   expect(streamed).toEqual(legacy);
   expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
   expect(legacy).toHaveLength(1);
@@ -190,14 +209,21 @@ describe("eeat/byline-consistency: registration", () => {
   });
 
   test("is weighted lighter than the per-page E-E-A-T rules it can overlap", () => {
-    expect(bylineConsistencyRule.meta.weight).toBeLessThan(authorBylineRule.meta.weight);
-    expect(bylineConsistencyRule.meta.weight).toBeLessThan(contentDatesRule.meta.weight);
+    expect(bylineConsistencyRule.meta.weight).toBeLessThan(
+      authorBylineRule.meta.weight
+    );
+    expect(bylineConsistencyRule.meta.weight).toBeLessThan(
+      contentDatesRule.meta.weight
+    );
   });
 });
 
 describe("eeat/byline-consistency: silence guards (skipped)", () => {
   test("skips a crawl below the site page floor", async () => {
-    const specs = [...pages(BYLINE_NORM_MIN_PAGES - 2, BYLINED), { pageType: "article" }];
+    const specs = [
+      ...pages(BYLINE_NORM_MIN_PAGES - 2, BYLINED),
+      { pageType: "article" },
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${BYLINE_NORM_MIN_PAGES} needed`);
@@ -215,7 +241,9 @@ describe("eeat/byline-consistency: silence guards (skipped)", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(`${BYLINE_NORM_MIN_GROUP_PAGES}+ comparable pages`);
+    expect(check.message).toContain(
+      `${BYLINE_NORM_MIN_GROUP_PAGES}+ comparable pages`
+    );
   });
 
   test("a site that never uses bylines stays clean (no-false-positive fixture)", async () => {
@@ -269,12 +297,12 @@ describe("eeat/byline-consistency: verdicts", () => {
     expect(check.status).toBe("warn");
     expect(check.value).toBe(1);
     expect(check.message).toBe(
-      "1 of 20 page(s) break the site's own byline convention (article author 95%, article date 95%)",
+      "1 of 20 page(s) break the site's own byline convention (article author 95%, article date 95%)"
     );
     expect(check.items).toHaveLength(2);
     expect(check.items![0]!.id).toBe("article:author");
     expect(check.items![0]!.label).toBe(
-      "1 of 20 article page(s) have no visible author byline, which 19 (95%) of article pages carry",
+      "1 of 20 article page(s) have no visible author byline, which 19 (95%) of article pages carry"
     );
     expect(check.items![0]!.sourcePages).toEqual([url(19)]);
     expect(check.items![1]!.id).toBe("article:date");
@@ -326,7 +354,8 @@ describe("eeat/byline-consistency: verdicts", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("warn");
-    for (const item of check.items!) expect(item.meta?.pageType).toBe("article");
+    for (const item of check.items!)
+      expect(item.meta?.pageType).toBe("article");
   });
 
   test("ignores non-2xx pages", async () => {
@@ -336,7 +365,10 @@ describe("eeat/byline-consistency: verdicts", () => {
   });
 
   test("leaves noindex pages out on an indexable site, but judges them otherwise", async () => {
-    const specs = [...pages(12, BYLINED), { pageType: "article", noindex: true }];
+    const specs = [
+      ...pages(12, BYLINED),
+      { pageType: "article", noindex: true },
+    ];
     expect((await bothPaths(specs, true)).status).toBe("pass");
     expect((await bothPaths(specs, undefined)).status).toBe("warn");
   });
@@ -356,7 +388,7 @@ describe("eeat/byline-consistency: verdicts", () => {
         const ctx = legacyCtx(specs);
         ctx.site!.pages.reverse();
         return ctx;
-      })(),
+      })()
     );
     expect(JSON.stringify(reversedLegacy[0])).toBe(JSON.stringify(forward));
   });
@@ -386,7 +418,10 @@ describe("eeat/byline-consistency: precedence over the per-page E-E-A-T rules", 
   // 19 bylined, dated articles and one with neither (its Article schema carries no
   // author or date). author-byline and content-dates would each count the last
   // article as missing; byline-consistency reports it. It must be reported once.
-  const specs = [...pages(19, BYLINED), { pageType: "article", articleSchema: true }];
+  const specs = [
+    ...pages(19, BYLINED),
+    { pageType: "article", articleSchema: true },
+  ];
   const deviant = url(19);
 
   test("the deviant page is reported by byline-consistency", async () => {
@@ -397,7 +432,9 @@ describe("eeat/byline-consistency: precedence over the per-page E-E-A-T rules", 
   test("eeat/author-byline does not count the page byline-consistency reports", async () => {
     const [check] = await checks(authorBylineRule, legacyCtx(specs));
     expect(check!.status).toBe("pass");
-    expect(check!.message).toBe("100% of content pages have author attribution");
+    expect(check!.message).toBe(
+      "100% of content pages have author attribution"
+    );
     expect(check!.value).toBe("19/19 pages");
     expect(check!.details).toEqual({ deferredToBylineConsistency: 1 });
   });
@@ -412,12 +449,18 @@ describe("eeat/byline-consistency: precedence over the per-page E-E-A-T rules", 
 
   test("with byline-consistency disabled, the per-page rules count the page again", async () => {
     const disabled = (id: string): boolean => id !== BYLINE_CONSISTENCY_RULE_ID;
-    const [author] = await checks(authorBylineRule, legacyCtx(specs, { ruleEnabled: disabled }));
+    const [author] = await checks(
+      authorBylineRule,
+      legacyCtx(specs, { ruleEnabled: disabled })
+    );
     expect(author!.value).toBe("19/20 pages");
     expect(author!.details).toBeUndefined();
-    const dates = await checks(contentDatesRule, legacyCtx(specs, { ruleEnabled: disabled }));
+    const dates = await checks(
+      contentDatesRule,
+      legacyCtx(specs, { ruleEnabled: disabled })
+    );
     expect(dates.find((c) => c.name === "date-published")!.message).toBe(
-      "95% of content has datePublished",
+      "95% of content has datePublished"
     );
   });
 
@@ -426,13 +469,18 @@ describe("eeat/byline-consistency: precedence over the per-page E-E-A-T rules", 
     const mixed = [...pages(6, BYLINED), ...pages(4, { pageType: "article" })];
     const [author] = await checks(authorBylineRule, legacyCtx(mixed));
     expect(author!.value).toBe("Consider adding authors to more content");
-    expect(author!.message).toBe("60% of content pages have author attribution");
+    expect(author!.message).toBe(
+      "60% of content pages have author attribution"
+    );
     expect(author!.details).toBeUndefined();
   });
 });
 
 describe("eeat/byline-consistency: precedence through the real runner", () => {
-  const specs = [...pages(19, BYLINED), { pageType: "article", articleSchema: true }];
+  const specs = [
+    ...pages(19, BYLINED),
+    { pageType: "article", articleSchema: true },
+  ];
   const deviant = url(19);
 
   let observed: boolean | undefined;
@@ -480,10 +528,15 @@ describe("eeat/byline-consistency: precedence through the real runner", () => {
   });
 
   test("a deviant page is reported once across the E-E-A-T rules", async () => {
-    const result = await runner(["eeat/*"]).runSiteRules(legacyCtx(specs).site!);
-    const byline = result.ruleResults.get(BYLINE_CONSISTENCY_RULE_ID)!.checks[0]!;
+    const result = await runner(["eeat/*"]).runSiteRules(
+      legacyCtx(specs).site!
+    );
+    const byline = result.ruleResults.get(BYLINE_CONSISTENCY_RULE_ID)!
+      .checks[0]!;
     expect(byline.status).toBe("warn");
-    expect(byline.items!.flatMap((i) => i.sourcePages ?? [])).toContain(deviant);
+    expect(byline.items!.flatMap((i) => i.sourcePages ?? [])).toContain(
+      deviant
+    );
     const author = result.ruleResults.get("eeat/author-byline")!.checks[0]!;
     expect(author.value).toBe("19/19 pages");
     expect(author.details).toEqual({ deferredToBylineConsistency: 1 });
@@ -495,9 +548,10 @@ describe("eeat/byline-consistency: precedence through the real runner", () => {
   });
 
   test("with byline-consistency excluded from the run, the per-page rules report the page", async () => {
-    const result = await runner(["eeat/*"], [BYLINE_CONSISTENCY_RULE_ID]).runSiteRules(
-      legacyCtx(specs).site!,
-    );
+    const result = await runner(
+      ["eeat/*"],
+      [BYLINE_CONSISTENCY_RULE_ID]
+    ).runSiteRules(legacyCtx(specs).site!);
     expect(result.ruleResults.has(BYLINE_CONSISTENCY_RULE_ID)).toBe(false);
     const author = result.ruleResults.get("eeat/author-byline")!.checks[0]!;
     expect(author.value).toBe("19/20 pages");

@@ -7,12 +7,11 @@
 // freshness logic as the page hot-path (calculateFreshness from @crawler), or a
 // conditional GET (304) when only a validator is available.
 
-import { Effect } from "effect";
-
 import type {
   CacheHitReason,
   CachedResourceRecord,
 } from "@squirrelscan/core-contracts";
+
 import { isCacheHitReason } from "@squirrelscan/core-contracts";
 import { calculateFreshness } from "@squirrelscan/crawler";
 import {
@@ -21,19 +20,28 @@ import {
   RESOURCE_SIZE_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
-import { isCompressibleContentType, mergeHeaderRecords } from "@squirrelscan/utils/headers";
-import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
-import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
+import {
+  isCompressibleContentType,
+  mergeHeaderRecords,
+} from "@squirrelscan/utils/headers";
 import {
   EgressRefusedError,
   egressGuardedSend,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
-import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
-import { wafBlockedFlag } from "./lib/asset-status";
+import { isRateLimitedResponse } from "@squirrelscan/utils/rate-limit";
+import { decodedBody, fetchUndecoded } from "@squirrelscan/utils/response-body";
+import {
+  isHttpOrHttpsUrl,
+  safeRedirectFetch,
+} from "@squirrelscan/utils/safe-fetch";
+import { Effect } from "effect";
+
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
-import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
+
 import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
+import { wafBlockedFlag } from "./lib/asset-status";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 
 /**
  * Every request this module sends: redirects followed by hand (#1395), each hop
@@ -41,14 +49,22 @@ import { parseImageHeader, type ImageHeaderInfo } from "./image-header";
  * ahead of the capped reads below (#2717). With an egress policy, each hop is
  * checked against it before it is sent (#703).
  */
-function fetchResource(url: string, init: RequestInit, options: ResourceCheckerOptions) {
+function fetchResource(
+  url: string,
+  init: RequestInit,
+  options: ResourceCheckerOptions
+) {
   if (!options.egress) return safeRedirectFetch(url, init, fetchUndecoded);
   // Refused, not a network error to retry: safeRedirectFetch would throw a
   // TypeError for a non-http(s) first hop before the guard ever saw it.
   if (!isHttpOrHttpsUrl(url)) {
     return Promise.reject(new EgressRefusedError("refused scheme"));
   }
-  return safeRedirectFetch(url, init, egressGuardedSend(fetchUndecoded, options.egress));
+  return safeRedirectFetch(
+    url,
+    init,
+    egressGuardedSend(fetchUndecoded, options.egress)
+  );
 }
 
 export interface ResourceCheckResult {
@@ -258,7 +274,9 @@ const HEADER_IMAGE_TYPES = [
  * long as the file is unchanged, so the image is probed again instead. SVG, ICO
  * and unlabelled files never get a size, and keep their cheap reuse.
  */
-function priorLacksImageHeader(prior: CachedResourceRecord | undefined): boolean {
+function priorLacksImageHeader(
+  prior: CachedResourceRecord | undefined
+): boolean {
   if (!prior || prior.naturalWidth != null) return false;
   const type = prior.contentType?.split(";")[0]?.trim().toLowerCase() ?? "";
   return HEADER_IMAGE_TYPES.includes(type);
@@ -347,32 +365,44 @@ async function measureUnrangedSize(
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
   const headers = mergeHeaderRecords(
     { "User-Agent": options.userAgent, Accept: "*/*" },
-    customHeadersFor(url, options.customHeaders, options.headerScope),
+    customHeadersFor(url, options.customHeaders, options.headerScope)
   );
   try {
     try {
-      const { response } = await fetchResource(url, {
-        method: "HEAD",
-        headers,
-        signal: controller.signal,
-      }, options);
+      const { response } = await fetchResource(
+        url,
+        {
+          method: "HEAD",
+          headers,
+          signal: controller.signal,
+        },
+        options
+      );
       const length =
-        response.status < 400 ? parseHeaderInt(response.headers.get("content-length")) : null;
+        response.status < 400
+          ? parseHeaderInt(response.headers.get("content-length"))
+          : null;
       if (length !== null) return length;
     } catch {
       // Fall through to the counted read, as the HEAD path above does.
     }
-    const { response } = await fetchResource(url, {
-      method: "GET",
-      headers,
-      signal: controller.signal,
-    }, options);
+    const { response } = await fetchResource(
+      url,
+      {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      },
+      options
+    );
     const declared = parseHeaderInt(response.headers.get("content-length"));
     if (!response.ok || declared !== null) {
       controller.abort();
       return response.ok ? declared : null;
     }
-    const body = await readCappedBody(response, 0, true, () => controller.abort());
+    const body = await readCappedBody(response, 0, true, () =>
+      controller.abort()
+    );
     return body.complete ? body.received : null;
   } catch {
     return null;
@@ -391,7 +421,10 @@ async function measureUnrangedSize(
 function requestController(deadline: AbortController): AbortController {
   const request = new AbortController();
   if (deadline.signal.aborted) request.abort();
-  else deadline.signal.addEventListener("abort", () => request.abort(), { once: true });
+  else
+    deadline.signal.addEventListener("abort", () => request.abort(), {
+      once: true,
+    });
   return request;
 }
 
@@ -509,12 +542,15 @@ async function checkSingleResourceAsync(
     !varyForbidsReuse(prior.vary)
   ) {
     if (prior.etag) conditional["If-None-Match"] = prior.etag;
-    if (prior.lastModified) conditional["If-Modified-Since"] = prior.lastModified;
+    if (prior.lastModified)
+      conditional["If-Modified-Since"] = prior.lastModified;
   }
 
   const extractMeta = (response: Response) => ({
     contentType: response.headers.get("content-type"),
-    contentEncoding: normalizeEncoding(response.headers.get("content-encoding")),
+    contentEncoding: normalizeEncoding(
+      response.headers.get("content-encoding")
+    ),
     cacheControl: response.headers.get("cache-control"),
     expires: response.headers.get("expires"),
     date: response.headers.get("date"),
@@ -531,20 +567,34 @@ async function checkSingleResourceAsync(
         // #1395: follow redirects manually so per hop the http/https scheme
         // allowlist applies and secret customHeaders are stripped on a cross-origin
         // redirect (native redirect:"follow" replays them to the redirect target).
-        const { response: headResponse, finalUrl: headFinalUrl } = await fetchResource(url, {
-          method: "HEAD",
-          headers: mergeHeaderRecords(
-            { "User-Agent": options.userAgent, Accept: "*/*" },
-            customHeadersFor(url, options.customHeaders, options.headerScope),
-            conditional,
-          ),
-          signal: controller.signal,
-        }, options);
+        const { response: headResponse, finalUrl: headFinalUrl } =
+          await fetchResource(
+            url,
+            {
+              method: "HEAD",
+              headers: mergeHeaderRecords(
+                { "User-Agent": options.userAgent, Accept: "*/*" },
+                customHeadersFor(
+                  url,
+                  options.customHeaders,
+                  options.headerScope
+                ),
+                conditional
+              ),
+              signal: controller.signal,
+            },
+            options
+          );
 
         defaultResult.rateLimited =
-          isRateLimitedResponse(headResponse.status, headResponse.headers.get("retry-after")) ||
-          undefined;
-        defaultResult.wafBlocked = wafBlockedFlag(headResponse.status, headResponse.headers);
+          isRateLimitedResponse(
+            headResponse.status,
+            headResponse.headers.get("retry-after")
+          ) || undefined;
+        defaultResult.wafBlocked = wafBlockedFlag(
+          headResponse.status,
+          headResponse.headers
+        );
 
         // A status probe is done once the HEAD answers below 400. An error
         // status still takes the GET below, as some servers refuse HEAD alone.
@@ -555,7 +605,9 @@ async function checkSingleResourceAsync(
             ...defaultResult,
             status: headResponse.status,
             contentType: meta.contentType,
-            sizeBytes: parseHeaderInt(headResponse.headers.get("content-length")),
+            sizeBytes: parseHeaderInt(
+              headResponse.headers.get("content-length")
+            ),
             redirectTarget: headFinalUrl !== url ? headFinalUrl : null,
           };
         }
@@ -591,7 +643,10 @@ async function checkSingleResourceAsync(
 
         if (
           options.validateContentType &&
-          !validateContentType(meta.contentType, options.expectedContentTypePrefix)
+          !validateContentType(
+            meta.contentType,
+            options.expectedContentTypePrefix
+          )
         ) {
           clearTimeout(timeoutId);
           return {
@@ -623,7 +678,11 @@ async function checkSingleResourceAsync(
           meta.contentEncoding !== null ||
           !isCompressibleContentType(meta.contentType);
 
-        if (headResponse.status < 400 && sizeBytes !== null && headEncodingIsTrustworthy) {
+        if (
+          headResponse.status < 400 &&
+          sizeBytes !== null &&
+          headEncodingIsTrustworthy
+        ) {
           clearTimeout(timeoutId);
           return {
             ...defaultResult,
@@ -655,21 +714,25 @@ async function checkSingleResourceAsync(
     // #1395: manual redirects — scheme allowlist + strip secret customHeaders on
     // cross-origin redirects (see the HEAD path above).
     let getController = readHeader ? requestController(controller) : controller;
-    let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
-      method: "GET",
-      headers: mergeHeaderRecords(
-        { "User-Agent": options.userAgent, Accept: "*/*" },
-        customHeadersFor(url, options.customHeaders, options.headerScope),
-        conditional,
-        // The size check reads this range and no more: never the caller's.
-        {
-          Range: readHeader
-            ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
-            : "bytes=0-0",
-        },
-      ),
-      signal: getController.signal,
-    }, options);
+    let { response: getResponse, finalUrl: getFinalUrl } = await fetchResource(
+      url,
+      {
+        method: "GET",
+        headers: mergeHeaderRecords(
+          { "User-Agent": options.userAgent, Accept: "*/*" },
+          customHeadersFor(url, options.customHeaders, options.headerScope),
+          conditional,
+          // The size check reads this range and no more: never the caller's.
+          {
+            Range: readHeader
+              ? `bytes=0-${RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES - 1}`
+              : "bytes=0-0",
+          }
+        ),
+        signal: getController.signal,
+      },
+      options
+    );
 
     // Servers that reject Range answer 416 (Range Not Satisfiable). That is a
     // Range-rejection, not the resource's real status — recording it surfaced
@@ -682,22 +745,31 @@ async function checkSingleResourceAsync(
       if (readHeader) getController.abort();
       getResponse.body?.cancel().catch(() => {});
       getController = readHeader ? requestController(controller) : controller;
-      ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(url, {
-        method: "GET",
-        headers: mergeHeaderRecords(
-          { "User-Agent": options.userAgent, Accept: "*/*" },
-          customHeadersFor(url, options.customHeaders, options.headerScope),
-          conditional,
-        ),
-        signal: getController.signal,
-      }, options));
+      ({ response: getResponse, finalUrl: getFinalUrl } = await fetchResource(
+        url,
+        {
+          method: "GET",
+          headers: mergeHeaderRecords(
+            { "User-Agent": options.userAgent, Accept: "*/*" },
+            customHeadersFor(url, options.customHeaders, options.headerScope),
+            conditional
+          ),
+          signal: getController.signal,
+        },
+        options
+      ));
     }
 
     // 304 Not Modified on the GET fallback → validator hit.
     defaultResult.rateLimited =
-      isRateLimitedResponse(getResponse.status, getResponse.headers.get("retry-after")) ||
-      undefined;
-    defaultResult.wafBlocked = wafBlockedFlag(getResponse.status, getResponse.headers);
+      isRateLimitedResponse(
+        getResponse.status,
+        getResponse.headers.get("retry-after")
+      ) || undefined;
+    defaultResult.wafBlocked = wafBlockedFlag(
+      getResponse.status,
+      getResponse.headers
+    );
 
     if (getResponse.status === 304 && prior && prior.status != null) {
       clearTimeout(timeoutId);
@@ -766,16 +838,22 @@ async function checkSingleResourceAsync(
       resolvedEncoding = undefined;
       // Only its headers are wanted, so the image pool aborts it once they
       // arrive: a cancel alone lets the whole file download (#470).
-      const confirmController = readHeader ? requestController(controller) : controller;
+      const confirmController = readHeader
+        ? requestController(controller)
+        : controller;
       try {
-        const { response: confirmResponse } = await fetchResource(url, {
-          method: "GET",
-          headers: mergeHeaderRecords(
-            { "User-Agent": options.userAgent, Accept: "*/*" },
-            customHeadersFor(url, options.customHeaders, options.headerScope),
-          ),
-          signal: confirmController.signal,
-        }, options);
+        const { response: confirmResponse } = await fetchResource(
+          url,
+          {
+            method: "GET",
+            headers: mergeHeaderRecords(
+              { "User-Agent": options.userAgent, Accept: "*/*" },
+              customHeadersFor(url, options.customHeaders, options.headerScope)
+            ),
+            signal: confirmController.signal,
+          },
+          options
+        );
         if (readHeader) confirmController.abort();
         confirmResponse.body?.cancel().catch(() => {});
         if (confirmResponse.status < 400) {
@@ -818,13 +896,16 @@ async function checkSingleResourceAsync(
       let header: ImageHeaderInfo | null = null;
       if (getResponse.ok) {
         const cap = RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES;
-        const body = await readCappedBody(getResponse, cap, false, () => getController.abort());
+        const body = await readCappedBody(getResponse, cap, false, () =>
+          getController.abort()
+        );
         header = readHeaderInfo(body.head);
         if (sizeBytes === null && !ranged) {
           // A 200 that ended inside the cap was read whole. One that ran past
           // it is measured the old way; one cut short by the deadline is not.
           if (body.complete) sizeBytes = body.received;
-          else if (body.received >= cap) sizeBytes = await measureUnrangedSize(url, options);
+          else if (body.received >= cap)
+            sizeBytes = await measureUnrangedSize(url, options);
         }
       } else {
         // An error page is not wanted at all; abort so it cannot stream on.
@@ -961,7 +1042,10 @@ function checkSingleResource(
     // recorded as an answer: only its latency can strike, from the hops that
     // were sent before it. Never an error strike against the URL's host, often
     // the audited site's own.
-    const outcome = result.error === ASSET_FETCH_REFUSED_ERROR ? "ok" : resourceOutcome(result);
+    const outcome =
+      result.error === ASSET_FETCH_REFUSED_ERROR
+        ? "ok"
+        : resourceOutcome(result);
     options.budget?.record(url, Date.now() - startedAt, outcome);
     return result;
   });

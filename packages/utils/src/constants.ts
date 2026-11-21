@@ -72,7 +72,10 @@ export const SLOW_BLOCKING_SCRIPT_HARD_MS = 2000;
  * close the same issue: over 2000 ms always counts; over 1000 ms counts only when the script was not the
  * first one fetched from its host, since that request also pays for DNS and the TLS handshake.
  */
-export function isSlowBlockingScript(responseMs: number | undefined, hostFirst: boolean | undefined): boolean {
+export function isSlowBlockingScript(
+  responseMs: number | undefined,
+  hostFirst: boolean | undefined
+): boolean {
   if (responseMs === undefined) return false;
   if (responseMs > SLOW_BLOCKING_SCRIPT_HARD_MS) return true;
   return responseMs > SLOW_BLOCKING_SCRIPT_MS && hostFirst !== true;
@@ -119,7 +122,8 @@ export const HTTP_PROBE_LIMITS = {
 } as const;
 
 // User agent for external checks
-export const SQUIRRELSCAN_USER_AGENT = "SquirrelScan/2.0 (+https://squirrelscan.com)";
+export const SQUIRRELSCAN_USER_AGENT =
+  "SquirrelScan/2.0 (+https://squirrelscan.com)";
 
 // Leaked secrets scanning window
 export const SECRET_CONTEXT_WINDOW_SIZE = 500;
@@ -163,7 +167,8 @@ export const KEY_SEPARATOR = "\x00";
 export const CHROME_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 export const CHROME_VERSION = "120";
-export const CHROME_SEC_CH_UA = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"';
+export const CHROME_SEC_CH_UA =
+  '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"';
 
 // Sitemap coverage rule thresholds
 export const SITEMAP_COVERAGE_WARN_PERCENT = 10;
@@ -515,7 +520,11 @@ export const DEMO_REPORT_URL = `https://reports.squirrelscan.com/${DEMO_REPORT_I
 // Org logo upload (#807): allowed image types + max size, shared by the API
 // upload validation and the dashboard upload UI so they can't drift.
 export const ORG_LOGO_MAX_BYTES = 1024 * 1024; // 1MB
-export const ORG_LOGO_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const ORG_LOGO_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
 export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 
 // Public rule/category counts for marketing and doc copy that can't read the
@@ -554,7 +563,13 @@ export const FEEDBACK_CATEGORIES = [
 ] as const;
 export type FeedbackCategory = (typeof FEEDBACK_CATEGORIES)[number];
 
-export const FEEDBACK_SOURCES = ["website", "dashboard", "cli", "api", "mcp"] as const;
+export const FEEDBACK_SOURCES = [
+  "website",
+  "dashboard",
+  "cli",
+  "api",
+  "mcp",
+] as const;
 export type FeedbackSource = (typeof FEEDBACK_SOURCES)[number];
 
 // Response headers technology detection reads (pub#871): the tech-detect

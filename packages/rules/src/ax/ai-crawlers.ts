@@ -2,6 +2,7 @@
 // classified into the three purposes those crawlers actually serve.
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -33,30 +34,150 @@ interface AiCrawler {
 // is unambiguously an answer-engine (ai-search) or a live user fetch
 // (user-action).
 export const AI_CRAWLERS: AiCrawler[] = [
-  { token: "GPTBot", vendor: "OpenAI", purpose: "model training", crawlerClass: "training" },
-  { token: "OAI-SearchBot", vendor: "OpenAI", purpose: "ChatGPT search index", crawlerClass: "ai-search" },
-  { token: "ChatGPT-User", vendor: "OpenAI", purpose: "user-triggered fetch", crawlerClass: "user-action" },
-  { token: "ClaudeBot", vendor: "Anthropic", purpose: "model training", crawlerClass: "training" },
-  { token: "anthropic-ai", vendor: "Anthropic", purpose: "model training (legacy)", crawlerClass: "training" },
-  { token: "Claude-User", vendor: "Anthropic", purpose: "user-triggered fetch", crawlerClass: "user-action" },
-  { token: "Claude-SearchBot", vendor: "Anthropic", purpose: "Claude search index", crawlerClass: "ai-search" },
-  { token: "Google-Extended", vendor: "Google", purpose: "Gemini/Vertex training", crawlerClass: "training" },
-  { token: "CCBot", vendor: "Common Crawl", purpose: "open crawl corpus", crawlerClass: "archive" },
-  { token: "ia_archiver", vendor: "Internet Archive", purpose: "Wayback Machine archiving", crawlerClass: "archive" },
-  { token: "archive.org_bot", vendor: "Internet Archive", purpose: "Wayback Machine archiving", crawlerClass: "archive" },
-  { token: "PerplexityBot", vendor: "Perplexity", purpose: "search index", crawlerClass: "ai-search" },
-  { token: "Perplexity-User", vendor: "Perplexity", purpose: "user-triggered fetch", crawlerClass: "user-action" },
-  { token: "Applebot-Extended", vendor: "Apple", purpose: "Apple Intelligence training", crawlerClass: "training" },
-  { token: "Bytespider", vendor: "ByteDance", purpose: "model training", crawlerClass: "training" },
-  { token: "Amazonbot", vendor: "Amazon", purpose: "Alexa/AI training", crawlerClass: "training" },
-  { token: "Meta-ExternalAgent", vendor: "Meta", purpose: "model training", crawlerClass: "training" },
-  { token: "Meta-ExternalFetcher", vendor: "Meta", purpose: "user-triggered fetch", crawlerClass: "user-action" },
-  { token: "cohere-ai", vendor: "Cohere", purpose: "model training", crawlerClass: "training" },
-  { token: "DuckAssistBot", vendor: "DuckDuckGo", purpose: "DuckAssist answers", crawlerClass: "ai-search" },
-  { token: "MistralAI-User", vendor: "Mistral", purpose: "user-triggered fetch", crawlerClass: "user-action" },
-  { token: "AI2Bot", vendor: "Allen AI", purpose: "model training", crawlerClass: "training" },
-  { token: "Diffbot", vendor: "Diffbot", purpose: "knowledge graph", crawlerClass: "training" },
-  { token: "YouBot", vendor: "You.com", purpose: "search index", crawlerClass: "ai-search" },
+  {
+    token: "GPTBot",
+    vendor: "OpenAI",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "OAI-SearchBot",
+    vendor: "OpenAI",
+    purpose: "ChatGPT search index",
+    crawlerClass: "ai-search",
+  },
+  {
+    token: "ChatGPT-User",
+    vendor: "OpenAI",
+    purpose: "user-triggered fetch",
+    crawlerClass: "user-action",
+  },
+  {
+    token: "ClaudeBot",
+    vendor: "Anthropic",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "anthropic-ai",
+    vendor: "Anthropic",
+    purpose: "model training (legacy)",
+    crawlerClass: "training",
+  },
+  {
+    token: "Claude-User",
+    vendor: "Anthropic",
+    purpose: "user-triggered fetch",
+    crawlerClass: "user-action",
+  },
+  {
+    token: "Claude-SearchBot",
+    vendor: "Anthropic",
+    purpose: "Claude search index",
+    crawlerClass: "ai-search",
+  },
+  {
+    token: "Google-Extended",
+    vendor: "Google",
+    purpose: "Gemini/Vertex training",
+    crawlerClass: "training",
+  },
+  {
+    token: "CCBot",
+    vendor: "Common Crawl",
+    purpose: "open crawl corpus",
+    crawlerClass: "archive",
+  },
+  {
+    token: "ia_archiver",
+    vendor: "Internet Archive",
+    purpose: "Wayback Machine archiving",
+    crawlerClass: "archive",
+  },
+  {
+    token: "archive.org_bot",
+    vendor: "Internet Archive",
+    purpose: "Wayback Machine archiving",
+    crawlerClass: "archive",
+  },
+  {
+    token: "PerplexityBot",
+    vendor: "Perplexity",
+    purpose: "search index",
+    crawlerClass: "ai-search",
+  },
+  {
+    token: "Perplexity-User",
+    vendor: "Perplexity",
+    purpose: "user-triggered fetch",
+    crawlerClass: "user-action",
+  },
+  {
+    token: "Applebot-Extended",
+    vendor: "Apple",
+    purpose: "Apple Intelligence training",
+    crawlerClass: "training",
+  },
+  {
+    token: "Bytespider",
+    vendor: "ByteDance",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "Amazonbot",
+    vendor: "Amazon",
+    purpose: "Alexa/AI training",
+    crawlerClass: "training",
+  },
+  {
+    token: "Meta-ExternalAgent",
+    vendor: "Meta",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "Meta-ExternalFetcher",
+    vendor: "Meta",
+    purpose: "user-triggered fetch",
+    crawlerClass: "user-action",
+  },
+  {
+    token: "cohere-ai",
+    vendor: "Cohere",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "DuckAssistBot",
+    vendor: "DuckDuckGo",
+    purpose: "DuckAssist answers",
+    crawlerClass: "ai-search",
+  },
+  {
+    token: "MistralAI-User",
+    vendor: "Mistral",
+    purpose: "user-triggered fetch",
+    crawlerClass: "user-action",
+  },
+  {
+    token: "AI2Bot",
+    vendor: "Allen AI",
+    purpose: "model training",
+    crawlerClass: "training",
+  },
+  {
+    token: "Diffbot",
+    vendor: "Diffbot",
+    purpose: "knowledge graph",
+    crawlerClass: "training",
+  },
+  {
+    token: "YouBot",
+    vendor: "You.com",
+    purpose: "search index",
+    crawlerClass: "ai-search",
+  },
 ];
 
 export interface AiCrawlerVerdict extends AiCrawler {
@@ -69,10 +190,15 @@ export interface AiCrawlerVerdict extends AiCrawler {
 /** Resolve the robots.txt groups that apply to a UA (specific wins over `*`). */
 function groupsForToken(robotsTxt: RobotsTxtData, token: string) {
   const lower = token.toLowerCase();
-  const exact = robotsTxt.rules.filter((g) => g.userAgent.toLowerCase() === lower);
+  const exact = robotsTxt.rules.filter(
+    (g) => g.userAgent.toLowerCase() === lower
+  );
   if (exact.length > 0) return { groups: exact, explicit: true };
   // "*" is always literal, no case-folding needed.
-  return { groups: robotsTxt.rules.filter((g) => g.userAgent === "*"), explicit: false };
+  return {
+    groups: robotsTxt.rules.filter((g) => g.userAgent === "*"),
+    explicit: false,
+  };
 }
 
 /** A search-engine crawler token. Not an AI crawler: reported beside them for context. */
@@ -96,7 +222,11 @@ export const SEARCH_ENGINE_BOTS: SearchEngineBot[] = [
  * - `path-blocked`: the root is allowed, but a rule disallows the audited path.
  * - `allow-override`: the root is disallowed, but an `Allow` rule re-permits the audited path.
  */
-export type SearchEngineVerdictKind = "allowed" | "root-blocked" | "path-blocked" | "allow-override";
+export type SearchEngineVerdictKind =
+  | "allowed"
+  | "root-blocked"
+  | "path-blocked"
+  | "allow-override";
 
 export interface SearchEngineVerdict extends SearchEngineBot {
   crawlerClass: "search-engine";
@@ -110,7 +240,7 @@ export interface SearchEngineVerdict extends SearchEngineBot {
 /** Per-bot verdict for `auditedUrl`, using the same longest-match evaluation as the crawl rules. */
 export function evaluateSearchEngineBots(
   robotsTxt: RobotsTxtData,
-  auditedUrl: string,
+  auditedUrl: string
 ): SearchEngineVerdict[] {
   let rootUrl = auditedUrl;
   try {
@@ -121,7 +251,8 @@ export function evaluateSearchEngineBots(
   return SEARCH_ENGINE_BOTS.map((bot) => {
     // Per Apple, Applebot with no group of its own follows the Googlebot group before `*`.
     const evalToken =
-      bot.token === "Applebot" && !groupsForToken(robotsTxt, "Applebot").explicit
+      bot.token === "Applebot" &&
+      !groupsForToken(robotsTxt, "Applebot").explicit
         ? groupsForToken(robotsTxt, "Googlebot").explicit
           ? "Googlebot"
           : bot.token
@@ -154,14 +285,22 @@ const SEARCH_VERDICT_LABEL: Record<SearchEngineVerdictKind, string> = {
 };
 
 /** Classify every known AI crawler against the parsed robots.txt. */
-export function evaluateAiCrawlers(robotsTxt: RobotsTxtData): AiCrawlerVerdict[] {
+export function evaluateAiCrawlers(
+  robotsTxt: RobotsTxtData
+): AiCrawlerVerdict[] {
   return AI_CRAWLERS.map((bot) => {
     const { groups, explicit } = groupsForToken(robotsTxt, bot.token);
     const rules = groups.flatMap((g) => g.rules);
     // Root access only: a full block is `Disallow: /` not re-permitted by `Allow: /`.
-    const disallowRoot = rules.some((r) => r.type === "disallow" && r.path === "/");
+    const disallowRoot = rules.some(
+      (r) => r.type === "disallow" && r.path === "/"
+    );
     const allowRoot = rules.some((r) => r.type === "allow" && r.path === "/");
-    return { ...bot, explicitlyListed: explicit, blocked: disallowRoot && !allowRoot };
+    return {
+      ...bot,
+      explicitlyListed: explicit,
+      blocked: disallowRoot && !allowRoot,
+    };
   });
 }
 
@@ -218,10 +357,11 @@ export const aiCrawlersRule: Rule = {
     // that crawl/robots-txt already reports and fails on. It gets a single informational check here, so the
     // site-wide block is not echoed as a summary, a Googlebot warning and a grouped row (#1780). A named
     // group that decides differently (an AI crawler or a search engine) keeps the full set of checks.
-    const auditedUrl = ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
+    const auditedUrl =
+      ctx.site?.entryUrls?.[0] ?? ctx.site?.baseUrl ?? ctx.page.url;
     const search = evaluateSearchEngineBots(robotsTxt, auditedUrl);
     const wildcardHasAllow = robotsTxt.rules.some(
-      (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow"),
+      (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow")
     );
     const wildcardOnly =
       wildcardBlocked.length === verdicts.length &&
@@ -269,12 +409,22 @@ export const aiCrawlersRule: Rule = {
         blocked: allBlocked.map((b) => b.token),
         wildcardBlocked: wildcardBlocked.map((b) => b.token),
         blockedByClass: {
-          training: blocked.filter((b) => b.crawlerClass === "training").map((b) => b.token),
-          "ai-search": blocked.filter((b) => b.crawlerClass === "ai-search").map((b) => b.token),
-          "user-action": blocked.filter((b) => b.crawlerClass === "user-action").map((b) => b.token),
-          archive: blocked.filter((b) => b.crawlerClass === "archive").map((b) => b.token),
+          training: blocked
+            .filter((b) => b.crawlerClass === "training")
+            .map((b) => b.token),
+          "ai-search": blocked
+            .filter((b) => b.crawlerClass === "ai-search")
+            .map((b) => b.token),
+          "user-action": blocked
+            .filter((b) => b.crawlerClass === "user-action")
+            .map((b) => b.token),
+          archive: blocked
+            .filter((b) => b.crawlerClass === "archive")
+            .map((b) => b.token),
         },
-        explicitlyListed: verdicts.filter((v) => v.explicitlyListed).map((v) => v.token),
+        explicitlyListed: verdicts
+          .filter((v) => v.explicitlyListed)
+          .map((v) => v.token),
       },
     });
 
@@ -282,13 +432,15 @@ export const aiCrawlersRule: Rule = {
       // crawl/robots-txt already fails on a `User-agent: *` block with no Allow rules. Then this row is
       // the same problem seen from the AI side, so it stays info and does not score a second time.
       const reported = !robotsTxt.rules.some(
-        (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow"),
+        (g) => g.userAgent === "*" && g.rules.some((r) => r.type === "allow")
       );
       checks.push({
         name: "ai-crawlers-wildcard-blocked",
         status: reported ? "info" : "warn",
         message: `robots.txt blocks all AI crawlers through the User-agent: * rule (Disallow: /); none of the ${wildcardBlocked.length} affected crawlers is named in the file.${
-          reported ? " This is the whole-site block already reported by crawl/robots-txt." : ""
+          reported
+            ? " This is the whole-site block already reported by crawl/robots-txt."
+            : ""
         } Name a crawler in its own group with Allow: / to let it in.`,
         value: `${wildcardBlocked.length} crawler(s) blocked by the wildcard rule`,
         items: wildcardBlocked.map((b) => ({
@@ -304,17 +456,23 @@ export const aiCrawlersRule: Rule = {
 
     // Blocking an answer-engine or live user fetch is usually accidental → warn.
     const answerBlocked = blocked.filter(
-      (b) => b.crawlerClass === "ai-search" || b.crawlerClass === "user-action",
+      (b) => b.crawlerClass === "ai-search" || b.crawlerClass === "user-action"
     );
     if (answerBlocked.length > 0) {
-      const search = answerBlocked.filter((b) => b.crawlerClass === "ai-search");
-      const user = answerBlocked.filter((b) => b.crawlerClass === "user-action");
+      const search = answerBlocked.filter(
+        (b) => b.crawlerClass === "ai-search"
+      );
+      const user = answerBlocked.filter(
+        (b) => b.crawlerClass === "user-action"
+      );
       const parts: string[] = [];
       if (search.length > 0)
-        parts.push(`AI-search indexers (${search.map((b) => b.token).join(", ")}), lost AI citations`);
+        parts.push(
+          `AI-search indexers (${search.map((b) => b.token).join(", ")}), lost AI citations`
+        );
       if (user.length > 0)
         parts.push(
-          `user-action fetchers (${user.map((b) => b.token).join(", ")}), breaks live requests users made inside an assistant`,
+          `user-action fetchers (${user.map((b) => b.token).join(", ")}), breaks live requests users made inside an assistant`
         );
       checks.push({
         name: "ai-answer-access",
@@ -356,7 +514,9 @@ export const aiCrawlersRule: Rule = {
     // other engine stays info, as does an allowed Googlebot and an `Allow` override.
     const searchBlocked = search.filter((v) => v.verdict !== "allowed");
     const googlebot = search.find((v) => v.token === "Googlebot");
-    const googlebotBlocked = googlebot?.verdict === "root-blocked" || googlebot?.verdict === "path-blocked";
+    const googlebotBlocked =
+      googlebot?.verdict === "root-blocked" ||
+      googlebot?.verdict === "path-blocked";
     checks.push({
       name: "search-engine-access",
       status: googlebotBlocked ? "warn" : "info",

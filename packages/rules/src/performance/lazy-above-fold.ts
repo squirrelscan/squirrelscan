@@ -1,9 +1,9 @@
 // perf/lazy-above-fold - Detects lazy loading on above-fold images
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { ABOVE_FOLD_IMAGE_BUDGET } from "@squirrelscan/utils/image-loading";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Ancestor is hidden from all users/AT — never an LCP candidate (#699).
 const HIDDEN_ANCESTOR_SELECTOR = '[aria-hidden="true"], [hidden], [inert]';
@@ -48,7 +48,10 @@ const ACTIVE_SLIDE_SELECTOR = [
 ].join(", ");
 
 function isActiveSlideMarker(slide: Element): boolean {
-  return slide.matches(ACTIVE_SLIDE_SELECTOR) || slide.getAttribute("aria-hidden") === "false";
+  return (
+    slide.matches(ACTIVE_SLIDE_SELECTOR) ||
+    slide.getAttribute("aria-hidden") === "false"
+  );
 }
 
 function isInactiveCarouselSlide(el: Element): boolean {
@@ -56,7 +59,9 @@ function isInactiveCarouselSlide(el: Element): boolean {
   if (!slide) return false;
   const parent = slide.parentElement;
   if (!parent) return false;
-  const slideSiblings = Array.from(parent.children).filter((sib) => sib.matches(SLIDE_SELECTOR));
+  const slideSiblings = Array.from(parent.children).filter((sib) =>
+    sib.matches(SLIDE_SELECTOR)
+  );
   if (slideSiblings.length < 2) return false;
 
   const markedActive = slideSiblings.filter(isActiveSlideMarker);
@@ -109,7 +114,11 @@ export const lazyAboveFoldRule: Rule = {
       // Not a real above-fold candidate — skip without consuming the
       // above-fold window so genuinely visible images later in the DOM still
       // get evaluated (#699).
-      if (isHiddenViaAncestor(img) || isInactiveCarouselSlide(img) || isInsideFooter(img)) {
+      if (
+        isHiddenViaAncestor(img) ||
+        isInactiveCarouselSlide(img) ||
+        isInsideFooter(img)
+      ) {
         continue;
       }
 
@@ -117,7 +126,11 @@ export const lazyAboveFoldRule: Rule = {
       const loading = img.getAttribute("loading");
 
       // Skip data URIs and tiny images
-      if (src?.startsWith("data:") || src?.includes("pixel") || src?.includes("spacer")) {
+      if (
+        src?.startsWith("data:") ||
+        src?.includes("pixel") ||
+        src?.includes("spacer")
+      ) {
         continue;
       }
 

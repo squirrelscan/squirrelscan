@@ -2,15 +2,18 @@
 // manifest however many pages link it, icons resolved against the manifest URL
 // (not the page), icon sizes read from the header, and the rule judging the result.
 
-import { Effect } from "effect";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { parseHTML } from "@squirrelscan/parser/dom";
-
-import { mobile, type ParsedPage } from "@squirrelscan/rules";
-import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
-import { createSiteAssetCollector, fetchAssetsFromOccurrences } from "../src/adapter";
+import { parseHTML } from "@squirrelscan/parser/dom";
+import { mobile, type ParsedPage } from "@squirrelscan/rules";
+import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+
+import {
+  createSiteAssetCollector,
+  fetchAssetsFromOccurrences,
+} from "../src/adapter";
 import { createFetchBudget } from "../src/fetch-budget";
 import { checkResourceSizes } from "../src/resource-checker";
 import { fetchScriptContents } from "../src/script-fetcher";
@@ -43,7 +46,12 @@ const MANIFEST = {
   theme_color: "#ffffff",
   icons: [
     // Relative to /static/m.json, so it resolves to /static/icon.png. Declared 512, real 256.
-    { src: "icon.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    {
+      src: "icon.png",
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "maskable",
+    },
     // Absolute and missing: a 404 the rule must name.
     { src: "/icons/192.png", sizes: "192x192", type: "image/png" },
   ],
@@ -66,16 +74,24 @@ beforeAll(() => {
         });
       }
       if (path === "/static/icon.png") {
-        return new Response(pngHeader(256, 256) as unknown as BodyInit, { headers: { "content-type": "image/png" } });
+        return new Response(pngHeader(256, 256) as unknown as BodyInit, {
+          headers: { "content-type": "image/png" },
+        });
       }
       // Same-site manifest paths that redirect off the site: to another host
       // (`localhost` reaches this server, but is not the site's host) and to
       // the metadata address.
       if (path === "/off-site.json") {
-        return Response.redirect(`http://localhost:${server.port}/static/m.json`, 302);
+        return Response.redirect(
+          `http://localhost:${server.port}/static/m.json`,
+          302
+        );
       }
       if (path === "/to-metadata.json") {
-        return Response.redirect("http://169.254.169.254/latest/meta-data/", 302);
+        return Response.redirect(
+          "http://169.254.169.254/latest/meta-data/",
+          302
+        );
       }
       if (path === "/waf-icons.json") {
         return new Response(
@@ -86,13 +102,17 @@ beforeAll(() => {
               { src: "/icons/busy.png", sizes: "512x512", type: "image/png" },
             ],
           }),
-          { headers: { "content-type": "application/manifest+json" } },
+          { headers: { "content-type": "application/manifest+json" } }
         );
       }
       if (path === "/icons/waf.png") {
         return new Response("<html>Just a moment...</html>", {
           status: 403,
-          headers: { "content-type": "text/html", server: "cloudflare", "cf-ray": "abc123-LHR" },
+          headers: {
+            "content-type": "text/html",
+            server: "cloudflare",
+            "cf-ray": "abc123-LHR",
+          },
         });
       }
       if (path === "/icons/busy.png") {
@@ -114,7 +134,9 @@ afterAll(() => {
 });
 
 function pageWith(head: string): ParsedPage {
-  const { document } = parseHTML(`<html><head>${head}</head><body></body></html>`);
+  const { document } = parseHTML(
+    `<html><head>${head}</head><body></body></html>`
+  );
   return { document } as unknown as ParsedPage;
 }
 
@@ -132,15 +154,31 @@ const SITE_EGRESS: EgressPolicy = {
 
 async function fetchAll(occurrences: WebAppManifestOccurrences) {
   return (
-    await Effect.runPromise(fetchWebAppManifests(occurrences, { timeoutMs: 5000 }, SITE_EGRESS))
+    await Effect.runPromise(
+      fetchWebAppManifests(occurrences, { timeoutMs: 5000 }, SITE_EGRESS)
+    )
   ).manifests;
 }
 
-function judge(webAppManifests: Awaited<ReturnType<typeof fetchAll>>, dropped = 0) {
+function judge(
+  webAppManifests: Awaited<ReturnType<typeof fetchAll>>,
+  dropped = 0
+) {
   return mobile.webAppManifestRule.run({
-    page: { url: `${base}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${base}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: base, pages: [], webAppManifests, webAppManifestsDropped: dropped },
+    site: {
+      baseUrl: base,
+      pages: [],
+      webAppManifests,
+      webAppManifestsDropped: dropped,
+    },
     options: {},
   } as unknown as Parameters<typeof mobile.webAppManifestRule.run>[0]) as {
     checks: Array<{
@@ -155,13 +193,14 @@ function judge(webAppManifests: Awaited<ReturnType<typeof fetchAll>>, dropped = 
 describe("web app manifest fetch (#710)", () => {
   test("a manifest linked from ten pages is fetched once and listed with all ten pages", async () => {
     hits.clear();
-    const occurrences: WebAppManifestOccurrences = emptyWebAppManifestOccurrences();
+    const occurrences: WebAppManifestOccurrences =
+      emptyWebAppManifestOccurrences();
     const pages = Array.from({ length: 10 }, (_, i) => `${base}/p${i}`);
     for (const page of pages) {
       absorbWebAppManifestLinks(
         occurrences,
         { url: page, parsed: pageWith(MANIFEST_HEAD) },
-        sameHost,
+        sameHost
       );
     }
 
@@ -173,7 +212,9 @@ describe("web app manifest fetch (#710)", () => {
     expect(manifest?.url).toBe(`${base}/static/m.json`);
     expect(manifest?.status).toBe(200);
     expect(manifest?.sourcePages).toEqual([...pages].sort());
-    expect(manifest?.themeColorsByPage[`${base}/p0`]).toEqual([{ content: "#FFF", media: null }]);
+    expect(manifest?.themeColorsByPage[`${base}/p0`]).toEqual([
+      { content: "#FFF", media: null },
+    ]);
   });
 
   test("icons resolve against the manifest URL and carry the header size; a 404 icon keeps its status", async () => {
@@ -181,17 +222,21 @@ describe("web app manifest fetch (#710)", () => {
     absorbWebAppManifestLinks(
       occurrences,
       { url: `${base}/`, parsed: pageWith(MANIFEST_HEAD) },
-      sameHost,
+      sameHost
     );
 
     const [manifest] = await fetchAll(occurrences);
 
-    const big = manifest?.icons.find((icon) => icon.url === `${base}/static/icon.png`);
+    const big = manifest?.icons.find(
+      (icon) => icon.url === `${base}/static/icon.png`
+    );
     expect(big?.status).toBe(200);
     expect(big?.naturalWidth).toBe(256);
     expect(big?.naturalHeight).toBe(256);
 
-    const missing = manifest?.icons.find((icon) => icon.url === `${base}/icons/192.png`);
+    const missing = manifest?.icons.find(
+      (icon) => icon.url === `${base}/icons/192.png`
+    );
     expect(missing?.status).toBe(404);
   });
 
@@ -200,7 +245,7 @@ describe("web app manifest fetch (#710)", () => {
     absorbWebAppManifestLinks(
       occurrences,
       { url: `${base}/`, parsed: pageWith(MANIFEST_HEAD) },
-      sameHost,
+      sameHost
     );
     const webAppManifests = await fetchAll(occurrences);
 
@@ -208,7 +253,9 @@ describe("web app manifest fetch (#710)", () => {
 
     const [check] = result.checks;
     expect(check?.status).toBe("warn");
-    const labels = (check?.items ?? []).map((item) => item.label ?? "").join("\n");
+    const labels = (check?.items ?? [])
+      .map((item) => item.label ?? "")
+      .join("\n");
     expect(labels).toContain("declared 512x512 but is 256x256");
     expect(labels).toContain(`${base}/icons/192.png answers HTTP 404`);
   });
@@ -224,16 +271,18 @@ describe("web app manifest fetch (#710)", () => {
         securityHeaders: {},
         html: "",
       },
-      parsed: { ...pageWith(MANIFEST_HEAD), images: [], links: [] } as unknown as ParsedPage,
+      parsed: {
+        ...pageWith(MANIFEST_HEAD),
+        images: [],
+        links: [],
+      } as unknown as ParsedPage,
     }));
     collector.absorb(siteContext as never);
     const manifests = collector.occurrences.webAppManifests;
     expect(manifests.size).toBe(1);
-    expect([...(manifests.get(`${base}/static/m.json`)?.keys() ?? [])]).toEqual([
-      `${base}/p0`,
-      `${base}/p1`,
-      `${base}/p2`,
-    ]);
+    expect([...(manifests.get(`${base}/static/m.json`)?.keys() ?? [])]).toEqual(
+      [`${base}/p0`, `${base}/p1`, `${base}/p2`]
+    );
   });
 
   test("a manifest on another host is never fetched", async () => {
@@ -242,9 +291,11 @@ describe("web app manifest fetch (#710)", () => {
       occurrences,
       {
         url: `${base}/`,
-        parsed: pageWith(`<link rel="manifest" href="https://elsewhere.invalid/m.json">`),
+        parsed: pageWith(
+          `<link rel="manifest" href="https://elsewhere.invalid/m.json">`
+        ),
       },
-      sameHost,
+      sameHost
     );
     expect(occurrences.size).toBe(0);
     const manifests = await fetchAll(occurrences);
@@ -255,8 +306,11 @@ describe("web app manifest fetch (#710)", () => {
     const occurrences = emptyWebAppManifestOccurrences();
     absorbWebAppManifestLinks(
       occurrences,
-      { url: `${base}/`, parsed: pageWith(`<link rel="manifest" href="/gone.webmanifest">`) },
-      sameHost,
+      {
+        url: `${base}/`,
+        parsed: pageWith(`<link rel="manifest" href="/gone.webmanifest">`),
+      },
+      sameHost
     );
     const [manifest] = await fetchAll(occurrences);
     expect(manifest?.status).toBe(404);
@@ -269,8 +323,11 @@ describe("web app manifest fetch (#710)", () => {
     const occurrences = emptyWebAppManifestOccurrences();
     absorbWebAppManifestLinks(
       occurrences,
-      { url: `${base}/`, parsed: pageWith(`<link rel="manifest" href="/off-site.json">`) },
-      sameHost,
+      {
+        url: `${base}/`,
+        parsed: pageWith(`<link rel="manifest" href="/off-site.json">`),
+      },
+      sameHost
     );
     const [manifest] = await fetchAll(occurrences);
     expect(manifest?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
@@ -286,8 +343,11 @@ describe("web app manifest fetch (#710)", () => {
     const occurrences = emptyWebAppManifestOccurrences();
     absorbWebAppManifestLinks(
       occurrences,
-      { url: `${base}/`, parsed: pageWith(`<link rel="manifest" href="/to-metadata.json">`) },
-      sameHost,
+      {
+        url: `${base}/`,
+        parsed: pageWith(`<link rel="manifest" href="/to-metadata.json">`),
+      },
+      sameHost
     );
     const [manifest] = await fetchAll(occurrences);
     expect(manifest?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
@@ -298,16 +358,26 @@ describe("web app manifest fetch (#710)", () => {
     const occurrences = emptyWebAppManifestOccurrences();
     absorbWebAppManifestLinks(
       occurrences,
-      { url: `${base}/`, parsed: pageWith(`<link rel="manifest" href="/waf-icons.json">`) },
-      sameHost,
+      {
+        url: `${base}/`,
+        parsed: pageWith(`<link rel="manifest" href="/waf-icons.json">`),
+      },
+      sameHost
     );
     const [manifest] = await fetchAll(occurrences);
-    expect(manifest?.icons.find((i) => i.url.endsWith("/icons/waf.png"))?.wafBlocked).toBe(true);
-    expect(manifest?.icons.find((i) => i.url.endsWith("/icons/busy.png"))?.rateLimited).toBe(true);
+    expect(
+      manifest?.icons.find((i) => i.url.endsWith("/icons/waf.png"))?.wafBlocked
+    ).toBe(true);
+    expect(
+      manifest?.icons.find((i) => i.url.endsWith("/icons/busy.png"))
+        ?.rateLimited
+    ).toBe(true);
     const [check] = judge([manifest!]).checks;
     const items = check?.items ?? [];
     expect(items.some((item) => item.id === "icon-status")).toBe(false);
-    expect(items.filter((item) => item.id === "icon-unverified")).toHaveLength(2);
+    expect(items.filter((item) => item.id === "icon-unverified")).toHaveLength(
+      2
+    );
   });
 
   test("a relative manifest link resolves against <base href>, not the page path", () => {
@@ -316,9 +386,11 @@ describe("web app manifest fetch (#710)", () => {
       occurrences,
       {
         url: `${base}/blog/post-1`,
-        parsed: pageWith(`<base href="/"><link rel="manifest" href="manifest.webmanifest">`),
+        parsed: pageWith(
+          `<base href="/"><link rel="manifest" href="manifest.webmanifest">`
+        ),
       },
-      sameHost,
+      sameHost
     );
     expect([...occurrences.keys()]).toEqual([`${base}/manifest.webmanifest`]);
   });
@@ -327,30 +399,42 @@ describe("web app manifest fetch (#710)", () => {
     const occurrences = emptyWebAppManifestOccurrences();
     absorbWebAppManifestLinks(
       occurrences,
-      { url: `${base}/`, parsed: pageWith(`<link rel="manifest" href="ftp://127.0.0.1/m.json">`) },
-      () => true,
+      {
+        url: `${base}/`,
+        parsed: pageWith(`<link rel="manifest" href="ftp://127.0.0.1/m.json">`),
+      },
+      () => true
     );
     expect(occurrences.size).toBe(0);
   });
 
   test("refusals and manifest 404s are not tarpit strikes against the site's host", async () => {
-    const budget = createFetchBudget({ tarpitLatencyMs: 60_000, tarpitStrikes: 1 });
+    const budget = createFetchBudget({
+      tarpitLatencyMs: 60_000,
+      tarpitStrikes: 1,
+    });
     // Icons that redirect off the site: refused, nothing sent.
     await Effect.runPromise(
-      checkResourceSizes([`${base}/off-site.json`, `${base}/to-metadata.json`], {
-        timeoutMs: 5000,
-        egress: SITE_EGRESS,
-        budget,
-      }),
+      checkResourceSizes(
+        [`${base}/off-site.json`, `${base}/to-metadata.json`],
+        {
+          timeoutMs: 5000,
+          egress: SITE_EGRESS,
+          budget,
+        }
+      )
     );
     // Manifests that answer 404: an answer, not a failing host.
     await Effect.runPromise(
-      fetchScriptContents([`${base}/gone-1.webmanifest`, `${base}/gone-2.webmanifest`], {
-        timeoutMs: 5000,
-        anyContentType: true,
-        egress: SITE_EGRESS,
-        budget,
-      }),
+      fetchScriptContents(
+        [`${base}/gone-1.webmanifest`, `${base}/gone-2.webmanifest`],
+        {
+          timeoutMs: 5000,
+          anyContentType: true,
+          egress: SITE_EGRESS,
+          budget,
+        }
+      )
     );
     expect(budget.summary().tarpitHosts).toEqual([]);
     expect(budget.shouldSkip(`${base}/static/m.json`)).toBe(false);
@@ -369,7 +453,11 @@ describe("web app manifest fetch (#710)", () => {
           securityHeaders: {},
           html: "",
         },
-        parsed: { ...pageWith(MANIFEST_HEAD), images: [], links: [] } as unknown as ParsedPage,
+        parsed: {
+          ...pageWith(MANIFEST_HEAD),
+          images: [],
+          links: [],
+        } as unknown as ParsedPage,
       },
     ] as never);
     const storage = {
@@ -383,7 +471,12 @@ describe("web app manifest fetch (#710)", () => {
       internal_links: { enabled: false },
     } as unknown as Parameters<typeof fetchAssetsFromOccurrences>[3];
     const assets = await Effect.runPromise(
-      fetchAssetsFromOccurrences(storage, "crawl", collector.occurrences, config),
+      fetchAssetsFromOccurrences(
+        storage,
+        "crawl",
+        collector.occurrences,
+        config
+      )
     );
     expect(assets.webAppManifests).toBeUndefined();
     expect(hits.get("/static/m.json")).toBeUndefined();
@@ -394,19 +487,24 @@ describe("web app manifest fetch (#710)", () => {
     for (let n = 0; n < 7; n++) {
       absorbWebAppManifestLinks(
         occurrences,
-        { url: `${base}/p${n}`, parsed: pageWith(`<link rel="manifest" href="/many/${n}.json">`) },
-        sameHost,
+        {
+          url: `${base}/p${n}`,
+          parsed: pageWith(`<link rel="manifest" href="/many/${n}.json">`),
+        },
+        sameHost
       );
     }
     const fetched = await Effect.runPromise(
-      fetchWebAppManifests(occurrences, { timeoutMs: 5000 }, SITE_EGRESS),
+      fetchWebAppManifests(occurrences, { timeoutMs: 5000 }, SITE_EGRESS)
     );
     expect(fetched.manifests).toHaveLength(5);
     expect(fetched.dropped).toBe(2);
     const note = judge(fetched.manifests, fetched.dropped).checks.find(
-      (c) => c.name === "web-app-manifest-unchecked",
+      (c) => c.name === "web-app-manifest-unchecked"
     );
     expect(note?.status).toBe("info");
-    expect(note?.message).toContain("2 more linked web app manifest(s) not checked");
+    expect(note?.message).toContain(
+      "2 more linked web app manifest(s) not checked"
+    );
   });
 });

@@ -6,16 +6,15 @@
 // for squirrelscan (MIT, like the rest of this package; see data/README.md),
 // checked by scripts/check-common-misspellings.ts and parsed on first use.
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { z } from "zod";
 
-import { getRenderedProseTextWhere } from "./text-content";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // One plain string, not a JSON import: it loads the same in every runtime that
 // imports the rules (no import attribute or JSON loader), and the compiled binary
 // embeds it at about its own size, where a JSON import becomes one export per key.
 import { COMMON_MISSPELLINGS } from "./data/common-misspellings-data";
+import { getRenderedProseTextWhere } from "./text-content";
 
 /** Findings listed per audit, worst first by page count. */
 const MAX_FINDINGS = 50;
@@ -50,7 +49,7 @@ export const optionsSchema = z.object({
     .array(z.string())
     .default([])
     .describe(
-      "Misspellings never reported, matched case-insensitively (for example a brand spelling). Doubled words are not affected",
+      "Misspellings never reported, matched case-insensitively (for example a brand spelling). Doubled words are not affected"
     ),
 });
 
@@ -95,7 +94,9 @@ function isUrlOrEmail(token: string): boolean {
 }
 /** Blank out URL and email tokens, keeping every other character in place. */
 function blankNonWords(text: string): string {
-  return text.replace(/\S+/g, (token) => (isUrlOrEmail(token) ? " ".repeat(token.length) : token));
+  return text.replace(/\S+/g, (token) =>
+    isUrlOrEmail(token) ? " ".repeat(token.length) : token
+  );
 }
 const WORD = /[A-Za-z]+/g;
 /** A letter run touching one of these is part of an identifier, not a word. */
@@ -124,10 +125,12 @@ function* tokenize(text: string, capitalsOk: boolean): Generator<Token> {
     const index = match.index ?? 0;
     const before = index > 0 ? cleaned[index - 1]! : "";
     const after = cleaned[index + word.length] ?? "";
-    if (IDENTIFIER_NEIGHBOUR.test(before) || IDENTIFIER_NEIGHBOUR.test(after)) continue;
+    if (IDENTIFIER_NEIGHBOUR.test(before) || IDENTIFIER_NEIGHBOUR.test(after))
+      continue;
     if (word.length > 1 && word === word.toUpperCase()) continue;
     if (/[A-Z]/.test(word.slice(1))) continue;
-    const capitalised = word[0] === word[0]!.toUpperCase() && word[0] !== word[0]!.toLowerCase();
+    const capitalised =
+      word[0] === word[0]!.toUpperCase() && word[0] !== word[0]!.toLowerCase();
     const sentenceStart = capitalsOk || startsSentence(cleaned, index);
     if (capitalised && !sentenceStart) continue;
     yield { word, index, sentenceStart, capitalised };
@@ -205,7 +208,7 @@ function isInterfaceText(el: Element): boolean {
   if (UI_TAG.test(el.tagName)) return true;
   if (el.getAttribute?.("role") === "navigation") return true;
   return /breadcrumb/i.test(
-    `${el.getAttribute?.("aria-label") ?? ""} ${el.getAttribute?.("class") ?? ""}`,
+    `${el.getAttribute?.("aria-label") ?? ""} ${el.getAttribute?.("class") ?? ""}`
   );
 }
 
@@ -232,7 +235,11 @@ interface Quota {
 }
 
 /** Record `occ` unless its kind and word are already recorded; false once `quota` is spent. */
-function record(scan: PageScan, quota: Quota, occ: MisspellingOccurrence): boolean {
+function record(
+  scan: PageScan,
+  quota: Quota,
+  occ: MisspellingOccurrence
+): boolean {
   const key = `${occ.kind}:${occ.word}`;
   if (!scan.seen.has(key)) {
     scan.seen.add(key);
@@ -248,7 +255,7 @@ function scanText(
   prominent: boolean,
   capitalsOk: boolean,
   scan: PageScan,
-  quota: Quota,
+  quota: Quota
 ): void {
   if (quota.left <= 0 || text === "") return;
   let previous: { lower: string; token: Token } | null = null;
@@ -274,14 +281,23 @@ function scanText(
       previous &&
       previous.lower === lower &&
       DOUBLED_FUNCTION_WORDS.has(lower) &&
-      /^[ \t]+$/.test(text.slice(previous.token.index + previous.token.word.length, token.index))
+      /^[ \t]+$/.test(
+        text.slice(
+          previous.token.index + previous.token.word.length,
+          token.index
+        )
+      )
     ) {
       const start = previous.token.index;
       const doubled = record(scan, quota, {
         kind: "doubled",
         word: `${lower} ${lower}`,
         prominent: false,
-        context: contextAt(text, start, token.index + token.word.length - start),
+        context: contextAt(
+          text,
+          start,
+          token.index + token.word.length - start
+        ),
       });
       if (!doubled) return;
     }
@@ -312,17 +328,27 @@ function getTable(): ReadonlyMap<string, string> {
  * or over the stored DOM in the legacy site pass. Both paths call this, so they
  * cannot disagree.
  */
-export function scanPageForMisspellings(doc: Document | null): PageMisspellings {
-  if (!doc || primaryLanguage(doc.documentElement?.getAttribute("lang")) !== "en") return NO_PAGE;
+export function scanPageForMisspellings(
+  doc: Document | null
+): PageMisspellings {
+  if (
+    !doc ||
+    primaryLanguage(doc.documentElement?.getAttribute("lang")) !== "en"
+  )
+    return NO_PAGE;
   // Headings get their own pass and quota below, so the body copy leaves them out:
   // a heading past that quota never spends the body's.
   const body = doc.querySelector("body");
-  const notBodyCopy = (el: Element) => isOwnExcluded(el) || HEADING_TAG.test(el.tagName);
+  const notBodyCopy = (el: Element) =>
+    isOwnExcluded(el) || HEADING_TAG.test(el.tagName);
   const bodyText = body ? getRenderedProseTextWhere(body, notBodyCopy) : "";
   // Names come from prose only: a breadcrumb or link echoing a misspelt title
   // ("Home > Accomodation") must not excuse the title.
   const proseText = body
-    ? getRenderedProseTextWhere(body, (el) => notBodyCopy(el) || isInterfaceText(el))
+    ? getRenderedProseTextWhere(
+        body,
+        (el) => notBodyCopy(el) || isInterfaceText(el)
+      )
     : "";
   const scan: PageScan = {
     table: getTable(),
@@ -334,14 +360,21 @@ export function scanPageForMisspellings(doc: Document | null): PageMisspellings 
   const prominent: Quota = { left: MAX_PROMINENT_PER_PAGE };
   // A <title lang="fr"> (or translate="no") is not English copy either.
   const titleEl = doc.querySelector("title");
-  const title = titleEl && !isOwnExcluded(titleEl) ? (titleEl.textContent ?? "") : "";
+  const title =
+    titleEl && !isOwnExcluded(titleEl) ? (titleEl.textContent ?? "") : "";
   scanText(title, true, true, scan, prominent);
   scanText(metaDescription(doc), true, false, scan, prominent);
   for (const heading of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
     if (prominent.left <= 0) break;
     if (isExcludedSubtree(heading)) continue;
     // Read like body copy: <code>, <kbd> or a foreign <span lang> inside a heading is skipped.
-    scanText(getRenderedProseTextWhere(heading, isOwnExcluded), true, true, scan, prominent);
+    scanText(
+      getRenderedProseTextWhere(heading, isOwnExcluded),
+      true,
+      true,
+      scan,
+      prominent
+    );
   }
 
   scanText(bodyText, false, false, scan, { left: MAX_BODY_PER_PAGE });
@@ -349,7 +382,10 @@ export function scanPageForMisspellings(doc: Document | null): PageMisspellings 
 }
 
 function metaDescription(doc: Document): string {
-  return doc.querySelector('meta[name="description" i]')?.getAttribute("content") ?? "";
+  return (
+    doc.querySelector('meta[name="description" i]')?.getAttribute("content") ??
+    ""
+  );
 }
 
 interface Finding {
@@ -365,13 +401,19 @@ function summarise(f: Finding): CheckResult {
   const pageCount = f.pages.size;
   const plural = pageCount === 1 ? "page" : "pages";
   const label =
-    f.kind === "misspelling" ? `"${f.word}" → "${f.correction}"` : `doubled word "${f.word}"`;
+    f.kind === "misspelling"
+      ? `"${f.word}" → "${f.correction}"`
+      : `doubled word "${f.word}"`;
   return {
     name: `${f.kind === "misspelling" ? "misspelling" : "doubled-word"}:${f.word}`,
     status: f.kind === "misspelling" && f.prominent ? "warn" : "info",
     message: `${label} on ${pageCount} ${plural}`,
     value: pageCount,
-    items: f.examples.map((e) => ({ id: e.url, label: e.url, snippet: e.context })),
+    items: f.examples.map((e) => ({
+      id: e.url,
+      label: e.url,
+      snippet: e.context,
+    })),
     details: { pageCount, correction: f.correction },
   };
 }
@@ -379,7 +421,7 @@ function summarise(f: Finding): CheckResult {
 /** Site-level aggregation shared by both paths: one finding per word, with its pages. */
 function aggregate(
   pages: ReadonlyArray<{ url: string; scan: PageMisspellings }>,
-  ignored: ReadonlySet<string>,
+  ignored: ReadonlySet<string>
 ): Finding[] {
   const findings = new Map<string, Finding>();
   for (const { url, scan } of pages) {
@@ -401,13 +443,16 @@ function aggregate(
       }
       finding.pages.add(url);
       finding.prominent ||= occ.prominent;
-      if (finding.examples.length < MAX_EXAMPLES && !finding.examples.some((e) => e.url === url)) {
+      if (
+        finding.examples.length < MAX_EXAMPLES &&
+        !finding.examples.some((e) => e.url === url)
+      ) {
         finding.examples.push({ url, context: occ.context });
       }
     }
   }
   return [...findings.values()].sort(
-    (a, b) => b.pages.size - a.pages.size || a.word.localeCompare(b.word),
+    (a, b) => b.pages.size - a.pages.size || a.word.localeCompare(b.word)
   );
 }
 
@@ -415,7 +460,8 @@ export const commonMisspellingsRule: Rule = {
   meta: {
     id: "content/common-misspellings",
     name: "Common Misspellings",
-    description: "Finds known misspellings and doubled words in the visible English text of a site",
+    description:
+      "Finds known misspellings and doubled words in the visible English text of a site",
     solution:
       "Each finding names a misspelled word, its correction, the number of pages it appears on and an example with its context. Fix the copy where it was written, and check the template or CMS field if it appears on many pages. Misspellings in the title, description or a heading are visible in search results or at the top of the page, so they are reported as warnings.",
     category: "content",

@@ -6,10 +6,9 @@
 // assembly made a single decorative appearance excuse every bare one.
 // squirrelscan/squirrelscan#143
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { generateReportFromStorage } from "../src/adapter";
 import {
@@ -64,13 +63,17 @@ async function summariesFor(images: Record<string, Appearance[]>) {
         }
       }
 
-      const v1 = yield* generateReportFromStorage(storage, crawlId, emptyRuleExecutionResult());
+      const v1 = yield* generateReportFromStorage(
+        storage,
+        crawlId,
+        emptyRuleExecutionResult()
+      );
       const v2 = yield* buildV2Report(storage, crawlId, streamingInput());
       return {
         v1: v1.summary.missingAltText,
         v2: v2.summary.missingAltText,
       };
-    }),
+    })
   );
 }
 
@@ -87,7 +90,10 @@ describe("summary.missingAltText", () => {
 
     for (const missing of [v1, v2]) {
       expect(missing).toEqual([
-        { page: "https://example.com/b", image: "https://example.com/logo.svg" },
+        {
+          page: "https://example.com/b",
+          image: "https://example.com/logo.svg",
+        },
       ]);
     }
   });
@@ -114,15 +120,23 @@ describe("summary.missingAltText", () => {
 
     for (const missing of [v1, v2]) {
       expect(missing).toEqual([
-        { page: "https://example.com/a", image: "https://example.com/photo.jpg" },
-        { page: "https://example.com/b", image: "https://example.com/photo.jpg" },
+        {
+          page: "https://example.com/a",
+          image: "https://example.com/photo.jpg",
+        },
+        {
+          page: "https://example.com/b",
+          image: "https://example.com/photo.jpg",
+        },
       ]);
     }
   });
 
   test("a described src is never reported", async () => {
     const { v1, v2 } = await summariesFor({
-      "https://example.com/barn.jpg": [{ pageUrl: "https://example.com/a", alt: "A red barn" }],
+      "https://example.com/barn.jpg": [
+        { pageUrl: "https://example.com/a", alt: "A red barn" },
+      ],
     });
 
     expect(v1).toEqual([]);

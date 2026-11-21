@@ -6,9 +6,15 @@
 // content/word-count. The positive cases pin the one thing it is for: a page far
 // below its OWN page type's median, on a site where that type has a clear norm.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   thinVsSiteNormRule,
@@ -16,7 +22,6 @@ import {
   THIN_NORM_MIN_PAGES,
 } from "../src/content/thin-vs-site-norm";
 import { WORD_COUNT_MIN_WORDS } from "../src/content/word-count";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   pageType: string | null;
@@ -33,12 +38,22 @@ function url(i: number): string {
 }
 
 /** N pages of one type, all at the same word count. */
-function uniform(pageType: string, wordCount: number, count: number): PageSpec[] {
+function uniform(
+  pageType: string,
+  wordCount: number,
+  count: number
+): PageSpec[] {
   return Array.from({ length: count }, () => ({ pageType, wordCount }));
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -57,7 +72,9 @@ function legacyCtx(specs: PageSpec[], siteIndexable?: boolean): RuleContext {
           content: { wordCount: spec.wordCount },
           meta: { robots: spec.noindex ? "noindex,follow" : null },
         } as unknown as ParsedPage,
-        headers: spec.headerNoindex ? { "x-robots-tag": "noindex" } : ({} as Record<string, string>),
+        headers: spec.headerNoindex
+          ? { "x-robots-tag": "noindex" }
+          : ({} as Record<string, string>),
       })),
       robotsTxt: null,
       sitemaps: null,
@@ -147,7 +164,10 @@ async function checks(ctx: RuleContext): Promise<CheckResult[]> {
 }
 
 /** Run BOTH paths over one fixture, assert byte-identical output, return it. */
-async function bothPaths(specs: PageSpec[], siteIndexable?: boolean): Promise<CheckResult> {
+async function bothPaths(
+  specs: PageSpec[],
+  siteIndexable?: boolean
+): Promise<CheckResult> {
   const legacy = await checks(legacyCtx(specs, siteIndexable));
   const streamed = await checks(siteQueryCtx(specs, siteIndexable));
   expect(streamed).toEqual(legacy);
@@ -158,7 +178,9 @@ async function bothPaths(specs: PageSpec[], siteIndexable?: boolean): Promise<Ch
 
 describe("content/thin-vs-site-norm — silence guards", () => {
   test("skips a crawl below the site page floor", async () => {
-    const check = await bothPaths(uniform("article", 1800, THIN_NORM_MIN_PAGES - 1));
+    const check = await bothPaths(
+      uniform("article", 1800, THIN_NORM_MIN_PAGES - 1)
+    );
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${THIN_NORM_MIN_PAGES} needed`);
   });
@@ -172,14 +194,21 @@ describe("content/thin-vs-site-norm — silence guards", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(`${THIN_NORM_MIN_GROUP_PAGES}+ comparable pages`);
+    expect(check.message).toContain(
+      `${THIN_NORM_MIN_GROUP_PAGES}+ comparable pages`
+    );
   });
 
   test("skips a heterogeneous group — no modal norm to deviate from", async () => {
     // Word counts scattered across an order of magnitude: fewer than 70% of the
     // group sits within ±50% of the median, so the median is not a norm.
-    const scattered = [300, 400, 900, 1500, 2600, 4000, 6000, 9000, 12000, 16000];
-    const specs = scattered.map((wordCount) => ({ pageType: "article", wordCount }));
+    const scattered = [
+      300, 400, 900, 1500, 2600, 4000, 6000, 9000, 12000, 16000,
+    ];
+    const specs = scattered.map((wordCount) => ({
+      pageType: "article",
+      wordCount,
+    }));
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
   });
@@ -187,7 +216,10 @@ describe("content/thin-vs-site-norm — silence guards", () => {
   test("untyped pages never form a group", async () => {
     const specs = [
       ...uniform("article", 1800, 10),
-      ...Array.from({ length: 4 }, () => ({ pageType: "unknown", wordCount: 40 })),
+      ...Array.from({ length: 4 }, () => ({
+        pageType: "unknown",
+        wordCount: 40,
+      })),
       ...Array.from({ length: 4 }, () => ({ pageType: null, wordCount: 40 })),
     ];
     const check = await bothPaths(specs);
@@ -198,7 +230,11 @@ describe("content/thin-vs-site-norm — silence guards", () => {
   test("non-2xx pages are excluded from the distribution", async () => {
     const specs = [
       ...uniform("article", 1800, 10),
-      ...Array.from({ length: 5 }, () => ({ pageType: "article", wordCount: 12, status: 404 })),
+      ...Array.from({ length: 5 }, () => ({
+        pageType: "article",
+        wordCount: 12,
+        status: 404,
+      })),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
@@ -215,8 +251,12 @@ describe("content/thin-vs-site-norm — the no-false-positive fixtures", () => {
 
   test("template-uniform siblings sit inside the norm", async () => {
     // Same template, small natural jitter — nothing here is an outlier.
-    const jitter = [980, 1000, 1010, 1020, 995, 1005, 1030, 970, 1000, 1015, 990, 1008];
-    const check = await bothPaths(jitter.map((wordCount) => ({ pageType: "product", wordCount })));
+    const jitter = [
+      980, 1000, 1010, 1020, 995, 1005, 1030, 970, 1000, 1015, 990, 1008,
+    ];
+    const check = await bothPaths(
+      jitter.map((wordCount) => ({ pageType: "product", wordCount }))
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toContain("within their page type's word-count norm");
   });
@@ -266,14 +306,20 @@ describe("content/thin-vs-site-norm — findings", () => {
   });
 
   test("fails once a fifth of the judged pages are outliers", async () => {
-    const specs = [...uniform("article", 1800, 10), ...uniform("article", 400, 4)];
+    const specs = [
+      ...uniform("article", 1800, 10),
+      ...uniform("article", 400, 4),
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("fail");
     expect(check.value).toBe(4);
   });
 
   test("caps the reported items", async () => {
-    const specs = [...uniform("article", 1800, 40), ...uniform("article", 400, 12)];
+    const specs = [
+      ...uniform("article", 1800, 40),
+      ...uniform("article", 400, 12),
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("fail");
     expect(check.items?.length).toBe(10);

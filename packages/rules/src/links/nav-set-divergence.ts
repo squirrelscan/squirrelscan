@@ -21,12 +21,17 @@
 //   5. A page's own URL never counts as missing (the active item is often unlinked), and a page
 //      whose set is oversized is not compared.
 
-import { createHash } from "node:crypto";
+import type {
+  CheckItem,
+  LinkData,
+  NavLinkSet,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
 import { normalizeUrl } from "@squirrelscan/utils";
+import { createHash } from "node:crypto";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { CheckItem, LinkData, NavLinkSet, SiteQuery } from "@squirrelscan/core-contracts";
 
 /** Crawl-wide page floor: below this there is no site navigation to compare against. */
 export const NAV_MIN_PAGES = 10;
@@ -56,7 +61,11 @@ export const NAV_SET_MAX_HREFS = 200;
 const NAV_MAX_HREF_LENGTH = 512;
 
 const CHECK_NAME = "nav-set-divergence";
-const CHROME_SECTIONS: ReadonlySet<string> = new Set(["header", "navigation", "footer"]);
+const CHROME_SECTIONS: ReadonlySet<string> = new Set([
+  "header",
+  "navigation",
+  "footer",
+]);
 
 /**
  * The navigation link set of a parsed page, or null when it carries none. Internal, working links
@@ -65,7 +74,7 @@ const CHROME_SECTIONS: ReadonlySet<string> = new Set(["header", "navigation", "f
  */
 export function pageNavLinkSet(
   parsed: { links?: LinkData[] } | null | undefined,
-  pageUrl: string,
+  pageUrl: string
 ): NavLinkSet | null {
   const links = parsed?.links;
   if (!Array.isArray(links)) return null;
@@ -74,7 +83,9 @@ export function pageNavLinkSet(
   for (const link of links) {
     if (!link.isInternal || link.error) continue;
     const chrome =
-      link.section !== undefined ? CHROME_SECTIONS.has(link.section) : link.isChrome === true;
+      link.section !== undefined
+        ? CHROME_SECTIONS.has(link.section)
+        : link.isChrome === true;
     if (!chrome || !link.url || link.url.length > NAV_MAX_HREF_LENGTH) continue;
     const href = normalizeUrl(link.url);
     if (href !== self) set.add(href);
@@ -82,7 +93,10 @@ export function pageNavLinkSet(
   if (set.size === 0) return null;
   const hrefs = [...set].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return {
-    hash: createHash("sha256").update(hrefs.join("\n")).digest("hex").slice(0, 16),
+    hash: createHash("sha256")
+      .update(hrefs.join("\n"))
+      .digest("hex")
+      .slice(0, 16),
     count: hrefs.length,
     hrefs: hrefs.length <= NAV_SET_MAX_HREFS ? hrefs : [],
   };
@@ -111,7 +125,12 @@ interface NavRollup {
 }
 
 function emptyRollup(): NavRollup {
-  return { pages: [], hashes: new Set(), oversizedPages: 0, pagesWithoutNav: 0 };
+  return {
+    pages: [],
+    hashes: new Set(),
+    oversizedPages: 0,
+    pagesWithoutNav: 0,
+  };
 }
 
 /** The classifier's "unknown" is the absence of a type, so it must not form a group of its own. */
@@ -131,7 +150,9 @@ function localeKey(url: string): string {
     return "";
   }
   const first = path.split("/")[1] ?? "";
-  return LOCALE_SEGMENT.test(first) ? first.toLowerCase().replace("_", "-") : "";
+  return LOCALE_SEGMENT.test(first)
+    ? first.toLowerCase().replace("_", "-")
+    : "";
 }
 
 function accumulatePage(rollup: NavRollup, record: NavPageRecord): void {
@@ -163,18 +184,22 @@ function clearNorm(pages: ComparedPage[]): string[] | null {
   const counts = new Map<string, number>();
   const selfCounts = new Map<string, number>();
   for (const page of pages) {
-    for (const href of page.hrefs) counts.set(href, (counts.get(href) ?? 0) + 1);
+    for (const href of page.hrefs)
+      counts.set(href, (counts.get(href) ?? 0) + 1);
     selfCounts.set(page.self, (selfCounts.get(page.self) ?? 0) + 1);
   }
   // A page cannot list its own URL (the extractor drops it), so a page sitting on an href counts
   // as having it: otherwise every nav target would drag its own link below the share.
   const norm: string[] = [];
   for (const [href, n] of counts) {
-    if ((n + (selfCounts.get(href) ?? 0)) / pages.length >= NAV_NORM_SHARE) norm.push(href);
+    if ((n + (selfCounts.get(href) ?? 0)) / pages.length >= NAV_NORM_SHARE)
+      norm.push(href);
   }
   if (norm.length === 0) return null;
   norm.sort(byText);
-  const agreeing = pages.filter((p) => norm.every((h) => p.hrefs.has(h) || h === p.self)).length;
+  const agreeing = pages.filter((p) =>
+    norm.every((h) => p.hrefs.has(h) || h === p.self)
+  ).length;
   return agreeing / pages.length >= NAV_MIN_AGREEMENT ? norm : null;
 }
 
@@ -193,7 +218,7 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
   if (sitePageCount < NAV_MIN_PAGES) {
     return [
       skip(
-        `Only ${sitePageCount} page(s) crawled; ${NAV_MIN_PAGES} needed to establish the site's navigation`,
+        `Only ${sitePageCount} page(s) crawled; ${NAV_MIN_PAGES} needed to establish the site's navigation`
       ),
     ];
   }
@@ -201,7 +226,7 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
   if (pages.length < NAV_MIN_PAGES) {
     return [
       skip(
-        `Only ${pages.length} page(s) carry navigation links to compare; ${NAV_MIN_PAGES} needed to establish the site's navigation`,
+        `Only ${pages.length} page(s) carry navigation links to compare; ${NAV_MIN_PAGES} needed to establish the site's navigation`
       ),
     ];
   }
@@ -217,12 +242,21 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
   let unjudged = 0;
   let siteNormSize = 0;
   const flagged: Flagged[] = [];
-  const judgeAgainst = (group: ComparedPage[], norm: string[], comparedWithin: string): void => {
+  const judgeAgainst = (
+    group: ComparedPage[],
+    norm: string[],
+    comparedWithin: string
+  ): void => {
     for (const page of group) {
       judged += 1;
       const missing = norm.filter((h) => !page.hrefs.has(h) && h !== page.self);
       if (missing.length > 0) {
-        flagged.push({ url: page.url, missing, normSize: norm.length, comparedWithin });
+        flagged.push({
+          url: page.url,
+          missing,
+          normSize: norm.length,
+          comparedWithin,
+        });
       }
     }
   };
@@ -260,7 +294,7 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
         judgeAgainst(
           groups.get(type)!,
           norm,
-          [label, `pageType:${type}`].filter(Boolean).join(" "),
+          [label, `pageType:${type}`].filter(Boolean).join(" ")
         );
       else unjudged += groups.get(type)!.length;
     }
@@ -270,7 +304,11 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
   }
 
   if (judged === 0) {
-    return [skip("No clear navigation norm: the pages' navigation links do not agree on one set")];
+    return [
+      skip(
+        "No clear navigation norm: the pages' navigation links do not agree on one set"
+      ),
+    ];
   }
 
   const details: Record<string, unknown> = {
@@ -295,7 +333,9 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
     ];
   }
 
-  flagged.sort((a, b) => b.missing.length - a.missing.length || byText(a.url, b.url));
+  flagged.sort(
+    (a, b) => b.missing.length - a.missing.length || byText(a.url, b.url)
+  );
   const items: CheckItem[] = flagged.slice(0, NAV_MAX_ITEMS).map((f) => {
     const listed = f.missing.slice(0, NAV_MAX_LISTED_HREFS);
     const more = f.missing.length - listed.length;
@@ -311,7 +351,9 @@ function buildChecks(rollup: NavRollup, sitePageCount: number): CheckResult[] {
       },
     };
   });
-  const severe = flagged.some((f) => f.missing.length / f.normSize >= NAV_FAIL_MISSING_SHARE);
+  const severe = flagged.some(
+    (f) => f.missing.length / f.normSize >= NAV_FAIL_MISSING_SHARE
+  );
 
   return [
     {
@@ -342,7 +384,8 @@ export const navSetDivergenceRule: Rule = {
   meta: {
     id: "links/nav-set-divergence",
     name: "Navigation Set Divergence",
-    description: "Finds pages whose navigation is missing links the rest of the site has",
+    description:
+      "Finds pages whose navigation is missing links the rest of the site has",
     solution:
       "These pages leave out navigation links that most of your site carries, so visitors and crawlers lose the route to those pages from here. Check the page's template: a landing page built outside the shared layout, an older template, or a header or footer include that failed to render are the usual causes. Add the missing links back, or move the page onto the shared layout. If the page is meant to be a focused landing page, this is intended and can stay. Sections with their own navigation (a docs area, a store) are compared with their own page type, not the whole site.",
     category: "links",

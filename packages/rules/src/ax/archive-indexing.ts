@@ -7,10 +7,14 @@
 // imply CC inclusion. CC is the one that matters most for AI: it is a primary
 // training/discovery corpus for the major labs.
 
-import type { ArchiveIndexingResponse, ArchivePresence } from "@squirrelscan/core-contracts";
+import type {
+  ArchiveIndexingResponse,
+  ArchivePresence,
+} from "@squirrelscan/core-contracts";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { humanizeCloudSkip, readCloudResult } from "../cloud";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** A capture older than this is reported as stale. */
 const STALE_CAPTURE_MS = 365 * 24 * 60 * 60 * 1000;
@@ -34,16 +38,25 @@ export const archiveIndexingRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 1,
-    cloud: { service: "archive-indexing", unit: "site", creditFeature: "archive_indexing" },
+    cloud: {
+      service: "archive-indexing",
+      unit: "site",
+      creditFeature: "archive_indexing",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<ArchiveIndexingResponse>(ctx.cloudResults, "archive-indexing");
+    const envelope = readCloudResult<ArchiveIndexingResponse>(
+      ctx.cloudResults,
+      "archive-indexing"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "archive-indexing",
         status: "skipped",
@@ -68,7 +81,11 @@ export const archiveIndexingRule: Rule = {
           ? `Site is in the Common Crawl index but the latest capture is over a year old, recent content is missing from CC-derived AI training data`
           : `Site is in the Common Crawl index${commonCrawl.source ? ` (${commonCrawl.source})` : ""}`,
         value: commonCrawl.latestCapture ?? "indexed",
-        details: { domain, source: commonCrawl.source, latestCapture: commonCrawl.latestCapture },
+        details: {
+          domain,
+          source: commonCrawl.source,
+          latestCapture: commonCrawl.latestCapture,
+        },
       });
     } else {
       checks.push({

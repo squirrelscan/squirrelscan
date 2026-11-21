@@ -41,7 +41,11 @@ import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
 
-import { runStreamingRules, type PreFetchedAssets, type StreamingRulePhase } from "../src/adapter";
+import {
+  runStreamingRules,
+  type PreFetchedAssets,
+  type StreamingRulePhase,
+} from "../src/adapter";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -108,80 +112,90 @@ async function main(): Promise<void> {
   const baseRss = rss();
   console.log(
     `db=${DB.split("/").pop()} pages=${pageCount} batch=${BATCH}  ` +
-      `baseline retained=${(base / MB).toFixed(0)} MB rss=${(baseRss / MB).toFixed(0)} MB\n`,
+      `baseline retained=${(base / MB).toFixed(0)} MB rss=${(baseRss / MB).toFixed(0)} MB\n`
   );
 
-  const started = new Map<StreamingRulePhase, { retained: number; rss: number }>();
+  const started = new Map<
+    StreamingRulePhase,
+    { retained: number; rss: number }
+  >();
   /** Full-batch boundary samples — the only ones the slope is fitted to. */
   const samples: Array<[number, number]> = [];
   const rssSamples: Array<[number, number]> = [];
   let peakInLoop = 0;
 
   const result = await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: BATCH,
-      onPhase: (phaseName, boundary) => {
-        if (boundary === "start") {
-          started.set(phaseName, { retained: retained(), rss: rss() });
-          return;
-        }
-        const from = started.get(phaseName)!;
-        const toRetained = retained();
-        const toRss = rss();
-        console.log(
-          `${phaseName.padEnd(12)} retained ${`${(from.retained / MB).toFixed(0)}`.padStart(5)} -> ` +
-            `${`${(toRetained / MB).toFixed(0)}`.padStart(5)} MB (${((toRetained - from.retained) / MB).toFixed(0).padStart(5)})   ` +
-            `rss ${`${(from.rss / MB).toFixed(0)}`.padStart(5)} -> ${`${(toRss / MB).toFixed(0)}`.padStart(5)} MB ` +
-            `(${((toRss - from.rss) / MB).toFixed(0).padStart(5)})`,
-        );
-      },
-      hooks: {
-        onBatch: ({ batchIndex, pagesDone }) => {
-          const r = retained();
-          const s = rss();
-          // The hook runs while this batch's PageRecords are still in scope, so
-          // a short batch is holding less html than a full one and its sample
-          // is not comparable to the others.
-          //
-          // Fullness is decided from the FETCHED rows, not from `pagesDone`:
-          // that counter advances only for pages the loop actually scores, so a
-          // full 50-row batch containing one non-HTML or WAF page would look
-          // short and be thrown away. The loop reads by OFFSET over the same
-          // rows `getPageCount` counts, so batch i covers [BATCH*(i-1), BATCH*i)
-          // and is full exactly when that window fits inside the crawl.
-          const full = BATCH * batchIndex <= pageCount;
-          if (full) {
-            samples.push([pagesDone, r]);
-            rssSamples.push([pagesDone, s]);
+    runStreamingRules(
+      storage,
+      crawlId,
+      benchConfig(),
+      EMPTY_ASSETS,
+      undefined,
+      {
+        batchSize: BATCH,
+        onPhase: (phaseName, boundary) => {
+          if (boundary === "start") {
+            started.set(phaseName, { retained: retained(), rss: rss() });
+            return;
           }
+          const from = started.get(phaseName)!;
+          const toRetained = retained();
+          const toRss = rss();
           console.log(
-            `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} scored)` +
-              `${full ? "     " : " PART"}  ` +
-              `retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`,
+            `${phaseName.padEnd(12)} retained ${`${(from.retained / MB).toFixed(0)}`.padStart(5)} -> ` +
+              `${`${(toRetained / MB).toFixed(0)}`.padStart(5)} MB (${((toRetained - from.retained) / MB).toFixed(0).padStart(5)})   ` +
+              `rss ${`${(from.rss / MB).toFixed(0)}`.padStart(5)} -> ${`${(toRss / MB).toFixed(0)}`.padStart(5)} MB ` +
+              `(${((toRss - from.rss) / MB).toFixed(0).padStart(5)})`
           );
         },
-      },
-      pageLoopHooks: {
-        heartbeatEveryPages: EVERY,
-        onProgress: (done) => {
-          // Trace only. These land mid-batch, where the batch's documents are
-          // part-released, so they are not comparable to each other and must
-          // not be fitted. The maximum over them is a POST-COLLECT high-water
-          // and NOT the container's: `retained()` collects before it samples,
-          // and the loop is sync CPU that yields only when `yieldEveryMs` is
-          // set, so any spike between two heartbeats — a batch's parse, one
-          // expensive rule — is invisible here. A container-sizing number has
-          // to come from outside the process (`/usr/bin/time -l`, the cgroup's
-          // own high-water), not from this sampler.
-          const r = retained();
-          peakInLoop = Math.max(peakInLoop, r);
-          console.log(
-            `  pages ${String(done).padStart(4)}  retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  ` +
-              `rss=${`${(rss() / MB).toFixed(0)}`.padStart(5)} MB`,
-          );
+        hooks: {
+          onBatch: ({ batchIndex, pagesDone }) => {
+            const r = retained();
+            const s = rss();
+            // The hook runs while this batch's PageRecords are still in scope, so
+            // a short batch is holding less html than a full one and its sample
+            // is not comparable to the others.
+            //
+            // Fullness is decided from the FETCHED rows, not from `pagesDone`:
+            // that counter advances only for pages the loop actually scores, so a
+            // full 50-row batch containing one non-HTML or WAF page would look
+            // short and be thrown away. The loop reads by OFFSET over the same
+            // rows `getPageCount` counts, so batch i covers [BATCH*(i-1), BATCH*i)
+            // and is full exactly when that window fits inside the crawl.
+            const full = BATCH * batchIndex <= pageCount;
+            if (full) {
+              samples.push([pagesDone, r]);
+              rssSamples.push([pagesDone, s]);
+            }
+            console.log(
+              `  batch ${String(batchIndex).padStart(3)} end (${String(pagesDone).padStart(4)} scored)` +
+                `${full ? "     " : " PART"}  ` +
+                `retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  rss=${`${(s / MB).toFixed(0)}`.padStart(5)} MB`
+            );
+          },
         },
-      },
-    }),
+        pageLoopHooks: {
+          heartbeatEveryPages: EVERY,
+          onProgress: (done) => {
+            // Trace only. These land mid-batch, where the batch's documents are
+            // part-released, so they are not comparable to each other and must
+            // not be fitted. The maximum over them is a POST-COLLECT high-water
+            // and NOT the container's: `retained()` collects before it samples,
+            // and the loop is sync CPU that yields only when `yieldEveryMs` is
+            // set, so any spike between two heartbeats — a batch's parse, one
+            // expensive rule — is invisible here. A container-sizing number has
+            // to come from outside the process (`/usr/bin/time -l`, the cgroup's
+            // own high-water), not from this sampler.
+            const r = retained();
+            peakInLoop = Math.max(peakInLoop, r);
+            console.log(
+              `  pages ${String(done).padStart(4)}  retained=${`${(r / MB).toFixed(0)}`.padStart(5)} MB  ` +
+                `rss=${`${(rss() / MB).toFixed(0)}`.padStart(5)} MB`
+            );
+          },
+        },
+      }
+    )
   );
 
   // The first FULL boundary is dropped too: it is the only one whose preceding
@@ -193,18 +207,18 @@ async function main(): Promise<void> {
   if (fitted.length < 2) {
     console.log(
       `\nPAGE LOOP TAIL SLOPE  not measurable: ${samples.length} full-batch boundaries, ` +
-        `and the first is startup. Lower --batch, or use more pages.`,
+        `and the first is startup. Lower --batch, or use more pages.`
     );
   } else {
     console.log(
       `\nPAGE LOOP TAIL SLOPE (full boundaries 2..${samples.length}, startup excluded)  ` +
         `retained ${(slope(fitted) / 1024).toFixed(0)} KB/page   ` +
-        `rss ${(slope(fittedRss) / 1024).toFixed(0)} KB/page`,
+        `rss ${(slope(fittedRss) / 1024).toFixed(0)} KB/page`
     );
   }
   console.log(
     `max post-collect retained across mid-batch samples ${(peakInLoop / MB).toFixed(0)} MB ` +
-      `(a sampled floor on the peak, NOT the container's high-water)`,
+      `(a sampled floor on the peak, NOT the container's high-water)`
   );
 
   // What the RESULT holds after the run, measured by dropping one field at a
@@ -221,18 +235,22 @@ async function main(): Promise<void> {
     "siteResults",
   ];
   let prev = retained();
-  console.log(`\nresult holds ${(prev / MB).toFixed(0)} MB; dropping one field at a time:`);
+  console.log(
+    `\nresult holds ${(prev / MB).toFixed(0)} MB; dropping one field at a time:`
+  );
   for (const key of fields) {
     bag[key] = undefined;
     const now = retained();
     const freed = prev - now;
     console.log(
       `  ${key.padEnd(16)} ${`${(freed / MB).toFixed(1)} MB`.padStart(10)}  ` +
-        `${`${Math.round(freed / pageCount / 1024)} KB/page`.padStart(14)}`,
+        `${`${Math.round(freed / pageCount / 1024)} KB/page`.padStart(14)}`
     );
     prev = now;
   }
-  console.log(`  ${"rest".padEnd(16)} ${`${((prev - base) / MB).toFixed(1)} MB`.padStart(10)}`);
+  console.log(
+    `  ${"rest".padEnd(16)} ${`${((prev - base) / MB).toFixed(1)} MB`.padStart(10)}`
+  );
 
   await run(storage.close());
 }

@@ -53,7 +53,10 @@ export interface RetentionMeasurement {
  * in preference to collecting, so an opportunistic collect leaves the arm's
  * garbage in the number and makes every arm look like a leak.
  */
-export function measureArm(iterations: number, build: (i: number) => unknown): RetentionMeasurement {
+export function measureArm(
+  iterations: number,
+  build: (i: number) => unknown
+): RetentionMeasurement {
   Bun.gc(true);
   const before = process.memoryUsage().external;
   const kept: unknown[] = [];
@@ -111,12 +114,13 @@ export function compareRetention(opts: {
  */
 export function expectDetached(
   result: RetentionComparison,
-  opts: { marginBytes: number; ratio: number; label: string },
+  opts: { marginBytes: number; ratio: number; label: string }
 ): void {
   const mb = (bytes: number) => `${(bytes / MB).toFixed(0)} MB`;
   // Signed, because a control-subtracted arm can legitimately come out slightly
   // negative and "+-1 MB" reads like a formatting bug rather than a number.
-  const signed = (bytes: number) => `${bytes < 0 ? "-" : "+"}${mb(Math.abs(bytes))}`;
+  const signed = (bytes: number) =>
+    `${bytes < 0 ? "-" : "+"}${mb(Math.abs(bytes))}`;
   const summary =
     `${opts.label}: control ${mb(result.controlBytes)}, ` +
     `attached ${signed(result.attachedBytes)}, detached ${signed(result.detachedBytes)}`;
@@ -124,14 +128,16 @@ export function expectDetached(
   // Printed on every run, pass or fail. When this does flake, the three numbers
   // are the whole diagnosis, and a green CI log that recorded nothing leaves
   // the next person re-deriving them.
-  console.log(`[retention] ${summary} (margin ${mb(opts.marginBytes)}, ratio ${opts.ratio}x)`);
+  console.log(
+    `[retention] ${summary} (margin ${mb(opts.marginBytes)}, ratio ${opts.ratio}x)`
+  );
 
   if (result.attachedBytes < opts.marginBytes) {
     throw new Error(
       `${summary} — the attached arm is not clear of the control by the ${mb(opts.marginBytes)} ` +
         `margin, so this run did not reproduce the retention and cannot judge the fix. ` +
         `That is a measurement failure, not a regression: check whether the fixture still ` +
-        `produces slices of a flat source string, and whether the runner has memory to spare.`,
+        `produces slices of a flat source string, and whether the runner has memory to spare.`
     );
   }
 

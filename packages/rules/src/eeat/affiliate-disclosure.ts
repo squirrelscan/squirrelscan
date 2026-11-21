@@ -1,8 +1,8 @@
 // eeat/affiliate-disclosure - Affiliate and sponsored content disclosure
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const affiliateDisclosureRule: Rule = {
   meta: {

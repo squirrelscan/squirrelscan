@@ -1,8 +1,6 @@
 // #407: the publish projection summarizes structurally identical entities
 // instead of sampling them, and states the true count of each group.
 
-import { describe, expect, test } from "bun:test";
-
 import { Value } from "@sinclair/typebox/value";
 import {
   ENTITY_MAP_FORMAT,
@@ -14,10 +12,15 @@ import {
   type EntityMapNode,
 } from "@squirrelscan/core-contracts/entity-map";
 import { entityMarkdownSection } from "@squirrelscan/report/entities";
+import { describe, expect, test } from "bun:test";
 
 import { projectEntityMap, slimEntityMapForPublish } from "../src/entity-map";
 
-function node(key: string, types: string[], extra: Partial<EntityMapNode> = {}): EntityMapNode {
+function node(
+  key: string,
+  types: string[],
+  extra: Partial<EntityMapNode> = {}
+): EntityMapNode {
   return {
     key,
     id: null,
@@ -34,7 +37,11 @@ function node(key: string, types: string[], extra: Partial<EntityMapNode> = {}):
   };
 }
 
-function edge(source: string, target: string, predicate = "brand"): EntityMapEdge {
+function edge(
+  source: string,
+  target: string,
+  predicate = "brand"
+): EntityMapEdge {
   return {
     source,
     predicate,
@@ -47,7 +54,9 @@ function edge(source: string, target: string, predicate = "brand"): EntityMapEdg
 }
 
 function catalogue(products: number): EntityMap {
-  const nodes: EntityMapNode[] = [node("id:org", ["Organization"], { occurrences: 5 })];
+  const nodes: EntityMapNode[] = [
+    node("id:org", ["Organization"], { occurrences: 5 }),
+  ];
   const edges: EntityMapEdge[] = [];
   for (let i = 0; i < products; i++) {
     const key = `id:p${String(i).padStart(4, "0")}`;
@@ -124,7 +133,9 @@ describe("entity map summarization (#407)", () => {
     expect(small.groups).toBeUndefined();
     expect(small.nodes).toHaveLength(6);
     const { summarize: _s, ...plain } = ENTITY_MAP_PUBLISH_LIMITS;
-    expect(projectEntityMap(catalogue(100), plain, "publish").groups).toBeUndefined();
+    expect(
+      projectEntityMap(catalogue(100), plain, "publish").groups
+    ).toBeUndefined();
   });
 
   test("a node with a conflict stays published even inside a large group", () => {
@@ -145,7 +156,9 @@ describe("entity map summarization (#407)", () => {
   });
 
   test("the markdown section renders a group as a count, not an entity", () => {
-    const text = entityMarkdownSection(slimEntityMapForPublish(catalogue(1000))).join("\n");
+    const text = entityMarkdownSection(
+      slimEntityMapForPublish(catalogue(1000))
+    ).join("\n");
     expect(text).toContain("Entity groups (1)");
     expect(text).toContain("| Product | 1000 | 3 | 997 |");
   });

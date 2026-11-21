@@ -1,12 +1,12 @@
 // performance/unminified-css - Detect unminified CSS
 // Aligns with Lighthouse unminified-css audit
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
-import { scanCssComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { scanCssComments } from "../shared/comment-scan";
 
 export const optionsSchema = z.object({
   min_size_bytes: z
@@ -185,7 +185,10 @@ export const unminifiedCssRule: Rule = {
     }
 
     // ALWAYS check DOM for external stylesheets not in site data (CDN/external resources)
-    const linkElements = querySelectorAllOutsideNoscript(doc, 'link[rel="stylesheet"]');
+    const linkElements = querySelectorAllOutsideNoscript(
+      doc,
+      'link[rel="stylesheet"]'
+    );
     for (const link of linkElements) {
       const href = link.getAttribute("href") || "";
       if (!href) continue;

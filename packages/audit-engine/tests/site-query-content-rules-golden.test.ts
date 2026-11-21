@@ -11,13 +11,13 @@
 // lowercases only, while title-unique also collapses internal whitespace — so the
 // "  home   page  " row joins the dup group in title-unique but not duplicate-title.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
-import type { PageFeatureRow } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { createSiteQuery } from "../src/site-query";
 
@@ -53,7 +53,9 @@ function feat(row: Row): PageFeatureRow {
     title: row.title,
     titleHash: row.title ? `h:${row.title.trim().toLowerCase()}` : null,
     description: row.description,
-    descHash: row.description ? `h:${row.description.trim().toLowerCase()}` : null,
+    descHash: row.description
+      ? `h:${row.description.trim().toLowerCase()}`
+      : null,
     contentHash: null,
     wordCount: null,
     pageType: null,
@@ -83,15 +85,35 @@ function feat(row: Row): PageFeatureRow {
 
 // normalized_url ASC order (matches getPageFeaturesPage cursor + getPages).
 const FIXTURE: Row[] = [
-  { normalizedUrl: "https://example.com/a", title: "Home Page", description: "Welcome" },
-  { normalizedUrl: "https://example.com/b", title: "Home Page", description: "Welcome" },
-  { normalizedUrl: "https://example.com/c", title: "About Us", description: "About page" },
+  {
+    normalizedUrl: "https://example.com/a",
+    title: "Home Page",
+    description: "Welcome",
+  },
+  {
+    normalizedUrl: "https://example.com/b",
+    title: "Home Page",
+    description: "Welcome",
+  },
+  {
+    normalizedUrl: "https://example.com/c",
+    title: "About Us",
+    description: "About page",
+  },
   // Whitespace variant: title-unique collapses to "home page" (joins the group),
   // duplicate-title keeps "home   page" (does not).
-  { normalizedUrl: "https://example.com/d", title: "  Home   Page  ", description: "Different desc" },
+  {
+    normalizedUrl: "https://example.com/d",
+    title: "  Home   Page  ",
+    description: "Different desc",
+  },
   // Title-less + desc-less rows are skipped by the rules but still counted.
   { normalizedUrl: "https://example.com/e", title: null, description: null },
-  { normalizedUrl: "https://example.com/f", title: "Unique Title", description: null },
+  {
+    normalizedUrl: "https://example.com/f",
+    title: "Unique Title",
+    description: null,
+  },
 ];
 
 async function seed(store: SQLiteStorage): Promise<void> {
@@ -106,7 +128,9 @@ function legacySitePages() {
     .map((r) => ({
       url: r.normalizedUrl,
       statusCode: 200,
-      parsed: { meta: { title: r.title, description: r.description } } as ParsedPage,
+      parsed: {
+        meta: { title: r.title, description: r.description },
+      } as ParsedPage,
     }));
 }
 
@@ -119,7 +143,12 @@ async function runBothWays(store: SQLiteStorage, rule: Rule) {
 
   const legacyCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: legacySitePages(), robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: BASE,
+      pages: legacySitePages(),
+      robotsTxt: null,
+      sitemaps: null,
+    },
   };
   const legacy = (await Promise.resolve(rule.run(legacyCtx))).checks;
 
@@ -165,7 +194,10 @@ describe("SiteQuery dual-path — content/duplicate-description", () => {
   test("streaming path deep-equal to legacy", async () => {
     const store = await freshStore();
     await seed(store);
-    const { legacy, streamed } = await runBothWays(store, duplicateDescriptionRule);
+    const { legacy, streamed } = await runBothWays(
+      store,
+      duplicateDescriptionRule
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy).toEqual([
       {
@@ -229,7 +261,10 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
         url: FIXTURE[0]!.normalizedUrl,
         statusCode: 200,
         parsed: {
-          meta: { title: FIXTURE[0]!.title, description: FIXTURE[0]!.description },
+          meta: {
+            title: FIXTURE[0]!.title,
+            description: FIXTURE[0]!.description,
+          },
         } as ParsedPage,
       },
     ];
@@ -240,12 +275,21 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
     };
     const siteQuery = await run(createSiteQuery(store, CRAWL));
 
-    for (const rule of [duplicateTitleRule, duplicateDescriptionRule, titleUniqueRule]) {
+    for (const rule of [
+      duplicateTitleRule,
+      duplicateDescriptionRule,
+      titleUniqueRule,
+    ]) {
       const legacy = (
         await Promise.resolve(
           rule.run({
             ...base,
-            site: { baseUrl: BASE, pages: single, robotsTxt: null, sitemaps: null },
+            site: {
+              baseUrl: BASE,
+              pages: single,
+              robotsTxt: null,
+              sitemaps: null,
+            },
           } as RuleContext)
         )
       ).checks;
@@ -267,15 +311,29 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
   test("all-unique crawl passes identically on both paths", async () => {
     const store = await freshStore();
     const unique: Row[] = [
-      { normalizedUrl: "https://example.com/x", title: "One", description: "d1" },
-      { normalizedUrl: "https://example.com/y", title: "Two", description: "d2" },
-      { normalizedUrl: "https://example.com/z", title: "Three", description: "d3" },
+      {
+        normalizedUrl: "https://example.com/x",
+        title: "One",
+        description: "d1",
+      },
+      {
+        normalizedUrl: "https://example.com/y",
+        title: "Two",
+        description: "d2",
+      },
+      {
+        normalizedUrl: "https://example.com/z",
+        title: "Three",
+        description: "d3",
+      },
     ];
     await run(store.upsertPageFeaturesBatch(CRAWL, unique.map(feat)));
     const sitePages = unique.map((r) => ({
       url: r.normalizedUrl,
       statusCode: 200,
-      parsed: { meta: { title: r.title, description: r.description } } as ParsedPage,
+      parsed: {
+        meta: { title: r.title, description: r.description },
+      } as ParsedPage,
     }));
     const base = {
       page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
@@ -283,12 +341,21 @@ describe("SiteQuery dual-path — content-rule edge cases parity", () => {
       options: {},
     };
     const siteQuery = await run(createSiteQuery(store, CRAWL));
-    for (const rule of [duplicateTitleRule, duplicateDescriptionRule, titleUniqueRule]) {
+    for (const rule of [
+      duplicateTitleRule,
+      duplicateDescriptionRule,
+      titleUniqueRule,
+    ]) {
       const legacy = (
         await Promise.resolve(
           rule.run({
             ...base,
-            site: { baseUrl: BASE, pages: sitePages, robotsTxt: null, sitemaps: null },
+            site: {
+              baseUrl: BASE,
+              pages: sitePages,
+              robotsTxt: null,
+              sitemaps: null,
+            },
           } as RuleContext)
         )
       ).checks;

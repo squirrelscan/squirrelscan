@@ -4,12 +4,12 @@
 // requested there, and the site's own assets connect to the address checked.
 // Without `pinOwnHosts` the own hosts are trusted by name, as before.
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
+
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
@@ -35,14 +35,18 @@ beforeEach(() => {
             `<link rel="stylesheet" href="http://www.site.test:${port}/twin.css">` +
             `<script src="http://cdn.site.test:${port}/app.js"></script>` +
             `</head><body>Home</body></html>`,
-          { headers: { "content-type": "text/html; charset=utf-8" } },
+          { headers: { "content-type": "text/html; charset=utf-8" } }
         );
       }
       if (url.pathname.endsWith(".css")) {
-        return new Response("body{color:red}", { headers: { "content-type": "text/css" } });
+        return new Response("body{color:red}", {
+          headers: { "content-type": "text/css" },
+        });
       }
       if (url.pathname.endsWith(".js")) {
-        return new Response("1", { headers: { "content-type": "text/javascript" } });
+        return new Response("1", {
+          headers: { "content-type": "text/javascript" },
+        });
       }
       return new Response("not found", { status: 404 });
     },
@@ -54,7 +58,10 @@ beforeEach(() => {
     if (REFUSED.includes(address)) return new Response(MARKER);
     if (address === "127.0.0.1") return realFetch(input, init);
     // Sent by name: the test's names have no real DNS, so answer from the fixture.
-    return realFetch(url.replace(/^http:\/\/[^/]+/, `http://127.0.0.1:${server.port}`), init);
+    return realFetch(
+      url.replace(/^http:\/\/[^/]+/, `http://127.0.0.1:${server.port}`),
+      init
+    );
   }) as typeof fetch;
 });
 
@@ -94,9 +101,11 @@ async function assetsOf(pinOwnHosts: boolean) {
         pinOwnHosts,
         resolveHost,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   requested = [];
   const config = {
     rule_options: {},
@@ -109,7 +118,7 @@ async function assetsOf(pinOwnHosts: boolean) {
   const pre = await Effect.runPromise(
     runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {
       resourceOverrides: { pinOwnHosts, resolveHost },
-    }),
+    })
   );
   return { origin, assets: pre.assets };
 }
@@ -121,19 +130,23 @@ describe("the asset phase and the site's own hosts (repo#3430)", () => {
     const css = new Map(assets.resourceSizes.css.map((c) => [c.url, c]));
     expect(css.get(`${origin}/style.css`)?.status).toBe(200);
     expect(css.get(`http://www.site.test:${server.port}/twin.css`)?.error).toBe(
-      ASSET_FETCH_REFUSED_ERROR,
+      ASSET_FETCH_REFUSED_ERROR
     );
     const script = assets.scripts.find(
-      (s) => s.url === `http://cdn.site.test:${server.port}/app.js`,
+      (s) => s.url === `http://cdn.site.test:${server.port}/app.js`
     );
     expect(script?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
 
     expect(
-      requested.filter((r) => REFUSED.includes(new URL(r.url).hostname.replace(/^\[|\]$/g, ""))),
+      requested.filter((r) =>
+        REFUSED.includes(new URL(r.url).hostname.replace(/^\[|\]$/g, ""))
+      )
     ).toEqual([]);
-    expect(requested.filter((r) => /www\.site\.test|cdn\.site\.test/.test(r.url + r.host))).toEqual(
-      [],
-    );
+    expect(
+      requested.filter((r) =>
+        /www\.site\.test|cdn\.site\.test/.test(r.url + r.host)
+      )
+    ).toEqual([]);
     // The site's own stylesheet went to the address checked, under its name.
     const own = requested.find((r) => r.url.endsWith("/style.css"));
     expect(own && new URL(own.url).hostname).toBe("127.0.0.1");
@@ -143,6 +156,8 @@ describe("the asset phase and the site's own hosts (repo#3430)", () => {
   test("not pinned: the own hosts go out by name, as before", async () => {
     await assetsOf(false);
 
-    expect(requested.some((r) => new URL(r.url).hostname === "www.site.test")).toBe(true);
+    expect(
+      requested.some((r) => new URL(r.url).hostname === "www.site.test")
+    ).toBe(true);
   });
 });

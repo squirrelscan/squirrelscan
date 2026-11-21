@@ -1,18 +1,23 @@
 // ax/llms-txt - detect /llms.txt (+ /llms-full.txt) and validate basic format
 
-import { PROBE_PATH_NOT_APPROVED_ERROR } from "@squirrelscan/core-contracts/storage";
+import type {
+  WellKnownPath,
+  WellKnownProbe,
+} from "@squirrelscan/core-contracts";
 
-import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
+import { PROBE_PATH_NOT_APPROVED_ERROR } from "@squirrelscan/core-contracts/storage";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { refusedCheck, refusedFor } from "../refused";
-
 import { includesPath, notCheckedCheck } from "./discovery-probe-state";
 
 // Alt paths some sites use instead of the root — probed by the crawler's
 // fixed well-known list (core-contracts WELL_KNOWN_PATHS).
-const LLMS_TXT_ALT_PATHS: readonly WellKnownPath[] = ["/.well-known/llms.txt", "/docs/llms.txt"];
+const LLMS_TXT_ALT_PATHS: readonly WellKnownPath[] = [
+  "/.well-known/llms.txt",
+  "/docs/llms.txt",
+];
 
 // The #1 false positive: an SPA serving the same index.html for every path,
 // including /llms.txt — a 200 that is actually a fallback page, not real content.
@@ -34,8 +39,12 @@ export interface LlmsFormat {
 }
 
 // Minimal llms.txt (llmstxt.org) shape: an H1 title + Markdown links that parse.
-export function validateLlmsFormat(content: string, baseUrl: string): LlmsFormat {
-  const firstNonEmpty = content.split("\n").find((l) => l.trim().length > 0) ?? "";
+export function validateLlmsFormat(
+  content: string,
+  baseUrl: string
+): LlmsFormat {
+  const firstNonEmpty =
+    content.split("\n").find((l) => l.trim().length > 0) ?? "";
   const hasH1 = /^#\s+\S/.test(firstNonEmpty.trim());
 
   const invalidLinks: string[] = [];
@@ -73,7 +82,7 @@ export const llmsTxtRule: Rule = {
     const checks: CheckResult[] = [];
     const llms = ctx.site?.llmsTxt;
     const altHit = ctx.site?.wellKnown?.probes.find(
-      (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p),
+      (p) => includesPath(LLMS_TXT_ALT_PATHS, p.path) && isRealAltHit(p)
     );
     const altHitCheck = (hit: WellKnownProbe): CheckResult => ({
       name: "llms-txt-present",
@@ -96,7 +105,8 @@ export const llmsTxtRule: Rule = {
         const refused = refusedFor(ctx.site, "llms.txt");
         // The crawler records a path the allowlist left out (#1655), so the reason is the real one.
         const notApproved = ctx.site?.wellKnown?.probes.some(
-          (p) => p.path === "/llms.txt" && p.error === PROBE_PATH_NOT_APPROVED_ERROR,
+          (p) =>
+            p.path === "/llms.txt" && p.error === PROBE_PATH_NOT_APPROVED_ERROR
         );
         checks.push(
           refused.length > 0
@@ -105,20 +115,24 @@ export const llmsTxtRule: Rule = {
                 "llms-txt",
                 "/llms.txt",
                 undefined,
-                notApproved ? "not-approved" : "no-result",
-              ),
+                notApproved ? "not-approved" : "no-result"
+              )
         );
       }
       return { checks };
     }
 
-    if (llms.llmsTxt.exists && looksLikeHtmlFallback(llms.llmsTxt.content ?? "")) {
+    if (
+      llms.llmsTxt.exists &&
+      looksLikeHtmlFallback(llms.llmsTxt.content ?? "")
+    ) {
       // Serving a fake llms.txt is actively misleading (agents will trust an
       // SPA index page as curated content), so this earns more than a quiet info.
       checks.push({
         name: "llms-txt-present",
         status: "fail",
-        message: "/llms.txt returned 200 but the body is an HTML page (SPA fallback), not a real llms.txt",
+        message:
+          "/llms.txt returned 200 but the body is an HTML page (SPA fallback), not a real llms.txt",
         value: "spa-fallback",
       });
       return { checks };
@@ -151,9 +165,13 @@ export const llmsTxtRule: Rule = {
       details: { llmsFullTxt: llms.llmsFullTxt.exists },
     });
 
-    const fmt = validateLlmsFormat(llms.llmsTxt.content ?? "", ctx.site?.baseUrl ?? "");
+    const fmt = validateLlmsFormat(
+      llms.llmsTxt.content ?? "",
+      ctx.site?.baseUrl ?? ""
+    );
     const issues: string[] = [];
-    if (!fmt.hasH1) issues.push("missing H1 title (should start with `# Name`)");
+    if (!fmt.hasH1)
+      issues.push("missing H1 title (should start with `# Name`)");
     if (fmt.linkCount === 0) issues.push("no Markdown links found");
     if (fmt.invalidLinks.length > 0)
       issues.push(`${fmt.invalidLinks.length} malformed link URL(s)`);
@@ -168,8 +186,15 @@ export const llmsTxtRule: Rule = {
           ? `Valid llms.txt format (${fmt.linkCount} links)`
           : `llms.txt format notes: ${issues.join("; ")}`,
       value: issues.length === 0 ? "valid" : "has-notes",
-      items: fmt.invalidLinks.map((u) => ({ id: u, label: `Malformed link: ${u}` })),
-      details: { hasH1: fmt.hasH1, linkCount: fmt.linkCount, invalidLinks: fmt.invalidLinks },
+      items: fmt.invalidLinks.map((u) => ({
+        id: u,
+        label: `Malformed link: ${u}`,
+      })),
+      details: {
+        hasH1: fmt.hasH1,
+        linkCount: fmt.linkCount,
+        invalidLinks: fmt.invalidLinks,
+      },
     });
 
     return { checks };

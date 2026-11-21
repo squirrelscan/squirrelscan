@@ -6,8 +6,6 @@
 // and an absent key resolves a prior finding on a crawled page. The signal now
 // carries a rule-wide `<rule>|*` key in `notEvaluated`, and the merge carries on it.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   ResolutionSignal,
@@ -15,20 +13,25 @@ import type {
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+
+import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   RULE_TIMED_OUT_SKIP_REASON,
   resolutionRuleKey,
 } from "@squirrelscan/core-contracts/resolution";
-import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildPublishResolution,
   buildResolutionSignal,
 } from "@squirrelscan/rules/resolution";
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_968";
@@ -41,7 +44,10 @@ const C = "https://www.acme-shop.com/c";
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -50,7 +56,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -91,18 +100,26 @@ const meta = { id: RULE, name: "Leaked secrets", category: "security" };
 type Mode = "sampled" | "compact";
 
 /** Run 1 finds a secret on A; run 2 is `byPage`. Returns A's row. */
-async function priorAfterRerun(byPage: Record<string, CheckResult[]>, mode: Mode) {
+async function priorAfterRerun(
+  byPage: Record<string, CheckResult[]>,
+  mode: Mode
+) {
   const store = new MemStore();
-  const publish = async (crawlId: string, pages: Record<string, CheckResult[]>) => {
-    const ruleResults = { [RULE]: { meta, checks: Object.values(pages).flat() } };
+  const publish = async (
+    crawlId: string,
+    pages: Record<string, CheckResult[]>
+  ) => {
+    const ruleResults = {
+      [RULE]: { meta, checks: Object.values(pages).flat() },
+    };
     const crawled = Object.keys(pages);
     const resolutionSignal =
       mode === "compact"
         ? await decodeResolutionSignal(
             buildPublishResolution(
               ruleResults as never,
-              crawled.map((url) => ({ url, statusCode: 200 })),
-            ).resolutionSignalCompact!,
+              crawled.map((url) => ({ url, statusCode: 200 }))
+            ).resolutionSignalCompact!
           )
         : buildResolutionSignal(ruleResults as never, crawled);
     await runCloudSmartAudits({
@@ -117,7 +134,7 @@ async function priorAfterRerun(byPage: Record<string, CheckResult[]>, mode: Mode
   await publish("audit_1", { [A]: [fail(A)], [B]: [pass(B)] });
   await publish("audit_2", byPage);
   return [...store.findings.values()].find(
-    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE,
+    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE
   )!;
 }
 
@@ -138,13 +155,19 @@ describe("the signal names a rule that timed out (pub#968)", () => {
   });
 
   test("a rule that never timed out gets no rule-wide key", () => {
-    const signal = buildResolutionSignal({ [RULE]: { checks: [pass(A), pass(B)] } }, [A, B])!;
+    const signal = buildResolutionSignal(
+      { [RULE]: { checks: [pass(A), pass(B)] } },
+      [A, B]
+    )!;
     expect(signal.notEvaluated).toBeUndefined();
   });
 
   test("a timed-out skip that names no page marks every crawled page", () => {
     const { pageUrl: _drop, ...bare } = timedOut(A);
-    const signal = buildResolutionSignal({ [RULE]: { checks: [bare, pass(B)] } }, [A, B])!;
+    const signal = buildResolutionSignal(
+      { [RULE]: { checks: [bare, pass(B)] } },
+      [A, B]
+    )!;
     expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(2);
   });
 });
@@ -152,13 +175,19 @@ describe("the signal names a rule that timed out (pub#968)", () => {
 for (const mode of ["sampled", "compact"] as const) {
   describe(`a prior finding when the rule times out (${mode} signal, pub#968)`, () => {
     test("every page timed out: it carries, not resolves", async () => {
-      const row = await priorAfterRerun({ [A]: [timedOut(A)], [B]: [timedOut(B)] }, mode);
+      const row = await priorAfterRerun(
+        { [A]: [timedOut(A)], [B]: [timedOut(B)] },
+        mode
+      );
       expect(row.state).toBe("open");
       expect(row.provenance).toBe("carried");
     });
 
     test("only some pages timed out: its page carries", async () => {
-      const row = await priorAfterRerun({ [A]: [timedOut(A)], [B]: [pass(B)] }, mode);
+      const row = await priorAfterRerun(
+        { [A]: [timedOut(A)], [B]: [pass(B)] },
+        mode
+      );
       expect(row.state).toBe("open");
       expect(row.provenance).toBe("carried");
     });
@@ -166,13 +195,16 @@ for (const mode of ["sampled", "compact"] as const) {
     test("it timed out elsewhere only: the page the rule cleared resolves", async () => {
       const row = await priorAfterRerun(
         { [A]: [pass(A)], [B]: [timedOut(B)], [C]: [timedOut(C)] },
-        mode,
+        mode
       );
       expect(row.state).toBe("resolved");
     });
 
     test("no timeout: a clean page still resolves", async () => {
-      const row = await priorAfterRerun({ [A]: [pass(A)], [B]: [pass(B)] }, mode);
+      const row = await priorAfterRerun(
+        { [A]: [pass(A)], [B]: [pass(B)] },
+        mode
+      );
       expect(row.state).toBe("resolved");
     });
   });
@@ -182,13 +214,18 @@ for (const mode of ["sampled", "compact"] as const) {
 async function rowAfterRuns(
   runs: Array<{
     pages: Record<string, CheckResult[]>;
-    signal?: (crawled: string[], ruleResults: never) => ResolutionSignal | undefined;
-  }>,
+    signal?: (
+      crawled: string[],
+      ruleResults: never
+    ) => ResolutionSignal | undefined;
+  }>
 ) {
   const store = new MemStore();
   let n = 0;
   for (const run of runs) {
-    const ruleResults = { [RULE]: { meta, checks: Object.values(run.pages).flat() } } as never;
+    const ruleResults = {
+      [RULE]: { meta, checks: Object.values(run.pages).flat() },
+    } as never;
     const crawled = Object.keys(run.pages);
     await runCloudSmartAudits({
       store,
@@ -202,7 +239,7 @@ async function rowAfterRuns(
     });
   }
   return [...store.findings.values()].find(
-    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE,
+    (f) => f.normalizedUrl === normalizePageUrl(A) && f.ruleId === RULE
   )!;
 }
 
@@ -228,11 +265,11 @@ describe("the rule-wide key's edge cases (pub#968)", () => {
   test("a crawl past the collection cap marks the rule-wide key truncated", () => {
     const filler = Array.from(
       { length: RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls },
-      (_, i) => `https://www.acme-shop.com/p/${i}`,
+      (_, i) => `https://www.acme-shop.com/p/${i}`
     );
     const signal = buildResolutionSignal(
       { [RULE]: { checks: [timedOut(A), pass(B)] } },
-      [A, B, ...filler],
+      [A, B, ...filler]
     )!;
     expect(signal.truncated).toContain(resolutionRuleKey(RULE));
   });
@@ -249,15 +286,20 @@ describe("the rule-wide key's edge cases (pub#968)", () => {
   test("per-check keys yield to the rule-wide key under the key cap", () => {
     const many: CheckResult[] = Array.from(
       { length: RESOLUTION_SIGNAL_LIMITS.maxChecks + 5 },
-      (_, i) => ({ ...pass(A), name: `c${i}` }),
+      (_, i) => ({ ...pass(A), name: `c${i}` })
     );
     const signal = buildResolutionSignal(
       { [RULE]: { checks: [...many, timedOut(B)] } },
-      [A, B],
+      [A, B]
     )!;
     expect(signal.notEvaluated?.[resolutionRuleKey(RULE)]).toHaveLength(1);
-    expect(Object.keys(signal.failing).length).toBeLessThan(RESOLUTION_SIGNAL_LIMITS.maxChecks);
+    expect(Object.keys(signal.failing).length).toBeLessThan(
+      RESOLUTION_SIGNAL_LIMITS.maxChecks
+    );
   });
 });
 
-describeSitePagesContract("timeout-no-resolve-968.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "timeout-no-resolve-968.test.ts MemStore",
+  () => new MemStore()
+);

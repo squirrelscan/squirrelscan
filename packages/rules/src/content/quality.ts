@@ -1,7 +1,7 @@
 // content/quality - LLM-based content quality analysis
 
-import { z } from "zod";
 import { stripHtmlForText } from "@squirrelscan/utils";
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -108,7 +108,11 @@ Respond with a JSON object containing score (0-100) and feedback (2-3 sentences)
 
 ${content}`;
 
-    const result = await llmCallWithSystem(systemPrompt, userPrompt, QualitySchema);
+    const result = await llmCallWithSystem(
+      systemPrompt,
+      userPrompt,
+      QualitySchema
+    );
 
     if (!result.success) {
       checks.push({

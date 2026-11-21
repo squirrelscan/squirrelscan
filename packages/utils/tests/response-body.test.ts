@@ -11,7 +11,7 @@ import { readBodyCapped } from "../src/response-body";
  * bytes were actually pulled off it. */
 function countingStream(
   chunkCount: number,
-  chunkSize: number,
+  chunkSize: number
 ): { stream: ReadableStream<Uint8Array>; bytesPulled: () => number } {
   let pulled = 0;
   let i = 0;
@@ -32,7 +32,7 @@ function countingStream(
 
 function responseFromStream(
   stream: ReadableStream<Uint8Array>,
-  headers: Record<string, string> = {},
+  headers: Record<string, string> = {}
 ): Response {
   return new Response(stream, { headers });
 }
@@ -67,7 +67,10 @@ describe("readBodyCapped (streamed)", () => {
 });
 
 describe("readBodyCapped (no-stream fallback)", () => {
-  function fakeResponse(text: string, headers: Record<string, string>): {
+  function fakeResponse(
+    text: string,
+    headers: Record<string, string>
+  ): {
     res: Response;
     textCalls: () => number;
   } {
@@ -84,7 +87,9 @@ describe("readBodyCapped (no-stream fallback)", () => {
   }
 
   test("refuses a body whose declared content-length exceeds the cap without buffering it", async () => {
-    const { res, textCalls } = fakeResponse("x".repeat(1000), { "content-length": "1000" });
+    const { res, textCalls } = fakeResponse("x".repeat(1000), {
+      "content-length": "1000",
+    });
     const out = await readBodyCapped(res, 100);
     expect(out).toBe("");
     expect(textCalls()).toBe(0);

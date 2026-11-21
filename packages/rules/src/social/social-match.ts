@@ -5,7 +5,11 @@
 // `socials` against a set of on-page URLs (from <a href> or schema `sameAs`) and
 // report which detected accounts are MISSING from the page. Pure — no I/O.
 
-import type { SiteMetadata, SocialAccount, SocialPlatform } from "@squirrelscan/core-contracts";
+import type {
+  SiteMetadata,
+  SocialAccount,
+  SocialPlatform,
+} from "@squirrelscan/core-contracts";
 
 /** Host fragments that identify each platform in an arbitrary URL. */
 const PLATFORM_HOSTS: Record<SocialPlatform, string[]> = {
@@ -71,13 +75,19 @@ function canonicalizeUrl(raw: string): UrlKey | null {
     return null;
   }
   const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-  const path = parsed.pathname.toLowerCase().replace(/\/+$/, "").replace(/^\//, "");
+  const path = parsed.pathname
+    .toLowerCase()
+    .replace(/\/+$/, "")
+    .replace(/^\//, "");
   return { host, path };
 }
 
 /** Lower-cased handle without a leading "@" / "/", or "" when absent. */
 function normalizeHandle(handle: string | null | undefined): string {
-  return (handle ?? "").trim().replace(/^[@/]+/, "").toLowerCase();
+  return (handle ?? "")
+    .trim()
+    .replace(/^[@/]+/, "")
+    .toLowerCase();
 }
 
 /**
@@ -93,11 +103,19 @@ function accountIsLinked(account: SocialAccount, pageKeys: UrlKey[]): boolean {
   const handle = normalizeHandle(account.handle);
   for (const key of pageKeys) {
     // Exact account reference (best signal): same host AND same path.
-    if (acct && key.host === acct.host && key.path === acct.path && acct.path !== "") {
+    if (
+      acct &&
+      key.host === acct.host &&
+      key.path === acct.path &&
+      acct.path !== ""
+    ) {
       return true;
     }
     // Same-platform link whose first path segment IS the handle.
-    if (handle && hosts.some((h) => key.host === h || key.host.endsWith(`.${h}`))) {
+    if (
+      handle &&
+      hosts.some((h) => key.host === h || key.host.endsWith(`.${h}`))
+    ) {
       const firstSegment = key.path.split("/")[0] ?? "";
       if (firstSegment === handle) return true;
     }
@@ -119,7 +137,7 @@ export interface SocialCrossCheck {
  */
 export function crossCheckSocials(
   meta: SiteMetadata | undefined,
-  pageUrls: Iterable<string>,
+  pageUrls: Iterable<string>
 ): SocialCrossCheck {
   const socials = meta?.socials ?? [];
   if (socials.length === 0) return { missing: [], linked: [] };

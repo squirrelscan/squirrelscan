@@ -1,3 +1,4 @@
+import { parsePage } from "@squirrelscan/parser";
 // #1741: a rule that ran says so. Every page-scope rule is run on a clean page and must emit at least one
 // check. Six rules still return an empty list when the page has nothing in their scope (no password form, no
 // svg role="img", no WebSite schema, no input field, no button); `fixtures/rule-clean-run-empty.json`
@@ -7,17 +8,18 @@
 // Site-scope rules need a crawl context, not a single page, and are not run here. Tracked as a follow-up.
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleResult } from "../src/types";
 
 import { loadAllRules } from "../src/loader";
-import type { ParsedPage, Rule, RuleResult } from "../src/types";
 import emptyBaseline from "./fixtures/rule-clean-run-empty.json";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 const URL = "https://shop.test/p";
 const HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A fine title of a decent length here</title><meta name="description" content="A perfectly reasonable description of the page that is long enough to be useful to readers and search engines alike."><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="canonical" href="${URL}"></head><body><main><h1>Hello</h1><p>Some text content here.</p><a href="/about">About</a></main></body></html>`;
 
-const pageRules = [...loadAllRules().values()].filter((r) => r.meta.scope === "page");
+const pageRules = [...loadAllRules().values()].filter(
+  (r) => r.meta.scope === "page"
+);
 
 function runClean(rule: Rule): RuleResult | null {
   try {
@@ -45,10 +47,13 @@ describe("a rule that ran emits a check (#1741)", () => {
       .map((r) => r.meta.id)
       .sort();
     const baseline = new Set<string>(emptyBaseline);
-    expect(empty.filter((id) => !baseline.has(id)), "a rule that ran must emit a pass or info check").toEqual([]);
+    expect(
+      empty.filter((id) => !baseline.has(id)),
+      "a rule that ran must emit a pass or info check"
+    ).toEqual([]);
     expect(
       [...baseline].filter((id) => !empty.includes(id)),
-      "now emits a check: remove from fixtures/rule-clean-run-empty.json",
+      "now emits a check: remove from fixtures/rule-clean-run-empty.json"
     ).toEqual([]);
     expect([...emptyBaseline]).toEqual([...new Set(emptyBaseline)].sort());
   });

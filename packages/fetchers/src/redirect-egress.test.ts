@@ -3,13 +3,12 @@
 // lookup fails, is never requested (fail closed), and an allowed one connects
 // to the address that was vetted, never to a second lookup's answer.
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-
 import {
   EgressRefusedError,
   memoizeResolveHost,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { createFetchDocumentFetcher } from "./index";
 
@@ -66,14 +65,21 @@ describe("the plain fetcher's redirect egress (repo#2830)", () => {
     await expect(
       createFetchDocumentFetcher().fetch({
         url: `${origin}/go`,
-        egress: policy(() => Promise.reject(new Error("ENOTFOUND elsewhere.example.net"))),
-      }),
+        egress: policy(() =>
+          Promise.reject(new Error("ENOTFOUND elsewhere.example.net"))
+        ),
+      })
     ).rejects.toThrow("ENOTFOUND");
-    expect(requested.map((r) => new URL(r.url).hostname)).toEqual(["127.0.0.1"]);
+    expect(requested.map((r) => new URL(r.url).hostname)).toEqual([
+      "127.0.0.1",
+    ]);
   });
 
   it.each<[string, (host: string) => Promise<string[]>]>([
-    ["an answer is link-local", async () => ["93.184.215.14", "169.254.169.254"]],
+    [
+      "an answer is link-local",
+      async () => ["93.184.215.14", "169.254.169.254"],
+    ],
     ["an answer is the IPv6 metadata address", async () => ["fd00:ec2::254"]],
   ])("a hop off the site is never requested when %s", async (_why, resolve) => {
     const origin = serve("http://elsewhere.example.net/x");
@@ -81,7 +87,9 @@ describe("the plain fetcher's redirect egress (repo#2830)", () => {
       url: `${origin}/go`,
       egress: policy(resolve),
     });
-    expect(requested.map((r) => new URL(r.url).hostname)).toEqual(["127.0.0.1"]);
+    expect(requested.map((r) => new URL(r.url).hostname)).toEqual([
+      "127.0.0.1",
+    ]);
     expect(res.status).toBe(302);
     expect(res.redirectChain.endsInError).toBe(true);
   });
@@ -89,7 +97,8 @@ describe("the plain fetcher's redirect egress (repo#2830)", () => {
   // DNS rebinding: public on the first lookup, metadata on any later one.
   const flipping = () => {
     let calls = 0;
-    return async () => (++calls === 1 ? ["93.184.215.14"] : ["169.254.169.254"]);
+    return async () =>
+      ++calls === 1 ? ["93.184.215.14"] : ["169.254.169.254"];
   };
 
   it("an allowed hop connects to the vetted address, not a later lookup's answer", async () => {
@@ -102,7 +111,9 @@ describe("the plain fetcher's redirect egress (repo#2830)", () => {
     });
     const hop = requested.filter((r) => r.host === "flip.example.net");
     expect(hop.map((r) => r.url)).toEqual(["http://93.184.215.14/x"]);
-    expect(requested.some((r) => r.url.includes("169.254.169.254"))).toBe(false);
+    expect(requested.some((r) => r.url.includes("169.254.169.254"))).toBe(
+      false
+    );
   });
 
   it("with a fresh lookup per check, the send-time answer is vetted again and refused", async () => {
@@ -110,8 +121,13 @@ describe("the plain fetcher's redirect egress (repo#2830)", () => {
     // The pre-check passed on the public answer; the send vets again, sees
     // the metadata answer, and fails the fetch before anything is sent.
     await expect(
-      createFetchDocumentFetcher().fetch({ url: `${origin}/go`, egress: policy(flipping()) }),
+      createFetchDocumentFetcher().fetch({
+        url: `${origin}/go`,
+        egress: policy(flipping()),
+      })
     ).rejects.toBeInstanceOf(EgressRefusedError);
-    expect(requested.map((r) => new URL(r.url).hostname)).toEqual(["127.0.0.1"]);
+    expect(requested.map((r) => new URL(r.url).hostname)).toEqual([
+      "127.0.0.1",
+    ]);
   });
 });

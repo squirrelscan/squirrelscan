@@ -1,13 +1,16 @@
 // crawl/server-errors reports each crawled page whose final response is 5xx (#2036), one finding per page (#2130).
 
+import {
+  resolutionCheckKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
+import { skipReasonClass } from "@squirrelscan/core-contracts/rule-outcome";
 import { describe, expect, test } from "bun:test";
 
-import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
-import { skipReasonClass } from "@squirrelscan/core-contracts/rule-outcome";
-
-import { buildResolutionSignal } from "../src/resolution";
-import { serverErrorsRule } from "../src/crawl/server-errors";
 import type { RuleContext } from "../src/types";
+
+import { serverErrorsRule } from "../src/crawl/server-errors";
+import { buildResolutionSignal } from "../src/resolution";
 
 type SiteExtras = {
   crawlLimits?: { pagesCrawled: number; maxPages: number };
@@ -17,10 +20,16 @@ type SiteExtras = {
 
 function run(
   pages: Array<{ url: string; statusCode: number; redirectSource?: boolean }>,
-  extras: SiteExtras = {},
+  extras: SiteExtras = {}
 ) {
   const ctx = {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {},
     options: {},
     site: {
@@ -36,8 +45,10 @@ const URL_A = "https://example.com/a";
 const URL_B = "https://example.com/b";
 const KEY = resolutionCheckKey("crawl/server-errors", "server-errors");
 const hash = (u: string) => resolutionUrlHash(u);
-const pageChecks = (r: { checks: Array<Record<string, any>> }) => r.checks.filter((c) => c.pageUrl);
-const siteChecks = (r: { checks: Array<Record<string, any>> }) => r.checks.filter((c) => !c.pageUrl);
+const pageChecks = (r: { checks: Array<Record<string, any>> }) =>
+  r.checks.filter((c) => c.pageUrl);
+const siteChecks = (r: { checks: Array<Record<string, any>> }) =>
+  r.checks.filter((c) => !c.pageUrl);
 
 describe("crawl/server-errors", () => {
   test("a 500 page fails as its own page finding with its status", () => {
@@ -45,13 +56,17 @@ describe("crawl/server-errors", () => {
       run([
         { url: "https://example.com/", statusCode: 200 },
         { url: "https://example.com/boom", statusCode: 500 },
-      ]),
+      ])
     ).filter((c) => c.status === "fail");
     expect(fails).toHaveLength(1);
     expect(fails[0]!.pageUrl).toBe("https://example.com/boom");
     expect(fails[0]!.details).toEqual({ statusCode: 500 });
     expect(fails[0]!.items).toEqual([
-      { id: "https://example.com/boom", label: "https://example.com/boom (500)", meta: { statusCode: 500 } },
+      {
+        id: "https://example.com/boom",
+        label: "https://example.com/boom (500)",
+        meta: { statusCode: 500 },
+      },
     ]);
   });
 
@@ -80,7 +95,9 @@ describe("crawl/server-errors", () => {
   });
 
   test("a redirect entry is not a page", () => {
-    const result = run([{ url: "https://example.com/r", statusCode: 500, redirectSource: true }]);
+    const result = run([
+      { url: "https://example.com/r", statusCode: 500, redirectSource: true },
+    ]);
     expect(pageChecks(result)).toEqual([]);
     expect(siteChecks(result)[0]?.status).toBe("pass");
   });
@@ -95,7 +112,7 @@ describe("crawl/server-errors", () => {
     const [check] = siteChecks(
       run([{ url: "https://example.com/", statusCode: 200 }], {
         crawlLimits: { pagesCrawled: 1, maxPages: 1 },
-      }),
+      })
     );
     expect(check!.status).toBe("skipped");
     expect(skipReasonClass(check!.skipReason)?.notChecked).toBe(true);
@@ -106,7 +123,7 @@ describe("crawl/server-errors", () => {
       run([{ url: "https://example.com/", statusCode: 200 }], {
         crawlLimits: { pagesCrawled: 1, maxPages: 100 },
         unfetchedPages: 3,
-      }),
+      })
     );
     expect(check!.status).toBe("skipped");
     expect(skipReasonClass(check!.skipReason)?.notChecked).toBe(true);
@@ -120,7 +137,7 @@ describe("crawl/server-errors", () => {
         crawlLimits: { pagesCrawled: 1, maxPages: 100 },
         unfetchedPages: 0,
         failedFetches: 1,
-      }),
+      })
     );
     expect(check!.status).toBe("skipped");
     expect(check!.skipReason).toBe("pages-not-fetched");
@@ -128,7 +145,9 @@ describe("crawl/server-errors", () => {
   });
 
   test("a crawl with failed fetches still reports the 5xx pages it did fetch", () => {
-    const result = run([{ url: "https://example.com/boom", statusCode: 500 }], { failedFetches: 2 });
+    const result = run([{ url: "https://example.com/boom", statusCode: 500 }], {
+      failedFetches: 2,
+    });
     expect(pageChecks(result).map((c) => c.status)).toEqual(["fail"]);
     expect(siteChecks(result)[0]?.skipReason).toBe("pages-not-fetched");
   });
@@ -146,7 +165,7 @@ describe("crawl/server-errors", () => {
         crawlLimits: { pagesCrawled: 1, maxPages: 100 },
         unfetchedPages: 0,
         failedFetches: 0,
-      }),
+      })
     );
     expect(check!.status).toBe("pass");
   });
@@ -155,11 +174,11 @@ describe("crawl/server-errors", () => {
 describe("crawl/server-errors resolution signal (#2130)", () => {
   const signalFor = (
     pages: Array<{ url: string; statusCode: number }>,
-    extras: SiteExtras = {},
+    extras: SiteExtras = {}
   ) =>
     buildResolutionSignal(
       { "crawl/server-errors": { checks: run(pages, extras).checks as any } },
-      pages.map((p) => p.url),
+      pages.map((p) => p.url)
     )!;
 
   test("a page that answered 5xx before and 200 now is evaluated clean while another page still fails", () => {
@@ -177,7 +196,7 @@ describe("crawl/server-errors resolution signal (#2130)", () => {
         { url: URL_A, statusCode: 200 },
         { url: URL_B, statusCode: 200 },
       ],
-      { crawlLimits: { pagesCrawled: 2, maxPages: 2 } },
+      { crawlLimits: { pagesCrawled: 2, maxPages: 2 } }
     );
     const unfetched = "https://example.com/not-fetched";
     expect(signal.crawledUrls).not.toContain(unfetched);

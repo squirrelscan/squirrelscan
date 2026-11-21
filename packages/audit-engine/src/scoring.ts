@@ -1,12 +1,6 @@
 // Health Score calculation with dynamic rebalancing
 // Scores based ONLY on enabled rules - disabled rules don't affect score
 
-// `/types` not the barrel: the barrel makes a type-only import pull every rule
-// module's types, surfacing their linkedom DOM-typing quirks under a consumer's
-// tsconfig (e.g. the API Worker). types.ts is the leaf type module. (#195)
-import type { RuleRunResult } from "@squirrelscan/rules/types";
-import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
-import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
 import type {
   AuditFailureDetail,
   AuditFailureReasonCode,
@@ -18,15 +12,37 @@ import type {
   RuleGroup,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+// `/types` not the barrel: the barrel makes a type-only import pull every rule
+// module's types, surfacing their linkedom DOM-typing quirks under a consumer's
+// tsconfig (e.g. the API Worker). types.ts is the leaf type module. (#195)
+import type { RuleRunResult } from "@squirrelscan/rules/types";
+
+import { unpackComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
 import {
   auditFailureDetail,
   auditFailureReasonText,
 } from "@squirrelscan/core-contracts/failure-reason";
 import { RESOLUTION_ANY_CHECK } from "@squirrelscan/core-contracts/resolution";
-import { getScoreGrade, getScoreColor } from "@squirrelscan/core-contracts/scoring";
-import { wafBlockReason, type WafBlockedPage } from "@squirrelscan/core-contracts/waf-block";
-import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-
+import {
+  getScoreGrade,
+  getScoreColor,
+} from "@squirrelscan/core-contracts/scoring";
+import { unpackSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+import {
+  wafBlockReason,
+  type WafBlockedPage,
+} from "@squirrelscan/core-contracts/waf-block";
+// Import the category-name helper from the `/categories` subpath, NOT the
+// `@squirrelscan/rules` barrel: the barrel re-exports every rule module (which
+// pull linkedom + node builtins), so importing it here would drag those into
+// the API Worker bundle. categories.ts is leaf-clean. (#195)
+import {
+  type RuleCategory,
+  getCategoryName,
+  getCategoryGroup,
+  getGroupName,
+  GROUP_CODES,
+} from "@squirrelscan/rules/categories";
 import {
   SCORING_CURVE_EXPONENT,
   SCORE_SCALE,
@@ -45,17 +61,7 @@ import {
   ISSUE_PENALTY_MAX,
   ISSUE_PENALTY_ITEM_CAP,
 } from "@squirrelscan/utils/constants";
-// Import the category-name helper from the `/categories` subpath, NOT the
-// `@squirrelscan/rules` barrel: the barrel re-exports every rule module (which
-// pull linkedom + node builtins), so importing it here would drag those into
-// the API Worker bundle. categories.ts is leaf-clean. (#195)
-import {
-  type RuleCategory,
-  getCategoryName,
-  getCategoryGroup,
-  getGroupName,
-  GROUP_CODES,
-} from "@squirrelscan/rules/categories";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
 // Scoring context - expects RuleRunResult with meta.category
 export interface ScoringContext {
@@ -191,13 +197,18 @@ export interface MergedScoringInput {
  */
 export function countCarriedNotEvaluated(
   pages: readonly SitePageRecord[],
-  carriedPageUrls: PageUrlSet,
+  carriedPageUrls: PageUrlSet
 ): Map<string, number> {
   const last = new Map<string, SitePageRecord>();
   for (const p of pages) last.set(p.normalizedUrl, p);
   const counts = new Map<string, number>();
   for (const [url, p] of last) {
-    if (!p.notEvaluated || p.notEvaluated.length === 0 || !carriedPageUrls.has(url)) continue;
+    if (
+      !p.notEvaluated ||
+      p.notEvaluated.length === 0 ||
+      !carriedPageUrls.has(url)
+    )
+      continue;
     for (const key of new Set(p.notEvaluated)) {
       // A rule id never holds the separator; a check name may.
       const sep = key.indexOf("|");
@@ -242,8 +253,12 @@ export function carriedFindingToCheck(
   normalizedUrl: string
 ): CheckResult {
   const payload = parseCarriedPayload(f.payload);
-  const carriedOccurrences = unpackComponentOccurrences(payload.componentOccurrences);
-  const carriedResources = unpackSiteResourceOccurrences(payload.siteResourceOccurrences);
+  const carriedOccurrences = unpackComponentOccurrences(
+    payload.componentOccurrences
+  );
+  const carriedResources = unpackSiteResourceOccurrences(
+    payload.siteResourceOccurrences
+  );
   return {
     name: f.checkName,
     status: f.status === "fail" ? "fail" : "warn",
@@ -263,7 +278,9 @@ export function carriedFindingToCheck(
     ...(payload.details ? { details: payload.details } : {}),
     ...(payload.pages ? { pages: payload.pages } : {}),
     ...(carriedOccurrences ? { componentOccurrences: carriedOccurrences } : {}),
-    ...(payload.componentEvidence ? { componentEvidence: payload.componentEvidence } : {}),
+    ...(payload.componentEvidence
+      ? { componentEvidence: payload.componentEvidence }
+      : {}),
     ...(carriedResources ? { siteResourceOccurrences: carriedResources } : {}),
     ...(payload.siteResourceEvidence
       ? { siteResourceEvidence: payload.siteResourceEvidence }
@@ -327,8 +344,13 @@ export function carriedCheckAsFailure(check: CheckResult): CheckResult {
 export function buildScoringResultsFromMerged(
   input: MergedScoringInput
 ): Map<string, RuleRunResult> {
-  const { freshResults, carriedFindings, carriedPageUrls, ruleMetaIndex, carriedSource } =
-    input;
+  const {
+    freshResults,
+    carriedFindings,
+    carriedPageUrls,
+    ruleMetaIndex,
+    carriedSource,
+  } = input;
   const checksPerPage = input.carriedChecksPerPage;
 
   // Clone fresh results (don't mutate the caller's map / arrays). Preserve any
@@ -396,7 +418,8 @@ export function buildScoringResultsFromMerged(
     if (carriedSource) {
       // Already built and already bounded — the caller replayed each carried
       // finding as it streamed and kept a per-rule sample.
-      for (const check of carriedSource.checksFor(ruleId)) result.checks.push(check);
+      for (const check of carriedSource.checksFor(ruleId))
+        result.checks.push(check);
     } else if (carriedForRule) {
       for (const [url, findings] of carriedForRule) {
         const replayed = findings.map((f) => carriedFindingToCheck(f, url));
@@ -428,7 +451,8 @@ export function buildScoringResultsFromMerged(
           cleanCarriedPasses += perPage;
         } else if (perPage > 1) {
           // (repo#3360) Each check name the page holds no row for passed there.
-          cleanCarriedPasses += perPage - new Set(findings.map((f) => f.checkName)).size;
+          cleanCarriedPasses +=
+            perPage - new Set(findings.map((f) => f.checkName)).size;
         } else {
           // One check per page: a page with a row has no pass left.
         }
@@ -440,8 +464,10 @@ export function buildScoringResultsFromMerged(
     // ADD to any fresh-clean count the reconstruction stamped (#1023), rather
     // than overwrite — a complete-store re-audit has BOTH fresh crawled-clean
     // passes and carried-clean passes, and the union denominator must count both.
-    const totalSyntheticPasses = (result.syntheticPassCount ?? 0) + cleanCarriedPasses;
-    if (totalSyntheticPasses > 0) result.syntheticPassCount = totalSyntheticPasses;
+    const totalSyntheticPasses =
+      (result.syntheticPassCount ?? 0) + cleanCarriedPasses;
+    if (totalSyntheticPasses > 0)
+      result.syntheticPassCount = totalSyntheticPasses;
   }
 
   return union;
@@ -502,7 +528,11 @@ function groupResultsByCategory(
 // `advisory` (severity "info" rules): warn checks surface in the report as
 // recommendations but are score-neutral — only fails count against the score.
 // `syntheticPasses` (#918): carried-clean passes counted, not materialized.
-function calculateRuleScore(checks: CheckResult[], advisory = false, syntheticPasses = 0): number {
+function calculateRuleScore(
+  checks: CheckResult[],
+  advisory = false,
+  syntheticPasses = 0
+): number {
   // no checks AND no carried-clean passes = exclude from scoring
   if (checks.length === 0 && syntheticPasses === 0) return -1;
 
@@ -922,8 +952,13 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   // branch. Only the machine-readable code is added, plus the crawler's own
   // detail (which carries the status and the WAF provider when it detected one)
   // appended to the end of the same sentence.
-  const blockedResult = (): { status: AuditStatus; reason: string; reasonCode: "http_4xx" } => {
-    const detail = s.rootFailure?.code === "http_4xx" ? s.rootFailure.detail : undefined;
+  const blockedResult = (): {
+    status: AuditStatus;
+    reason: string;
+    reasonCode: "http_4xx";
+  } => {
+    const detail =
+      s.rootFailure?.code === "http_4xx" ? s.rootFailure.detail : undefined;
     return {
       status: "blocked",
       reason: detail ? `${BLOCKED_REASON}: ${detail}` : BLOCKED_REASON,
@@ -937,7 +972,11 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
   const failedResult = (fallback: string) => {
     const failure = s.rootFailure;
     if (!failure) {
-      return { status: "failed" as const, reason: fallback, reasonCode: "unknown" as const };
+      return {
+        status: "failed" as const,
+        reason: fallback,
+        reasonCode: "unknown" as const,
+      };
     }
     return {
       status: "failed" as const,
@@ -958,7 +997,9 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
 
   if (s.pagesCrawled === 0) {
     if (rateLimited > 0 && blocked === 0) return rateLimitedResult();
-    return blocked > 0 ? blockedResult() : failedResult("No pages were crawled");
+    return blocked > 0
+      ? blockedResult()
+      : failedResult("No pages were crawled");
   }
   if (s.contentPages === 0) {
     if (rateLimited > 0 && blocked === 0) return rateLimitedResult();
@@ -975,14 +1016,16 @@ export function deriveAuditStatus(s: AuditStatusSignals): {
     if (rateLimited > 0) {
       reasons.push(
         `${rateLimited} page${rateLimited === 1 ? "" : "s"} rate limited by ${hostText}` +
-          (unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : ""),
+          (unfetched > 0
+            ? `; ${unfetched} more discovered but not fetched`
+            : "")
       );
     }
     // A page whose body could not be decoded is absent from every rule, so a
     // rule reporting an absence cannot tell it from a page that lacks the thing.
     if (undecodable > 0) {
       reasons.push(
-        `${undecodable} page${undecodable === 1 ? "" : "s"} could not be decoded (bad content-encoding)`,
+        `${undecodable} page${undecodable === 1 ? "" : "s"} could not be decoded (bad content-encoding)`
       );
     }
     return { status: "partial", reason: reasons.join("; ") };
@@ -1026,11 +1069,14 @@ export function deriveAuditStatusFromPages(
 } {
   // #1829: a stored 429/430 page is rate limiting, not a bot wall. Counted into
   // its own bucket so the reason text sends the reader to the right fix.
-  const rateLimitedPages = pages.filter((p) => isRateLimitStatus(p.status)).length;
+  const rateLimitedPages = pages.filter((p) =>
+    isRateLimitStatus(p.status)
+  ).length;
   return deriveAuditStatus({
     pagesCrawled: pages.length,
     contentPages: pages.filter((p) => p.status >= 200 && p.status < 300).length,
-    blockedPages: pages.filter((p) => p.status === 401 || p.status === 403).length,
+    blockedPages: pages.filter((p) => p.status === 401 || p.status === 403)
+      .length,
     blockedErrors,
     rateLimitedErrors: rateLimit.errors ?? 0,
     rateLimitedPages,
@@ -1070,7 +1116,8 @@ function rootFailureFromPages(
   const errors = pages.filter((p) => p.status >= 400);
   if (errors.length === 0 || errors.length !== pages.length) return undefined;
   const counts = new Map<number, number>();
-  for (const page of errors) counts.set(page.status, (counts.get(page.status) ?? 0) + 1);
+  for (const page of errors)
+    counts.set(page.status, (counts.get(page.status) ?? 0) + 1);
   let dominant = errors[0]!.status;
   let best = 0;
   for (const [status, count] of counts) {
@@ -1149,9 +1196,11 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
 
     // Roll the same weights + item-aware tally up into the category's group.
     const group = getCategoryGroup(result.categoryScore.category);
-    const agg =
-      groupAgg.get(group) ??
-      { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
+    const agg = groupAgg.get(group) ?? {
+      totalWeight: 0,
+      earnedWeight: 0,
+      tally: emptyTally(),
+    };
     agg.totalWeight += result.totalWeight;
     agg.earnedWeight += result.earnedWeight;
     addTally(agg.tally, result.tally);
@@ -1373,9 +1422,11 @@ export function calculateHealthScoreFromTallies(
     addTally(overallTally, catTally);
 
     const group = getCategoryGroup(category);
-    const agg =
-      groupAgg.get(group) ??
-      { totalWeight: 0, earnedWeight: 0, tally: emptyTally() };
+    const agg = groupAgg.get(group) ?? {
+      totalWeight: 0,
+      earnedWeight: 0,
+      tally: emptyTally(),
+    };
     agg.totalWeight += catTotalWeight;
     agg.earnedWeight += catEarnedWeight;
     addTally(agg.tally, catTally);

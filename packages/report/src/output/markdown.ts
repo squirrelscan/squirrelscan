@@ -1,66 +1,38 @@
 // Markdown report output
 
 import type { ReportBranding } from "@squirrelscan/core-contracts";
+
 import { isAuditFailed } from "@squirrelscan/core-contracts";
-import type { AuditReport } from "../types";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
-import { cacheFreshnessLines, cacheReasonsLabel, cacheStatsSummaryLine } from "../cache-stats";
-import { javascriptPageSize, javascriptShipped, javascriptShippedSummary } from "../javascript-shipped";
-import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { wafBlockedPagesLines, wafBlockedSeedCopy, wafSuspectLines } from "../waf-blocked";
-import { getScoreGrade } from "../scoring";
-import { scoreAdjustmentNoteFor } from "../score-adjustment";
-import { REPORT_SOURCE_PAGES_PREVIEW, REPORT_PAGES_HARD_CAP } from "../constants";
-import { fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
-import {
-  ruleSiteResourceCoverage,
-  siteResourceFixLine,
-  withSiteResourceCoverage,
-} from "../site-resource-presentation";
+import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
+
+import type { AuditReport } from "../types";
 
 import {
-  buildWcagChecklist,
-  hasWcagDeclarations,
-  wcagChecklistMarkdownLines,
-  type WcagChecklistRule,
-} from "../wcag-checklist";
-import { uncoveredItems } from "../component-presentation";
-import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-items";
-import {
-  groupIssuesByCategory,
-  flattenIssuesBySeverity,
-  passedRuleScope,
-  reportPassedRules,
-} from "../grouping";
-import {
-  affectedPagesSuffix,
-  hasItemSources,
-  itemSourceView,
-  moreSourcePages,
-  sourceRowText,
-} from "../item-sources";
-import {
-  checkPagesScopedAway,
-  checkScopeLine,
-  itemLabel,
-  regionScopeLine,
-} from "../region-scope";
-import { entityMarkdownSection } from "../entities";
-import {
-  structureChromeLine,
-  structureDegradedLine,
-  structurePageTypesLine,
-  structureRows,
-  structureNumber,
-  structureTotalsLine,
-} from "../structure";
-import { hostRows } from "../host";
-import { groupTechnologies, isLocalOnlyTech, TECH_LOCAL_MARK, techChangeSummary, techIconUrl } from "../technologies";
-import { SITE_PROFILE_NOTE, siteProfileFlags, siteProfileRows } from "../site-metadata";
-import { EDITOR_SUMMARY_NOTE, editorSummaryView, priorityEffortLabel } from "../editor-summary";
-import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
-import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+  affectedPages,
+  ruleAffectedPageCount,
+  ruleCarriedPageCount,
+  isRedundantPageItem,
+  itemsNotListed,
+  itemsNotListedLine,
+} from "../affected-pages";
 import { agentSignalLines } from "../agent-signals";
+import {
+  cacheFreshnessLines,
+  cacheReasonsLabel,
+  cacheStatsSummaryLine,
+} from "../cache-stats";
+import { getGroupName, getSubcategoryName, severityLabel } from "../categories";
+import {
+  fixRollupLine,
+  fixUnits,
+  ruleFixCoverage,
+} from "../component-presentation";
+import { uncoveredItems } from "../component-presentation";
+import {
+  REPORT_SOURCE_PAGES_PREVIEW,
+  REPORT_PAGES_HARD_CAP,
+} from "../constants";
 import {
   carriedTag,
   coverageLine,
@@ -76,20 +48,91 @@ import {
   unfetchedNote,
 } from "../coverage";
 import { partialAuditLine } from "../coverage";
+import {
+  EDITOR_SUMMARY_NOTE,
+  editorSummaryView,
+  priorityEffortLabel,
+} from "../editor-summary";
+import { entityMarkdownSection } from "../entities";
+import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  passedRuleScope,
+  reportPassedRules,
+} from "../grouping";
+import { hostRows } from "../host";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
 import {
-  affectedPages,
-  ruleAffectedPageCount,
-  ruleCarriedPageCount,
-  isRedundantPageItem,
-  itemsNotListed,
-  itemsNotListedLine,
-} from "../affected-pages";
-import { formatReportDate } from "../utils";
-import { getPathname } from "../url";
-import { LOCKED_REASON_LABELS, lockedRuleView, lockedRulesMessage } from "../locked-rules";
-import { privateTargetLine } from "../private-target";
+  affectedPagesSuffix,
+  hasItemSources,
+  itemSourceView,
+  moreSourcePages,
+  sourceRowText,
+} from "../item-sources";
+import {
+  javascriptPageSize,
+  javascriptShipped,
+  javascriptShippedSummary,
+} from "../javascript-shipped";
+import {
+  LOCKED_REASON_LABELS,
+  lockedRuleView,
+  lockedRulesMessage,
+} from "../locked-rules";
 import { notCheckedDetailLines } from "../not-checked";
+import { privateTargetLine } from "../private-target";
+import {
+  checkPagesScopedAway,
+  checkScopeLine,
+  itemLabel,
+  regionScopeLine,
+} from "../region-scope";
+import { scoreAdjustmentNoteFor } from "../score-adjustment";
+import { getScoreGrade } from "../scoring";
+import {
+  SITE_PROFILE_NOTE,
+  siteProfileFlags,
+  siteProfileRows,
+} from "../site-metadata";
+import {
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+} from "../site-resource-presentation";
+import {
+  formatSiteWideItem,
+  siteWideContext,
+  siteWideItem,
+} from "../site-wide-items";
+import {
+  structureChromeLine,
+  structureDegradedLine,
+  structurePageTypesLine,
+  structureRows,
+  structureNumber,
+  structureTotalsLine,
+} from "../structure";
+import {
+  groupTechnologies,
+  isLocalOnlyTech,
+  TECH_LOCAL_MARK,
+  techChangeSummary,
+  techIconUrl,
+} from "../technologies";
+import { getPathname } from "../url";
+import { formatReportDate } from "../utils";
+import {
+  wafBlockedPagesLines,
+  wafBlockedSeedCopy,
+  wafSuspectLines,
+} from "../waf-blocked";
+import {
+  buildWcagChecklist,
+  hasWcagDeclarations,
+  wcagChecklistMarkdownLines,
+  type WcagChecklistRule,
+} from "../wcag-checklist";
 import {
   escapeHtmlText,
   escapeMarkdownCell,
@@ -159,9 +202,12 @@ function escapeBlockStart(value: string): string {
  * close the autolink is shown. Null when neither is set. Twin of the cloud's
  * report-markdown template.
  */
-function whiteLabelFooterLine(branding: ReportBranding | undefined): string | null {
+function whiteLabelFooterLine(
+  branding: ReportBranding | undefined
+): string | null {
   const parts: string[] = [];
-  if (branding?.footerText) parts.push(escapeMarkdownInline(oneMdLine(branding.footerText)));
+  if (branding?.footerText)
+    parts.push(escapeMarkdownInline(oneMdLine(branding.footerText)));
   const website = branding?.websiteUrl;
   if (website && /^https:\/\//i.test(website) && !/[\s<>]/.test(website)) {
     parts.push(`<${website}>`);
@@ -190,7 +236,6 @@ function siteProfileMarkdownValue(value: string, rawUrl?: string): string {
     return label;
   }
 }
-
 
 /**
  * Host list for a rate-limit line: names up to two, then counts the rest.
@@ -221,7 +266,7 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1829: coverage lost to throttling.
   if (report.rateLimited && report.rateLimited.pages > 0) {
     out.push(
-      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`,
+      `Rate limited: ${report.rateLimited.pages} page(s) not verified (${formatRateLimitedHosts(report.rateLimited.hosts)})${unfetchedNote(report.rateLimited.unfetched)}`
     );
   }
   // #1418: the seed redirected off its own site and the crawler refused to follow it, so the URL at
@@ -235,7 +280,8 @@ function scanDetailLines(report: AuditReport): string[] {
   // #1262: findings the config's [[ignore]] entries waived, and entries that matched nothing.
   const ignored = ignoredLine(report);
   if (ignored) out.push(escapeMarkdownInline(ignored));
-  for (const line of ignoredNoteLines(report)) out.push(escapeMarkdownInline(line));
+  for (const line of ignoredNoteLines(report))
+    out.push(escapeMarkdownInline(line));
   const partial = partialAuditLine(report);
   if (partial) out.push(escapeMarkdownInline(partial));
   const scope = scanScopeLine(report);
@@ -276,7 +322,7 @@ function structureLines(report: AuditReport): string[] {
     lines.push("|---------|------:|------:|");
     for (const row of rows) {
       lines.push(
-        `| ${row.section} | ${structureNumber(row.pages)} | ${structureNumber(row.links)} |`,
+        `| ${row.section} | ${structureNumber(row.pages)} | ${structureNumber(row.links)} |`
       );
     }
     lines.push("");
@@ -308,7 +354,8 @@ function reportDetailLines(report: AuditReport): string[] {
   const notChecked = notCheckedDetailLines(report);
   const structure = structureLines(report);
   const scan = scanDetailLines(report);
-  if (notChecked.length === 0 && structure.length === 0 && scan.length === 0) return [];
+  if (notChecked.length === 0 && structure.length === 0 && scan.length === 0)
+    return [];
 
   const lines: string[] = ["## Report detail", ""];
   if (notChecked.length > 0) {
@@ -326,7 +373,10 @@ function reportDetailLines(report: AuditReport): string[] {
   return lines;
 }
 
-export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOptions): string {
+export function renderMarkdown(
+  report: AuditReport,
+  options?: MarkdownRenderOptions
+): string {
   const lines: string[] = [];
   const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
   const version = options?.version ?? "";
@@ -337,7 +387,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push(
     whiteLabel
       ? `# ${options?.branding?.orgName ? `${escapeMarkdownInline(options.branding.orgName)} ` : ""}Audit Report`
-      : "# squirrelscan Audit Report",
+      : "# squirrelscan Audit Report"
   );
   lines.push("");
   // #3522: escaped, like every value below that a site or a stored report chose.
@@ -362,7 +412,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     if (es.priorities.length === 0 && es.bigTicket.length > 0) {
       lines.push("**Big-ticket items:**");
       lines.push("");
-      for (const item of es.bigTicket) lines.push(`- ${escapeMarkdownInline(oneMdLine(item))}`);
+      for (const item of es.bigTicket)
+        lines.push(`- ${escapeMarkdownInline(oneMdLine(item))}`);
       lines.push("");
     }
     if (es.verdict) {
@@ -377,7 +428,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("");
     for (const [i, p] of es.priorities.entries()) {
       lines.push(
-        `${i + 1}. **${escapeMarkdownInline(p.title)}** (${priorityEffortLabel(p.effort)})`,
+        `${i + 1}. **${escapeMarkdownInline(p.title)}** (${priorityEffortLabel(p.effort)})`
       );
       // Trailing two spaces: a hard break, so why and action stay separate lines.
       if (p.why) lines.push(`   ${escapeMarkdownInline(oneMdLine(p.why))}  `);
@@ -400,7 +451,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // the site. Fields are sanitised in wafBlockedSeedCopy and escaped here.
       lines.push(escapeMarkdownInline(wafSeed.headline));
       lines.push("");
-      lines.push(`${escapeMarkdownInline(wafSeed.saw)} Code: \`${wafSeed.code}\`.`);
+      lines.push(
+        `${escapeMarkdownInline(wafSeed.saw)} Code: \`${wafSeed.code}\`.`
+      );
       lines.push("");
       lines.push("To get a full audit:");
       lines.push("");
@@ -409,23 +462,31 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // #1829: throttling and a bot wall both land here with nothing audited,
       // but the fixes are opposite — say which one this was.
       lines.push(
-        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`,
+        `${formatRateLimitedHosts(report.rateLimited!.hosts)} rate limited the crawler (429/430) before any pages could be read, so nothing was audited.`
       );
       lines.push("");
       lines.push("To get a full audit:");
       lines.push("");
-      lines.push("- Set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in `squirrel.toml`.");
-      lines.push("- Raise `[crawler] max_backoff_ms` so the crawl waits longer for the host to recover.");
+      lines.push(
+        "- Set `[crawler] per_host_concurrency = 1` and `per_host_delay_ms = 500` in `squirrel.toml`."
+      );
+      lines.push(
+        "- Raise `[crawler] max_backoff_ms` so the crawl waits longer for the host to recover."
+      );
       lines.push("- Retry when the host is less busy.");
     } else if (blocked) {
       lines.push(
-        "Your site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage.",
+        "Your site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting). This is a block on your side, not a squirrelscan outage."
       );
       lines.push("");
       lines.push("To get a full audit:");
       lines.push("");
-      lines.push("- Allowlist the squirrelscan crawler in your WAF or bot protection.");
-      lines.push("- Turn off bot fight mode (or the blocking rule) for the audit.");
+      lines.push(
+        "- Allowlist the squirrelscan crawler in your WAF or bot protection."
+      );
+      lines.push(
+        "- Turn off bot fight mode (or the blocking rule) for the audit."
+      );
       lines.push("- Run the audit from a trusted network.");
     } else {
       // #1822: reason line, then the next step for that failure class.
@@ -446,7 +507,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     const refused = refusedFetchLines(report);
     if (refused.length > 0) {
       lines.push("");
-      lines.push("Refused by the site (not checked, so not reported as missing):");
+      lines.push(
+        "Refused by the site (not checked, so not reported as missing):"
+      );
       lines.push("");
       for (const line of refused) lines.push(`- ${escapeMarkdownInline(line)}`);
     }
@@ -455,7 +518,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     // #1829: a partial run keeps its grade; flag the coverage gap above it.
     if (report.status === "partial" && report.statusReason) {
       // Escaped like the Failed branch's reason above, for the same reason (#3522).
-      lines.push(`> **Partial audit:** ${escapeMarkdownText(report.statusReason)}`);
+      lines.push(
+        `> **Partial audit:** ${escapeMarkdownText(report.statusReason)}`
+      );
       lines.push("");
     }
     // #1253: pages a WAF or bot manager blocked. Never audited, never scored.
@@ -484,7 +549,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push(
       score === null
         ? `| **Overall** | **N/A** |`
-        : `| **Overall** | **${score}/100 (${getScoreGrade(score)})** |`,
+        : `| **Overall** | **${score}/100 (${getScoreGrade(score)})** |`
     );
     // Group scores (#626) — bolded, above the finer categories. Name derives
     // from the group CODE so renames apply to already-stored reports.
@@ -523,19 +588,23 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (report.host) {
     lines.push("## Host");
     lines.push("");
-    for (const row of hostRows(report.host)) lines.push(`- **${row.label}:** ${escapeMarkdownText(row.value)}`);
+    for (const row of hostRows(report.host))
+      lines.push(`- **${row.label}:** ${escapeMarkdownText(row.value)}`);
     lines.push("");
   }
 
   // Technologies — report-only section, never part of the score. Logos embed
   // via inline <img> (GFM-supported); they degrade to alt text in plain terminals.
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
     lines.push("## Technologies");
     lines.push("");
     const summary = techChangeSummary(tech);
     lines.push(
-      `_Detected tech stack: informational, not part of the score.${summary ? ` ${summary}.` : ""}_`,
+      `_Detected tech stack: informational, not part of the score.${summary ? ` ${summary}.` : ""}_`
     );
     lines.push("");
     for (const group of groupTechnologies(tech.items)) {
@@ -568,10 +637,13 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // repo#3397: the script weight the audit measured. Report-only, not scored.
   const javascript = javascriptShipped(report);
   if (javascript) {
-    lines.push(`- **JavaScript shipped:** ${javascriptShippedSummary(javascript, escapeMarkdownText)}`);
+    lines.push(
+      `- **JavaScript shipped:** ${javascriptShippedSummary(javascript, escapeMarkdownText)}`
+    );
     if (javascript.heaviestPages.length > 0) {
       const pages = javascript.heaviestPages.map(
-        (page) => `${escapeMarkdownText(page.url)} (${javascriptPageSize(page)})`,
+        (page) =>
+          `${escapeMarkdownText(page.url)} (${javascriptPageSize(page)})`
       );
       lines.push(`- **Heaviest pages by script:** ${pages.join(", ")}`);
     }
@@ -582,7 +654,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (report.cacheStats) {
     const cs = report.cacheStats;
     const byReason = cacheReasonsLabel(cs);
-    lines.push(`_${cacheStatsSummaryLine(cs)}${byReason ? ` (${byReason})` : ""}_`);
+    lines.push(
+      `_${cacheStatsSummaryLine(cs)}${byReason ? ` (${byReason})` : ""}_`
+    );
     lines.push("");
   }
   if (report.cacheFreshness) {
@@ -594,7 +668,10 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   lines.push("---");
   lines.push("");
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
+  const categoryIssues = groupIssuesByCategory(
+    report.ruleResults,
+    report.checkTallies
+  );
 
   if (categoryIssues.length > 0) {
     lines.push("## Issues");
@@ -613,7 +690,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         lastSeverity = rule.severity;
         lastCategory = undefined;
         const bucket = flatIssues.filter((r) => r.severity === rule.severity);
-        lines.push(`### ${severityLabel(rule.severity, { titleCase: true, plural: true })}`);
+        lines.push(
+          `### ${severityLabel(rule.severity, { titleCase: true, plural: true })}`
+        );
         lines.push("");
         lines.push(`*${bucket.length} rule(s)*`);
         lines.push("");
@@ -627,7 +706,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       const hasSub = Boolean(rule.subcategory);
       if (rule.subcategory && rule.subcategory !== lastSub) {
         lastSub = rule.subcategory;
-        lines.push(`${"#".repeat(subBase)} ${getSubcategoryName(rule.subcategory)}`);
+        lines.push(
+          `${"#".repeat(subBase)} ${getSubcategoryName(rule.subcategory)}`
+        );
         lines.push("");
       }
       const severityBadge =
@@ -649,7 +730,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       }
 
       if (rule.wcag && rule.wcag.length > 0) {
-        for (const c of rule.wcag) lines.push(`**WCAG:** ${wcagLabel(c)} (WCAG ${c.version})`);
+        for (const c of rule.wcag)
+          lines.push(`**WCAG:** ${wcagLabel(c)} (WCAG ${c.version})`);
         lines.push("");
       }
 
@@ -663,17 +745,24 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // #2341: the same composition every surface makes — resource units first,
       // then component units, over one shared coverage.
       const siteResources = ruleSiteResourceCoverage(rule);
-      const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
+      const coverage = withSiteResourceCoverage(
+        ruleFixCoverage(rule),
+        siteResources,
+        rule
+      );
       for (const group of siteResources.groups) {
         lines.push(
-          `**${escapeMarkdownText(siteResourceFixLine(group, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/"))}**`,
+          `**${escapeMarkdownText(siteResourceFixLine(group, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/"))}**`
         );
         lines.push("");
       }
-      for (const rollup of fixUnits(coverage.groups, options?.componentRollup !== false)) {
+      for (const rollup of fixUnits(
+        coverage.groups,
+        options?.componentRollup !== false
+      )) {
         // One actionable line per REPAIR, not per faulty element in a block.
         lines.push(
-          `**${escapeMarkdownText(fixRollupLine(rollup, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/"))}**`,
+          `**${escapeMarkdownText(fixRollupLine(rollup, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/"))}**`
         );
         lines.push("");
       }
@@ -682,7 +771,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // this run, only carried pages still red" note.
       const carriedRollup = ruleCarriedRollupLine(
         ruleCarriedPageCount(rule.checks),
-        ruleAffectedPageCount(rule.checks),
+        ruleAffectedPageCount(rule.checks)
       );
       if (carriedRollup) {
         lines.push(`_${carriedRollup}_`);
@@ -707,9 +796,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         const pagesNote = hasItemSources(check)
           ? affectedPagesSuffix(check, affectedPages(check).count)
           : "";
-        const escapedMessage = escapeMarkdownCell(check.message + pagesNote + carriedTag(check));
+        const escapedMessage = escapeMarkdownCell(
+          check.message + pagesNote + carriedTag(check)
+        );
         lines.push(
-          `| ${escapeMarkdownCell(check.name)} | ${statusIcon} ${check.status} | ${escapedMessage} |`,
+          `| ${escapeMarkdownCell(check.name)} | ${statusIcon} ${check.status} | ${escapedMessage} |`
         );
       }
       lines.push("");
@@ -731,7 +822,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           coverage.mode === "full"
             ? []
             : coverage.mode === "partial"
-              ? ap.sample.filter((page) => coverage.uncoveredPages.includes(page))
+              ? ap.sample.filter((page) =>
+                  coverage.uncoveredPages.includes(page)
+                )
               : ap.sample;
         // pub#846: a check that sits in one shared region names it instead of listing its
         // pages, and so does a check whose findings are scoped to regions.
@@ -753,12 +846,12 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
               ? `${uncovered.length} page(s) not attributed to a shared component`
               : `${ap.count} page(s) affected`;
           lines.push(
-            `<details><summary><strong>${escapeHtmlText(check.name)}:</strong> ${summary}</summary>`,
+            `<details><summary><strong>${escapeHtmlText(check.name)}:</strong> ${summary}</summary>`
           );
           lines.push("");
           if (ap.count > materialized.length) {
             lines.push(
-              `_Showing ${materialized.length} examples of ${ap.count} affected pages._`,
+              `_Showing ${materialized.length} examples of ${ap.count} affected pages._`
             );
             lines.push("");
           }
@@ -771,7 +864,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           for (const page of materialized) {
             const carried = carriedPageSet?.has(page) ? " (carried)" : "";
             // #3522: a page URL's path is the site's; label and destination are escaped.
-            lines.push(`- ${markdownLink(getPathname(page) || "/", page)}${carried}`);
+            lines.push(
+              `- ${markdownLink(getPathname(page) || "/", page)}${carried}`
+            );
           }
           lines.push("");
           lines.push("</details>");
@@ -783,11 +878,11 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
         // URL isn't listed twice; items with sourcePages or a non-URL id
         // (a resource's own identity) keep their row.
         const visibleItems = uncoveredItems(check.items, coverage).filter(
-          (item) => !isRedundantPageItem(item),
+          (item) => !isRedundantPageItem(item)
         );
         if (visibleItems && visibleItems.length > 0) {
           lines.push(
-            `<details><summary><strong>${escapeHtmlText(check.name)}:</strong> ${visibleItems.length} item(s)${notListedSuffix(check)}</summary>`,
+            `<details><summary><strong>${escapeHtmlText(check.name)}:</strong> ${visibleItems.length} item(s)${notListedSuffix(check)}</summary>`
           );
           lines.push("");
           for (const item of visibleItems) {
@@ -798,11 +893,17 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
               item.id.startsWith("http://") ||
               item.id.startsWith("https://") ||
               item.id.startsWith("/");
-            const display = isUrl ? markdownLink(label, item.id) : escapeMarkdownText(label);
-            const siteWideInfo = siteWideItem(item, siteWide.total, siteWide.pageUrls);
+            const display = isUrl
+              ? markdownLink(label, item.id)
+              : escapeMarkdownText(label);
+            const siteWideInfo = siteWideItem(
+              item,
+              siteWide.total,
+              siteWide.pageUrls
+            );
             if (siteWideInfo) {
               lines.push(
-                `- ${formatSiteWideItem(display, siteWideInfo, (page) => escapeMarkdownText(getPathname(page) || "/"))}`,
+                `- ${formatSiteWideItem(display, siteWideInfo, (page) => escapeMarkdownText(getPathname(page) || "/"))}`
               );
               continue;
             }
@@ -818,8 +919,8 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
               lines.push(
                 `  - from: ${sourceRowText(
                   markdownLink(getPathname(row.page) || "/", row.page),
-                  row.detail,
-                )}`,
+                  row.detail
+                )}`
               );
             }
             const hidden = Math.max(0, view.total - view.rows.length);
@@ -830,7 +931,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
           lines.push("");
         } else if (coverage.mode !== "full" && itemsNotListed(check) > 0) {
           // A fully covered rule's groups already account for every item.
-          lines.push(`**${escapeMarkdownText(check.name)}:** ${itemsNotListedLine(itemsNotListed(check))}`);
+          lines.push(
+            `**${escapeMarkdownText(check.name)}:** ${itemsNotListedLine(itemsNotListed(check))}`
+          );
           lines.push("");
         }
       }
@@ -852,13 +955,15 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   if (passedRules.length > 0) {
     lines.push("## Passed");
     lines.push("");
-    lines.push(`*${passedRules.length} rule${passedRules.length === 1 ? "" : "s"} with no issues*`);
+    lines.push(
+      `*${passedRules.length} rule${passedRules.length === 1 ? "" : "s"} with no issues*`
+    );
     lines.push("");
     lines.push("| Rule | Category | Checked |");
     lines.push("|------|----------|---------|");
     for (const rule of passedRules) {
       lines.push(
-        `| ${escapeMarkdownCell(rule.name)} \`${rule.id}\` | ${rule.categoryName} | ${passedRuleScope(rule)} |`,
+        `| ${escapeMarkdownCell(rule.name)} \`${rule.id}\` | ${rule.categoryName} | ${passedRuleScope(rule)} |`
       );
     }
     lines.push("");
@@ -882,11 +987,19 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
       // The action carries publisher-supplied detail (#1734): escaped as text, so a link, an
       // image or raw HTML in it renders as typed. The CTA is ours.
       const action = escapeMarkdownText(locked.action);
-      lines.push(locked.cta ? `${action} [${locked.cta.label}](${locked.cta.url}).` : action);
+      lines.push(
+        locked.cta
+          ? `${action} [${locked.cta.label}](${locked.cta.url}).`
+          : action
+      );
       lines.push("");
       for (const rule of locked.rules.map(lockedRuleView)) {
-        const why = rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : "";
-        lines.push(`- ${markdownCodeSpan(rule.id)}, ${escapeMarkdownText(rule.name)}${why}`);
+        const why = rule.reason
+          ? ` (${LOCKED_REASON_LABELS[rule.reason]})`
+          : "";
+        lines.push(
+          `- ${markdownCodeSpan(rule.id)}, ${escapeMarkdownText(rule.name)}${why}`
+        );
       }
       lines.push("");
     }
@@ -897,7 +1010,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
   // It needs the rules' WCAG declarations, which the report itself does not carry.
   const wcagRules = options?.wcagRules ? [...options.wcagRules] : [];
   if (!isAuditFailed(report.status) && hasWcagDeclarations(wcagRules)) {
-    lines.push(...wcagChecklistMarkdownLines(buildWcagChecklist(report, wcagRules)));
+    lines.push(
+      ...wcagChecklistMarkdownLines(buildWcagChecklist(report, wcagRules))
+    );
   }
 
   // Report detail: the last section, after every finding. What this audit did not check, the
@@ -910,7 +1025,9 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("---");
     lines.push("");
     const versionStr = version ? ` v${version}` : "";
-    lines.push(`*Generated by [squirrelscan](https://squirrelscan.com)${versionStr}*`);
+    lines.push(
+      `*Generated by [squirrelscan](https://squirrelscan.com)${versionStr}*`
+    );
   } else {
     const footer = whiteLabelFooterLine(options?.branding);
     if (footer) {

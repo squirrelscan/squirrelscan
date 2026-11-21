@@ -1,11 +1,16 @@
 // a11y/aria-input-field-name - Input fields have accessible names
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import {
+  elementsWithAttribute,
+  labelsFor,
+  type AttrReadable,
+} from "../shared/attribute-lookup";
 import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { inputRoles } from "./aria-data";
-import { elementsWithAttribute, labelsFor, type AttrReadable } from "../shared/attribute-lookup";
 
 function getAccessibleName(el: AttrReadable, doc: Document): string | null {
   // Check aria-label

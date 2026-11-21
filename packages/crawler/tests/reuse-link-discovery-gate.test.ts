@@ -32,7 +32,10 @@ function mockResponse(url: string, body: string): FetchResponse {
     finalUrl: url,
     status: 200,
     // max-age keeps every stored page fresh on pass 2, so it is reused unfetched.
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "max-age=3600" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "max-age=3600",
+    },
     body,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -89,7 +92,7 @@ const baseConfig = {
 
 async function createCrawlRecord(
   storage: CrawlStorage,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
@@ -100,14 +103,14 @@ async function createCrawlRecord(
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
 }
 
 async function seedFrontier(
   storage: CrawlStorage,
   crawlId: string,
-  entries: Array<{ path: string; source: "seed" | "sitemap" }>,
+  entries: Array<{ path: string; source: "seed" | "sitemap" }>
 ) {
   for (const { path, source } of entries) {
     await Effect.runPromise(
@@ -120,7 +123,7 @@ async function seedFrontier(
         source,
         enqueuedAt: Date.now(),
         retryCount: 0,
-      }),
+      })
     );
   }
 }
@@ -143,7 +146,10 @@ async function runReusePass(opts: {
   const crawlId1 = await createCrawlRecord(storage, cfg1);
   await seedFrontier(storage, crawlId1, [{ path: "/", source: "seed" }]);
   const crawler1 = await Effect.runPromise(
-    createCrawler({ config: { ...cfg1, documentFetcher: fetcherFor([]) }, storage }),
+    createCrawler({
+      config: { ...cfg1, documentFetcher: fetcherFor([]) },
+      storage,
+    })
   );
   await Effect.runPromise(crawler1.resumeFromStorage(crawlId1));
 
@@ -161,11 +167,16 @@ async function runReusePass(opts: {
     ...opts.sitemapPaths.map((path) => ({ path, source: "sitemap" as const })),
   ]);
   const crawler2 = await Effect.runPromise(
-    createCrawler({ config: { ...cfg2, documentFetcher: fetcherFor(fetched) }, storage }),
+    createCrawler({
+      config: { ...cfg2, documentFetcher: fetcherFor(fetched) },
+      storage,
+    })
   );
   await Effect.runPromise(crawler2.resumeFromStorage(crawlId2));
 
-  const entries = await Effect.runPromise(storage.getAllFrontierEntries(crawlId2));
+  const entries = await Effect.runPromise(
+    storage.getAllFrontierEntries(crawlId2)
+  );
   const stats = await Effect.runPromise(storage.getStats(crawlId2));
   await Effect.runPromise(storage.close());
   return {
@@ -180,7 +191,10 @@ const OFF_MAP = `${ORIGIN}/off-map`;
 
 describe("cached page reuse honours disableLinkDiscovery (#354)", () => {
   test("disableLinkDiscovery: a reused page does not enqueue its outlinks", async () => {
-    const r = await runReusePass({ disableLinkDiscovery: true, sitemapPaths: ["/listed"] });
+    const r = await runReusePass({
+      disableLinkDiscovery: true,
+      sitemapPaths: ["/listed"],
+    });
     // Sanity: the pages really were reused rather than fetched.
     expect(r.fetched).toEqual([]);
     expect(r.unchanged).toBeGreaterThan(0);
@@ -191,14 +205,20 @@ describe("cached page reuse honours disableLinkDiscovery (#354)", () => {
   }, 30000);
 
   test("sitemap fallback: with no crawlable sitemap URLs a reused page's links are discovered", async () => {
-    const r = await runReusePass({ disableLinkDiscovery: true, sitemapPaths: [] });
+    const r = await runReusePass({
+      disableLinkDiscovery: true,
+      sitemapPaths: [],
+    });
     expect(r.fetched).toEqual([]);
     expect(r.frontier).toContain(OFF_MAP);
     expect(r.linkDiscoveryOff).toBeUndefined();
   }, 30000);
 
   test("negative control: disableLinkDiscovery false discovers a reused page's links", async () => {
-    const r = await runReusePass({ disableLinkDiscovery: false, sitemapPaths: ["/listed"] });
+    const r = await runReusePass({
+      disableLinkDiscovery: false,
+      sitemapPaths: ["/listed"],
+    });
     expect(r.fetched).toEqual([]);
     expect(r.frontier).toContain(OFF_MAP);
     expect(r.linkDiscoveryOff).toBeUndefined();

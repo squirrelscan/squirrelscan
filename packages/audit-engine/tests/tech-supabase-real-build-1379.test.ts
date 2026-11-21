@@ -29,7 +29,7 @@ function filler(count: number): string {
   const fns = Array.from(
     { length: count },
     (_, i) =>
-      `export function f${i}(x){let y=x*${i + 3};const u="https://www.google.com/a/${i}?q='"+y,t=\`//t/\${y}\`;for(let i=0;i<${(i % 5) + 2};i++)y=(y^${i * 7})+${i % 11}+u.length+t.length;return y}`,
+      `export function f${i}(x){let y=x*${i + 3};const u="https://www.google.com/a/${i}?q='"+y,t=\`//t/\${y}\`;for(let i=0;i<${(i % 5) + 2};i++)y=(y^${i * 7})+${i % 11}+u.length+t.length;return y}`
   );
   return `${fns.join("\n")}\nexport const all=[${Array.from({ length: count }, (_, i) => `f${i}`).join(",")}];`;
 }
@@ -39,10 +39,15 @@ function filler(count: number): string {
  * `fillerFns` the app module sits between two big filler modules, so it is
  * neither in the head nor in the tail of the file. `before` runs ahead of the client.
  */
-async function build(name: string, appCode: string, fillerFns = 0, before = ""): Promise<string> {
+async function build(
+  name: string,
+  appCode: string,
+  fillerFns = 0,
+  before = ""
+): Promise<string> {
   writeFileSync(
     join(dir, `${name}-app.js`),
-    `${before}\nimport { createClient } from ${JSON.stringify(SUPABASE_JS)};\n${appCode}\n`,
+    `${before}\nimport { createClient } from ${JSON.stringify(SUPABASE_JS)};\n${appCode}\n`
   );
   const lead = fillerFns
     ? `import { all } from "./${name}-filler.js";\nglobalThis.__sum = all.reduce((n, f) => n + f(1), 0);\n`
@@ -52,9 +57,15 @@ async function build(name: string, appCode: string, fillerFns = 0, before = ""):
     : "";
   if (fillerFns) {
     writeFileSync(join(dir, `${name}-filler.js`), filler(fillerFns));
-    writeFileSync(join(dir, `${name}-after.js`), filler(fillerFns).replace(/\bf(\d+)\b/g, "g$1"));
+    writeFileSync(
+      join(dir, `${name}-after.js`),
+      filler(fillerFns).replace(/\bf(\d+)\b/g, "g$1")
+    );
   }
-  writeFileSync(join(dir, `${name}.js`), `${lead}import "./${name}-app.js";\n${tail}`);
+  writeFileSync(
+    join(dir, `${name}.js`),
+    `${lead}import "./${name}-app.js";\n${tail}`
+  );
   const result = await Bun.build({
     entrypoints: [join(dir, `${name}.js`)],
     outdir: join(dir, `${name}-out`),
@@ -78,11 +89,13 @@ function detectLocal(code: string): string[] {
       },
     ],
     [{ url, content: code, sourcePages: ["https://example.com/"] }],
-    DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+    DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
   );
-  return detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS).items.map(
-    (t) => t.id,
-  );
+  return detectReportTechnologiesMulti(
+    inputs,
+    undefined,
+    LOCAL_TECH_DETECT_OPTIONS
+  ).items.map((t) => t.id);
 }
 
 function detect(code: string): string[] {
@@ -95,7 +108,7 @@ function detect(code: string): string[] {
         html: `<!doctype html><div id="root"></div><script type="module" src="/assets/index-1.js"></script>`,
       },
     ],
-    [{ url, content: code, sourcePages: ["https://example.com/"] }],
+    [{ url, content: code, sourcePages: ["https://example.com/"] }]
   );
   return detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
 }
@@ -104,7 +117,7 @@ describe("#1379 the real supabase-js build", () => {
   test("the library strings the signature keys on are in the minified build", async () => {
     const code = await build(
       "lib",
-      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`,
+      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`
     );
     expect(code).toContain("github.com/orgs/supabase/discussions/");
     expect(code).toMatch(/sb-\$\{[^}]{1,40}\}-auth-token/);
@@ -113,7 +126,7 @@ describe("#1379 the real supabase-js build", () => {
   test("the URL in a variable with the key elsewhere", async () => {
     const code = await build(
       "var",
-      `let l="https://${REF}.supabase.co",h=globalThis.__k;globalThis.__c = createClient(l,h);`,
+      `let l="https://${REF}.supabase.co",h=globalThis.__k;globalThis.__c = createClient(l,h);`
     );
     expect(detect(code)).toContain("supabase");
   });
@@ -121,7 +134,7 @@ describe("#1379 the real supabase-js build", () => {
   test("a new-format secret key beside the URL", async () => {
     const code = await build(
       "sec",
-      `const pD="https://${REF}.supabase.co",gD="${SECRET_KEY}";globalThis.__c = createClient(pD,gD);`,
+      `const pD="https://${REF}.supabase.co",gD="${SECRET_KEY}";globalThis.__c = createClient(pD,gD);`
     );
     expect(detect(code)).toContain("supabase");
   });
@@ -130,38 +143,42 @@ describe("#1379 the real supabase-js build", () => {
     const code = await build(
       "big",
       `let l="https://${REF}.supabase.co";globalThis.__c = createClient(l,globalThis.__k);`,
-      7000,
+      7000
     );
     expect(code.length).toBeGreaterThan(300_000);
     expect(code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
-    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
+    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(
+      256 * 1024
+    );
     expect(detect(code)).toContain("supabase");
   });
 
   test("200 identical and 60 distinct earlier placeholder URLs do not hide the real one", async () => {
     const same = Array.from(
       { length: 200 },
-      (_, i) => `globalThis.__s${i % 7}="https://your-project.supabase.co";`,
+      (_, i) => `globalThis.__s${i % 7}="https://your-project.supabase.co";`
     ).join("\n");
     const distinct = Array.from(
       { length: 60 },
-      (_, i) => `globalThis.__d${i}="https://your-project-${i}.supabase.co";`,
+      (_, i) => `globalThis.__d${i}="https://your-project-${i}.supabase.co";`
     ).join("\n");
     const code = await build(
       "many",
       `let l="https://${REF}.supabase.co";globalThis.__c = createClient(l,globalThis.__k);`,
       7000,
-      `${same}\n${distinct}`,
+      `${same}\n${distinct}`
     );
     expect(code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
-    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(256 * 1024);
+    expect(code.length - code.indexOf(`${REF}.supabase.co`)).toBeGreaterThan(
+      256 * 1024
+    );
     expect(detect(code)).toContain("supabase");
   });
 
   test("not detected: the library with no project URL (a runtime-built one)", async () => {
     const code = await build(
       "nourl",
-      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`,
+      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`
     );
     expect(detect(code)).not.toContain("supabase");
   });
@@ -169,7 +186,7 @@ describe("#1379 the real supabase-js build", () => {
   test("not detected: the library with a placeholder URL only", async () => {
     const code = await build(
       "ph",
-      `globalThis.__c = createClient("https://your-project.supabase.co", globalThis.__k);`,
+      `globalThis.__c = createClient("https://your-project.supabase.co", globalThis.__k);`
     );
     expect(detect(code)).not.toContain("supabase");
   });
@@ -179,7 +196,7 @@ describe("#1379 the real supabase-js build", () => {
   test("a whole supabase-js bundle is not Sentry", async () => {
     const code = await build(
       "nosentry",
-      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`,
+      `globalThis.__c = createClient(globalThis.__u, globalThis.__k);`
     );
     expect(code).toContain("Sentry.init");
     expect(detectLocal(code)).not.toContain("sentry");
@@ -188,16 +205,18 @@ describe("#1379 the real supabase-js build", () => {
   test("a real Sentry init call and the SDK's own log prefix are still Sentry", async () => {
     expect(
       detectLocal(
-        `${"var a=1;\n".repeat(50_000)}Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});`,
-      ),
+        `${"var a=1;\n".repeat(50_000)}Sentry.init({dsn:"https://k@o1.ingest.sentry.io/2"});`
+      )
     ).toContain("sentry");
     expect(
       detectLocal(
-        `${"var a=1;\n".repeat(50_000)}console.warn("[Sentry] Sentry.init() was called more than once");`,
-      ),
+        `${"var a=1;\n".repeat(50_000)}console.warn("[Sentry] Sentry.init() was called more than once");`
+      )
     ).toContain("sentry");
     expect(
-      detectLocal(`${"var a=1;\n".repeat(10)}// docs say call Sentry.init() once`),
+      detectLocal(
+        `${"var a=1;\n".repeat(10)}// docs say call Sentry.init() once`
+      )
     ).not.toContain("sentry");
   });
 });

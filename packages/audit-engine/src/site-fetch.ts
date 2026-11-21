@@ -5,6 +5,12 @@
 // adapter). Nothing here imports ./adapter, ./streaming or ./page-features;
 // ./adapter re-exports these names so the package barrel is unchanged.
 
+import type {
+  CrawlStorage,
+  PageRecord,
+} from "@squirrelscan/core-contracts/storage";
+import type { ParsedPage } from "@squirrelscan/rules";
+
 import {
   detectPageType,
   extractAuthorFromSchema,
@@ -27,12 +33,9 @@ import {
   type ParsedPageCache,
   type ParsePageOptions,
 } from "@squirrelscan/parser";
-import { Effect } from "effect";
-
-import type { CrawlStorage, PageRecord } from "@squirrelscan/core-contracts/storage";
-import type { ParsedPage } from "@squirrelscan/rules";
 import { decodedPageBytes } from "@squirrelscan/utils/bytes";
 import { overlayTechHeaders } from "@squirrelscan/utils/headers";
+import { Effect } from "effect";
 
 import { logger } from "./adapter-logger";
 
@@ -65,7 +68,9 @@ export const isRenderedFetch = (fetcherId?: string | null): boolean =>
  * takes either path's SiteContextPage (both carry `page.url` + `page.fetcherId`).
  */
 export function renderedPageUrlsFrom(
-  siteContext: ReadonlyArray<{ page: { url: string; fetcherId?: string | null } }>,
+  siteContext: ReadonlyArray<{
+    page: { url: string; fetcherId?: string | null };
+  }>
 ): Set<string> {
   const out = new Set<string>();
   for (const { page } of siteContext) {
@@ -81,7 +86,7 @@ export function renderedPageUrlsFrom(
 export function buildSiteContext(
   pages: PageRecord[],
   parsedCache?: ParsedPageCache,
-  limits?: { maxParseBytes?: number },
+  limits?: { maxParseBytes?: number }
 ): Effect.Effect<SiteContextPage[], never, never> {
   return Effect.sync(() => {
     const contextPages: SiteContextPage[] = [];
@@ -89,7 +94,10 @@ export function buildSiteContext(
 
     for (const page of pages) {
       // `--max-duration` (#1332): a page over the cap is stored but never parsed, here or anywhere else.
-      if (maxParseBytes !== undefined && decodedPageBytes(page.sizeBytes, page.html ?? "") > maxParseBytes) {
+      if (
+        maxParseBytes !== undefined &&
+        decodedPageBytes(page.sizeBytes, page.html ?? "") > maxParseBytes
+      ) {
         contextPages.push({ page, parsed: null });
         continue;
       }
@@ -117,14 +125,16 @@ export function buildSiteContext(
           // Handle corrupted state: parsedData exists but html is null
           if (page.html === null) {
             logger.error(
-              `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`,
+              `Cannot recreate document for ${page.url}: HTML is null but parsedData exists (corrupted state)`
             );
             contextPages.push({ page, parsed: null });
             continue;
           }
 
           // Reuse the crawl-time DOM when present, else re-parse (#267)
-          const doc = parsedCache?.get(page.normalizedUrl)?.document ?? parseDocument(page.html);
+          const doc =
+            parsedCache?.get(page.normalizedUrl)?.document ??
+            parseDocument(page.html);
           // Rehydrate SchemaCollection (getters lost during JSON serialization)
           parsed = {
             document: doc,
@@ -133,7 +143,9 @@ export function buildSiteContext(
             // A parse stored before the marker was captured has no value, but
             // the DOM is live right here, so read it now rather than losing it.
             errorShell:
-              typeof stored.errorShell === "boolean" ? stored.errorShell : hasErrorShellMarker(doc),
+              typeof stored.errorShell === "boolean"
+                ? stored.errorShell
+                : hasErrorShellMarker(doc),
           };
         } catch (e) {
           logger.error(`Failed to deserialize parsedData for ${page.url}:`, e);
@@ -171,7 +183,9 @@ export function buildSiteContext(
  * `ensureSiteContextDocuments` rebuilds an identical DOM on demand
  * (~12.5ms/page, #263 measurements).
  */
-export function releaseSiteContextDocuments(siteContext: SiteContextPage[]): void {
+export function releaseSiteContextDocuments(
+  siteContext: SiteContextPage[]
+): void {
   for (const entry of siteContext) {
     if (entry.parsed) entry.parsed.document = null;
   }
@@ -182,7 +196,9 @@ export function releaseSiteContextDocuments(siteContext: SiteContextPage[]): voi
  * only entries with a null document (and html to parse) are touched, so a
  * never-released context is a no-op.
  */
-export function ensureSiteContextDocuments(siteContext: SiteContextPage[]): void {
+export function ensureSiteContextDocuments(
+  siteContext: SiteContextPage[]
+): void {
   for (const entry of siteContext) {
     if (entry.parsed && !entry.parsed.document && entry.page.html !== null) {
       entry.parsed.document = parseDocument(entry.page.html);
@@ -204,7 +220,7 @@ export function ensureSiteContextDocuments(siteContext: SiteContextPage[]): void
 export function parseHtmlForRules(
   html: string,
   baseUrl: string,
-  options?: ParsePageOptions,
+  options?: ParsePageOptions
 ): ParsedPage {
   const doc = parseDocument(html);
   // The page classifier, when the caller supplied one (#2307): same hook `parsePage` takes.
@@ -254,7 +270,9 @@ export function parseHtmlForRules(
     // Captured now, while the DOM is live: the streamed audit releases it before
     // soft-404 candidates are picked (#235).
     errorShell: hasErrorShellMarker(doc),
-    ...(parseNotices(doc).length > 0 ? { parseNotices: parseNotices(doc) } : {}),
+    ...(parseNotices(doc).length > 0
+      ? { parseNotices: parseNotices(doc) }
+      : {}),
     // New schema data
     schemas,
     author,
@@ -273,13 +291,16 @@ export function parseHtmlForRules(
 /**
  * Parse a page record to extract structured data for rules
  */
-export function parsePageRecord(page: PageRecord, options?: ParsePageOptions): ParsedPage | null {
+export function parsePageRecord(
+  page: PageRecord,
+  options?: ParsePageOptions
+): ParsedPage | null {
   if (page.html === null) return null;
 
   return logger.withTrace(
     "parsePageRecord",
     () => parseHtmlForRules(page.html!, page.url, options),
-    () => ({ url: page.url, htmlLen: page.html!.length }),
+    () => ({ url: page.url, htmlLen: page.html!.length })
   );
 }
 
@@ -326,42 +347,55 @@ export function buildHeadersMap(page: PageRecord): Record<string, string> {
       ? `${page.headers.contentType}; charset=${charset}`
       : page.headers.contentType;
   }
-  if (page.headers.contentEncoding) headers["content-encoding"] = page.headers.contentEncoding;
-  if (page.headers.cacheControl) headers["cache-control"] = page.headers.cacheControl;
+  if (page.headers.contentEncoding)
+    headers["content-encoding"] = page.headers.contentEncoding;
+  if (page.headers.cacheControl)
+    headers["cache-control"] = page.headers.cacheControl;
   if (page.headers.expires) headers["expires"] = page.headers.expires;
   if (page.headers.vary) headers["vary"] = page.headers.vary;
   if (page.headers.etag) headers["etag"] = page.headers.etag;
-  if (page.headers.lastModified) headers["last-modified"] = page.headers.lastModified;
+  if (page.headers.lastModified)
+    headers["last-modified"] = page.headers.lastModified;
   if (page.headers.server) headers["server"] = page.headers.server;
   // New headers for SEO/performance rules
   if (page.headers.link) headers["link"] = page.headers.link;
-  if (page.headers.serverTiming) headers["server-timing"] = page.headers.serverTiming;
+  if (page.headers.serverTiming)
+    headers["server-timing"] = page.headers.serverTiming;
   if (page.headers.age) headers["age"] = page.headers.age;
   if (page.headers.xCache) headers["x-cache"] = page.headers.xCache;
-  if (page.headers.cfCacheStatus) headers["cf-cache-status"] = page.headers.cfCacheStatus;
-  if (page.headers.xVercelCache) headers["x-vercel-cache"] = page.headers.xVercelCache;
+  if (page.headers.cfCacheStatus)
+    headers["cf-cache-status"] = page.headers.cfCacheStatus;
+  if (page.headers.xVercelCache)
+    headers["x-vercel-cache"] = page.headers.xVercelCache;
   if (page.headers.altSvc) headers["alt-svc"] = page.headers.altSvc;
-  if (page.headers.acceptRanges) headers["accept-ranges"] = page.headers.acceptRanges;
+  if (page.headers.acceptRanges)
+    headers["accept-ranges"] = page.headers.acceptRanges;
   // Version-revealing headers (security/version-disclosure, #713).
-  if (page.headers.xPoweredBy) headers["x-powered-by"] = page.headers.xPoweredBy;
-  if (page.headers.xAspNetVersion) headers["x-aspnet-version"] = page.headers.xAspNetVersion;
+  if (page.headers.xPoweredBy)
+    headers["x-powered-by"] = page.headers.xPoweredBy;
+  if (page.headers.xAspNetVersion)
+    headers["x-aspnet-version"] = page.headers.xAspNetVersion;
   if (page.headers.xAspNetMvcVersion)
     headers["x-aspnetmvc-version"] = page.headers.xAspNetMvcVersion;
   if (page.headers.xGenerator) headers["x-generator"] = page.headers.xGenerator;
   // Set-Cookie — security/cookie-flags rule (#748).
   if (page.headers.setCookie) headers["set-cookie"] = page.headers.setCookie;
   // Security headers
-  if (page.securityHeaders.hsts) headers["strict-transport-security"] = page.securityHeaders.hsts;
-  if (page.securityHeaders.csp) headers["content-security-policy"] = page.securityHeaders.csp;
+  if (page.securityHeaders.hsts)
+    headers["strict-transport-security"] = page.securityHeaders.hsts;
+  if (page.securityHeaders.csp)
+    headers["content-security-policy"] = page.securityHeaders.csp;
   if (page.securityHeaders.xFrameOptions)
     headers["x-frame-options"] = page.securityHeaders.xFrameOptions;
   if (page.securityHeaders.xContentTypeOptions)
-    headers["x-content-type-options"] = page.securityHeaders.xContentTypeOptions;
+    headers["x-content-type-options"] =
+      page.securityHeaders.xContentTypeOptions;
   if (page.securityHeaders.referrerPolicy)
     headers["referrer-policy"] = page.securityHeaders.referrerPolicy;
   if (page.securityHeaders.permissionsPolicy)
     headers["permissions-policy"] = page.securityHeaders.permissionsPolicy;
-  if (page.securityHeaders.xRobotsTag) headers["x-robots-tag"] = page.securityHeaders.xRobotsTag;
+  if (page.securityHeaders.xRobotsTag)
+    headers["x-robots-tag"] = page.securityHeaders.xRobotsTag;
   return headers;
 }
 
@@ -380,7 +414,10 @@ export function isAuditableEmptyBodyStatus(status: number): boolean {
 
 /** A captured body, including an empty one when its status permits content. */
 export function hasAuditableHtmlBody(
-  page: Pick<PageRecord, "html" | "status">,
+  page: Pick<PageRecord, "html" | "status">
 ): page is Pick<PageRecord, "status"> & { html: string } {
-  return page.html !== null && (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status));
+  return (
+    page.html !== null &&
+    (page.html.length > 0 || isAuditableEmptyBodyStatus(page.status))
+  );
 }

@@ -36,9 +36,12 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
-import { isCloudMetadataHostname, isNonPublicHostname } from "./non-public-host";
-import { isPrivateOrReservedHost } from "./url";
+import {
+  isCloudMetadataHostname,
+  isNonPublicHostname,
+} from "./non-public-host";
 import { trimTrailing } from "./trim";
+import { isPrivateOrReservedHost } from "./url";
 
 /** Every address a hostname resolves to. */
 export type ResolveHost = (hostname: string) => Promise<string[]>;
@@ -123,7 +126,7 @@ export interface EgressPolicy {
  */
 export function proxiedByEnvironment(): boolean {
   return ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"].some(
-    (name) => (process.env[name] ?? "").trim() !== "",
+    (name) => (process.env[name] ?? "").trim() !== ""
   );
 }
 
@@ -177,7 +180,9 @@ export class EgressUnresolvableError extends EgressRefusedError {
  */
 export function isReservedUnresolvableHostname(rawHost: string): boolean {
   const host = trimTrailing(rawHost.toLowerCase(), 46); // a linear trim: /\.+$/ is quadratic on a host of many dots
-  return ["test", "example", "invalid"].some((zone) => host === zone || host.endsWith(`.${zone}`));
+  return ["test", "example", "invalid"].some(
+    (zone) => host === zone || host.endsWith(`.${zone}`)
+  );
 }
 
 /** Cloud metadata services reached by address rather than by 169.254/16. */
@@ -198,17 +203,28 @@ function ipv6Groups(address: string): number[] | null {
   const zone = text.indexOf("%");
   if (zone !== -1) text = text.slice(0, zone);
   if (isIP(text) !== 6) return null;
-  const dotted = text.match(/^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  const dotted = text.match(
+    /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+  );
   if (dotted) {
-    const [a, b, c, d] = dotted.slice(2).map(Number) as [number, number, number, number];
+    const [a, b, c, d] = dotted.slice(2).map(Number) as [
+      number,
+      number,
+      number,
+      number,
+    ];
     text = `${dotted[1]}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
   }
   const halves = text.split("::");
   const head = halves[0] ? halves[0].split(":") : [];
   const tail = halves.length > 1 && halves[1] ? halves[1].split(":") : [];
   const fill = halves.length > 1 ? 8 - head.length - tail.length : 0;
-  const groups = [...head, ...Array<string>(fill).fill("0"), ...tail].map((g) => parseInt(g, 16));
-  return groups.length === 8 && groups.every((g) => g >= 0 && g <= 0xffff) ? groups : null;
+  const groups = [...head, ...Array<string>(fill).fill("0"), ...tail].map((g) =>
+    parseInt(g, 16)
+  );
+  return groups.length === 8 && groups.every((g) => g >= 0 && g <= 0xffff)
+    ? groups
+    : null;
 }
 
 /**
@@ -219,8 +235,14 @@ function ipv6Groups(address: string): number[] | null {
  * to that IPv4 address, so it is judged as that address.
  */
 function embeddedIpv4(g: number[]): number[] | null {
-  const octets = (hi: number, lo: number) => [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
-  const zero = (from: number, to: number) => g.slice(from, to).every((x) => x === 0);
+  const octets = (hi: number, lo: number) => [
+    hi >> 8,
+    hi & 0xff,
+    lo >> 8,
+    lo & 0xff,
+  ];
+  const zero = (from: number, to: number) =>
+    g.slice(from, to).every((x) => x === 0);
   const [g0, g1, g2, , g4, g5, g6, g7] = g as [
     number,
     number,
@@ -233,7 +255,8 @@ function embeddedIpv4(g: number[]): number[] | null {
   ];
   if (zero(0, 5) && g5 === 0xffff) return octets(g6, g7);
   if (zero(0, 4) && g4 === 0xffff && g5 === 0) return octets(g6, g7);
-  if (g0 === 0x64 && g1 === 0xff9b && (g2 === 1 || zero(2, 6))) return octets(g6, g7);
+  if (g0 === 0x64 && g1 === 0xff9b && (g2 === 1 || zero(2, 6)))
+    return octets(g6, g7);
   if (g0 === 0x2002) return octets(g1, g2);
   if (zero(0, 6) && (g6 !== 0 || g7 > 1)) return octets(g6, g7);
   return null;
@@ -288,7 +311,12 @@ function isAlwaysRefusedIpv6(g: number[]): boolean {
   if (g0 === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
   if (METADATA_IPV6.some((m) => m.every((x, i) => g[i] === x))) return true;
   // ISATAP (#1577): an identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` embedding a link-local or metadata IPv4 is refused under allowPrivate too.
-  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe && isAlwaysRefusedIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))) return true;
+  if (
+    (g[4] === 0 || g[4] === 0x200) &&
+    g[5] === 0x5efe &&
+    isAlwaysRefusedIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))
+  )
+    return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isAlwaysRefusedIpv4(v4);
 }
@@ -305,7 +333,12 @@ function isNonPublicIpv6(g: number[]): boolean {
   // ISATAP (#1577): an interface identifier `0:5efe:a.b.c.d` or `200:5efe:a.b.c.d` on any prefix embeds an IPv4 address, judged as
   // that address, as `isSpecialUseIpv6` does for the policy layer.
   // It does not return early: a 6to4 prefix can carry an ISATAP identifier, and the prefix's embedded address is judged too.
-  if ((g[4] === 0 || g[4] === 0x200) && g[5] === 0x5efe && isNonPublicIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))) return true;
+  if (
+    (g[4] === 0 || g[4] === 0x200) &&
+    g[5] === 0x5efe &&
+    isNonPublicIpv4(octetsOf(g[6] ?? 0, g[7] ?? 0))
+  )
+    return true;
   const v4 = embeddedIpv4(g);
   return v4 !== null && isNonPublicIpv4(v4);
 }
@@ -343,9 +376,13 @@ function refusesAddress(address: string, allowPrivate: boolean): boolean {
 }
 
 /** Rejects with an AbortError when `signal` aborts first. */
-function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | null | undefined): Promise<T> {
+function raceAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | null | undefined
+): Promise<T> {
   if (!signal) return promise;
-  const aborted = () => new DOMException("The operation was aborted.", "AbortError");
+  const aborted = () =>
+    new DOMException("The operation was aborted.", "AbortError");
   if (signal.aborted) return Promise.reject(aborted());
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(aborted());
@@ -358,7 +395,7 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | null | undefine
       (error: unknown) => {
         signal.removeEventListener("abort", onAbort);
         reject(error);
-      },
+      }
     );
   });
 }
@@ -391,7 +428,9 @@ export interface VettedTarget {
 function orderAddresses(addresses: string[]): string[] {
   const v4 = addresses.find((address) => isIP(address) === 4);
   // A scoped address (`fe80::1%en0`) cannot be pinned in a URL: skip to one that can.
-  const v6 = addresses.find((address) => isIP(address) === 6 && !address.includes("%"));
+  const v6 = addresses.find(
+    (address) => isIP(address) === 6 && !address.includes("%")
+  );
   return [v4, v6].filter((address): address is string => address !== undefined);
 }
 
@@ -423,7 +462,7 @@ function isConnectFailure(error: unknown): boolean {
 export async function assertEgressAllowed(
   url: string,
   policy: EgressPolicy,
-  signal?: AbortSignal | null,
+  signal?: AbortSignal | null
 ): Promise<void> {
   await vetEgressTarget(url, policy, signal);
 }
@@ -444,7 +483,7 @@ export async function assertEgressAllowed(
 export async function egressRefuses(
   url: string,
   policy: EgressPolicy,
-  signal?: AbortSignal | null,
+  signal?: AbortSignal | null
 ): Promise<boolean> {
   try {
     await vetEgressTarget(url, policy, signal);
@@ -464,7 +503,10 @@ export async function egressRefuses(
  * refused (pub#770). False is not an approval: the name is still vetted on
  * the request.
  */
-export function refusedWithoutLookup(url: string, policy: EgressPolicy): boolean {
+export function refusedWithoutLookup(
+  url: string,
+  policy: EgressPolicy
+): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -474,7 +516,8 @@ export function refusedWithoutLookup(url: string, policy: EgressPolicy): boolean
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
   const host = parsed.hostname.replace(/^\[|\]$/g, "");
   if (policy.allowHost && !policy.allowHost(host)) return true;
-  const allowPrivate = policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
+  const allowPrivate =
+    policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
   if (isIP(host) !== 0) return refusesAddress(host, allowPrivate);
   if (isCloudMetadataHostname(host)) return true;
   if (policy.trustTarget?.(parsed)) return false;
@@ -490,7 +533,7 @@ export function refusedWithoutLookup(url: string, policy: EgressPolicy): boolean
 export async function vetEgressTarget(
   url: string,
   policy: EgressPolicy,
-  signal?: AbortSignal | null,
+  signal?: AbortSignal | null
 ): Promise<VettedTarget | null> {
   let parsed: URL;
   try {
@@ -507,26 +550,34 @@ export async function vetEgressTarget(
     throw new EgressRefusedError(EGRESS_OFF_SITE_REFUSAL);
   }
 
-  const allowPrivate = policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
+  const allowPrivate =
+    policy.allowPrivateNetwork || policy.allowPrivateTarget?.(parsed) === true;
   if (isIP(host) !== 0) {
-    if (refusesAddress(host, allowPrivate)) throw new EgressRefusedError("refused address");
+    if (refusesAddress(host, allowPrivate))
+      throw new EgressRefusedError("refused address");
     return null;
   }
-  if (isCloudMetadataHostname(host)) throw new EgressRefusedError("refused metadata host");
+  if (isCloudMetadataHostname(host))
+    throw new EgressRefusedError("refused metadata host");
   // After the checks that need no lookup, so no trust reaches a metadata name.
   if (policy.trustTarget?.(parsed)) return null;
   if (!allowPrivate && isNonPublicHostname(host)) {
     throw new EgressRefusedError("refused non-public host");
   }
 
-  const answers = await raceAbort((policy.resolve ?? resolveHostAddresses)(host), signal);
+  const answers = await raceAbort(
+    (policy.resolve ?? resolveHostAddresses)(host),
+    signal
+  );
   // A scoped link-local answer (`fe80::1%en0`) cannot be pinned in a URL, so a
   // pinned request never connects to it. A LAN name (`nas.local`) answers one
   // beside its routable addresses on macOS, and refusing the whole name for it
   // refused every redirect between LAN hosts (repo#2830), so it is set aside.
   // Not when the transport connects by name: it might pick that address.
   const addresses =
-    policy.pin === false ? answers : answers.filter((address) => !address.includes("%"));
+    policy.pin === false
+      ? answers
+      : answers.filter((address) => !address.includes("%"));
   // No answer at all is a dead name, not a refused address (#1740). Only when the resolver gave nothing: a
   // name whose every answer was set aside above (scoped link-local) still reads as refused.
   if (answers.length === 0) throw new EgressUnresolvableError(host);
@@ -534,7 +585,9 @@ export async function vetEgressTarget(
     addresses.length === 0 ||
     addresses.some((address) => refusesAddress(address, allowPrivate))
   ) {
-    throw new EgressRefusedError("refused: host resolves to a non-public address");
+    throw new EgressRefusedError(
+      "refused: host resolves to a non-public address"
+    );
   }
 
   const urls: string[] = [];
@@ -544,7 +597,8 @@ export async function vetEgressTarget(
     // The hostname setter ignores a value it cannot parse (a scoped IPv6
     // address, a resolver that answered a name) and would leave the name in
     // place: an unpinned request. Such an answer is never used.
-    if (isIP(pinned.hostname.replace(/^\[|\]$/g, "")) !== 0) urls.push(pinned.href);
+    if (isIP(pinned.hostname.replace(/^\[|\]$/g, "")) !== 0)
+      urls.push(pinned.href);
   }
   if (urls.length === 0) {
     throw new EgressRefusedError("refused: resolved address cannot be pinned");
@@ -555,7 +609,9 @@ export async function vetEgressTarget(
     hostHeader: parsed.host,
     // SNI names carry no trailing root dot (RFC 6066), and the certificate is
     // checked against this name, so `example.com.` must present `example.com`.
-    ...(parsed.protocol === "https:" ? { serverName: parsed.hostname.replace(/\.$/, "") } : {}),
+    ...(parsed.protocol === "https:"
+      ? { serverName: parsed.hostname.replace(/\.$/, "") }
+      : {}),
   };
 }
 
@@ -571,7 +627,7 @@ type PinnedInit = RequestInit & { tls?: Record<string, unknown> };
  */
 export function egressGuardedSend(
   send: (url: string, init: RequestInit) => Promise<Response>,
-  policy: EgressPolicy,
+  policy: EgressPolicy
 ): (url: string, init: RequestInit) => Promise<Response> {
   return async (url, init) => {
     const target = await vetEgressTarget(url, policy, init.signal);
@@ -580,7 +636,10 @@ export function egressGuardedSend(
     headers.set("host", target.hostHeader);
     const pinned: PinnedInit = { ...init, headers };
     if (target.serverName) {
-      pinned.tls = { ...(init as PinnedInit).tls, serverName: target.serverName };
+      pinned.tls = {
+        ...(init as PinnedInit).tls,
+        serverName: target.serverName,
+      };
     }
     // Each vetted address in turn, as a resolver-driven connect would, but only
     // past a connection that was never made. An answer of any status is final,

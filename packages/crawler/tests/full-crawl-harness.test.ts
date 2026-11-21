@@ -6,14 +6,12 @@
 // pre-crawl preamble (redirect detection + sitemap probing); the crawl loop
 // itself runs entirely through the injected fetcher.
 
+import type { ParsedPageCache } from "@squirrelscan/parser";
+
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
-import type { ParsedPageCache } from "@squirrelscan/parser";
-
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
-import { applyStatusGuards, type CrawlFetcher, type FetchOptions } from "../src/fetcher";
 import type {
   CrawlStats,
   PageRecord,
@@ -21,6 +19,13 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
+import {
+  applyStatusGuards,
+  type CrawlFetcher,
+  type FetchOptions,
+} from "../src/fetcher";
 
 const ORIGIN = "https://example.com";
 
@@ -103,7 +108,7 @@ function buildFetcher(
     onFetch?: (url: string) => void;
     onOptions?: (options: FetchOptions) => void;
     yieldEach?: boolean;
-  } = {},
+  } = {}
 ): CrawlFetcher {
   return (url, options) =>
     Effect.gen(function* () {
@@ -118,7 +123,8 @@ function buildFetcher(
       // fetcher — driving the crawl loop's fetch-error branch, not a
       // hand-crafted CrawlError (#802).
       yield* applyStatusGuards(url, status, new Headers(), body);
-      const contentType = page === undefined ? "text/plain" : (page.contentType ?? "text/html");
+      const contentType =
+        page === undefined ? "text/plain" : (page.contentType ?? "text/html");
       return {
         url,
         finalUrl: url,
@@ -126,7 +132,11 @@ function buildFetcher(
         loadTime: 1,
         ttfb: 1,
         downloadTime: 1,
-        headers: { ...EMPTY_RESPONSE_HEADERS, contentType, setCookie: page?.setCookie ?? null },
+        headers: {
+          ...EMPTY_RESPONSE_HEADERS,
+          contentType,
+          setCookie: page?.setCookie ?? null,
+        },
         securityHeaders: EMPTY_SECURITY_HEADERS,
         contentType,
         body,
@@ -141,7 +151,9 @@ function buildFetcher(
 
 // Build an HTML body that links to the given paths (relative to ORIGIN).
 function html(...links: string[]): string {
-  const anchors = links.map((href) => `<a href="${ORIGIN}${href}">${href}</a>`).join("");
+  const anchors = links
+    .map((href) => `<a href="${ORIGIN}${href}">${href}</a>`)
+    .join("");
   return `<!doctype html><html><body>${anchors}</body></html>`;
 }
 
@@ -188,14 +200,17 @@ function runCrawl(args: {
       (e) =>
         Effect.sync(() => {
           events.push(e);
-        }),
+        })
     ).pipe(Effect.fork);
     // Ensure the subscriber attaches to the PubSub before the crawl emits.
     yield* Effect.yieldNow();
 
     const crawlId = yield* crawler.start(args.seed ?? ORIGIN);
 
-    yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(5)), Effect.ignore);
+    yield* Fiber.join(collector).pipe(
+      Effect.timeout(Duration.seconds(5)),
+      Effect.ignore
+    );
     yield* Fiber.interrupt(collector);
 
     const storage = crawler.storage;
@@ -260,7 +275,10 @@ describe("full-crawl integration harness (#315)", () => {
     // Every page came through the injected fetcher — no real network was used.
     expect(out.fetched).toContain(`${ORIGIN}/`);
     expect(out.fetched).toContain(`${ORIGIN}/a`);
-    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual([`${ORIGIN}/`, `${ORIGIN}/a`]);
+    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual([
+      `${ORIGIN}/`,
+      `${ORIGIN}/a`,
+    ]);
   });
 
   test("#512: fetcherId/fallbackReason from the fetch result are persisted onto the PageRecord", async () => {
@@ -268,7 +286,11 @@ describe("full-crawl integration harness (#315)", () => {
       // Homepage served via cloud render; a subpage recovered via the direct-fetch
       // fallback after a render block — both fetch-result fields must round-trip.
       [`${ORIGIN}/`]: { body: html("/a"), fetcherId: "cloud-render" },
-      [`${ORIGIN}/a`]: { body: html(), fetcherId: "fetch", fallbackReason: "render-block" },
+      [`${ORIGIN}/a`]: {
+        body: html(),
+        fetcherId: "fetch",
+        fallbackReason: "render-block",
+      },
     };
     const out = await runCrawl({ site });
 
@@ -300,13 +322,18 @@ describe("full-crawl integration harness (#315)", () => {
   // packages/crawler/src/core/crawler.ts, not a hand-built PageRecord fixture.
   test("#748: set-cookie from the fetch result is persisted onto the PageRecord", async () => {
     const site: Site = {
-      [`${ORIGIN}/`]: { body: html("/a"), setCookie: "session=abc123; Path=/; HttpOnly" },
+      [`${ORIGIN}/`]: {
+        body: html("/a"),
+        setCookie: "session=abc123; Path=/; HttpOnly",
+      },
       [`${ORIGIN}/a`]: { body: html() }, // no cookies set on this page
     };
     const out = await runCrawl({ site });
 
     const byUrl = new Map(out.pages.map((p) => [p.normalizedUrl, p]));
-    expect(byUrl.get(`${ORIGIN}/`)?.headers.setCookie).toBe("session=abc123; Path=/; HttpOnly");
+    expect(byUrl.get(`${ORIGIN}/`)?.headers.setCookie).toBe(
+      "session=abc123; Path=/; HttpOnly"
+    );
     expect(byUrl.get(`${ORIGIN}/a`)?.headers.setCookie).toBeNull();
   });
 
@@ -324,7 +351,11 @@ describe("full-crawl integration harness (#315)", () => {
       },
       // Set followRedirects explicitly so the test asserts forwarding, not the
       // CrawlerConfig default value.
-      config: { userAgent: "squirrel-test/9.9", timeoutMs: 4321, followRedirects: true },
+      config: {
+        userAgent: "squirrel-test/9.9",
+        timeoutMs: 4321,
+        followRedirects: true,
+      },
     });
 
     expect(out.fetchOptions.length).toBe(2);
@@ -352,7 +383,9 @@ describe("full-crawl integration harness (#315)", () => {
     };
     const out = await runCrawl({ site, config: { maxPages: 100 } });
 
-    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual(Object.keys(site).sort());
+    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual(
+      Object.keys(site).sort()
+    );
     // No page fetched twice despite the cycles.
     expect(out.fetched.length).toBe(Object.keys(site).length);
     expect(new Set(out.fetched).size).toBe(out.fetched.length);
@@ -366,7 +399,9 @@ describe("full-crawl integration harness (#315)", () => {
 
   test("maxPages cap is never overshot (serial)", async () => {
     // Hub linking to 29 leaves; cap at 8 (seed + 7).
-    const site: Site = { [`${ORIGIN}/`]: { body: html(...seq(29).map((n) => `/p${n}`)) } };
+    const site: Site = {
+      [`${ORIGIN}/`]: { body: html(...seq(29).map((n) => `/p${n}`)) },
+    };
     for (const n of seq(29)) site[`${ORIGIN}/p${n}`] = { body: html() };
 
     const out = await runCrawl({ site, config: { maxPages: 8 } });
@@ -380,7 +415,9 @@ describe("full-crawl integration harness (#315)", () => {
     // Same hub, but multiple workers dispatch concurrently near the cap. The
     // pagesCommitted + inFlight reservation must keep the total at exactly the
     // cap — a regression in the counter would store extra pages here.
-    const site: Site = { [`${ORIGIN}/`]: { body: html(...seq(40).map((n) => `/p${n}`)) } };
+    const site: Site = {
+      [`${ORIGIN}/`]: { body: html(...seq(40).map((n) => `/p${n}`)) },
+    };
     for (const n of seq(40)) site[`${ORIGIN}/p${n}`] = { body: html() };
 
     const out = await runCrawl({
@@ -500,7 +537,9 @@ describe("full-crawl integration harness (#315)", () => {
       yieldEach: true,
     });
 
-    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual(Object.keys(site).sort());
+    expect(out.pages.map((p) => p.normalizedUrl).sort()).toEqual(
+      Object.keys(site).sort()
+    );
     // Buffered entries dispatched exactly once despite the cycles.
     expect(out.fetched.length).toBe(Object.keys(site).length);
     expect(new Set(out.fetched).size).toBe(out.fetched.length);
@@ -567,7 +606,12 @@ describe("full-crawl integration harness (#315)", () => {
 
     test("a plain 503 root (no challenge signals) stays a generic failure, not blocked", async () => {
       const out = await runCrawl({
-        site: { [`${ORIGIN}/`]: { status: 503, body: "Service temporarily unavailable" } },
+        site: {
+          [`${ORIGIN}/`]: {
+            status: 503,
+            body: "Service temporarily unavailable",
+          },
+        },
       });
 
       expect(out.pages.length).toBe(0);
@@ -584,7 +628,9 @@ function seq(n: number): number[] {
 
 // A root linking to n leaf pages (/p1../pN), each a dead end.
 function hub(n: number): Site {
-  const site: Site = { [`${ORIGIN}/`]: { body: html(...seq(n).map((i) => `/p${i}`)) } };
+  const site: Site = {
+    [`${ORIGIN}/`]: { body: html(...seq(n).map((i) => `/p${i}`)) },
+  };
   for (const i of seq(n)) site[`${ORIGIN}/p${i}`] = { body: html() };
   return site;
 }

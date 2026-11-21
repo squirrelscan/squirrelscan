@@ -52,7 +52,10 @@ export const WAF_CHALLENGE_MARKERS: readonly WafMarker[] = [
 
 /** What a marker check reads from one answer. */
 export interface WafSniff {
-  headers?: Headers | Readonly<Record<string, string | null | undefined>> | null;
+  headers?:
+    | Headers
+    | Readonly<Record<string, string | null | undefined>>
+    | null;
   /** Cookie names. When omitted and `headers` is a `Headers`, read from its `set-cookie`. */
   cookieNames?: readonly string[] | null;
   body?: string | null;
@@ -67,33 +70,47 @@ export function setCookieNames(headers: Headers): string[] {
 }
 
 /** The vendor whose markers an answer carries, or null. See {@link WAF_CHALLENGE_MARKERS}. */
-export function wafChallengeVendor(sniff: WafSniff | null | undefined): string | null {
+export function wafChallengeVendor(
+  sniff: WafSniff | null | undefined
+): string | null {
   if (!sniff) return null;
   const headers = new Map<string, string>();
   const raw = sniff.headers;
   if (raw instanceof Headers) {
-    raw.forEach((value, name) => headers.set(name.toLowerCase(), value.toLowerCase()));
+    raw.forEach((value, name) =>
+      headers.set(name.toLowerCase(), value.toLowerCase())
+    );
   } else if (raw) {
     for (const [name, value] of Object.entries(raw)) {
       headers.set(name.toLowerCase(), (value ?? "").toLowerCase());
     }
   }
-  const cookies = sniff.cookieNames ?? (raw instanceof Headers ? setCookieNames(raw) : []);
+  const cookies =
+    sniff.cookieNames ?? (raw instanceof Headers ? setCookieNames(raw) : []);
   const body = (sniff.body ?? "").toLowerCase();
   const names = [...headers.keys()];
   for (const m of WAF_CHALLENGE_MARKERS) {
     if (m.headers?.some((h) => headers.has(h))) return m.vendor;
-    if (m.headerPrefixes?.some((p) => names.some((k) => k.startsWith(p)))) return m.vendor;
-    if (m.cookies?.some((re) => cookies.some((c) => re.test(c)))) return m.vendor;
+    if (m.headerPrefixes?.some((p) => names.some((k) => k.startsWith(p))))
+      return m.vendor;
+    if (m.cookies?.some((re) => cookies.some((c) => re.test(c))))
+      return m.vendor;
     if (m.bodyMarkers && body) {
-      if (m.bodyNeeds && !headers.get(m.bodyNeeds.header)?.includes(m.bodyNeeds.contains)) continue;
-      if (m.bodyMarkers.some((marker) => body.includes(marker))) return m.vendor;
+      if (
+        m.bodyNeeds &&
+        !headers.get(m.bodyNeeds.header)?.includes(m.bodyNeeds.contains)
+      )
+        continue;
+      if (m.bodyMarkers.some((marker) => body.includes(marker)))
+        return m.vendor;
     }
   }
   return null;
 }
 
 /** True when an answer carries WAF or bot-challenge markers. */
-export function hasWafChallengeEvidence(sniff: WafSniff | null | undefined): boolean {
+export function hasWafChallengeEvidence(
+  sniff: WafSniff | null | undefined
+): boolean {
   return wafChallengeVendor(sniff) !== null;
 }

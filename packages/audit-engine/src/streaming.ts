@@ -23,23 +23,34 @@
 // cluster key and is left alone — with `SQUIRREL_TEMPLATE_FANOUT=0` as the kill
 // switch. See template-fanout.ts for what makes it sound and what it can never do.
 
-import { decodedPageBytes } from "@squirrelscan/utils/bytes";
-import { Effect } from "effect";
-
 import type { PageRecord } from "@squirrelscan/core-contracts";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
-import type { PageFingerprint, RuleRunResult, SiteData, PageData, ParsedPage } from "@squirrelscan/rules";
+import type {
+  PageFingerprint,
+  RuleRunResult,
+  SiteData,
+  PageData,
+  ParsedPage,
+} from "@squirrelscan/rules";
 import type { RuleRunner } from "@squirrelscan/rules";
-import { detachFingerprint, fingerprintPage, mergeRuleRunResult } from "@squirrelscan/rules";
 
-import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "./site-fetch";
+import { auditedEmpty } from "@squirrelscan/parser";
+import {
+  detachFingerprint,
+  fingerprintPage,
+  mergeRuleRunResult,
+} from "@squirrelscan/rules";
+import { decodedPageBytes } from "@squirrelscan/utils/bytes";
+import { crawledPageKeys } from "@squirrelscan/utils/url";
+import { Effect } from "effect";
+
+import type { PageRuleLoopHooks } from "./page-rule-executor";
+
 import { collectDroppedBatch } from "./batch-gc";
 import { detachFromPage } from "./detach";
 import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
-import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
 import { extractPageFeatures, isAuditablePage } from "./page-features";
-import { crawledPageKeys } from "@squirrelscan/utils/url";
-import type { PageRuleLoopHooks } from "./page-rule-executor";
+import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
 import {
   emptyRuleCacheStats,
   type PageRuleCacheEntry,
@@ -47,8 +58,11 @@ import {
   type StreamRuleCache,
 } from "./rule-cache";
 import { foldRuleResultIntoTallies, type RuleTally } from "./scoring";
-import { auditedEmpty } from "@squirrelscan/parser";
-import { templateFingerprintKey } from "./template-key";
+import {
+  buildSiteContext,
+  buildHeadersMap,
+  isRenderedFetch,
+} from "./site-fetch";
 import {
   createTemplateFanout,
   fanoutClusterKey,
@@ -56,6 +70,7 @@ import {
   templateFanoutEnabled,
   type TemplateFanoutStats,
 } from "./template-fanout";
+import { templateFingerprintKey } from "./template-key";
 
 /** Default page batch — bounds DOM residency to ≤ this many live docs at once. */
 export const STREAM_PAGE_BATCH = 200;
@@ -94,7 +109,11 @@ export interface PageSignalCollector {
    * collector that does blocks replay for every page, which is the safe default
    * for one whose contribution cannot be reproduced from data alone.
    */
-  collect(page: PageRecord, parsed: ParsedPage, shared: SharedPageSignals): unknown;
+  collect(
+    page: PageRecord,
+    parsed: ParsedPage,
+    shared: SharedPageSignals
+  ): unknown;
   /**
    * Re-contribute a snapshot a previous run's `collect` returned, at the same
    * point in the stream, so the collected order is the crawl order either way.
@@ -106,11 +125,17 @@ export interface PageSignalCollector {
 
 export interface StreamPageRulesHooks {
   /** Emitted after each batch with cumulative page count + wall-time, for the flatness gate. */
-  onBatch?: (info: { batchIndex: number; pagesDone: number; batchMs: number }) => void;
+  onBatch?: (info: {
+    batchIndex: number;
+    pagesDone: number;
+    batchMs: number;
+  }) => void;
 }
 
 /** One page's per-rule checks, in the runner's enabled-rule order. */
-export type PageRuleEntries = ReadonlyArray<readonly [ruleId: string, checks: CheckResultLike[]]>;
+export type PageRuleEntries = ReadonlyArray<
+  readonly [ruleId: string, checks: CheckResultLike[]]
+>;
 
 /**
  * Where a page's rule output GOES as it is produced (#2343).
@@ -222,7 +247,10 @@ export function streamPageRules(
     batchSize?: number;
     collectors?: readonly PageSignalCollector[];
     hooks?: StreamPageRulesHooks;
-    soft404Confirmations?: ReadonlyMap<string, ParsedPage["soft404Confirmation"]>;
+    soft404Confirmations?: ReadonlyMap<
+      string,
+      ParsedPage["soft404Confirmation"]
+    >;
     signal?: AbortSignal;
     /**
      * Wall-clock time (epoch ms) after which no further page starts its rules (#1271):
@@ -312,7 +340,10 @@ export function streamPageRules(
     const soft404 = opts?.soft404Confirmations;
     const universe = opts?.pageUniverse;
     const yieldEveryMs = opts?.pageLoopHooks?.yieldEveryMs;
-    const heartbeatEvery = Math.max(1, opts?.pageLoopHooks?.heartbeatEveryPages ?? 1);
+    const heartbeatEvery = Math.max(
+      1,
+      opts?.pageLoopHooks?.heartbeatEveryPages ?? 1
+    );
     const onLoopProgress = opts?.pageLoopHooks?.onProgress;
     let lastYieldAt = Date.now();
 
@@ -335,8 +366,10 @@ export function streamPageRules(
     // parsing, an unchanged one from its entry), so the representative is the first page
     // of the cluster in crawl order exactly as in a fresh audit. See `fanReplayable`.
     const fanout =
-      opts?.templateFanout ?? templateFanoutEnabled()
-        ? createTemplateFanout(runner, { maxClusters: opts?.templateFanoutMaxClusters })
+      (opts?.templateFanout ?? templateFanoutEnabled())
+        ? createTemplateFanout(runner, {
+            maxClusters: opts?.templateFanoutMaxClusters,
+          })
         : null;
 
     /**
@@ -350,7 +383,10 @@ export function streamPageRules(
      *    is the page it inherited from (same page key, so same inputs, same verdicts).
      * Anything else runs fresh: a fresh audit would give the page other verdicts.
      */
-    const fanReplayable = (entry: PageRuleCacheEntry, ownKey: string | undefined): boolean => {
+    const fanReplayable = (
+      entry: PageRuleCacheEntry,
+      ownKey: string | undefined
+    ): boolean => {
       const fan = entry.fan;
       if (!fanout) return fan === undefined;
       if (fan === undefined) return false;
@@ -388,7 +424,8 @@ export function streamPageRules(
         .getPagesWithoutBodies(crawlId, { limit: 1000, offset: at })
         .pipe(Effect.orDie);
       if (light.length === 0) break;
-      for (const key of crawledPageKeys(light.map((p) => p.normalizedUrl))) crawledUrls.add(key);
+      for (const key of crawledPageKeys(light.map((p) => p.normalizedUrl)))
+        crawledUrls.add(key);
     }
 
     for (let offset = 0; ; offset += batchSize) {
@@ -398,7 +435,9 @@ export function streamPageRules(
       // to `[]` and treated as "no more pages" — which would silently truncate the
       // scored page set at an arbitrary offset (matches site-query.ts's paginated
       // read pattern; keeps the error channel `never`).
-      const batch = yield* storage.getPages(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie);
+      const batch = yield* storage
+        .getPages(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.orDie);
       if (batch.length === 0) break;
 
       const batchStart = Date.now();
@@ -423,7 +462,10 @@ export function streamPageRules(
             // A redirect row (#1762) is not a page and runs only the redirect rules: it has no cached entry,
             // and a key built from its empty record must never be looked up as if it did.
             if (isRedirectSourcePage(page)) continue;
-            const key = await cache.keyFor(page, soft404?.get(page.normalizedUrl));
+            const key = await cache.keyFor(
+              page,
+              soft404?.get(page.normalizedUrl)
+            );
             if (key) {
               keyByUrl.set(page.normalizedUrl, key);
               wanted.push(key);
@@ -441,17 +483,28 @@ export function streamPageRules(
           // today, since the collector set is code — this is what keeps it
           // unreachable when it stops being.
           if (!entry) continue;
-          if (collectors.every((c) => c.id in entry.signals)) replayByUrl.set(url, entry);
+          if (collectors.every((c) => c.id in entry.signals))
+            replayByUrl.set(url, entry);
         }
       }
 
       // Parse only what has to be parsed (≤ batchSize DOMs live at the peak).
       const tooLarge = (p: (typeof batch)[number]): boolean =>
-        maxPageBytes !== undefined && decodedPageBytes(p.sizeBytes, p.html ?? "") > maxPageBytes;
-      const toParse = batch.filter((p) => !replayByUrl.has(p.normalizedUrl) && !tooLarge(p));
-      const parsedBatch = yield* buildSiteContext(toParse, undefined, { maxParseBytes: maxPageBytes });
-      peakLiveDocs = Math.max(peakLiveDocs, parsedBatch.filter((p) => p.parsed?.document).length);
-      const parsedByUrl = new Map(parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed]));
+        maxPageBytes !== undefined &&
+        decodedPageBytes(p.sizeBytes, p.html ?? "") > maxPageBytes;
+      const toParse = batch.filter(
+        (p) => !replayByUrl.has(p.normalizedUrl) && !tooLarge(p)
+      );
+      const parsedBatch = yield* buildSiteContext(toParse, undefined, {
+        maxParseBytes: maxPageBytes,
+      });
+      peakLiveDocs = Math.max(
+        peakLiveDocs,
+        parsedBatch.filter((p) => p.parsed?.document).length
+      );
+      const parsedByUrl = new Map(
+        parsedBatch.map((e) => [e.page.normalizedUrl, e.parsed])
+      );
 
       for (const page of batch) {
         if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
@@ -464,32 +517,54 @@ export function streamPageRules(
         opts?.signal?.throwIfAborted();
 
         let replayEntry = replayByUrl.get(page.normalizedUrl);
-        if (replayEntry && !fanReplayable(replayEntry, keyByUrl.get(page.normalizedUrl))) {
+        if (
+          replayEntry &&
+          !fanReplayable(replayEntry, keyByUrl.get(page.normalizedUrl))
+        ) {
           // The page itself is unchanged but its cluster's representative moved (#296): it runs
           // fresh, so it was not parsed with the batch. Parse it now.
           replayEntry = undefined;
           replayByUrl.delete(page.normalizedUrl);
           if (!tooLarge(page)) {
-            const late = yield* buildSiteContext([page], undefined, { maxParseBytes: maxPageBytes });
-            for (const e of late) parsedByUrl.set(e.page.normalizedUrl, e.parsed);
-            peakLiveDocs = Math.max(peakLiveDocs, late.filter((p) => p.parsed?.document).length);
+            const late = yield* buildSiteContext([page], undefined, {
+              maxParseBytes: maxPageBytes,
+            });
+            for (const e of late)
+              parsedByUrl.set(e.page.normalizedUrl, e.parsed);
+            peakLiveDocs = Math.max(
+              peakLiveDocs,
+              late.filter((p) => p.parsed?.document).length
+            );
           }
         }
         if (replayEntry) {
-          yield* replayPage(page, replayEntry, runner, crawlId, storage, collectors, {
-            retain,
-            pageSink,
-            pageResults,
-            pageRuleResults,
-            ruleResultsMap,
-            tallies,
-            pageUrls,
-          });
+          yield* replayPage(
+            page,
+            replayEntry,
+            runner,
+            crawlId,
+            storage,
+            collectors,
+            {
+              retain,
+              pageSink,
+              pageResults,
+              pageRuleResults,
+              ruleResultsMap,
+              tallies,
+              pageUrls,
+            }
+          );
           // A replayed representative is the cluster's first page: record its template
           // verdicts so a member that has to run fresh inherits them (#296). Its stored
           // checks carry its own pageUrl, which a recorded verdict must not.
           const fan = replayEntry.fan;
-          if (fanout && fan && fan.cluster !== null && fan.rep === keyByUrl.get(page.normalizedUrl)) {
+          if (
+            fanout &&
+            fan &&
+            fan.cluster !== null &&
+            fan.rep === keyByUrl.get(page.normalizedUrl)
+          ) {
             const unstamped = new Map<string, RuleRunResult>();
             for (const [ruleId, checks] of replayEntry.ruleResults) {
               const meta = runner.getRuleMeta(ruleId);
@@ -497,7 +572,9 @@ export function streamPageRules(
               unstamped.set(ruleId, {
                 meta,
                 checks: checks.map((c) =>
-                  c.pageUrl === page.normalizedUrl ? { ...c, pageUrl: undefined } : c,
+                  c.pageUrl === page.normalizedUrl
+                    ? { ...c, pageUrl: undefined }
+                    : c
                 ) as CheckResultLike[],
               });
             }
@@ -511,7 +588,11 @@ export function streamPageRules(
           if (onLoopProgress && pagesDone % heartbeatEvery === 0) {
             onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
           }
-          if (yieldEveryMs != null && yieldEveryMs > 0 && Date.now() - lastYieldAt >= yieldEveryMs) {
+          if (
+            yieldEveryMs != null &&
+            yieldEveryMs > 0 &&
+            Date.now() - lastYieldAt >= yieldEveryMs
+          ) {
             yield* Effect.promise(() => yieldToEventLoop());
             lastYieldAt = Date.now();
             opts?.signal?.throwIfAborted();
@@ -536,18 +617,22 @@ export function streamPageRules(
                 redirectChain: entry.redirectChain,
               },
               siteDataForPageRules,
-              { redirectSource: true },
-            ),
+              { redirectSource: true }
+            )
           );
           const pageUrl = entry.url;
           for (const [, rr] of raw.ruleResults) {
-            for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+            for (const check of rr.checks)
+              if (!check.pageUrl) check.pageUrl = pageUrl;
           }
-          const entries = [...raw.ruleResults].map(([ruleId, rr]) => [ruleId, rr.checks] as const);
+          const entries = [...raw.ruleResults].map(
+            ([ruleId, rr]) => [ruleId, rr.checks] as const
+          );
           const written = pageSink?.writePage(pageUrl, entries);
           if (written) yield* Effect.promise(() => written);
           for (const [ruleId, rr] of raw.ruleResults) {
-            if (retain) mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
+            if (retain)
+              mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
             foldRuleResultIntoTallies(tallies, ruleId, rr as RuleRunResult);
           }
           continue;
@@ -558,7 +643,8 @@ export function streamPageRules(
           // evaluate (HTML, not empty, not a WAF challenge).
           if (isAuditablePage(page)) {
             oversizeSkipped++;
-            if (tooLargePages.length < TOO_LARGE_PAGES_LISTED) tooLargePages.push(page.normalizedUrl);
+            if (tooLargePages.length < TOO_LARGE_PAGES_LISTED)
+              tooLargePages.push(page.normalizedUrl);
           }
           continue;
         }
@@ -568,7 +654,9 @@ export function streamPageRules(
         // With a `pageUniverse` that set is v1's own, so WAF *and* rate-limited
         // pages are excluded together; without one this falls back to the
         // WAF-only predicate (see the option's doc).
-        const inUniverse = universe ? universe.has(page.normalizedUrl) : isAuditablePage(page);
+        const inUniverse = universe
+          ? universe.has(page.normalizedUrl)
+          : isAuditablePage(page);
         if (!inUniverse) {
           parsed.document = null;
           continue;
@@ -577,7 +665,8 @@ export function streamPageRules(
         // Thread the pre-computed soft-404 confirmation the way v1's confirm pass
         // mutates parsed before page rules run.
         const confirmation = soft404?.get(page.normalizedUrl);
-        if (confirmation !== undefined) parsed.soft404Confirmation = confirmation;
+        if (confirmation !== undefined)
+          parsed.soft404Confirmation = confirmation;
 
         const pageUrl = page.normalizedUrl;
         const pageData: PageData = {
@@ -620,7 +709,7 @@ export function streamPageRules(
           ? fanoutClusterKey(
               templateFingerprintKey(shared.fingerprint),
               pageUrl,
-              fanoutInputSignature(parsed.document),
+              fanoutInputSignature(parsed.document)
             )
           : null;
         const fanned = fanout?.take(clusterKey);
@@ -661,7 +750,7 @@ export function streamPageRules(
             checks: raw.checks,
             ruleChecks: byRule.map(([, rr]) => rr.checks),
           },
-          "page-rules",
+          "page-rules"
         );
         const result = {
           checks: detached.checks,
@@ -669,7 +758,7 @@ export function streamPageRules(
             byRule.map(([ruleId, rr], i) => [
               ruleId,
               { ...rr, checks: detached.ruleChecks[i]! },
-            ]),
+            ])
           ),
         };
 
@@ -678,12 +767,15 @@ export function streamPageRules(
         // page-identity-free and its own stamp is a first write (#1951). Only when
         // this page ran the rules itself — a member has nothing new to say.
         const ownCacheKey = keyByUrl.get(pageUrl) ?? null;
-        if (!fanned && !unread) fanout?.record(clusterKey, result.ruleResults, ownCacheKey);
+        if (!fanned && !unread)
+          fanout?.record(clusterKey, result.ruleResults, ownCacheKey);
         // Whose verdicts this page holds, for its cache entry (#296): the cluster's
         // representative, which is this page unless the fan-out gave it one.
         // A cluster with no recorded representative (over the cap, or nothing fannable) ran on its own.
         const repKey =
-          clusterKey === null ? null : (fanout?.repKeyOf(clusterKey) ?? ownCacheKey);
+          clusterKey === null
+            ? null
+            : (fanout?.repKeyOf(clusterKey) ?? ownCacheKey);
 
         // Stamp the page URL FIRST, then every consumer — the sink, the retained
         // maps and the fold — sees identical checks and they stay byte-consistent
@@ -692,10 +784,11 @@ export function streamPageRules(
         // rule's stamping only ever touches its own checks, so pass order is
         // immaterial.
         for (const [, rr] of result.ruleResults) {
-          for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+          for (const check of rr.checks)
+            if (!check.pageUrl) check.pageUrl = pageUrl;
         }
         const entries = [...result.ruleResults].map(
-          ([ruleId, rr]) => [ruleId, rr.checks] as const,
+          ([ruleId, rr]) => [ruleId, rr.checks] as const
         );
 
         // Hand this page's checks off BEFORE deciding whether to keep them, so
@@ -706,13 +799,15 @@ export function streamPageRules(
         if (retain) {
           pageResults.set(pageUrl, result.checks);
           const ruleChecksForPage = new Map<string, CheckResultLike[]>();
-          for (const [ruleId, checks] of entries) ruleChecksForPage.set(ruleId, checks);
+          for (const [ruleId, checks] of entries)
+            ruleChecksForPage.set(ruleId, checks);
           pageRuleResults.set(pageUrl, ruleChecksForPage);
         }
         for (const [ruleId, rr] of result.ruleResults) {
           // The O(pages × page bytes) term. `tallies` below keeps this rule's
           // exact counts either way, so skipping the merge costs scoring nothing.
-          if (retain) mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
+          if (retain)
+            mergeRuleRunResult(ruleResultsMap, ruleId, rr as RuleRunResult);
           foldRuleResultIntoTallies(tallies, ruleId, rr as RuleRunResult);
         }
         pageUrls.push(pageUrl);
@@ -724,7 +819,9 @@ export function streamPageRules(
         // An unread page (#1570) is left out of page_features and the collectors: its empty parse would read as a page with no
         // favicon, theme color, og:image, canonical or NAP and a blank template, and the site rules (asset divergence, NAP
         // consistency, template discontinuity, the word-count norm, duplicate titles) would judge the site on it.
-        const features = unread ? null : extractPageFeatures(page, parsed, { ...shared, crawledUrls });
+        const features = unread
+          ? null
+          : extractPageFeatures(page, parsed, { ...shared, crawledUrls });
         if (features) {
           yield* storage
             .upsertPageFeatures(crawlId, features)
@@ -745,13 +842,20 @@ export function streamPageRules(
         // A rule that ran past its time budget (rules/rule-budget.ts) says how
         // busy this machine was, not what the page is: never replay it.
         const timedOut = entries.some(([, checks]) =>
-          checks.some((c) => c.details?.timedOut === true),
+          checks.some((c) => c.details?.timedOut === true)
         );
         const cacheKey = keyByUrl.get(pageUrl);
         // A page that inherited a verdict from a representative with no key cannot say whose it
         // holds, so it is not stored (it runs again next time, which is always correct).
         const fanKnown = !fanout || clusterKey === null || repKey !== null;
-        if (ruleCache && cacheKey && features && signalsCacheable && !timedOut && fanKnown) {
+        if (
+          ruleCache &&
+          cacheKey &&
+          features &&
+          signalsCacheable &&
+          !timedOut &&
+          fanKnown
+        ) {
           // The checks stored are the ones whose `pageUrl` was just stamped, so a
           // replay's own stamping loop is a no-op and the two paths agree. They
           // are the SAME objects the run already retains, so recording them here
@@ -784,7 +888,11 @@ export function streamPageRules(
         if (onLoopProgress && pagesDone % heartbeatEvery === 0) {
           onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
         }
-        if (yieldEveryMs != null && yieldEveryMs > 0 && Date.now() - lastYieldAt >= yieldEveryMs) {
+        if (
+          yieldEveryMs != null &&
+          yieldEveryMs > 0 &&
+          Date.now() - lastYieldAt >= yieldEveryMs
+        ) {
           yield* Effect.promise(() => yieldToEventLoop());
           lastYieldAt = Date.now();
           opts?.signal?.throwIfAborted();
@@ -794,7 +902,8 @@ export function streamPageRules(
       // Hand the batch's checks over before dropping it, so a buffering sink
       // holds at most one batch of them and the GC pass below reclaims both the
       // batch's DOMs and whatever the sink was holding (#2343).
-      if (pageSink?.flush) yield* Effect.promise(async () => void (await pageSink.flush!()));
+      if (pageSink?.flush)
+        yield* Effect.promise(async () => void (await pageSink.flush!()));
 
       // Defensive backstop: every path in the per-page loop above already nulls
       // `parsed.document`, so this is a no-op today — but re-nulling the whole batch
@@ -835,14 +944,18 @@ export function streamPageRules(
     // Final marker when the last page didn't land on a heartbeat boundary —
     // mirrors SerialPageRuleExecutor's tail so the last progress event a slow
     // cloud run emits is the real total, not the last multiple of N.
-    if (onLoopProgress && (pagesDone === 0 || pagesDone % heartbeatEvery !== 0)) {
+    if (
+      onLoopProgress &&
+      (pagesDone === 0 || pagesDone % heartbeatEvery !== 0)
+    ) {
       onLoopProgress(pagesDone, opts?.totalPages ?? pagesDone);
     }
     if (ruleCache?.flush) yield* Effect.promise(() => ruleCache.flush!());
     // Tail flush. The in-loop one already ran for the final batch, so this is a
     // no-op for every sink that empties its buffer — it exists so a sink can
     // treat "flushed after the last page" as guaranteed rather than inferred.
-    if (pageSink?.flush) yield* Effect.promise(async () => void (await pageSink.flush!()));
+    if (pageSink?.flush)
+      yield* Effect.promise(async () => void (await pageSink.flush!()));
 
     return {
       pageResults,
@@ -852,7 +965,12 @@ export function streamPageRules(
       pageUrls,
       peakLiveDocs,
       extractedCount,
-      pagesNotEvaluated: deadlineHit ? Math.max(0, (opts?.totalPages ?? pagesDone) - pagesDone - oversizeSkipped) : 0,
+      pagesNotEvaluated: deadlineHit
+        ? Math.max(
+            0,
+            (opts?.totalPages ?? pagesDone) - pagesDone - oversizeSkipped
+          )
+        : 0,
       pagesTooLarge: oversizeSkipped,
       tooLargePages,
       templateFanout: fanout?.stats() ?? {
@@ -900,7 +1018,7 @@ function replayPage(
     ruleResultsMap: Map<string, RuleRunResult>;
     tallies: Map<string, RuleTally>;
     pageUrls: string[];
-  },
+  }
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
     const pageUrl = page.normalizedUrl;

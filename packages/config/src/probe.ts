@@ -35,7 +35,9 @@ const DURATION_UNIT_MS = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 } as const;
  */
 export function normalizeProbeLevel(raw: string): ProbeLevel | null {
   const value = raw.trim().toLowerCase();
-  return (PROBE_LEVELS as readonly string[]).includes(value) ? (value as ProbeLevel) : null;
+  return (PROBE_LEVELS as readonly string[]).includes(value)
+    ? (value as ProbeLevel)
+    : null;
 }
 
 /**
@@ -52,12 +54,18 @@ export function parseProbeBudget(raw: string | number): number | null {
   } else {
     const match = /^(\d+(?:\.\d+)?)\s*(ms|s|m|h)?$/i.exec(raw.trim());
     if (!match) return null;
-    const unit = (match[2]?.toLowerCase() ?? "s") as keyof typeof DURATION_UNIT_MS;
+    const unit = (match[2]?.toLowerCase() ??
+      "s") as keyof typeof DURATION_UNIT_MS;
     ms = Number(match[1]) * DURATION_UNIT_MS[unit];
   }
   // Round first: "0.4ms" would otherwise pass as positive and become 0.
   const rounded = Math.round(ms);
-  if (!Number.isFinite(rounded) || rounded <= 0 || rounded > MAX_PROBE_BUDGET_MS) return null;
+  if (
+    !Number.isFinite(rounded) ||
+    rounded <= 0 ||
+    rounded > MAX_PROBE_BUDGET_MS
+  )
+    return null;
   return rounded;
 }
 
@@ -105,7 +113,12 @@ export interface ProbeConfig {
   budget?: string | number;
 }
 
-export type ProbeLevelSource = "flag" | "shortcut" | "config" | "level" | "default";
+export type ProbeLevelSource =
+  | "flag"
+  | "shortcut"
+  | "config"
+  | "level"
+  | "default";
 
 export interface ResolvedProbing {
   level: ProbeLevel;
@@ -131,7 +144,8 @@ export type ProbeResolution =
  *   cloud, unverified         → passive (and locked, see {@link isProbeLocked})
  */
 export function defaultProbeLevel(ctx: ProbeRunContext): ProbeLevel {
-  if (ctx.surface === "cloud") return ctx.ownershipVerified ? "active" : "passive";
+  if (ctx.surface === "cloud")
+    return ctx.ownershipVerified ? "active" : "passive";
   return ctx.signedIn ? "active" : "passive";
 }
 
@@ -155,14 +169,18 @@ export function probeLockedMessage(level: ProbeLevel): string {
  * null. Mirrors validateAuditFlags' `--render` + `--http` refusal: two flags
  * that ask for different levels are refused, never silently resolved.
  */
-export function validateProbeFlags(flags: ProbeFlags, coverage?: string): string | null {
+export function validateProbeFlags(
+  flags: ProbeFlags,
+  coverage?: string
+): string | null {
   if (flags.passive && flags.aggressive) {
     return "--passive and --aggressive cannot be combined";
   }
   if (flags.pentest && flags.passive) {
     return "--pentest and --passive cannot be combined (--pentest probes aggressively)";
   }
-  const probe = flags.probe === undefined ? undefined : normalizeProbeLevel(flags.probe);
+  const probe =
+    flags.probe === undefined ? undefined : normalizeProbeLevel(flags.probe);
   if (probe) {
     if (flags.passive && probe !== "passive") {
       return `--passive cannot be combined with --probe ${probe}`;
@@ -174,7 +192,11 @@ export function validateProbeFlags(flags: ProbeFlags, coverage?: string): string
       return `--pentest cannot be combined with --probe ${probe} (--pentest is --probe aggressive)`;
     }
   }
-  if (flags.pentest && coverage !== undefined && parseAuditLevel(coverage) !== "full") {
+  if (
+    flags.pentest &&
+    coverage !== undefined &&
+    parseAuditLevel(coverage) !== "full"
+  ) {
     return `--pentest cannot be combined with --level ${coverage} (--pentest is --level full)`;
   }
   return null;
@@ -262,20 +284,28 @@ export function resolveProbeIntensity(input: {
   if (context.discoveryProbesDisabled) {
     if (level !== "passive" && source !== "default" && source !== "level") {
       notices.push(
-        `Probing stays passive: discovery probes are disabled ([crawler] disable_discovery_probes or --disable-discovery-probes), so '${level}' sends no probe.`,
+        `Probing stays passive: discovery probes are disabled ([crawler] disable_discovery_probes or --disable-discovery-probes), so '${level}' sends no probe.`
       );
     }
-    return { ok: true, value: { level: "passive", budgetMs: 0, source, locked, notices } };
+    return {
+      ok: true,
+      value: { level: "passive", budgetMs: 0, source, locked, notices },
+    };
   }
 
   if (level === "passive" && flags.probeBudget !== undefined) {
-    notices.push("--probe-budget has no effect: probing is passive, so no probe runs.");
+    notices.push(
+      "--probe-budget has no effect: probing is passive, so no probe runs."
+    );
   }
 
   // The schema already refused an invalid [security] budget; null here means
   // a hand-built config, which falls back to the level default.
-  const configBudget = config.budget === undefined ? null : parseProbeBudget(config.budget);
+  const configBudget =
+    config.budget === undefined ? null : parseProbeBudget(config.budget);
   const budgetMs =
-    level === "passive" ? 0 : (budgetOverride ?? configBudget ?? DEFAULT_PROBE_BUDGET_MS[level]);
+    level === "passive"
+      ? 0
+      : (budgetOverride ?? configBudget ?? DEFAULT_PROBE_BUDGET_MS[level]);
   return { ok: true, value: { level, budgetMs, source, locked, notices } };
 }

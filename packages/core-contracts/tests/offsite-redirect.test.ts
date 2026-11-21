@@ -38,17 +38,21 @@ describe("isSignInHost", () => {
 
 describe("offSiteRedirectFollowUp", () => {
   test("a moved site gets the exact command for the destination's origin", () => {
-    expect(offSiteRedirectFollowUp("https://www.example.com/en/home?ref=old")).toEqual({
+    expect(
+      offSiteRedirectFollowUp("https://www.example.com/en/home?ref=old")
+    ).toEqual({
       kind: "audit",
       origin: "https://www.example.com",
       command: "squirrel audit https://www.example.com",
     });
-    expect(offSiteRedirectFollowUp("http://example.test:8080/")?.kind).toBe("audit");
+    expect(offSiteRedirectFollowUp("http://example.test:8080/")?.kind).toBe(
+      "audit"
+    );
   });
 
   test("a sign-in page gets the docs link and no command", () => {
     const followUp = offSiteRedirectFollowUp(
-      "https://team.cloudflareaccess.com/cdn-cgi/access/login/example.com?redirect_url=%2F",
+      "https://team.cloudflareaccess.com/cdn-cgi/access/login/example.com?redirect_url=%2F"
     );
     expect(followUp).toEqual({
       kind: "sign_in",
@@ -65,7 +69,12 @@ describe("offSiteRedirectFollowUp", () => {
   });
 
   test("anything that is not an http(s) URL gets nothing", () => {
-    for (const value of ["", "not a url", "javascript:alert(1)", "ftp://example.com/"]) {
+    for (const value of [
+      "",
+      "not a url",
+      "javascript:alert(1)",
+      "ftp://example.com/",
+    ]) {
       expect(offSiteRedirectFollowUp(value)).toBeNull();
     }
   });

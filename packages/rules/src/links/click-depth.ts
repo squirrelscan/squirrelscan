@@ -20,11 +20,10 @@
 //     a lower bound like the crawl cap. One shared function builds the finding for both paths.
 //   * A crawl stopped at its page cap still reports, labelled as a lower bound.
 
+import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
 import { frontDoorTest } from "../shared/front-door";
 import { noindexSource } from "../shared/noindex";
@@ -46,7 +45,7 @@ export interface DepthEntry {
  */
 export function shortestDepths(
   roots: readonly string[],
-  edges: ReadonlyMap<string, readonly string[]>,
+  edges: ReadonlyMap<string, readonly string[]>
 ): Map<string, number> {
   const depths = new Map<string, number>();
   let frontier: string[] = [];
@@ -90,7 +89,8 @@ export const clickDepthRule: Rule = {
   meta: {
     id: "links/click-depth",
     name: "Click Depth",
-    description: "Detects indexable pages that take many clicks to reach from the homepage",
+    description:
+      "Detects indexable pages that take many clicks to reach from the homepage",
     solution:
       "Pages many clicks from the homepage are crawled less often and receive little internal link weight. Link important deep pages from the homepage, a hub or category page, or the main navigation. Add paginated or archive shortcuts, related-content links and breadcrumbs so the shortest path gets shorter. Pages that are deep on purpose can be left alone, or raise the threshold with the maxDepth rule option.",
     category: "links",
@@ -106,7 +106,9 @@ export const clickDepthRule: Rule = {
         .int()
         .min(1)
         .default(3)
-        .describe("Pages more than this many clicks from the homepage are listed"),
+        .describe(
+          "Pages more than this many clicks from the homepage are listed"
+        ),
     }),
   },
 
@@ -119,14 +121,14 @@ export const clickDepthRule: Rule = {
 function noPages(): RuleResult {
   return skipped(
     "Insufficient pages for click depth analysis",
-    "Needs at least two pages: a single page audit has no link path to measure",
+    "Needs at least two pages: a single page audit has no link path to measure"
   );
 }
 
 function noHomepage(): RuleResult {
   return skipped(
     "The homepage was not among the crawled pages",
-    "No homepage to measure click depth from",
+    "No homepage to measure click depth from"
   );
 }
 
@@ -139,10 +141,12 @@ function buildResult(
   maxDepth: number,
   deep: DepthEntry[],
   searchTruncated: "maxDepth" | "maxNodes" | null,
-  searchLimit: number,
+  searchLimit: number
 ): RuleResult {
   // Deepest first, then by url so the order never depends on the crawl.
-  deep.sort((a, b) => b.depth - a.depth || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  deep.sort(
+    (a, b) => b.depth - a.depth || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
+  );
 
   const limits = ctx.site?.crawlLimits;
   const capped = limits !== undefined && limits.pagesCrawled >= limits.maxPages;
@@ -174,7 +178,8 @@ function buildResult(
       .slice(0, MAX_SAMPLE)
       .map((e) => `${getPathname(e.url)} (${e.depth} clicks)`)
       .join("\n");
-    const suffix = deep.length > MAX_SAMPLE ? `\n+${deep.length - MAX_SAMPLE} more` : "";
+    const suffix =
+      deep.length > MAX_SAMPLE ? `\n+${deep.length - MAX_SAMPLE} more` : "";
     check = {
       name: NAME,
       status: "warn",
@@ -202,7 +207,10 @@ function runLegacy(ctx: RuleContext): RuleResult {
 
   if (pages.length < 2) return noPages();
 
-  const isFrontDoor = frontDoorTest(ctx.site?.baseUrl || "", ctx.site?.entryUrls ?? []);
+  const isFrontDoor = frontDoorTest(
+    ctx.site?.baseUrl || "",
+    ctx.site?.entryUrls ?? []
+  );
 
   // Page universe keyed by normalized url, plus the dofollow internal edges
   // between pages of that universe. First page wins a duplicate key, in the
@@ -257,7 +265,10 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   }
   if (universe.length < 2) return noPages();
 
-  const isFrontDoor = frontDoorTest(ctx.site?.baseUrl || "", ctx.site?.entryUrls ?? []);
+  const isFrontDoor = frontDoorTest(
+    ctx.site?.baseUrl || "",
+    ctx.site?.entryUrls ?? []
+  );
   const roots: string[] = [];
   for (const url of winners.values()) {
     if (isFrontDoor(url)) roots.push(url);
@@ -273,7 +284,9 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   // The same test as noindexSource: page_features carries it as indexableReasons.
   const noindex = new Set<string>();
   for await (const row of query.pagesMatching(
-    (r) => r.indexableReasons.includes("meta:noindex") || r.indexableReasons.includes("header:noindex"),
+    (r) =>
+      r.indexableReasons.includes("meta:noindex") ||
+      r.indexableReasons.includes("header:noindex")
   )) {
     noindex.add(row.normalizedUrl);
   }
@@ -281,10 +294,12 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   const deep: DepthEntry[] = [];
   for (const [url, node] of result.depths) {
     if (node.depth <= maxDepth) continue;
-    if (node.status === null || node.status < 200 || node.status >= 300) continue;
+    if (node.status === null || node.status < 200 || node.status >= 300)
+      continue;
     if (noindex.has(url)) continue;
     deep.push({ url, depth: node.depth });
   }
-  const limit = result.truncated === "maxNodes" ? SEARCH_MAX_NODES : searchDepth;
+  const limit =
+    result.truncated === "maxNodes" ? SEARCH_MAX_NODES : searchDepth;
   return buildResult(ctx, maxDepth, deep, result.truncated, limit);
 }

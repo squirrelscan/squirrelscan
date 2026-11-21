@@ -2,17 +2,22 @@
 // at most 8 items. Scored by the real category scorer, a worst-case failure must cost the content
 // category no more than a failure from a per-page content rule, so it cannot dominate the category.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { loadAllRules } from "@squirrelscan/rules";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
+
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { calculateHealthScore } from "../src/scoring";
 
-const contentRules = [...loadAllRules().values()].filter((r) => r.meta.category === "content");
+const contentRules = [...loadAllRules().values()].filter(
+  (r) => r.meta.category === "content"
+);
 
-function contentScore(override?: { ruleId: string; check: CheckResult }): number {
+function contentScore(override?: {
+  ruleId: string;
+  check: CheckResult;
+}): number {
   const results = new Map<string, RuleRunResult>();
   for (const rule of contentRules) {
     const check: CheckResult =
@@ -21,7 +26,9 @@ function contentScore(override?: { ruleId: string; check: CheckResult }): number
         : { name: rule.meta.id.split("/")[1]!, status: "pass", message: "ok" };
     results.set(rule.meta.id, { meta: rule.meta, checks: [check] });
   }
-  const category = calculateHealthScore({ results }).categories.find((c) => c.category === "content");
+  const category = calculateHealthScore({ results }).categories.find(
+    (c) => c.category === "content"
+  );
   if (!category) throw new Error("no content category score");
   return category.score;
 }
@@ -40,7 +47,11 @@ describe("content/terminology-consistency: scoring density", () => {
     });
     const stale = contentScore({
       ruleId: "content/stale-dated-copy",
-      check: { name: "stale-dated-copy", status: "fail", message: "1 claim is stale" },
+      check: {
+        name: "stale-dated-copy",
+        status: "fail",
+        message: "1 claim is stale",
+      },
     });
     expect(fail).toBeLessThan(clean);
     expect(clean - fail).toBeLessThanOrEqual(clean - stale);

@@ -24,7 +24,7 @@ export const PAGE_TYPE_TRUST_CONFIDENCE = 0.9;
  */
 export function trustedPageType(
   parsed: ParsedPage | null | undefined,
-  minConfidence: number = PAGE_TYPE_TRUST_CONFIDENCE,
+  minConfidence: number = PAGE_TYPE_TRUST_CONFIDENCE
 ): string | null {
   const pageType = parsed?.classification?.pageType;
   if (!pageType || pageType.source !== "model") return null;
@@ -101,7 +101,8 @@ function containsPhrase(text: string, phrase: string): boolean {
     const at = text.indexOf(phrase, from);
     if (at < 0) return false;
     const before = at > 0 ? text[at - 1]! : " ";
-    const after = at + phrase.length < text.length ? text[at + phrase.length]! : " ";
+    const after =
+      at + phrase.length < text.length ? text[at + phrase.length]! : " ";
     if (!LETTER.test(before) && !LETTER.test(after)) return true;
     from = at + 1;
   }
@@ -124,7 +125,12 @@ function hasEmailAddress(text: string): boolean {
     const at = text.indexOf("@", from);
     if (at < 0) return false;
     from = at + 1;
-    if (at > 0 && LOCAL_CHAR.test(text[at - 1]!) && EMAIL_DOMAIN.test(text.slice(at + 1, at + 301))) return true;
+    if (
+      at > 0 &&
+      LOCAL_CHAR.test(text[at - 1]!) &&
+      EMAIL_DOMAIN.test(text.slice(at + 1, at + 301))
+    )
+      return true;
   }
   return false;
 }
@@ -141,7 +147,8 @@ function isPhoneRun(run: string, plus: boolean): boolean {
   // A phone number is written with a separator pattern or brackets; a bare run of digits is an id.
   if (!/[\s().-]/.test(run.trim())) return false;
   // An IPv4 address (four dotted groups) and a list of years ("2019 2020 2021") are not phone numbers.
-  if (groups.length === 4 && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(run.trim())) return false;
+  if (groups.length === 4 && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(run.trim()))
+    return false;
   if (groups.every((g) => /^(?:19|20)\d{2}$/.test(g))) return false;
   return true;
 }
@@ -161,7 +168,16 @@ function hasPhoneNumber(text: string): boolean {
   for (let i = 0; i < text.length; i++) {
     const char = text[i]!;
     const isDigit = char >= "0" && char <= "9";
-    if (isDigit || (run.length > 0 && (char === " " || char === "(" || char === ")" || char === "-" || char === "." || char === "\u00a0"))) {
+    if (
+      isDigit ||
+      (run.length > 0 &&
+        (char === " " ||
+          char === "(" ||
+          char === ")" ||
+          char === "-" ||
+          char === "." ||
+          char === "\u00a0"))
+    ) {
       if (run.length === 0) plus = i > 0 && text[i - 1] === "+";
       run += char;
       if (run.length > MAX_PHONE_RUN) {
@@ -177,7 +193,8 @@ function hasPhoneNumber(text: string): boolean {
 }
 
 /** Elements that are page furniture, not the page's own content. */
-const CHROME = "header, nav, footer, aside, [role='banner'], [role='navigation'], [role='contentinfo'], [role='complementary'], script, style, noscript, template";
+const CHROME =
+  "header, nav, footer, aside, [role='banner'], [role='navigation'], [role='contentinfo'], [role='complementary'], script, style, noscript, template";
 
 interface MainContent {
   text: string;
@@ -227,13 +244,18 @@ function mainContent(parsed: ParsedPage): MainContent | null {
 function buildMainContent(parsed: ParsedPage): MainContent | null {
   const document = parsed.document;
   if (!document) return null;
-  const root = document.querySelector("main, [role='main']") ?? document.body ?? document.documentElement;
+  const root =
+    document.querySelector("main, [role='main']") ??
+    document.body ??
+    document.documentElement;
   if (!root) return null;
   const copy = root.cloneNode(true) as Element;
-  for (const chrome of Array.from(copy.querySelectorAll(CHROME))) chrome.remove();
+  for (const chrome of Array.from(copy.querySelectorAll(CHROME)))
+    chrome.remove();
   return {
     text: textWithSpaces(copy).replace(/\s+/g, " ").trim().toLowerCase(),
-    hasContactLink: copy.querySelector("a[href^='mailto:' i], a[href^='tel:' i]") != null,
+    hasContactLink:
+      copy.querySelector("a[href^='mailto:' i], a[href^='tel:' i]") != null,
     hasMessageBox: copy.querySelector("form textarea") != null,
   };
 }
@@ -246,14 +268,18 @@ function buildMainContent(parsed: ParsedPage): MainContent | null {
  * and neither is a footer. `legal` needs policy vocabulary, not the word "legal". A support page
  * with a contact form is a contact surface and is accepted.
  */
-export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, label: string): boolean {
+export function bodyCorroboratesPageType(
+  parsed: ParsedPage | null | undefined,
+  label: string
+): boolean {
   if (!parsed || (label !== "legal" && label !== "contact")) return false;
   const main = mainContent(parsed);
   if (!main || main.text.length === 0) return false;
   if (label === "legal") {
     let found = 0;
     for (const phrase of LEGAL_PHRASES) {
-      if (containsPhrase(main.text, phrase) && ++found >= LEGAL_PHRASES_NEEDED) return true;
+      if (containsPhrase(main.text, phrase) && ++found >= LEGAL_PHRASES_NEEDED)
+        return true;
     }
     return false;
   }
@@ -268,7 +294,7 @@ export function bodyCorroboratesPageType(parsed: ParsedPage | null | undefined, 
  */
 export function skippablePageType(
   parsed: ParsedPage | null | undefined,
-  types: readonly string[],
+  types: readonly string[]
 ): string | null {
   const label = trustedPageType(parsed);
   if (label === null || !types.includes(label)) return null;
@@ -282,13 +308,21 @@ export function skippablePageType(
  * finding from an earlier audit on it resolves. `skippedByType` counts the page so a report can say
  * why it was not judged; `pageType` names the label.
  */
-export function pageTypeRuleSkip(ruleId: string, label: string, ruleName: string): CheckResult {
+export function pageTypeRuleSkip(
+  ruleId: string,
+  label: string,
+  ruleName: string
+): CheckResult {
   return {
     name: ruleId,
     status: "skipped",
     message: `Skipped: ${ruleName} is not judged on a ${label.replace(/_/g, " ")} page`,
     skipReason: PAGE_TYPE_SKIP_REASON,
-    details: { foldKey: PAGE_TYPE_SKIP_REASON, pageType: label, skippedByType: 1 },
+    details: {
+      foldKey: PAGE_TYPE_SKIP_REASON,
+      pageType: label,
+      skippedByType: 1,
+    },
   };
 }
 
@@ -298,12 +332,20 @@ export function pageTypeRuleSkip(ruleId: string, label: string, ruleName: string
  * per-check "does not apply" on `ruleId|checkName`; the page then reads as evaluated and clean for
  * that check only and its earlier finding resolves.
  */
-export function pageTypeSkip(name: string, label: string, what: string): CheckResult {
+export function pageTypeSkip(
+  name: string,
+  label: string,
+  what: string
+): CheckResult {
   return {
     name,
     status: "skipped",
     message: `Skipped: ${what} is not judged on a ${label.replace(/_/g, " ")} page`,
     skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
-    details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON, pageType: label, skippedByType: 1 },
+    details: {
+      foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON,
+      pageType: label,
+      skippedByType: 1,
+    },
   };
 }

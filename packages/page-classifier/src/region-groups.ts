@@ -21,7 +21,12 @@
 // What stays `unknown` is mostly page content, which is the useful signal for "this link is not in the
 // furniture", but the runtime does not claim it.
 
-export const SITE_CHROME_CLASSES = ["site_header", "footer", "navigation", "sidebar"] as const;
+export const SITE_CHROME_CLASSES = [
+  "site_header",
+  "footer",
+  "navigation",
+  "sidebar",
+] as const;
 export const SITE_CHROME_THRESHOLD = 0.8;
 
 /**
@@ -32,15 +37,18 @@ export const SITE_CHROME_THRESHOLD = 0.8;
  */
 export function chromeIndices(
   classes: readonly string[],
-  thresholds?: ArrayLike<number>,
+  thresholds?: ArrayLike<number>
 ): number[] {
   return SITE_CHROME_CLASSES.map((name) => classes.indexOf(name)).filter(
-    (i) => i >= 0 && (thresholds === undefined || thresholds[i]! <= 1),
+    (i) => i >= 0 && (thresholds === undefined || thresholds[i]! <= 1)
   );
 }
 
 /** The probability mass on the chrome classes, from softmaxed probabilities. */
-export function chromeMass(probabilities: ArrayLike<number>, indices: readonly number[]): number {
+export function chromeMass(
+  probabilities: ArrayLike<number>,
+  indices: readonly number[]
+): number {
   let mass = 0;
   for (const i of indices) mass += probabilities[i]!;
   return mass;

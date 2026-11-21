@@ -5,12 +5,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
 
 import type { CrawlMetadata } from "../src/storage/types";
+
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(effect: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -75,9 +76,9 @@ function seedWithoutScanScope(path: string, version: number): string {
 function columnsOf(path: string): string[] {
   const db = new Database(path, { readonly: true });
   try {
-    return (db.query("PRAGMA table_info(crawls)").all() as { name: string }[]).map(
-      (column) => column.name
-    );
+    return (
+      db.query("PRAGMA table_info(crawls)").all() as { name: string }[]
+    ).map((column) => column.name);
   } finally {
     db.close();
   }
@@ -132,11 +133,20 @@ describe("migration 36: stored scan scope", () => {
     const db = new Database(path);
     db.query(
       "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run("old-cli", "https://e.test", 1, "completed", "{}", JSON.stringify(STATS));
+    ).run(
+      "old-cli",
+      "https://e.test",
+      1,
+      "completed",
+      "{}",
+      JSON.stringify(STATS)
+    );
     db.close();
 
     const reopened = await openStore(path);
-    expect((await run(reopened.getCrawl("old-cli")))?.scanScope).toBeUndefined();
+    expect(
+      (await run(reopened.getCrawl("old-cli")))?.scanScope
+    ).toBeUndefined();
     await run(reopened.close());
   });
 });

@@ -20,8 +20,9 @@ import { headingHierarchyRule } from "./heading-hierarchy";
 import { hiddenTextRule } from "./hidden-text";
 import { keywordStuffingRule } from "./keyword-stuffing";
 import { metaInBodyRule } from "./meta-in-body";
-import { mojibakeRule } from "./mojibake";
 import { mimeTypeRule } from "./mime-type";
+import { mojibakeRule } from "./mojibake";
+import { nearDuplicateRule } from "./near-duplicate";
 import { placeholderContactRule } from "./placeholder-contact";
 import { placeholderMediaRule } from "./placeholder-media";
 import { placeholderTextRule } from "./placeholder-text";
@@ -35,7 +36,6 @@ import { titlePatternOutlierRule } from "./title-pattern-outlier";
 import { truncationArtifactsRule } from "./truncation-artifacts";
 import { typographyRule } from "./typography";
 import { unrenderedMarkupRule } from "./unrendered-markup";
-import { nearDuplicateRule } from "./near-duplicate";
 import { voiceConsistencyRule } from "./voice-consistency";
 import { wordCountRule } from "./word-count";
 

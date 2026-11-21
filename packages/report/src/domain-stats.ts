@@ -3,7 +3,11 @@
 // one-line summary surfaced in every output format. Domain stats are
 // informational: they NEVER affect the score.
 
-import type { DomainStats, DomainStatsMetrics, DomainStatsPositions } from "./types";
+import type {
+  DomainStats,
+  DomainStatsMetrics,
+  DomainStatsPositions,
+} from "./types";
 
 /** Note rendered with the section so it reads as informational, not scored. */
 export const DOMAIN_STATS_NOTE = "Domain SEO stats: informational, not scored.";
@@ -63,19 +67,24 @@ export function domainStatRows(metrics: DomainStatsMetrics): DomainStatLine[] {
 export function buildDomainStatsSummary(stats: DomainStats): string {
   const m = stats.metrics;
   const parts: string[] = [];
-  if (m.backlinks != null) parts.push(`${formatCompact(m.backlinks)} backlinks`);
+  if (m.backlinks != null)
+    parts.push(`${formatCompact(m.backlinks)} backlinks`);
   if (m.referringDomains != null)
     parts.push(`${formatCompact(m.referringDomains)} referring domains`);
   if (m.organicKeywords != null)
     parts.push(`${formatCompact(m.organicKeywords)} organic keywords`);
   if (m.organicTraffic != null)
     parts.push(`~${formatCompact(m.organicTraffic)} organic traffic/mo`);
-  if (parts.length === 0) return `No domain stats available for ${stats.domain}.`;
+  if (parts.length === 0)
+    return `No domain stats available for ${stats.domain}.`;
   return `${stats.domain}: ${parts.join(" · ")}.`;
 }
 
 /** SERP position-band labels in display order, for the distribution sub-line. */
-export const POSITION_BANDS: { key: keyof DomainStatsPositions; label: string }[] = [
+export const POSITION_BANDS: {
+  key: keyof DomainStatsPositions;
+  label: string;
+}[] = [
   { key: "pos1", label: "#1" },
   { key: "pos2_3", label: "#2–3" },
   { key: "pos4_10", label: "#4–10" },
@@ -92,7 +101,7 @@ export const POSITION_BANDS: { key: keyof DomainStatsPositions; label: string }[
 
 /** Non-empty position bands as {label, count}, for the distribution display. */
 export function positionBands(
-  positions: DomainStatsPositions | null,
+  positions: DomainStatsPositions | null
 ): { label: string; count: number }[] {
   if (!positions) return [];
   const out: { label: string; count: number }[] = [];
@@ -105,8 +114,11 @@ export function positionBands(
 
 /** All position bands as {label, count} incl. zeros: fills out the distribution graph. */
 export function allPositionBands(
-  positions: DomainStatsPositions | null,
+  positions: DomainStatsPositions | null
 ): { label: string; count: number }[] {
   if (!positions) return [];
-  return POSITION_BANDS.map(({ key, label }) => ({ label, count: positions[key] ?? 0 }));
+  return POSITION_BANDS.map(({ key, label }) => ({
+    label,
+    count: positions[key] ?? 0,
+  }));
 }

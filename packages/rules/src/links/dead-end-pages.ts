@@ -1,10 +1,9 @@
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { normalizeUrl, matchesExcludePattern } from "@squirrelscan/utils";
+import { MIN_INTERNAL_LINKS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult } from "../types";
-
-import { MIN_INTERNAL_LINKS } from "@squirrelscan/utils/constants";
-import { normalizeUrl, matchesExcludePattern } from "@squirrelscan/utils";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 export const deadEndPages: Rule = {
   meta: {

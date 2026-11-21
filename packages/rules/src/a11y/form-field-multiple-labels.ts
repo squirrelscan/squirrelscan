@@ -1,6 +1,7 @@
 // a11y/form-field-multiple-labels - Inputs don't have multiple labels
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 /** Labelable elements, as HTML defines them (a label's first one is its control). */
@@ -57,7 +58,11 @@ export const formFieldMultipleLabelsRule: Rule = {
       // (a `for` naming another id sends the label there) and the control is its
       // first labelable descendant (HTML's labeled control rule).
       const wrapper = input.closest("label");
-      if (wrapper && !wrapper.hasAttribute("for") && wrapper.querySelector(LABELABLE) === input) {
+      if (
+        wrapper &&
+        !wrapper.hasAttribute("for") &&
+        wrapper.querySelector(LABELABLE) === input
+      ) {
         labels.add(wrapper);
       }
 

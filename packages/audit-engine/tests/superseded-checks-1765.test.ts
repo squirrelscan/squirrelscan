@@ -1,17 +1,28 @@
 // pub#1765: a finding stored under a superseded check name (core/meta-title `meta-title`) is judged by
 // its successors on the same page when a later audit resolves it.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  FindingState,
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
+import type { ParsedPage } from "@squirrelscan/rules/types";
 
-import type { CheckResult, FindingState, PageFindingRecord, SitePageRecord } from "@squirrelscan/core-contracts";
-import { buildSupersededIndex, judgeSuperseded } from "@squirrelscan/core-contracts/resolution";
+import {
+  buildSupersededIndex,
+  judgeSuperseded,
+} from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
-import type { ParsedPage } from "@squirrelscan/rules/types";
+import { describe, expect, test } from "bun:test";
 
 import { computeMerge, findingKey, flattenChecks } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
@@ -25,7 +36,11 @@ class MemStore implements SmartAuditStore {
     return [...this.pages.values()];
   }
   async upsertFindings(findings: PageFindingRecord[]) {
-    for (const f of findings) this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+    for (const f of findings)
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
   }
   async upsertSitePages(pages: SitePageRecord[]) {
     for (const p of pages) this.pages.set(p.normalizedUrl, { ...p });
@@ -37,7 +52,10 @@ class MemStore implements SmartAuditStore {
   }
 }
 
-describeSitePagesContract("superseded-checks-1765.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "superseded-checks-1765.test.ts MemStore",
+  () => new MemStore()
+);
 
 const metaTitleRule = loadAllRules().get("core/meta-title")!;
 const SITE = "web_1765";
@@ -45,7 +63,8 @@ const NOW = 1_780_000_000_000;
 const URL = "https://shop.test/p";
 const RULE = "core/meta-title";
 const FIXED = "A title of a perfectly fine length here";
-const LONG = "Classic trail mix: a generous, hand-mixed blend of nuts, seeds and dried fruit | The Nut Shop";
+const LONG =
+  "Classic trail mix: a generous, hand-mixed blend of nuts, seeds and dried fruit | The Nut Shop";
 
 function titleChecks(title: string | null): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head>${title === null ? "" : `<title>${title}</title>`}</head><body><h1>x</h1></body></html>`;
@@ -57,13 +76,37 @@ function titleChecks(title: string | null): CheckResult[] {
   return checks.map((c) => ({ ...c, pageUrl: URL }));
 }
 
-async function audit(pageChecks: CheckResult[], withNeighbour = false, locator = URL) {
+async function audit(
+  pageChecks: CheckResult[],
+  withNeighbour = false,
+  locator = URL
+) {
   // A second page that evaluates both successors, so their keys exist in the signal (an absent key resolves everything).
   const other = "https://shop.test/q";
-  const checks = withNeighbour ? [...pageChecks, ...titleChecks(FIXED).map((c) => ({ ...c, pageUrl: other }))] : pageChecks;
+  const checks = withNeighbour
+    ? [
+        ...pageChecks,
+        ...titleChecks(FIXED).map((c) => ({ ...c, pageUrl: other })),
+      ]
+    : pageChecks;
   const store = new MemStore();
-  if (withNeighbour) store.pages.set(other, { siteKey: SITE, normalizedUrl: other, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 });
-  store.pages.set(URL, { siteKey: SITE, normalizedUrl: URL, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 });
+  if (withNeighbour)
+    store.pages.set(other, {
+      siteKey: SITE,
+      normalizedUrl: other,
+      lastStatus: 200,
+      state: "active",
+      lastSeenCrawlId: "a0",
+      lastSeenAt: NOW - 1000,
+    });
+  store.pages.set(URL, {
+    siteKey: SITE,
+    normalizedUrl: URL,
+    lastStatus: 200,
+    state: "active",
+    lastSeenCrawlId: "a0",
+    lastSeenAt: NOW - 1000,
+  });
   // The earlier audit stored the title finding under the old name, keyed by the page url (the item id).
   store.findings.set(findingKey(URL, RULE, "meta-title", locator), {
     siteKey: SITE,
@@ -91,13 +134,17 @@ async function audit(pageChecks: CheckResult[], withNeighbour = false, locator =
     crawlId: "a1",
     ruleResults,
     pageStatuses: [],
-    resolutionSignal: buildResolutionSignal(ruleResults, withNeighbour ? [URL, other] : [URL]),
+    resolutionSignal: buildResolutionSignal(
+      ruleResults,
+      withNeighbour ? [URL, other] : [URL]
+    ),
     now: NOW,
   });
   return store;
 }
 
-const old = (s: MemStore) => s.findings.get(findingKey(URL, RULE, "meta-title", URL))!;
+const old = (s: MemStore) =>
+  s.findings.get(findingKey(URL, RULE, "meta-title", URL))!;
 
 describe("a finding under a superseded check name follows its successors", () => {
   test("every successor passed: the old finding resolves", async () => {
@@ -108,7 +155,9 @@ describe("a finding under a superseded check name follows its successors", () =>
   test("a still-long title: the old row retires and the finding lives on under the new name, keeping its first-seen", async () => {
     const store = await audit(titleChecks(LONG));
     expect(old(store).state).toBe("stale");
-    const fresh = store.findings.get(findingKey(URL, RULE, "meta-title-too-long", URL))!;
+    const fresh = store.findings.get(
+      findingKey(URL, RULE, "meta-title-too-long", URL)
+    )!;
     expect(fresh.state).toBe("open");
     expect(fresh.status).toBe("warn");
     expect(fresh.message).toContain("Title too long");
@@ -117,7 +166,9 @@ describe("a finding under a superseded check name follows its successors", () =>
 
   test("a successor that was not checked: the old finding is carried, never resolved", async () => {
     const checks = titleChecks(FIXED).map((c) =>
-      c.name === "meta-title-too-short" ? ({ ...c, status: "skipped", message: "Skipped" } as CheckResult) : c,
+      c.name === "meta-title-too-short"
+        ? ({ ...c, status: "skipped", message: "Skipped" } as CheckResult)
+        : c
     );
     const store = await audit(checks, true);
     expect(old(store).state).toBe("open");
@@ -130,7 +181,9 @@ describe("a title that is MISSING in both runs is still the old check's finding 
   // and neither successor fires on a page with no title. It must stay open with its first-seen, not resolve.
   test("cloud merge: the old row stays open and keeps its first-seen", async () => {
     const missing = titleChecks(null);
-    expect(missing.some((c) => c.name === "meta-title" && c.status !== "pass")).toBe(true);
+    expect(
+      missing.some((c) => c.name === "meta-title" && c.status !== "pass")
+    ).toBe(true);
     // A missing title has no item, so its finding's locator is empty.
     const store = await audit(missing, false, "");
     const row = store.findings.get(findingKey(URL, RULE, "meta-title", ""))!;
@@ -169,10 +222,21 @@ describe("a title that is MISSING in both runs is still the old check's finding 
       supersededChecks: buildSupersededIndex([metaTitleRule.meta]),
       statusByUrl: new Map([[URL, 200]]),
       priorFindings: [prior],
-      priorPages: [{ siteKey: SITE, normalizedUrl: URL, lastStatus: 200, state: "active", lastSeenCrawlId: "a0", lastSeenAt: NOW - 1000 }],
+      priorPages: [
+        {
+          siteKey: SITE,
+          normalizedUrl: URL,
+          lastStatus: 200,
+          state: "active",
+          lastSeenCrawlId: "a0",
+          lastSeenAt: NOW - 1000,
+        },
+      ],
       now: NOW,
     });
-    const row = merged.persisted.find((f) => f.checkName === "meta-title" && f.normalizedUrl === URL)!;
+    const row = merged.persisted.find(
+      (f) => f.checkName === "meta-title" && f.normalizedUrl === URL
+    )!;
     expect(row.state).toBe("open");
     expect(row.firstSeenAt).toBe(NOW - 86_400_000);
   });

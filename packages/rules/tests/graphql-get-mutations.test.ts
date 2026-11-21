@@ -6,9 +6,13 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { executedMutationType, graphqlGetMutationsRule } from "../src/security/graphql-get-mutations";
-import { NOOP_MUTATION } from "../src/security/graphql-probe";
 import type { CheckResult } from "../src/types";
+
+import {
+  executedMutationType,
+  graphqlGetMutationsRule,
+} from "../src/security/graphql-get-mutations";
+import { NOOP_MUTATION } from "../src/security/graphql-probe";
 import {
   BASE,
   candidate,
@@ -57,16 +61,35 @@ function isNoopMutationGet(r: SentRequest): boolean {
 describe("security/graphql-get-mutations", () => {
   test("passive or no probe budget: skipped, nothing sent", async () => {
     for (const opts of [{ level: "passive" as const }, { noProbe: true }]) {
-      const { checks, sent } = await run({ [GQL]: () => json({ data: { __typename: "Mutation" } }) }, opts);
+      const { checks, sent } = await run(
+        { [GQL]: () => json({ data: { __typename: "Mutation" } }) },
+        opts
+      );
       expect(sent).toHaveLength(0);
-      expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probing-passive" })]);
+      expect(checks).toEqual([
+        expect.objectContaining({
+          status: "skipped",
+          skipReason: "probing-passive",
+        }),
+      ]);
     }
   });
 
   test("nothing but the no-op mutation over GET is ever sent, at any level and any answer", async () => {
     const answers: Route[] = [
       () => json({ data: { __typename: "Mutation" } }),
-      () => json({ errors: [{ message: "Can only perform a mutation operation from a POST request." }] }, 405),
+      () =>
+        json(
+          {
+            errors: [
+              {
+                message:
+                  "Can only perform a mutation operation from a POST request.",
+              },
+            ],
+          },
+          405
+        ),
       () => json({ errors: [{ message: "x" }] }, 400),
       () => html(),
     ];
@@ -80,12 +103,20 @@ describe("security/graphql-get-mutations", () => {
     for (const level of ["active", "aggressive"] as const) {
       for (const answer of answers) {
         const { sent } = await run(
-          { [GQL]: answer, [`${BASE}/v1/graphql`]: answer, [`${BASE}/api/graphql`]: answer },
+          {
+            [GQL]: answer,
+            [`${BASE}/v1/graphql`]: answer,
+            [`${BASE}/api/graphql`]: answer,
+          },
           { level, surface: discovered }
         );
         expect(sent.every(isNoopMutationGet)).toBe(true);
         // One request per endpoint: /v1/graphql, /graphql, /api/graphql.
-        expect(sent.map((r) => new URL(r.url).pathname)).toEqual(["/v1/graphql", "/graphql", "/api/graphql"]);
+        expect(sent.map((r) => new URL(r.url).pathname)).toEqual([
+          "/v1/graphql",
+          "/graphql",
+          "/api/graphql",
+        ]);
         total += sent.length;
         restore?.();
       }
@@ -95,7 +126,9 @@ describe("security/graphql-get-mutations", () => {
   });
 
   test("an executed mutation is flagged, naming the endpoint, the risk and the fix", async () => {
-    const { checks } = await run({ [GQL]: () => json({ data: { __typename: "Mutation" } }) });
+    const { checks } = await run({
+      [GQL]: () => json({ data: { __typename: "Mutation" } }),
+    });
     const fail = checks.filter((c) => c.status === "fail");
     expect(fail).toHaveLength(1);
     const msg = fail[0]!.message;
@@ -103,15 +136,25 @@ describe("security/graphql-get-mutations", () => {
     expect(msg).toContain("over GET");
     expect(msg).toContain("CSRF");
     expect(msg).toContain("idempotent");
-    expect(msg).toContain("require POST with a non-simple Content-Type or a CSRF token");
-    expect(fail[0]!.items?.[0]).toMatchObject({ id: GQL, meta: { mutationType: "Mutation" } });
+    expect(msg).toContain(
+      "require POST with a non-simple Content-Type or a CSRF token"
+    );
+    expect(fail[0]!.items?.[0]).toMatchObject({
+      id: GQL,
+      meta: { mutationType: "Mutation" },
+    });
   });
 
   test("custom mutation root names are recognised", async () => {
     for (const name of ["mutation_root", "RootMutationType", "MutationRoot"]) {
-      const { checks } = await run(
-        { [GQL]: () => json({ data: { __typename: name } }, 200, "application/graphql-response+json") }
-      );
+      const { checks } = await run({
+        [GQL]: () =>
+          json(
+            { data: { __typename: name } },
+            200,
+            "application/graphql-response+json"
+          ),
+      });
       expect(checks.filter((c) => c.status === "fail")).toHaveLength(1);
       restore?.();
     }
@@ -120,11 +163,38 @@ describe("security/graphql-get-mutations", () => {
   test("405, POST-only errors, introspection-style errors and query answers are not flagged", async () => {
     for (const route of [
       () => new Response("Method Not Allowed", { status: 405 }),
-      () => json({ errors: [{ message: "Can only perform a mutation operation from a POST request." }] }, 405),
-      () => json({ errors: [{ message: "Mutations are only allowed over POST" }] }, 400),
-      () => json({ errors: [{ message: "GraphQL introspection is not allowed" }] }, 400),
-      () => json({ errors: [{ message: "Schema is not configured for mutations." }] }, 200),
-      () => json({ data: null, errors: [{ message: "mutation not allowed" }] }, 200),
+      () =>
+        json(
+          {
+            errors: [
+              {
+                message:
+                  "Can only perform a mutation operation from a POST request.",
+              },
+            ],
+          },
+          405
+        ),
+      () =>
+        json(
+          { errors: [{ message: "Mutations are only allowed over POST" }] },
+          400
+        ),
+      () =>
+        json(
+          { errors: [{ message: "GraphQL introspection is not allowed" }] },
+          400
+        ),
+      () =>
+        json(
+          { errors: [{ message: "Schema is not configured for mutations." }] },
+          200
+        ),
+      () =>
+        json(
+          { data: null, errors: [{ message: "mutation not allowed" }] },
+          200
+        ),
       () => json({ data: { __typename: "Query" } }),
       () => json({ data: { __typename: "Mutation" } }, 405),
     ]) {
@@ -149,8 +219,14 @@ describe("security/graphql-get-mutations", () => {
   });
 
   test("an oversized answer is not parsed or flagged", async () => {
-    const big = JSON.stringify({ data: { __typename: "Mutation" }, extensions: { pad: "a".repeat(70 * 1024) } });
-    const { checks } = await run({ [GQL]: () => new Response(big, { headers: { "content-type": "application/json" } }) });
+    const big = JSON.stringify({
+      data: { __typename: "Mutation" },
+      extensions: { pad: "a".repeat(70 * 1024) },
+    });
+    const { checks } = await run({
+      [GQL]: () =>
+        new Response(big, { headers: { "content-type": "application/json" } }),
+    });
     expect(checks).toEqual([expect.objectContaining({ status: "pass" })]);
   });
 
@@ -158,15 +234,24 @@ describe("security/graphql-get-mutations", () => {
     const fail = () => {
       throw new TypeError("timed out");
     };
-    const { checks, sent } = await run({ [GQL]: fail, [`${BASE}/api/graphql`]: fail });
+    const { checks, sent } = await run({
+      [GQL]: fail,
+      [`${BASE}/api/graphql`]: fail,
+    });
     expect(sent).toHaveLength(2);
     expect(checks).toEqual([
-      expect.objectContaining({ status: "skipped", skipReason: "probe-errors" }),
+      expect.objectContaining({
+        status: "skipped",
+        skipReason: "probe-errors",
+      }),
     ]);
   });
 
   test("robots.txt disallowed endpoints are not probed below aggressive", async () => {
-    const { sent } = await run({}, { robotsTxt: robots(["/graphql", "/api/"]) });
+    const { sent } = await run(
+      {},
+      { robotsTxt: robots(["/graphql", "/api/"]) }
+    );
     expect(sent).toHaveLength(0);
   });
 
@@ -179,9 +264,16 @@ describe("security/graphql-get-mutations", () => {
       },
     });
     restore = stub.restore;
-    const { checks } = await graphqlGetMutationsRule.run(ruleCtx({ budgetMs: 50, now: () => t }));
+    const { checks } = await graphqlGetMutationsRule.run(
+      ruleCtx({ budgetMs: 50, now: () => t })
+    );
     expect(stub.sent.map((r) => new URL(r.url).pathname)).toEqual(["/graphql"]);
-    expect(checks).toEqual([expect.objectContaining({ status: "skipped", skipReason: "probe-budget" })]);
+    expect(checks).toEqual([
+      expect.objectContaining({
+        status: "skipped",
+        skipReason: "probe-budget",
+      }),
+    ]);
     expect(checks[0]!.message).toContain("after 1 of 2 GraphQL endpoint(s)");
     expect(checks[0]!.message).toContain("the rest were not checked");
   });
@@ -195,21 +287,36 @@ describe("security/graphql-get-mutations", () => {
     t = 100;
     const { checks } = await graphqlGetMutationsRule.run(ctx);
     expect(stub.sent).toHaveLength(0);
-    expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "probe-budget" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "probe-budget",
+    });
   });
 
   test("each run probes live: a fixed server passes on the next run", async () => {
-    const first = await run({ [GQL]: () => json({ data: { __typename: "Mutation" } }) });
+    const first = await run({
+      [GQL]: () => json({ data: { __typename: "Mutation" } }),
+    });
     expect(first.checks.some((c) => c.status === "fail")).toBe(true);
     restore?.();
-    const second = await run({ [GQL]: () => new Response(null, { status: 405 }) });
-    expect(second.checks).toEqual([expect.objectContaining({ status: "pass" })]);
+    const second = await run({
+      [GQL]: () => new Response(null, { status: 405 }),
+    });
+    expect(second.checks).toEqual([
+      expect.objectContaining({ status: "pass" }),
+    ]);
   });
 
   test("executedMutationType", () => {
-    expect(executedMutationType({ data: { __typename: "Mutation" }, errors: [] })).toBe("Mutation");
-    expect(executedMutationType({ data: { __typename: "Query" }, errors: [] })).toBeNull();
-    expect(executedMutationType({ data: null, errors: [{ message: "x" }] })).toBeNull();
+    expect(
+      executedMutationType({ data: { __typename: "Mutation" }, errors: [] })
+    ).toBe("Mutation");
+    expect(
+      executedMutationType({ data: { __typename: "Query" }, errors: [] })
+    ).toBeNull();
+    expect(
+      executedMutationType({ data: null, errors: [{ message: "x" }] })
+    ).toBeNull();
     expect(executedMutationType(null)).toBeNull();
   });
 });

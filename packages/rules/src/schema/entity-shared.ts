@@ -19,7 +19,12 @@
 // here from a site that declares nothing — and only one of those is worth
 // telling the user about.
 
-import type { CheckItem, CheckResult, EntityMap, EntityMapNode } from "../types";
+import type {
+  CheckItem,
+  CheckResult,
+  EntityMap,
+  EntityMapNode,
+} from "../types";
 
 export {
   IDENTITY_TYPES,
@@ -32,10 +37,14 @@ export {
   primaryOrganization,
   referencedKeys,
 } from "@squirrelscan/core-contracts/entity-map-findings";
-import { compareStrings, pageTotal } from "@squirrelscan/core-contracts/entity-map-findings";
+import {
+  compareStrings,
+  pageTotal,
+} from "@squirrelscan/core-contracts/entity-map-findings";
 
 /** Where every rule's fix text points. */
-export const ENTITY_FIX_DOCS = "https://docs.squirrelscan.com/guides/entity-map/fixing";
+export const ENTITY_FIX_DOCS =
+  "https://docs.squirrelscan.com/guides/entity-map/fixing";
 
 /**
  * Items listed on one finding before it is truncated.
@@ -48,10 +57,6 @@ export const ENTITY_ITEM_CAP = 10;
 
 /** Declaring pages listed against one item. */
 export const ENTITY_PAGE_CAP = 5;
-
-
-
-
 
 /** What to call an entity in a message: its name, else its type, else its key. */
 export function entityLabel(node: EntityMapNode): string {

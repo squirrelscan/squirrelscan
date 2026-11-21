@@ -5,8 +5,9 @@
 // equal-priority categories (by code). These tests shuffle the input and
 // assert byte-identical (JSON.stringify-equal) output.
 
-import { describe, expect, test } from "bun:test";
 import type { ReportRuleResult } from "@squirrelscan/core-contracts";
+
+import { describe, expect, test } from "bun:test";
 
 import { groupIssuesByCategory } from "../src/grouping";
 
@@ -34,9 +35,24 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
   test("a check's affected pages are sorted regardless of check order", () => {
     const results: Record<string, ReportRuleResult> = {
       "core/x": rule("core/x", "core", 5, [
-        { name: "C", status: "fail", message: "broken", pageUrl: "https://e.com/z" },
-        { name: "C", status: "fail", message: "broken", pageUrl: "https://e.com/a" },
-        { name: "C", status: "fail", message: "broken", pageUrl: "https://e.com/m" },
+        {
+          name: "C",
+          status: "fail",
+          message: "broken",
+          pageUrl: "https://e.com/z",
+        },
+        {
+          name: "C",
+          status: "fail",
+          message: "broken",
+          pageUrl: "https://e.com/a",
+        },
+        {
+          name: "C",
+          status: "fail",
+          message: "broken",
+          pageUrl: "https://e.com/m",
+        },
       ]),
     };
     const grouped = groupIssuesByCategory(results);
@@ -73,7 +89,12 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
     // even though its id sorts last — weight is the PRIMARY key. The two w5
     // rules then sort aaa before bbb by id.
     const failCheck = [
-      { name: "C", status: "fail" as const, message: "x", pageUrl: "https://e.com/p" },
+      {
+        name: "C",
+        status: "fail" as const,
+        message: "x",
+        pageUrl: "https://e.com/p",
+      },
     ];
     const results: Record<string, ReportRuleResult> = {
       "core/bbb": rule("core/bbb", "core", 5, failCheck),
@@ -96,7 +117,10 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
       ["core/a", rule("core/a", "core", 5, failCheck("https://e.com/2"))],
       ["core/b", rule("core/b", "core", 5, failCheck("https://e.com/1"))],
       ["perf/c", rule("perf/c", "perf", 5, failCheck("https://e.com/3"))],
-      ["security/d", rule("security/d", "security", 5, failCheck("https://e.com/4"))],
+      [
+        "security/d",
+        rule("security/d", "security", 5, failCheck("https://e.com/4")),
+      ],
       ["core/e", rule("core/e", "core", 9, failCheck("https://e.com/5"))],
     ];
 
@@ -115,9 +139,24 @@ describe("groupIssuesByCategory deterministic ordering (#150)", () => {
     // by name then status then message.
     const results: Record<string, ReportRuleResult> = {
       "core/x": rule("core/x", "core", 5, [
-        { name: "Bravo", status: "warn", message: "m", pageUrl: "https://e.com/1" },
-        { name: "Alpha", status: "fail", message: "m", pageUrl: "https://e.com/2" },
-        { name: "Alpha", status: "fail", message: "a", pageUrl: "https://e.com/3" },
+        {
+          name: "Bravo",
+          status: "warn",
+          message: "m",
+          pageUrl: "https://e.com/1",
+        },
+        {
+          name: "Alpha",
+          status: "fail",
+          message: "m",
+          pageUrl: "https://e.com/2",
+        },
+        {
+          name: "Alpha",
+          status: "fail",
+          message: "a",
+          pageUrl: "https://e.com/3",
+        },
       ]),
     };
     const grouped = groupIssuesByCategory(results);

@@ -43,7 +43,7 @@ export const SECURITY_HEADER_RULES: readonly Rule[] = [
 export function gradeResponseHeaders(
   rule: Rule,
   url: string,
-  headers: Record<string, string>,
+  headers: Record<string, string>
 ): CheckResult[] {
   const ctx = { site: { pages: [{ url, headers }] } } as unknown as RuleContext;
   const result: RuleResult | Promise<RuleResult> = rule.run(ctx);

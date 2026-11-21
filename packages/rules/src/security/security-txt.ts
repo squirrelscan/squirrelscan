@@ -1,9 +1,18 @@
 // security/security-txt - RFC 9116 vulnerability-disclosure contact file
 
-import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
+import type {
+  WellKnownPath,
+  WellKnownProbe,
+} from "@squirrelscan/core-contracts";
 
-import { NOT_CHECKED, answeredWellKnown, notApprovedPath, notCheckedCheck } from "../ax/discovery-probe-state";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import {
+  NOT_CHECKED,
+  answeredWellKnown,
+  notApprovedPath,
+  notCheckedCheck,
+} from "../ax/discovery-probe-state";
 
 const CANONICAL_PATH: WellKnownPath = "/.well-known/security.txt";
 // The pre-RFC location. Still read by some scanners, so it is reported, not failed.
@@ -40,7 +49,9 @@ function parseRfc3339(value: string): number | null {
 }
 
 function quoteExpires(value: string): string {
-  return value.length > MAX_QUOTED_EXPIRES ? `${value.slice(0, MAX_QUOTED_EXPIRES)}...` : value;
+  return value.length > MAX_QUOTED_EXPIRES
+    ? `${value.slice(0, MAX_QUOTED_EXPIRES)}...`
+    : value;
 }
 
 // A body the server answered with HTML is the site's catch-all page, never the file.
@@ -76,7 +87,11 @@ function excerptBytes(p: WellKnownProbe): number {
 }
 
 // Validate a file that answered 200 with a non-HTML body.
-function checkFile(p: WellKnownProbe, now: number, legacy: boolean): CheckResult[] {
+function checkFile(
+  p: WellKnownProbe,
+  now: number,
+  legacy: boolean
+): CheckResult[] {
   const checks: CheckResult[] = [];
   const fields = parseFields(p.excerpt);
   // A body longer than the excerpt is only partly seen: a missing field then
@@ -104,7 +119,8 @@ function checkFile(p: WellKnownProbe, now: number, legacy: boolean): CheckResult
       checks.push({
         name: "security-txt-expires",
         status: "warn",
-        message: "security.txt Expires is not an RFC 3339 date-time (e.g. 2027-01-31T23:59:59Z)",
+        message:
+          "security.txt Expires is not an RFC 3339 date-time (e.g. 2027-01-31T23:59:59Z)",
         value: expires,
       });
     } else if (when <= now) {
@@ -181,7 +197,10 @@ export const securityTxtRule: Rule = {
 
     const canonical = wk.probes.find((p) => p.path === CANONICAL_PATH);
     const legacy = wk.probes.find((p) => p.path === LEGACY_PATH);
-    const { unchecked, reason } = answeredWellKnown(wk, [CANONICAL_PATH, LEGACY_PATH]);
+    const { unchecked, reason } = answeredWellKnown(wk, [
+      CANONICAL_PATH,
+      LEGACY_PATH,
+    ]);
     const now = Date.now();
 
     // The catch-all trap: a 200 HTML page at the canonical path is never a pass.
@@ -208,7 +227,12 @@ export const securityTxtRule: Rule = {
     // Only 404 and 410 say the file is not there. A 401/403 (often a WAF or a
     // bot rule), a 429 or a 5xx says nothing about the file.
     // The legacy path stands in when the canonical one was not requested (not approved, not sent) (#1794).
-    const decisive = canonical && canonical.status > 0 ? canonical : notApprovedPath(wk, CANONICAL_PATH) ? legacy : canonical;
+    const decisive =
+      canonical && canonical.status > 0
+        ? canonical
+        : notApprovedPath(wk, CANONICAL_PATH)
+          ? legacy
+          : canonical;
     if (decisive && MISSING_STATUSES.has(decisive.status)) {
       checks.push({
         name: "security-txt",
@@ -233,7 +257,14 @@ export const securityTxtRule: Rule = {
       return { checks };
     }
 
-    checks.push(notCheckedCheck("security-txt", "security.txt", { notChecked: unchecked }, reason));
+    checks.push(
+      notCheckedCheck(
+        "security-txt",
+        "security.txt",
+        { notChecked: unchecked },
+        reason
+      )
+    );
     return { checks };
   },
 };

@@ -8,8 +8,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -35,21 +36,24 @@ function serve(): { origin: string; seen: Seen[] } {
         case "/":
           return new Response(
             `<!doctype html><html><head><title>Home</title></head><body><a href="/about">About</a></body></html>`,
-            { headers: { "content-type": "text/html" } },
+            { headers: { "content-type": "text/html" } }
           );
         case "/robots.txt":
-          return new Response(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, {
-            headers: { "content-type": "text/plain" },
-          });
+          return new Response(
+            `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+            {
+              headers: { "content-type": "text/plain" },
+            }
+          );
         case "/sitemap.xml":
           return new Response(
             `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/about</loc></url></urlset>`,
-            { headers: { "content-type": "application/xml" } },
+            { headers: { "content-type": "application/xml" } }
           );
         default:
           return new Response(
             `<!doctype html><html><head><title>Page</title></head><body>Page</body></html>`,
-            { headers: { "content-type": "text/html" } },
+            { headers: { "content-type": "text/html" } }
           );
       }
     },
@@ -86,27 +90,42 @@ describe("custom headers that differ only in case from a built-in one (repo#3346
           storage,
         });
         yield* crawler.start(`${origin}/`, `${origin}/`);
-      }),
+      })
     );
 
     // Non-vacuous: pages, robots.txt, the sitemap and the root probes all went out.
     const paths = new Set(seen.map((s) => s.path));
-    for (const path of ["/", "/about", "/robots.txt", "/sitemap.xml", "/llms.txt"]) {
+    for (const path of [
+      "/",
+      "/about",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/llms.txt",
+    ]) {
       expect(paths).toContain(path);
     }
     // No request carried two values for one name.
     expect(
       seen
-        .filter((s) => s.userAgent?.includes("custom-agent") && s.userAgent !== "custom-agent")
-        .map((s) => s.path),
+        .filter(
+          (s) =>
+            s.userAgent?.includes("custom-agent") &&
+            s.userAgent !== "custom-agent"
+        )
+        .map((s) => s.path)
     ).toEqual([]);
     expect(
       seen
-        .filter((s) => s.accept?.includes("text/x-custom") && s.accept !== "text/x-custom")
-        .map((s) => s.path),
+        .filter(
+          (s) =>
+            s.accept?.includes("text/x-custom") && s.accept !== "text/x-custom"
+        )
+        .map((s) => s.path)
     ).toEqual([]);
     // The agent-access probe of `/` keeps its fixed identities over the custom agent.
-    const homeAgents = seen.filter((s) => s.path === "/").map((s) => s.userAgent ?? "");
+    const homeAgents = seen
+      .filter((s) => s.path === "/")
+      .map((s) => s.userAgent ?? "");
     expect(homeAgents.some((ua) => ua.includes("GPTBot"))).toBe(true);
     expect(homeAgents.some((ua) => ua.includes("Claude-User"))).toBe(true);
     // The crawl's own requests send the custom agent alone. (`/` is also asked
@@ -115,7 +134,8 @@ describe("custom headers that differ only in case from a built-in one (repo#3346
     for (const s of seen.filter((s) => s.path !== "/")) {
       expect(s.userAgent).toBe("custom-agent");
       // The markdown probe's Accept is the negotiation it tests: always its own.
-      if (s.path === "/index.md") expect(s.accept).not.toContain("text/x-custom");
+      if (s.path === "/index.md")
+        expect(s.accept).not.toContain("text/x-custom");
       else expect(s.accept).toBe("text/x-custom");
     }
   });

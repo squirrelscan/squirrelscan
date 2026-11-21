@@ -31,7 +31,7 @@ export type NoindexSource = "robots meta tag" | "X-Robots-Tag header";
  */
 export function noindexSource(
   parsed: ParsedPage | null | undefined,
-  headers: Record<string, string> | undefined,
+  headers: Record<string, string> | undefined
 ): NoindexSource | null {
   if (!parsed) return null;
   const { reasons } = isPageIndexable(parsed, headers);
@@ -89,9 +89,11 @@ export interface SiteIndexablePage {
 export function isSiteIndexable(
   pages: ReadonlyArray<SiteIndexablePage>,
   baseUrl: string,
-  entryUrls: ReadonlyArray<string | undefined> = [],
+  entryUrls: ReadonlyArray<string | undefined> = []
 ): boolean | undefined {
-  const fetched = pages.filter((page) => page.statusCode < 400 && !page.redirectSource);
+  const fetched = pages.filter(
+    (page) => page.statusCode < 400 && !page.redirectSource
+  );
   const verdict = (refs: SiteIndexablePage[]): boolean | undefined =>
     refs.length === 0
       ? undefined
@@ -102,19 +104,27 @@ export function isSiteIndexable(
     const host = bareHost(base);
     const homepages = fetched.filter((page) => {
       const url = parseUrl(page.url);
-      return url !== null && bareHost(url) === host && url.search === "" && url.pathname === "/";
+      return (
+        url !== null &&
+        bareHost(url) === host &&
+        url.search === "" &&
+        url.pathname === "/"
+      );
     });
     const homepageVerdict = verdict(homepages);
     if (homepageVerdict !== undefined) return homepageVerdict;
   }
 
-  const entries = new Set(entryUrls.map(pageIdentity).filter((id): id is string => id !== null));
+  const entries = new Set(
+    entryUrls.map(pageIdentity).filter((id): id is string => id !== null)
+  );
   if (entries.size === 0) return undefined;
   return verdict(
     fetched.filter(
       (page) =>
-        entries.has(pageIdentity(page.url) ?? "") || entries.has(pageIdentity(page.finalUrl) ?? ""),
-    ),
+        entries.has(pageIdentity(page.url) ?? "") ||
+        entries.has(pageIdentity(page.finalUrl) ?? "")
+    )
   );
 }
 
@@ -131,7 +141,7 @@ export function skipsNoindexPages(site: SiteData | undefined): boolean {
 export function excludesNoindexPage(
   site: SiteData | undefined,
   parsed: ParsedPage | null | undefined,
-  headers: Record<string, string> | undefined,
+  headers: Record<string, string> | undefined
 ): boolean {
   return skipsNoindexPages(site) && noindexSource(parsed, headers) !== null;
 }

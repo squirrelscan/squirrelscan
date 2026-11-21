@@ -111,15 +111,19 @@ export interface SeedRedirectedOutcome {
  * null for a loop or a refused hop, where there is nothing to re-run.
  */
 export function redirectedOutcome(
-  resolution: SeedRedirectResolution,
+  resolution: SeedRedirectResolution
 ): SeedRedirectedOutcome | null {
-  if (resolution.kind === "none" || resolution.kind === "same-site") return null;
+  if (resolution.kind === "none" || resolution.kind === "same-site")
+    return null;
   const { kind } = resolution;
   // Every URL that is printed or recorded is redacted: a Location header can
   // carry a token in its query or credentials in its userinfo.
   const originalUrl = redactUrl(resolution.originalUrl);
   const finalUrl = redactUrl(resolution.finalUrl);
-  const chain = resolution.chain.map((hop) => ({ url: redactUrl(hop.url), status: hop.status }));
+  const chain = resolution.chain.map((hop) => ({
+    url: redactUrl(hop.url),
+    status: hop.status,
+  }));
   let rerunCommand: string | null = null;
   let message: string;
   switch (kind) {
@@ -136,7 +140,9 @@ export function redirectedOutcome(
       message = `${originalUrl} redirects more than ${MAX_SEED_REDIRECT_HOPS} times, so nothing was audited. The chain was heading to ${finalUrl}.`;
       break;
     default: {
-      const scheme = /^refused scheme ([a-z][a-z0-9+.-]*:)$/i.exec(resolution.refusal ?? "")?.[1];
+      const scheme = /^refused scheme ([a-z][a-z0-9+.-]*:)$/i.exec(
+        resolution.refusal ?? ""
+      )?.[1];
       message = scheme
         ? `${originalUrl} redirects to a ${scheme} URL, which was refused and never requested, so nothing was audited. The last URL requested was ${finalUrl}.`
         : `${originalUrl} redirects to ${finalUrl}, which was not requested (${redactUrlsInText(resolution.refusal ?? "refused")}), so nothing was audited.`;
@@ -178,7 +184,21 @@ export function redactUrl(value: string): string {
 
 /** Characters that end a URL inside error text: whitespace, quotes and closing brackets. */
 const TOKEN_LEAD = new Set(["(", '"', "'", "`", "<", "[", "{"]);
-const TOKEN_TRAIL = new Set([".", ",", ";", ":", "!", "?", ")", '"', "'", "`", ">", "]", "}"]);
+const TOKEN_TRAIL = new Set([
+  ".",
+  ",",
+  ";",
+  ":",
+  "!",
+  "?",
+  ")",
+  '"',
+  "'",
+  "`",
+  ">",
+  "]",
+  "}",
+]);
 const URL_PLACEHOLDER = "(redacted URL)";
 
 function redactTokenCore(core: string): string {
@@ -194,7 +214,8 @@ function redactTokenCore(core: string): string {
     const redacted = redactUrl(core);
     // The parser can leave an `@` in the path (`https://usrx\\pwdy@host/`, `https://usrx:123/pwdy@host/`):
     // it read the userinfo differently from the text, so fail closed.
-    if (redacted !== "(unprintable URL)" && !redacted.includes("@")) return redacted;
+    if (redacted !== "(unprintable URL)" && !redacted.includes("@"))
+      return redacted;
   }
   return URL_PLACEHOLDER;
 }
@@ -208,7 +229,11 @@ const SPLIT_LOOKAHEAD_TOKENS = 16;
  * that contains an `@` (at most {@link SPLIT_LOOKAHEAD_TOKENS} tokens ahead). Returns how many
  * whitespace-separated tokens past this one to replace, or 0 when the authority is not open.
  */
-function openAuthorityRun(token: string, parts: string[], index: number): number {
+function openAuthorityRun(
+  token: string,
+  parts: string[],
+  index: number
+): number {
   if (!/^[("'`<[{]*https?:\/\//i.test(token)) return 0;
   const afterScheme = token.slice(token.indexOf("//") + 2);
   if (/[/?#\\@]/.test(afterScheme)) return 0;
@@ -259,7 +284,9 @@ export function redactUrlsInText(text: string): string {
     out.push(
       endsOpen
         ? token.slice(0, start) + URL_PLACEHOLDER
-        : token.slice(0, start) + redactTokenCore(token.slice(start, end)) + token.slice(end)
+        : token.slice(0, start) +
+            redactTokenCore(token.slice(start, end)) +
+            token.slice(end)
     );
   }
   return out.join("");

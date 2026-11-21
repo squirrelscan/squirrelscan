@@ -15,7 +15,7 @@ const SCORE_SPANS = [
   new RegExp(String.raw`\b\d{1,3}(?:\.\d+)?${OUT_OF}`, "gi"),
   new RegExp(
     String.raw`\bscor(?:e|es|ed|ing)\b:?(?:\s+(?:of|at|is|was|sits|stands|now|just|only|around|about|roughly|a|an|its|their|overall|health)){0,4}\s+${SCORE_NUM}(?:\s*(?:,|and|or|to|–|-)\s*${SCORE_NUM})*`,
-    "gi",
+    "gi"
   ),
   /\b\d{1,3}(?:\.\d+)?\s+(?:overall\s+|health\s+)?score\b/gi,
 ];
@@ -50,16 +50,20 @@ const PAGE_COUNTS = [
   new RegExp(String.raw`\b${COUNT}(?:\+?\s+${MODIFIER}|-)pages?\b`, "gi"),
   new RegExp(
     String.raw`\b${COUNT}\s+of\s+(?:its\s+|the\s+)?(?:\d[\d,]*\+?\s+)?${MODIFIER}pages?\b`,
-    "gi",
+    "gi"
   ),
-  new RegExp(String.raw`\b${COUNT}\s*(?:to|-|–|or|and)\s*\d[\d,]*\+?\s+${MODIFIER}pages?\b`, "gi"),
+  new RegExp(
+    String.raw`\b${COUNT}\s*(?:to|-|–|or|and)\s*\d[\d,]*\+?\s+${MODIFIER}pages?\b`,
+    "gi"
+  ),
 ];
 
 /** Every page count a sentence states. */
 export function pageCounts(sentence: string): number[] {
   const out: number[] = [];
   for (const re of PAGE_COUNTS) {
-    for (const m of sentence.matchAll(re)) out.push(Number(m[1]!.replace(/,/g, "")));
+    for (const m of sentence.matchAll(re))
+      out.push(Number(m[1]!.replace(/,/g, "")));
   }
   return out;
 }
@@ -99,7 +103,7 @@ export interface SummaryTextEdits {
  */
 export function guardSummaryText(
   text: { prose: string; verdict: string },
-  opts: { allowedPageCounts: Iterable<number>; fallbackProse: string },
+  opts: { allowedPageCounts: Iterable<number>; fallbackProse: string }
 ): { prose: string; verdict: string; edits: SummaryTextEdits } {
   const allowed = new Set([...opts.allowedPageCounts].filter((n) => n > 0));
   const edits: SummaryTextEdits = {
@@ -128,7 +132,7 @@ export function guardSummaryText(
       splitSentences(p)
         .map(keep)
         .filter((s): s is string => s !== null)
-        .join(" "),
+        .join(" ")
     )
     .filter(Boolean);
   const verdict = text.verdict.trim() ? (keep(text.verdict.trim()) ?? "") : "";

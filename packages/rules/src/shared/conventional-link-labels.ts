@@ -96,9 +96,13 @@ export const CONVENTIONAL_LABEL_LANGUAGES = [
   "ru",
 ] as const;
 
-export type ConventionalLabelLanguage = (typeof CONVENTIONAL_LABEL_LANGUAGES)[number];
+export type ConventionalLabelLanguage =
+  (typeof CONVENTIONAL_LABEL_LANGUAGES)[number];
 
-type LabelTable = Record<ConventionalLabelKind, Record<ConventionalLabelLanguage, readonly string[]>>;
+type LabelTable = Record<
+  ConventionalLabelKind,
+  Record<ConventionalLabelLanguage, readonly string[]>
+>;
 
 /**
  * The labels as a reader writes them; accents, case and punctuation do not matter, because
@@ -240,14 +244,7 @@ export const CONVENTIONAL_LINK_LABELS: LabelTable = {
       "账户",
       "帳戶",
     ],
-    ko: [
-      "로그인",
-      "회원가입",
-      "가입하기",
-      "로그아웃",
-      "내 계정",
-      "마이페이지",
-    ],
+    ko: ["로그인", "회원가입", "가입하기", "로그아웃", "내 계정", "마이페이지"],
     ru: [
       "войти",
       "вход",
@@ -562,8 +559,10 @@ export const CONVENTIONAL_LINK_LABELS: LabelTable = {
 /** Every label across kinds and languages, normalised. */
 const CONVENTIONAL_SET: ReadonlySet<string> = new Set(
   Object.values(CONVENTIONAL_LINK_LABELS).flatMap((byLanguage) =>
-    Object.values(byLanguage).flatMap((labels) => labels.map(normalizeLinkLabel)),
-  ),
+    Object.values(byLanguage).flatMap((labels) =>
+      labels.map(normalizeLinkLabel)
+    )
+  )
 );
 
 /**

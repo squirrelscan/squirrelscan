@@ -3,10 +3,14 @@
 // candidate set is deduped up-front — so a 500-page crawl never fans out into
 // thousands of provider calls.
 
-import type { IntelSource, IntelUrlVerdict } from "@squirrelscan/core-contracts";
+import type {
+  IntelSource,
+  IntelUrlVerdict,
+} from "@squirrelscan/core-contracts";
+
+import type { IntelConfig, IntelTransport } from "./types";
 
 import { LOOKUP_PROVIDERS, isProviderEnabled } from "./providers";
-import type { IntelConfig, IntelTransport } from "./types";
 import { normalizeUrl } from "./url";
 
 /**
@@ -21,11 +25,13 @@ import { normalizeUrl } from "./url";
 export async function runLookups(
   urls: string[],
   config: IntelConfig,
-  deps: { transport: IntelTransport; concurrency?: number },
+  deps: { transport: IntelTransport; concurrency?: number }
 ): Promise<Map<string, IntelUrlVerdict>> {
   const verdicts = new Map<string, IntelUrlVerdict>();
 
-  const active = LOOKUP_PROVIDERS.filter((p) => isProviderEnabled(config.providers[p.id]));
+  const active = LOOKUP_PROVIDERS.filter((p) =>
+    isProviderEnabled(config.providers[p.id])
+  );
   if (active.length === 0) return verdicts;
 
   // Dedupe candidates by normalized key — same resource queried once.
@@ -50,13 +56,13 @@ export async function runLookups(
             const hits = await provider.lookup(
               rawUrl,
               deps.transport,
-              config.providers[provider.id] ?? {},
+              config.providers[provider.id] ?? {}
             );
             sources.push(...hits);
           } catch {
             // provider unavailable for this URL
           }
-        }),
+        })
       );
       verdicts.set(key, {
         url: rawUrl,
@@ -67,6 +73,8 @@ export async function runLookups(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker())
+  );
   return verdicts;
 }

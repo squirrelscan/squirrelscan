@@ -1,8 +1,8 @@
 // eeat/author-expertise - Author credentials and expertise signals
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const authorExpertiseRule: Rule = {
   meta: {
@@ -19,7 +19,15 @@ export const authorExpertiseRule: Rule = {
     // Author credentials matter for editorial / YMYL content sites; irrelevant to
     // SaaS marketing / ecommerce / landing pages. Gate to content-publishing
     // types. Offline / no-metadata / low-confidence runs as today.
-    appliesWhen: { siteTypes: ["blog", "news", "healthcare_provider", "education", "nonprofit"] },
+    appliesWhen: {
+      siteTypes: [
+        "blog",
+        "news",
+        "healthcare_provider",
+        "education",
+        "nonprofit",
+      ],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {

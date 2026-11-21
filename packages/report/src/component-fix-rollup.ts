@@ -61,12 +61,15 @@ function componentRootKey(group: ComponentFixGroup): string | undefined {
 /** The value a defect is about, as a short string for the rolled-up list. */
 function defectValue(group: ComponentFixGroup): string {
   const { values } = group.defect;
-  const preferred = values.normalizedText ?? values.text ?? values.reason ?? values.year;
+  const preferred =
+    values.normalizedText ?? values.text ?? values.reason ?? values.year;
   return preferred === undefined ? group.defect.kind : String(preferred);
 }
 
 function pageSetKey(group: ComponentFixGroup): string {
-  return [...group.affectedPages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join("\u0000");
+  return [...group.affectedPages]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .join("\u0000");
 }
 
 /**
@@ -75,7 +78,9 @@ function pageSetKey(group: ComponentFixGroup): string {
  * Groups without a component root, or alone in their bucket, come back as
  * one-member units so callers can render a single list without special cases.
  */
-export function componentFixRollups(groups: readonly ComponentFixGroup[]): ComponentFixRollup[] {
+export function componentFixRollups(
+  groups: readonly ComponentFixGroup[]
+): ComponentFixRollup[] {
   const buckets = new Map<string, ComponentFixGroup[]>();
   const order: string[] = [];
 
@@ -122,9 +127,15 @@ export function componentFixRollups(groups: readonly ComponentFixGroup[]): Compo
       representative,
       affectedPages: representative.affectedPages,
       affectedPageCount: representative.affectedPageCount,
-      elementCount: members.reduce((sum, member) => sum + member.occurrences.length, 0),
+      elementCount: members.reduce(
+        (sum, member) => sum + member.occurrences.length,
+        0
+      ),
       distinctValues: distinct.slice(0, ROLLUP_MAX_DISTINCT_VALUES),
-      additionalValues: Math.max(0, distinct.length - ROLLUP_MAX_DISTINCT_VALUES),
+      additionalValues: Math.max(
+        0,
+        distinct.length - ROLLUP_MAX_DISTINCT_VALUES
+      ),
     };
   });
 }
@@ -159,12 +170,12 @@ export function describeRollupDefect(rollup: ComponentFixRollup): string {
         ? "with no accessible text"
         : "with generic text";
   const values = distinctValues.map((value) => `"${value}"`).join(", ");
-  const tail = additionalValues > 0 ? `${values} (+${additionalValues} more)` : values;
+  const tail =
+    additionalValues > 0 ? `${values} (+${additionalValues} more)` : values;
   return values.length === 0
     ? `${elementCount} ${noun} ${what}`
     : `${elementCount} ${noun} ${what} ${tail}`;
 }
-
 
 /** Stable comparison key for a defect's VALUES, not just its kind. */
 function defectValuesKey(group: ComponentFixGroup): string {
@@ -176,8 +187,8 @@ function defectValuesKey(group: ComponentFixGroup): string {
 
 /** The distinct repair slots a unit covers, as a sorted list. */
 function slotSet(unit: ComponentFixRollup): string[] {
-  return [...new Set(unit.groups.map((group) => group.semanticSlot))].sort((a, b) =>
-    a < b ? -1 : a > b ? 1 : 0,
+  return [...new Set(unit.groups.map((group) => group.semanticSlot))].sort(
+    (a, b) => (a < b ? -1 : a > b ? 1 : 0)
   );
 }
 
@@ -200,7 +211,7 @@ function componentFamilyKey(group: ComponentFixGroup): string | undefined {
  * and must not be pre-empted by this one.
  */
 export function componentFamilyRollups(
-  units: readonly ComponentFixRollup[],
+  units: readonly ComponentFixRollup[]
 ): ComponentFixRollup[] {
   const buckets = new Map<string, ComponentFixRollup[]>();
   const order: string[] = [];
@@ -237,9 +248,9 @@ export function componentFamilyRollups(
     const members = buckets.get(key)!;
     if (members.length === 1) return members[0]!;
     const groups = members.flatMap((member) => member.groups);
-    const pages = [...new Set(members.flatMap((member) => member.affectedPages))].sort((a, b) =>
-      a < b ? -1 : a > b ? 1 : 0,
-    );
+    const pages = [
+      ...new Set(members.flatMap((member) => member.affectedPages)),
+    ].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const seen = new Set<string>();
     const distinct: string[] = [];
     for (const member of members) {
@@ -257,9 +268,15 @@ export function componentFamilyRollups(
       representative: members[0]!.representative,
       affectedPages: pages,
       affectedPageCount: pages.length,
-      elementCount: members.reduce((sum, member) => sum + member.elementCount, 0),
+      elementCount: members.reduce(
+        (sum, member) => sum + member.elementCount,
+        0
+      ),
       distinctValues: distinct.slice(0, ROLLUP_MAX_DISTINCT_VALUES),
-      additionalValues: Math.max(0, distinct.length - ROLLUP_MAX_DISTINCT_VALUES),
+      additionalValues: Math.max(
+        0,
+        distinct.length - ROLLUP_MAX_DISTINCT_VALUES
+      ),
     };
   });
 }

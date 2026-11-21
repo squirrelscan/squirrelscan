@@ -28,7 +28,11 @@ function channel(hex: string, start: number): number {
 export function relativeLuminance(color: string): number {
   const hex = normalizeBrandColor(color);
   if (!hex) throw new RangeError(`Invalid colour: ${color}`);
-  return 0.2126 * channel(hex, 1) + 0.7152 * channel(hex, 3) + 0.0722 * channel(hex, 5);
+  return (
+    0.2126 * channel(hex, 1) +
+    0.7152 * channel(hex, 3) +
+    0.0722 * channel(hex, 5)
+  );
 }
 
 /** WCAG 2.x contrast ratio between two `#rrggbb` colours (1 to 21). */
@@ -40,11 +44,19 @@ export function contrastRatio(a: string, b: string): number {
 
 /** Black or white, whichever has the higher contrast on `color`. */
 export function pickTextOn(color: string): "#000000" | "#ffffff" {
-  return contrastRatio(color, BLACK) >= contrastRatio(color, WHITE) ? BLACK : WHITE;
+  return contrastRatio(color, BLACK) >= contrastRatio(color, WHITE)
+    ? BLACK
+    : WHITE;
 }
 
 export type BrandColorValidation =
-  | { ok: true; color: string; textColor: "#000000" | "#ffffff"; textContrast: number; pageContrast: number }
+  | {
+      ok: true;
+      color: string;
+      textColor: "#000000" | "#ffffff";
+      textContrast: number;
+      pageContrast: number;
+    }
   | {
       ok: false;
       reason: "invalid-format" | "text-contrast" | "page-contrast";
@@ -56,7 +68,11 @@ export type BrandColorValidation =
 export function validateBrandColor(input: unknown): BrandColorValidation {
   const color = normalizeBrandColor(input);
   if (!color) {
-    return { ok: false, reason: "invalid-format", message: "Brand colour must be a #rrggbb hex value." };
+    return {
+      ok: false,
+      reason: "invalid-format",
+      message: "Brand colour must be a #rrggbb hex value.",
+    };
   }
   const textColor = pickTextOn(color);
   const textContrast = contrastRatio(color, textColor);

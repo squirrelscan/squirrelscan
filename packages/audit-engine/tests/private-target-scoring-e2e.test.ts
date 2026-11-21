@@ -18,16 +18,24 @@
 // those conditions. The canonical golden tests pin the public synthetic site's
 // numbers exactly, so a drift there fails those too.
 
-import { describe, expect, test } from "bun:test";
-
 import type { Config } from "@squirrelscan/config";
-import { type CheckResult, type PageRecord, PRIVATE_TARGET_SKIP_REASON } from "@squirrelscan/core-contracts";
+
+import {
+  type CheckResult,
+  type PageRecord,
+  PRIVATE_TARGET_SKIP_REASON,
+} from "@squirrelscan/core-contracts";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { getScoreGrade } from "@squirrelscan/report";
 import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { getGoldenBaselineConfig, run, runV1Pipeline } from "./helpers/golden-baseline";
+import {
+  getGoldenBaselineConfig,
+  run,
+  runV1Pipeline,
+} from "./helpers/golden-baseline";
 
 const GATED = [
   "perf/asset-compression",
@@ -165,7 +173,11 @@ ${page.body.map((sentence) => `<p>${sentence}</p>`).join("\n")}
 
 type Delivery = "dev" | "edge";
 
-function pageRecord(base: string, page: (typeof PAGES)[number], delivery: Delivery): PageRecord {
+function pageRecord(
+  base: string,
+  page: (typeof PAGES)[number],
+  delivery: Delivery
+): PageRecord {
   const url = `${base}${page.path}`;
   const html = renderPage(base, page);
   const edge = delivery === "edge";
@@ -187,7 +199,9 @@ function pageRecord(base: string, page: (typeof PAGES)[number], delivery: Delive
     headers: {
       contentType: "text/html; charset=utf-8",
       contentEncoding: edge ? "br" : null,
-      cacheControl: edge ? "public, max-age=300, stale-while-revalidate=60" : null,
+      cacheControl: edge
+        ? "public, max-age=300, stale-while-revalidate=60"
+        : null,
       expires: null,
       vary: edge ? "Accept-Encoding" : null,
       etag: edge ? `"${page.path.length}-acme"` : null,
@@ -267,7 +281,7 @@ async function audit(base: string, delivery: Delivery): Promise<Audit> {
           bytesTotal: 0,
           avgLoadTimeMs: 40,
         },
-      } as never),
+      } as never)
     );
     for (const page of PAGES) {
       await run(storage.upsertPage(crawlId, pageRecord(base, page, delivery)));
@@ -283,7 +297,7 @@ async function audit(base: string, delivery: Delivery): Promise<Audit> {
         sitemaps: [sitemapUrl],
         fetchedAt: 1_700_000_000_000,
         error: null,
-      }),
+      })
     );
     await run(
       storage.addSitemap(crawlId, {
@@ -293,13 +307,13 @@ async function audit(base: string, delivery: Delivery): Promise<Audit> {
         childSitemaps: [],
         errors: [],
         fetchedAt: 1_700_000_000_000,
-      }),
+      })
     );
     await run(
       storage.addSitemapUrls(
         crawlId,
-        PAGES.map((p) => ({ sitemapUrl, loc: `${base}${p.path}` })),
-      ),
+        PAGES.map((p) => ({ sitemapUrl, loc: `${base}${p.path}` }))
+      )
     );
 
     const { report } = await runV1Pipeline(storage, crawlId, config());
@@ -321,7 +335,9 @@ const isPrivateSkip = (c: CheckResult) =>
 /** Checks that move the score: fail, or warn on a rule that is not advisory. */
 function scored(checks: CheckResult[], ruleId: string): CheckResult[] {
   const advisory = loadAllRules().get(ruleId)?.meta.severity === "info";
-  return checks.filter((c) => c.status === "fail" || (c.status === "warn" && !advisory));
+  return checks.filter(
+    (c) => c.status === "fail" || (c.status === "warn" && !advisory)
+  );
 }
 
 const [privateRun, devRun, edgeRun] = await Promise.all([
@@ -346,7 +362,9 @@ describe("pub#629: a clean dev site scores like the clean public site", () => {
 
   test("and land within a point or two of the site behind a production edge", () => {
     expect(edgeRun.grade).toBe("A");
-    expect(Math.abs(privateRun.overall - edgeRun.overall)).toBeLessThanOrEqual(2);
+    expect(Math.abs(privateRun.overall - edgeRun.overall)).toBeLessThanOrEqual(
+      2
+    );
   });
 
   test("every gated rule is skipped on localhost, never passed or failed", () => {
@@ -364,27 +382,30 @@ describe("pub#629 / pub#633: one cause costs the score once", () => {
   // reports the site share as info (pub#633: before, both scored it); on a
   // private target neither is charged (pub#629).
   type Check = [ruleId: string, checkName: string];
-  const CONDITIONS: Record<string, { scoredBy: Check; alsoReportedBy: Check }> = {
-    "no compression": {
-      scoredBy: ["perf/compression", "compression"],
-      alsoReportedBy: ["perf/bad-caching", "bad-caching-compression"],
-    },
-    "no caching policy": {
-      scoredBy: ["perf/cache-headers", "cache-headers-missing"],
-      alsoReportedBy: ["perf/bad-caching", "bad-caching-freshness"],
-    },
-  };
+  const CONDITIONS: Record<string, { scoredBy: Check; alsoReportedBy: Check }> =
+    {
+      "no compression": {
+        scoredBy: ["perf/compression", "compression"],
+        alsoReportedBy: ["perf/bad-caching", "bad-caching-compression"],
+      },
+      "no caching policy": {
+        scoredBy: ["perf/cache-headers", "cache-headers-missing"],
+        alsoReportedBy: ["perf/bad-caching", "bad-caching-freshness"],
+      },
+    };
 
   test.each(Object.entries(CONDITIONS))(
     "%s: scored by exactly one check on a public host, still reported by the other",
     (_condition, { scoredBy, alsoReportedBy }) => {
       const charging = [scoredBy, alsoReportedBy].filter(([id, name]) =>
-        scored(devRun.checks(id), id).some((c) => c.name === name),
+        scored(devRun.checks(id), id).some((c) => c.name === name)
       );
       expect(charging).toEqual([scoredBy]);
       const [id, name] = alsoReportedBy;
-      expect(devRun.checks(id).find((c) => c.name === name)?.status).toBe("info");
-    },
+      expect(devRun.checks(id).find((c) => c.name === name)?.status).toBe(
+        "info"
+      );
+    }
   );
 
   test.each(Object.entries(CONDITIONS))(
@@ -393,12 +414,16 @@ describe("pub#629 / pub#633: one cause costs the score once", () => {
       for (const [id] of [scoredBy, alsoReportedBy]) {
         expect(scored(privateRun.checks(id), id)).toEqual([]);
       }
-    },
+    }
   );
 
   test("no HTTPS: charged on a public host, not on localhost", () => {
-    expect(scored(devRun.checks("security/https"), "security/https").length).toBeGreaterThan(0);
-    expect(scored(privateRun.checks("security/https"), "security/https")).toEqual([]);
+    expect(
+      scored(devRun.checks("security/https"), "security/https").length
+    ).toBeGreaterThan(0);
+    expect(
+      scored(privateRun.checks("security/https"), "security/https")
+    ).toEqual([]);
   });
 });
 
@@ -412,6 +437,8 @@ describe("pub#629: public hosts are unchanged", () => {
   });
 
   test("plain http on a public host still fails HTTPS", () => {
-    expect(devRun.checks("security/https").some((c) => c.status === "fail")).toBe(true);
+    expect(
+      devRun.checks("security/https").some((c) => c.status === "fail")
+    ).toBe(true);
   });
 });

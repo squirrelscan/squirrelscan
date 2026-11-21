@@ -1,6 +1,7 @@
+import type { HTMLAttributes } from "react";
+
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { HTMLAttributes } from "react";
 
 import { cn } from "./utils";
 
@@ -16,7 +17,12 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   flat?: boolean;
 }
 
-export function Card({ className, tone = "default", flat = false, ...props }: CardProps) {
+export function Card({
+  className,
+  tone = "default",
+  flat = false,
+  ...props
+}: CardProps) {
   return (
     <div
       data-slot="card"
@@ -24,7 +30,7 @@ export function Card({ className, tone = "default", flat = false, ...props }: Ca
         "overflow-hidden border bg-card text-card-foreground",
         TONE[tone],
         !flat && "shadow-xs",
-        className,
+        className
       )}
       {...props}
     />

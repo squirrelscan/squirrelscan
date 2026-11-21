@@ -1,17 +1,20 @@
+import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
+import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 import { Effect } from "effect";
 import robotsParser from "robots-parser";
 
-import type { RobotsTxtData } from "@squirrelscan/core-contracts";
-import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
-import { readBodyCapped } from "@squirrelscan/utils/response-body";
-
-import { BUDGET_EXHAUSTED_ERROR, budgetedTimeoutMs, safeFetchWithDeadline } from "./deadline";
-
-import { noteRefusal } from "./refusals";
-
 import type { PhaseBudget } from "./deadline";
-import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+
+import {
+  BUDGET_EXHAUSTED_ERROR,
+  budgetedTimeoutMs,
+  safeFetchWithDeadline,
+} from "./deadline";
+import { noteRefusal } from "./refusals";
 
 const ROBOTS_FETCH_TIMEOUT_MS = 30_000;
 
@@ -42,7 +45,7 @@ function emptyRobotsData(url: string, error?: string): RobotsTxtData {
 export function createRobotsEvaluator(
   robotsUrl: string,
   content: string | null,
-  userAgent: string,
+  userAgent: string
 ): RobotsEvaluator {
   const parser = robotsParser(robotsUrl, content ?? "");
   const sitemaps = parser.getSitemaps?.() ?? [];
@@ -74,8 +77,15 @@ export function createRobotsEvaluator(
   };
 }
 
-function unreachableEvaluator(robotsUrl: string, error: string): RobotsEvaluator {
-  return { data: emptyRobotsData(robotsUrl, error), isAllowed: () => true, crawlDelayMs: null };
+function unreachableEvaluator(
+  robotsUrl: string,
+  error: string
+): RobotsEvaluator {
+  return {
+    data: emptyRobotsData(robotsUrl, error),
+    isAllowed: () => true,
+    crawlDelayMs: null,
+  };
 }
 
 export function fetchRobotsEvaluator(
@@ -85,7 +95,7 @@ export function fetchRobotsEvaluator(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   /** The token robots.txt groups are matched against; default `userAgent`. */
-  robotsAgent?: string,
+  robotsAgent?: string
 ): Effect.Effect<RobotsEvaluator, never, never> {
   const robotsUrl = new URL("/robots.txt", baseUrl).toString();
   // The request still says `userAgent`; only the group match uses the token.
@@ -97,7 +107,9 @@ export function fetchRobotsEvaluator(
 
   const timeoutMs = budgetedTimeoutMs(budget, ROBOTS_FETCH_TIMEOUT_MS);
   if (timeoutMs === null) {
-    return Effect.succeed(unreachableEvaluator(robotsUrl, BUDGET_EXHAUSTED_ERROR));
+    return Effect.succeed(
+      unreachableEvaluator(robotsUrl, BUDGET_EXHAUSTED_ERROR)
+    );
   }
 
   return Effect.tryPromise({
@@ -111,7 +123,7 @@ export function fetchRobotsEvaluator(
               Accept: "text/plain",
               "Upgrade-Insecure-Requests": "1",
             },
-            customHeaders,
+            customHeaders
           ),
         },
         timeoutMs,
@@ -138,7 +150,7 @@ export function fetchRobotsEvaluator(
             linkHeader: response.headers.get("link"),
           };
         },
-        budget?.egress,
+        budget?.egress
       ),
     catch: (error) => unreachableEvaluator(robotsUrl, (error as Error).message),
   }).pipe(Effect.catchAll((err) => Effect.succeed(err)));

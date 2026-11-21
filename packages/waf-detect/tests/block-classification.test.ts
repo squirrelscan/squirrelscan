@@ -5,7 +5,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { classifyWafResponse, detectWafChallengePage, inspectWafChallengePage } from "../src";
+import {
+  classifyWafResponse,
+  detectWafChallengePage,
+  inspectWafChallengePage,
+} from "../src";
 import { BLOCKED, NEAR_MISSES, type Sample } from "./fixtures/waf-blocks";
 
 function response(sample: Sample) {
@@ -34,7 +38,9 @@ describe("a provider's challenge or block page is blocked", () => {
   test("every listed provider has at least one block and one near-miss", () => {
     const providers = new Set(BLOCKED.map((sample) => sample.provider));
     for (const provider of providers) {
-      expect(NEAR_MISSES.some((sample) => sample.provider === provider)).toBe(true);
+      expect(NEAR_MISSES.some((sample) => sample.provider === provider)).toBe(
+        true
+      );
     }
     expect<string[]>([...providers].sort()).toEqual(
       [
@@ -50,13 +56,14 @@ describe("a provider's challenge or block page is blocked", () => {
         "sucuri",
         "vercel",
         "wordfence",
-      ].sort(),
+      ].sort()
     );
   });
 
   test("statuses 200, 202, 403, 405, 429 and 503 are all covered", () => {
     const statuses = new Set(BLOCKED.map((sample) => sample.status));
-    for (const status of [200, 202, 403, 405, 429, 503]) expect(statuses.has(status)).toBe(true);
+    for (const status of [200, 202, 403, 405, 429, 503])
+      expect(statuses.has(status)).toBe(true);
   });
 });
 
@@ -76,20 +83,26 @@ describe("a refusal with no provider marker warns and is still audited", () => {
       headers: { server: "cloudflare", raw: { "cf-ray": "0-SYD" } },
       html: "<html><body><h1>Forbidden</h1></body></html>",
     });
-    expect(result).toMatchObject({ verdict: "suspect", providerId: "cloudflare" });
+    expect(result).toMatchObject({
+      verdict: "suspect",
+      providerId: "cloudflare",
+    });
     expect(
       detectWafChallengePage({
         status: 403,
         headers: { server: "cloudflare" },
         html: "<h1>Forbidden</h1>",
-      }).detected,
+      }).detected
     ).toBe(false);
   });
 
   test("a refusal from an unknown server is clear", () => {
     expect(
-      classifyWafResponse({ status: 403, headers: { server: "nginx" }, html: "<h1>Forbidden</h1>" })
-        .verdict,
+      classifyWafResponse({
+        status: 403,
+        headers: { server: "nginx" },
+        html: "<h1>Forbidden</h1>",
+      }).verdict
     ).toBe("clear");
   });
 });
@@ -117,7 +130,11 @@ describe("hostile input stays linear", () => {
 
   function time(html: string): number {
     const start = performance.now();
-    classifyWafResponse({ status: 403, headers: { server: "cloudflare" }, html });
+    classifyWafResponse({
+      status: 403,
+      headers: { server: "cloudflare" },
+      html,
+    });
     inspectWafChallengePage({ status: 200, headers: {}, html });
     return performance.now() - start;
   }

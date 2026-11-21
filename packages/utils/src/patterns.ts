@@ -98,7 +98,9 @@ export function excludePatternError(pattern: string): string | null {
     new RegExp(regexStr, flags);
     return null;
   } catch (error) {
-    return error instanceof Error ? error.message : "invalid regular expression";
+    return error instanceof Error
+      ? error.message
+      : "invalid regular expression";
   }
 }
 

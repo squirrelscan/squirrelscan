@@ -1,8 +1,12 @@
 // schema/faq - FAQPage schema validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import {
+  flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
 
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const faqSchemaRule: Rule = {
   meta: {
@@ -75,9 +79,9 @@ export const faqSchemaRule: Rule = {
     }
 
     const ids = indexJsonLdIds(pageNodes, ctx.page.url);
-    const questions: unknown[] = (Array.isArray(mainEntity) ? mainEntity : [mainEntity]).map(
-      (q) => resolveJsonLdRef(q, ids, ctx.page.url)
-    );
+    const questions: unknown[] = (
+      Array.isArray(mainEntity) ? mainEntity : [mainEntity]
+    ).map((q) => resolveJsonLdRef(q, ids, ctx.page.url));
 
     if (questions.length === 0) {
       checks.push({

@@ -107,7 +107,10 @@ export interface DeadLinksRequest {
  * confirm it (`awaiting-confirmation`), a likely-broken link rather than a
  * blocked one.
  */
-export type UnverifiedReason = "blocked" | "unreachable" | "awaiting-confirmation";
+export type UnverifiedReason =
+  | "blocked"
+  | "unreachable"
+  | "awaiting-confirmation";
 
 export const UNVERIFIED_REASONS: readonly UnverifiedReason[] = [
   "blocked",
@@ -116,8 +119,11 @@ export const UNVERIFIED_REASONS: readonly UnverifiedReason[] = [
 ];
 
 /** `value` as an {@link UnverifiedReason}, or undefined for anything else (untrusted input). */
-export function parseUnverifiedReason(value: unknown): UnverifiedReason | undefined {
-  return typeof value === "string" && (UNVERIFIED_REASONS as readonly string[]).includes(value)
+export function parseUnverifiedReason(
+  value: unknown
+): UnverifiedReason | undefined {
+  return typeof value === "string" &&
+    (UNVERIFIED_REASONS as readonly string[]).includes(value)
     ? (value as UnverifiedReason)
     : undefined;
 }

@@ -4,9 +4,10 @@
 import type { Rule } from "../types";
 
 import { allNoindexPages } from "./all-noindex-pages";
-import { custom404Rule } from "./custom-404";
-import { conflictingIndexSignalsRule } from "./conflicting-index-signals";
 import { canonicalChainRule } from "./canonical-chain";
+import { conflictingIndexSignalsRule } from "./conflicting-index-signals";
+import { custom404Rule } from "./custom-404";
+import { homePageUnreachableRule } from "./home-page-unreachable";
 import { htmlSizeRule } from "./html-size";
 import { indexabilityCheck } from "./indexability";
 import { indexabilityConflicts } from "./indexability-conflicts";
@@ -19,16 +20,15 @@ import { renderedSignalMismatchRule } from "./rendered-signal-mismatch";
 import { robotsMetaConflictRule } from "./robots-meta-conflict";
 import { robotsTxtRule } from "./robots-txt";
 import { schemaNoindexConflict } from "./schema-noindex-conflict";
+import { serverErrorsRule } from "./server-errors";
+import { singlePageSiteRule } from "./single-page-site";
 import { sitemap4xxRule } from "./sitemap-4xx";
 import { sitemapCoverageRule } from "./sitemap-coverage";
-import { homePageUnreachableRule } from "./home-page-unreachable";
 import { sitemapDomainRule } from "./sitemap-domain";
 import { sitemapExistsRule } from "./sitemap-exists";
 import { sitemapLastmodChurnRule } from "./sitemap-lastmod-churn";
 import { sitemapLastmodDriftRule } from "./sitemap-lastmod-drift";
 import { sitemapValidRule } from "./sitemap-valid";
-import { serverErrorsRule } from "./server-errors";
-import { singlePageSiteRule } from "./single-page-site";
 import { soft404Rule } from "./soft-404";
 
 export const rules: Rule[] = [

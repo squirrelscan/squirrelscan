@@ -2,8 +2,10 @@
 // page nesting hundreds of thousands of elements would overflow the stack and take the whole audit
 // down with a RangeError. The answers on normal pages stay exactly what they were.
 
-import { describe, expect, test } from "bun:test";
 import type { Element } from "linkedom";
+
+import { describe, expect, test } from "bun:test";
+
 import type { LinkSection } from "../src/extractors/types";
 
 import { makeSectionResolver } from "../src/extractors/link-section";
@@ -50,7 +52,9 @@ describe("link section on a very deep page", () => {
   test("the link extractor reads the deep anchor too", () => {
     const { doc } = deepDocument(200_000, "nav");
     const links = extractLinks(doc as never, URL);
-    expect(links.map((l) => [l.href, l.section])).toEqual([["https://example.com/deep", "navigation"]]);
+    expect(links.map((l) => [l.href, l.section])).toEqual([
+      ["https://example.com/deep", "navigation"],
+    ]);
   });
 });
 
@@ -91,7 +95,8 @@ function referenceResolver(): (element: Element) => string {
     if (!CHROME.has(inherited)) {
       const mine = own(element);
       if (mine) {
-        const scoped = (mine === "header" || mine === "footer") && inherited !== "unknown";
+        const scoped =
+          (mine === "header" || mine === "footer") && inherited !== "unknown";
         if (!scoped) section = mine;
       }
     }
@@ -116,11 +121,15 @@ describe("the iterative walk answers what the recursive one did", () => {
   for (const [i, body] of FIXTURES.entries()) {
     test(`fixture ${i + 1}, in document order and in reverse`, () => {
       const doc = parseDocument(page(body));
-      const anchors = [...doc.querySelectorAll("a[href]")] as unknown as Element[];
+      const anchors = [
+        ...doc.querySelectorAll("a[href]"),
+      ] as unknown as Element[];
       const expected = anchors.map(referenceResolver()) as LinkSection[];
       expect(anchors.map(makeSectionResolver())).toEqual(expected);
       // Resolving deep anchors first fills the memo from below; the answers must not change.
-      expect([...anchors].reverse().map(makeSectionResolver()).reverse()).toEqual(expected);
+      expect(
+        [...anchors].reverse().map(makeSectionResolver()).reverse()
+      ).toEqual(expected);
     });
   }
 });

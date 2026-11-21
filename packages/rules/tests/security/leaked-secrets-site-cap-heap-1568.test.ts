@@ -1,11 +1,19 @@
 // security/leaked-secrets: the heap a crawl keeps for findings stays under the site cap's bound (#1568).
 // Values are built at runtime from parts; no secret-shaped literal is committed. Measured with a forced GC, no timing.
 
-import { expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { expect, test } from "bun:test";
 
-import { applySiteFindingBudget, buildCollectedPageSignal, type CollectedPageSignal } from "../../src/collected-signals";
-import { createSiteFindingBudget, PAGE_FINDINGS_CAP, SITE_FINDINGS_CAP } from "../../src/security/leaked-secrets";
+import {
+  applySiteFindingBudget,
+  buildCollectedPageSignal,
+  type CollectedPageSignal,
+} from "../../src/collected-signals";
+import {
+  createSiteFindingBudget,
+  PAGE_FINDINGS_CAP,
+  SITE_FINDINGS_CAP,
+} from "../../src/security/leaked-secrets";
 
 const ALNUM = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const stripe = (n: number): string => {
@@ -42,9 +50,17 @@ test(`${PAGES} pages at the per-page cap keep under ${BOUND_MB} MB of findings, 
   const budget = createSiteFindingBudget();
   const url = (p: number) => `https://shop.example/p${p}`;
   const build = (p: number): CollectedPageSignal => {
-    const values = Array.from({ length: PAGE_FINDINGS_CAP + 100 }, (_, i) => `<p>${stripe(p * 10_000 + i)}</p>`).join("");
+    const values = Array.from(
+      { length: PAGE_FINDINGS_CAP + 100 },
+      (_, i) => `<p>${stripe(p * 10_000 + i)}</p>`
+    ).join("");
     const html = `<!doctype html><html><body>${values}</body></html>`;
-    const signal = buildCollectedPageSignal({ url: url(p), parsed: parsePage(html, url(p)), htmlBytes: html.length, budgetMs: 60_000 });
+    const signal = buildCollectedPageSignal({
+      url: url(p),
+      parsed: parsePage(html, url(p)),
+      htmlBytes: html.length,
+      budgetMs: 60_000,
+    });
     return applySiteFindingBudget(signal, budget);
   };
   for (let p = 0; p < 3; p++) build(900 + p); // warm up, then drop
@@ -60,6 +76,9 @@ test(`${PAGES} pages at the per-page cap keep under ${BOUND_MB} MB of findings, 
   expect(kept).toHaveLength(PAGES);
   expect(findings).toBeLessThanOrEqual(SITE_FINDINGS_CAP + SITE_FINDINGS_CAP); // distinct room plus the copy allowance
   expect(budget.kept()).toBeLessThanOrEqual(SITE_FINDINGS_CAP);
-  expect(kept.reduce((n, s) => n + (s.secretsOmitted ?? 0), 0), "a cut site is counted, not silent").toBeGreaterThan(0);
+  expect(
+    kept.reduce((n, s) => n + (s.secretsOmitted ?? 0), 0),
+    "a cut site is counted, not silent"
+  ).toBeGreaterThan(0);
   expect(grown, `kept ${grown.toFixed(1)} MB`).toBeLessThan(BOUND_MB);
 }, 180_000);

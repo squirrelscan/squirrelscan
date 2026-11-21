@@ -24,7 +24,13 @@ import {
   type UnknownReason,
 } from "../shared/structured-nodes";
 
-export const PRODUCT_FIELDS = ["name", "description", "image", "price", "availability"] as const;
+export const PRODUCT_FIELDS = [
+  "name",
+  "description",
+  "image",
+  "price",
+  "availability",
+] as const;
 export type ProductField = (typeof PRODUCT_FIELDS)[number];
 
 export interface FieldEvidence {
@@ -54,7 +60,11 @@ const MAX_VARIANTS = 200;
 export type Resolve = (value: unknown) => unknown;
 
 /** A direct property, as a list of resolved values. */
-export function values(node: StructuredNode, prop: string, resolve: Resolve): unknown[] {
+export function values(
+  node: StructuredNode,
+  prop: string,
+  resolve: Resolve
+): unknown[] {
   return asList(node[prop]).map(resolve);
 }
 
@@ -68,21 +78,34 @@ function imageFilled(list: unknown[]): boolean {
     if (typeof v === "string") return v.trim() !== "";
     if (v && typeof v === "object" && !Array.isArray(v)) {
       const o = v as StructuredNode;
-      return isFilled(o["url"]) || isFilled(o["contentUrl"]) || isFilled(o["@id"]) && !isDanglingRef(o);
+      return (
+        isFilled(o["url"]) ||
+        isFilled(o["contentUrl"]) ||
+        (isFilled(o["@id"]) && !isDanglingRef(o))
+      );
     }
     return false;
   });
 }
 
 /** Every Offer reachable from a node, through AggregateOffer nesting and references. */
-export function offersOf(node: StructuredNode, resolve: Resolve): StructuredNode[] {
+export function offersOf(
+  node: StructuredNode,
+  resolve: Resolve
+): StructuredNode[] {
   const out: StructuredNode[] = [];
   const seen = new Set<object>();
   const visit = (value: unknown, depth: number): void => {
     if (depth > 4) return;
     for (const raw of asList(value)) {
       const offer = resolve(raw);
-      if (!offer || typeof offer !== "object" || Array.isArray(offer) || seen.has(offer)) continue;
+      if (
+        !offer ||
+        typeof offer !== "object" ||
+        Array.isArray(offer) ||
+        seen.has(offer)
+      )
+        continue;
       seen.add(offer);
       out.push(offer as StructuredNode);
       visit((offer as StructuredNode)["offers"], depth + 1);
@@ -94,32 +117,56 @@ export function offersOf(node: StructuredNode, resolve: Resolve): StructuredNode
 
 /** A price is declared by `price`, `lowPrice`, or a `priceSpecification` carrying one. A price of 0 is declared. */
 export function priceFilled(offer: StructuredNode, resolve: Resolve): boolean {
-  if (filledAny([offer["price"], offer["lowPrice"], offer["highPrice"]].filter((v) => v !== undefined))) return true;
+  if (
+    filledAny(
+      [offer["price"], offer["lowPrice"], offer["highPrice"]].filter(
+        (v) => v !== undefined
+      )
+    )
+  )
+    return true;
   return values(offer, "priceSpecification", resolve).some(
-    (spec) => !!spec && typeof spec === "object" && isFilled((spec as StructuredNode)["price"]),
+    (spec) =>
+      !!spec &&
+      typeof spec === "object" &&
+      isFilled((spec as StructuredNode)["price"])
   );
 }
 
 /** The product plus, for a ProductGroup, its variants (resolved, bounded). */
-export function productAndVariants(node: StructuredNode, resolve: Resolve): StructuredNode[] {
+export function productAndVariants(
+  node: StructuredNode,
+  resolve: Resolve
+): StructuredNode[] {
   const out: StructuredNode[] = [node];
   for (const raw of values(node, "hasVariant", resolve)) {
     if (out.length > MAX_VARIANTS) break;
-    if (raw && typeof raw === "object" && !Array.isArray(raw)) out.push(raw as StructuredNode);
+    if (raw && typeof raw === "object" && !Array.isArray(raw))
+      out.push(raw as StructuredNode);
   }
   return out;
 }
 
 type Found = "yes" | "no" | "dangling";
 
-function lookup(field: ProductField, members: StructuredNode[], resolve: Resolve): Found {
+function lookup(
+  field: ProductField,
+  members: StructuredNode[],
+  resolve: Resolve
+): Found {
   let dangling = false;
   for (const member of members) {
     if (field === "price" || field === "availability") {
       for (const offer of offersOf(member, resolve)) {
-        if (field === "price" ? priceFilled(offer, resolve) : filledAny(values(offer, "availability", resolve))) return "yes";
+        if (
+          field === "price"
+            ? priceFilled(offer, resolve)
+            : filledAny(values(offer, "availability", resolve))
+        )
+          return "yes";
       }
-      if (asList(member["offers"]).some((o) => isDanglingRef(resolve(o)))) dangling = true;
+      if (asList(member["offers"]).some((o) => isDanglingRef(resolve(o))))
+        dangling = true;
       continue;
     }
     const list = values(member, field, resolve);
@@ -131,14 +178,21 @@ function lookup(field: ProductField, members: StructuredNode[], resolve: Resolve
 
 /** An empty JavaScript shell: almost no visible text and scripts that would fill it. */
 function looksLikeJsShell(doc: Document): boolean {
-  return visibleText(doc).length < 200 && doc.querySelectorAll("script").length > 0;
+  return (
+    visibleText(doc).length < 200 && doc.querySelectorAll("script").length > 0
+  );
 }
 
 /** Signals that the page is a product page whose markup is built by script. */
 function productSignals(ctx: RuleContext, doc: Document): boolean {
-  const type = doc.querySelector('meta[property="og:type"]')?.getAttribute("content") ?? "";
+  const type =
+    doc.querySelector('meta[property="og:type"]')?.getAttribute("content") ??
+    "";
   if (/^(og:)?product/i.test(type.trim())) return true;
-  if (doc.querySelector('meta[property^="product:"], meta[property^="og:price"]')) return true;
+  if (
+    doc.querySelector('meta[property^="product:"], meta[property^="og:price"]')
+  )
+    return true;
   const st = ctx.siteMetadata?.siteType;
   if (st === "ecommerce" || st === "marketplace") return true;
   return false;
@@ -148,7 +202,11 @@ function productSignals(ctx: RuleContext, doc: Document): boolean {
 function mentionsProductType(text: string): boolean {
   const needle = "schema.org/Product";
   const word = /[A-Za-z0-9_]/;
-  for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
+  for (
+    let at = text.indexOf(needle);
+    at !== -1;
+    at = text.indexOf(needle, at + 1)
+  ) {
     let end = at + needle.length;
     if (text.startsWith("Group", end)) end += "Group".length;
     if (end >= text.length || !word.test(text.charAt(end))) return true;
@@ -157,9 +215,12 @@ function mentionsProductType(text: string): boolean {
 }
 
 function scriptBuildsProduct(doc: Document): boolean {
-  for (const s of Array.from(doc.querySelectorAll("script:not([type='application/ld+json'])"))) {
+  for (const s of Array.from(
+    doc.querySelectorAll("script:not([type='application/ld+json'])")
+  )) {
     const t = s.textContent ?? "";
-    if (t.length > 0 && t.length < 500_000 && mentionsProductType(t)) return true;
+    if (t.length > 0 && t.length < 500_000 && mentionsProductType(t))
+      return true;
   }
   return false;
 }
@@ -171,19 +232,24 @@ function scriptBuildsProduct(doc: Document): boolean {
 export function readProductEvidence(
   ctx: RuleContext,
   jsonLdNodes: StructuredNode[],
-  jsonLdPrimary: StructuredNode | null,
+  jsonLdPrimary: StructuredNode | null
 ): ProductEvidence | null {
   const doc = ctx.parsed.document;
   if (!doc) return null;
   const read = htmlReadState(ctx);
 
   const candidates: Candidate[] = [];
-  if (jsonLdPrimary) candidates.push({ source: "json-ld", node: jsonLdPrimary });
+  if (jsonLdPrimary)
+    candidates.push({ source: "json-ld", node: jsonLdPrimary });
 
   const micro = readMicrodata(doc);
   const rdfa = readRdfa(doc);
-  for (const n of micro.nodes) if (hasType(n, ...PRODUCT_TYPES)) candidates.push({ source: "microdata", node: n });
-  for (const n of rdfa.nodes) if (hasType(n, ...PRODUCT_TYPES)) candidates.push({ source: "rdfa", node: n });
+  for (const n of micro.nodes)
+    if (hasType(n, ...PRODUCT_TYPES))
+      candidates.push({ source: "microdata", node: n });
+  for (const n of rdfa.nodes)
+    if (hasType(n, ...PRODUCT_TYPES))
+      candidates.push({ source: "rdfa", node: n });
 
   const allNodes = [...jsonLdNodes, ...collectNestedNodes(jsonLdNodes)];
   const resolve = makeRefResolver(allNodes, ctx.page.url);
@@ -198,7 +264,11 @@ export function readProductEvidence(
       read,
       sources: [],
       hasOffers: false,
-      fields: PRODUCT_FIELDS.map((field) => ({ field, status: "unknown" as const, reason: "rendered-only" as const })),
+      fields: PRODUCT_FIELDS.map((field) => ({
+        field,
+        status: "unknown" as const,
+        reason: "rendered-only" as const,
+      })),
     };
   }
 
@@ -213,13 +283,33 @@ export function readProductEvidence(
       if (found === "yes") return { field, status: "present" as const, source };
       if (found === "dangling") dangling = true;
     }
-    if (dangling) return { field, status: "unknown" as const, reason: "unresolved-reference" as const };
-    if (read !== "complete") return { field, status: "unknown" as const, reason: "incomplete-read" as const };
-    if (unsupported) return { field, status: "unknown" as const, reason: "unsupported" as const };
+    if (dangling)
+      return {
+        field,
+        status: "unknown" as const,
+        reason: "unresolved-reference" as const,
+      };
+    if (read !== "complete")
+      return {
+        field,
+        status: "unknown" as const,
+        reason: "incomplete-read" as const,
+      };
+    if (unsupported)
+      return {
+        field,
+        status: "unknown" as const,
+        reason: "unsupported" as const,
+      };
     return { field, status: "absent" as const };
   });
   for (const { node } of candidates) {
-    if (productAndVariants(node, resolve).some((m) => offersOf(m, resolve).length > 0)) hasOffers = true;
+    if (
+      productAndVariants(node, resolve).some(
+        (m) => offersOf(m, resolve).length > 0
+      )
+    )
+      hasOffers = true;
   }
   return { read, sources, fields, hasOffers };
 }
@@ -247,7 +337,10 @@ export function fieldEvidenceCheck(evidence: ProductEvidence): CheckResult {
       read: evidence.read,
       sources: evidence.sources,
       fields: Object.fromEntries(
-        evidence.fields.map((f) => [f.field, { status: f.status, source: f.source, reason: f.reason }]),
+        evidence.fields.map((f) => [
+          f.field,
+          { status: f.status, source: f.source, reason: f.reason },
+        ])
       ),
     },
   };

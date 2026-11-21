@@ -12,10 +12,17 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID, authEndpointDisclosureRule } from "../src/security/auth-endpoint-disclosure";
-import { dedupeEndpointFindings } from "../src/security/endpoint-dedupe";
-import { UNAUTHENTICATED_API_RULE_ID, unauthenticatedApiRule } from "../src/security/unauthenticated-api";
 import type { CheckResult, RuleContext } from "../src/types";
+
+import {
+  AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+  authEndpointDisclosureRule,
+} from "../src/security/auth-endpoint-disclosure";
+import { dedupeEndpointFindings } from "../src/security/endpoint-dedupe";
+import {
+  UNAUTHENTICATED_API_RULE_ID,
+  unauthenticatedApiRule,
+} from "../src/security/unauthenticated-api";
 import {
   BASE,
   candidate,
@@ -49,15 +56,35 @@ const LEAKY_USER = {
 };
 
 /** The same user without anything auth-endpoint-disclosure reports. */
-const PLAIN_USER = { id: 42, email: "jo@example.com", name: "Jo", phone: "+61 400 000 000" };
+const PLAIN_USER = {
+  id: 42,
+  email: "jo@example.com",
+  name: "Jo",
+  phone: "+61 400 000 000",
+};
 
 const meSurface = () => surface([candidate("/api/me", { method: "GET" })]);
 
 /** The runner's post-site-pass dedupe (squirrelscan#2082) over one audit's two results. */
-function throughDedupe(api: CheckResult[], auth: CheckResult[] | undefined): { api: CheckResult[]; auth: CheckResult[] } {
-  const results = new Map([[UNAUTHENTICATED_API_RULE_ID, { meta: unauthenticatedApiRule.meta, checks: api }]]);
-  if (auth) results.set(AUTH_ENDPOINT_DISCLOSURE_RULE_ID, { meta: authEndpointDisclosureRule.meta, checks: auth });
-  return { api: dedupeEndpointFindings(results)?.checks ?? api, auth: auth ?? [] };
+function throughDedupe(
+  api: CheckResult[],
+  auth: CheckResult[] | undefined
+): { api: CheckResult[]; auth: CheckResult[] } {
+  const results = new Map([
+    [
+      UNAUTHENTICATED_API_RULE_ID,
+      { meta: unauthenticatedApiRule.meta, checks: api },
+    ],
+  ]);
+  if (auth)
+    results.set(AUTH_ENDPOINT_DISCLOSURE_RULE_ID, {
+      meta: authEndpointDisclosureRule.meta,
+      checks: auth,
+    });
+  return {
+    api: dedupeEndpointFindings(results)?.checks ?? api,
+    auth: auth ?? [],
+  };
 }
 
 /** Run both rules on ONE context (one audit, one probe budget), in either order. */
@@ -67,10 +94,14 @@ async function runBoth(
 ): Promise<{ api: CheckResult[]; auth: CheckResult[]; sent: SentRequest[] }> {
   const stub = stubFetch(routes);
   restore = stub.restore;
-  const ctx: RuleContext = { ...ruleCtx({ surface: meSurface() }), ruleEnabled: opts.ruleEnabled };
+  const ctx: RuleContext = {
+    ...ruleCtx({ surface: meSurface() }),
+    ruleEnabled: opts.ruleEnabled,
+  };
   // A disabled rule does not run, as in the runner.
   const authOn = opts.ruleEnabled?.(AUTH_ENDPOINT_DISCLOSURE_RULE_ID) ?? true;
-  const runAuth = async () => (authOn ? (await authEndpointDisclosureRule.run(ctx)).checks : undefined);
+  const runAuth = async () =>
+    authOn ? (await authEndpointDisclosureRule.run(ctx)).checks : undefined;
   let api: CheckResult[];
   let auth: CheckResult[] | undefined;
   if (opts.authFirst) {
@@ -83,7 +114,8 @@ async function runBoth(
   return { ...throughDedupe(api, auth), sent: stub.sent };
 }
 
-const fails = (checks: CheckResult[]) => checks.filter((c) => c.status === "fail" || c.status === "warn");
+const fails = (checks: CheckResult[]) =>
+  checks.filter((c) => c.status === "fail" || c.status === "warn");
 const meRequests = (sent: SentRequest[]) => sent.filter((r) => r.url === ME);
 const otherConvention: Record<string, Route> = {
   [`${BASE}/api/session`]: () => html(),
@@ -96,17 +128,26 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
     const order = authFirst ? "auth rule first" : "api rule first";
 
     test(`a leaked user record on /api/me is one finding (auth-endpoint-disclosure) and one request (${order})`, async () => {
-      const { api, auth, sent } = await runBoth({ [ME]: () => json(LEAKY_USER), ...otherConvention }, { authFirst });
+      const { api, auth, sent } = await runBoth(
+        { [ME]: () => json(LEAKY_USER), ...otherConvention },
+        { authFirst }
+      );
       expect(meRequests(sent)).toHaveLength(1);
       expect(fails(auth)).toHaveLength(1);
       expect(fails(auth)[0]?.details).toMatchObject({ endpoint: ME });
       expect(fails(api)).toHaveLength(0);
       const clean = api.find((c) => c.status === "pass");
-      expect(clean?.details).toMatchObject({ reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID, reportedElsewhere: 1 });
+      expect(clean?.details).toMatchObject({
+        reportedBy: AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
+        reportedElsewhere: 1,
+      });
     });
 
     test(`records without a password, secret or user row stay with unauthenticated-api (${order})`, async () => {
-      const { api, auth, sent } = await runBoth({ [ME]: () => json([PLAIN_USER, PLAIN_USER]), ...otherConvention }, { authFirst });
+      const { api, auth, sent } = await runBoth(
+        { [ME]: () => json([PLAIN_USER, PLAIN_USER]), ...otherConvention },
+        { authFirst }
+      );
       expect(meRequests(sent)).toHaveLength(1);
       expect(fails(auth)).toHaveLength(0);
       expect(fails(api)).toHaveLength(1);
@@ -123,12 +164,16 @@ describe("squirrelscan#1886: one request and one finding per endpoint", () => {
       // Either way one finding and one request.
       const stub = stubFetch({
         [ME]: () => json(LEAKY_USER),
-        [`${BASE}/api/session`]: () => new Response("slow down", { status: 429 }),
+        [`${BASE}/api/session`]: () =>
+          new Response("slow down", { status: 429 }),
       });
       restore = stub.restore;
       const ctx = ruleCtx({
         surface: surface([
-          candidate("/api/session", { method: undefined, discoveredVia: "string-literal" }),
+          candidate("/api/session", {
+            method: undefined,
+            discoveredVia: "string-literal",
+          }),
           candidate("/api/me", { method: "GET" }),
         ]),
       });
@@ -163,7 +208,9 @@ describe("auth-endpoint-disclosure release gate (#1920): unverified answers are 
   async function runAuth(answer: () => Response): Promise<CheckResult[]> {
     const stub = stubFetch({ [ME]: answer, ...otherConvention });
     restore = stub.restore;
-    return (await authEndpointDisclosureRule.run(ruleCtx({ surface: meSurface() }))).checks;
+    return (
+      await authEndpointDisclosureRule.run(ruleCtx({ surface: meSurface() }))
+    ).checks;
   }
 
   const cases: Array<[string, () => Response]> = [
@@ -179,10 +226,17 @@ describe("auth-endpoint-disclosure release gate (#1920): unverified answers are 
     [
       "a WAF 403 page",
       () =>
-        new Response("<!doctype html><title>Attention Required! | Cloudflare</title>", {
-          status: 403,
-          headers: { "content-type": "text/html", server: "cloudflare", "cf-ray": "8f0000000000abcd-SYD" },
-        }),
+        new Response(
+          "<!doctype html><title>Attention Required! | Cloudflare</title>",
+          {
+            status: 403,
+            headers: {
+              "content-type": "text/html",
+              server: "cloudflare",
+              "cf-ray": "8f0000000000abcd-SYD",
+            },
+          }
+        ),
     ],
     ["a 5xx", () => new Response("upstream error", { status: 502 })],
   ];
@@ -191,16 +245,26 @@ describe("auth-endpoint-disclosure release gate (#1920): unverified answers are 
     test(`${label} is not checked`, async () => {
       const checks = await runAuth(answer);
       expect(checks.some((c) => c.status === "pass")).toBe(false);
-      expect(checks.some((c) => c.status === "skipped" && c.name === "auth-endpoint-not-checked")).toBe(true);
+      expect(
+        checks.some(
+          (c) =>
+            c.status === "skipped" && c.name === "auth-endpoint-not-checked"
+        )
+      ).toBe(true);
     });
   }
 
   test("no candidate at all is not checked", async () => {
     const stub = stubFetch({});
     restore = stub.restore;
-    const { checks } = await authEndpointDisclosureRule.run(ruleCtx({ robotsTxt: robots(["/api/"]) }));
+    const { checks } = await authEndpointDisclosureRule.run(
+      ruleCtx({ robotsTxt: robots(["/api/"]) })
+    );
     expect(stub.sent).toHaveLength(0);
     expect(checks).toHaveLength(1);
-    expect(checks[0]).toMatchObject({ status: "skipped", skipReason: "no-endpoints" });
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "no-endpoints",
+    });
   });
 });

@@ -1,9 +1,20 @@
 // crawl/conflicting-index-signals - one finding per page that says "index me" and "do not index me" at once (#1771)
 
-import type { Rule, RuleContext, RuleResult, CheckResult, CheckItem } from "../types";
-import type { RobotsTxtData, SiteQuery, SitemapDiscovery } from "@squirrelscan/core-contracts";
+import type {
+  RobotsTxtData,
+  SiteQuery,
+  SitemapDiscovery,
+} from "@squirrelscan/core-contracts";
 
 import { isPageIndexable, isRobotsTxtDisallowed } from "@squirrelscan/utils";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  CheckItem,
+} from "../types";
 
 const CHECK_NAME = "conflicting-index-signals";
 const MAX_ITEMS = 50;
@@ -51,7 +62,8 @@ function comparableUrl(href: string, base: string): string | null {
     const u = new URL(href.trim(), base);
     if (u.protocol !== "http:" && u.protocol !== "https:") return null;
     u.hash = "";
-    if (u.pathname.length > 1 && u.pathname.endsWith("/")) u.pathname = u.pathname.slice(0, -1);
+    if (u.pathname.length > 1 && u.pathname.endsWith("/"))
+      u.pathname = u.pathname.slice(0, -1);
     return u.href;
   } catch {
     return null;
@@ -59,7 +71,10 @@ function comparableUrl(href: string, base: string): string | null {
 }
 
 /** The absolute URL a page's canonical points at when it differs from the page itself, else null. */
-export function canonicalElsewhere(canonical: string | null, pageUrl: string): string | null {
+export function canonicalElsewhere(
+  canonical: string | null,
+  pageUrl: string
+): string | null {
   if (!canonical) return null;
   const target = comparableUrl(canonical, pageUrl);
   const self = comparableUrl(pageUrl, pageUrl);
@@ -67,12 +82,15 @@ export function canonicalElsewhere(canonical: string | null, pageUrl: string): s
   return target;
 }
 
-export function sitemapUrlSet(sitemaps: SitemapDiscovery | undefined): Set<string> {
+export function sitemapUrlSet(
+  sitemaps: SitemapDiscovery | undefined
+): Set<string> {
   const set = new Set<string>();
   for (const sitemap of sitemaps?.discovered ?? []) {
     // Compared on the normalized URL (slash, fragment, default port): the page rows of both engines carry
     // normalized URLs and a sitemap lists whatever the site wrote, so a raw match would miss `/a` vs `/a/`.
-    for (const entry of sitemap.urls) set.add(comparableUrl(entry.loc, entry.loc) ?? entry.loc);
+    for (const entry of sitemap.urls)
+      set.add(comparableUrl(entry.loc, entry.loc) ?? entry.loc);
   }
   return set;
 }
@@ -88,7 +106,7 @@ export function sitemapUrlSet(sitemaps: SitemapDiscovery | undefined): Set<strin
 export function evaluateIndexSignals(
   pages: readonly IndexSignalPage[],
   sitemapUrls: ReadonlySet<string>,
-  robotsTxt: RobotsTxtData | null | undefined,
+  robotsTxt: RobotsTxtData | null | undefined
 ): IndexSignalVerdict {
   const conflicts: PageSignals[] = [];
   let closed = 0;
@@ -103,10 +121,14 @@ export function evaluateIndexSignals(
     if (header) against.push("noindex in the X-Robots-Tag header");
     const target = canonicalElsewhere(page.canonical, page.url);
     if (target) against.push(`canonical points to a different URL (${target})`);
-    const disallowed = !!robotsTxt && isRobotsTxtDisallowed(page.url, robotsTxt);
+    const disallowed =
+      !!robotsTxt && isRobotsTxtDisallowed(page.url, robotsTxt);
     if (disallowed) against.push("blocked by robots.txt");
     if (meta || header || disallowed) closed++;
-    if (against.length >= 2 && sitemapUrls.has(comparableUrl(page.url, page.url) ?? page.url)) {
+    if (
+      against.length >= 2 &&
+      sitemapUrls.has(comparableUrl(page.url, page.url) ?? page.url)
+    ) {
       conflicts.push({
         url: page.url,
         against,
@@ -141,7 +163,10 @@ function buildChecks(verdict: IndexSignalVerdict): CheckResult[] {
         status: "info",
         message: `${verdict.closedPages} of ${verdict.totalPages} crawled pages are kept out of the index (noindex or robots.txt): this looks like a site-wide block (a staging site or a pre-launch site), so per-page conflicts are not reported. See crawl/all-noindex-pages`,
         value: verdict.closedPages,
-        details: { closedPages: verdict.closedPages, totalPages: verdict.totalPages },
+        details: {
+          closedPages: verdict.closedPages,
+          totalPages: verdict.totalPages,
+        },
       },
     ];
   }
@@ -157,7 +182,11 @@ function buildChecks(verdict: IndexSignalVerdict): CheckResult[] {
   const items: CheckItem[] = verdict.pages.slice(0, MAX_ITEMS).map((p) => ({
     id: p.url,
     label: `${[...p.for, ...p.against].join("; ")}`,
-    meta: { signalsIndex: p.for, signalsNoIndex: p.against, relatedRules: relatedFor(p) },
+    meta: {
+      signalsIndex: p.for,
+      signalsNoIndex: p.against,
+      relatedRules: relatedFor(p),
+    },
   }));
   return [
     {
@@ -180,7 +209,7 @@ function buildChecks(verdict: IndexSignalVerdict): CheckResult[] {
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
   sitemapUrls: ReadonlySet<string>,
-  robotsTxt: RobotsTxtData | null | undefined,
+  robotsTxt: RobotsTxtData | null | undefined
 ): Promise<RuleResult> {
   const pages: IndexSignalPage[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
@@ -191,7 +220,9 @@ async function runViaSiteQuery(
       reasons: row.indexableReasons,
     });
   }
-  return { checks: buildChecks(evaluateIndexSignals(pages, sitemapUrls, robotsTxt)) };
+  return {
+    checks: buildChecks(evaluateIndexSignals(pages, sitemapUrls, robotsTxt)),
+  };
 }
 
 export const conflictingIndexSignalsRule: Rule = {
@@ -211,7 +242,11 @@ export const conflictingIndexSignalsRule: Rule = {
     checks: [
       { name: "conflicting-index-signals", outcome: "problem" },
       { name: "site-wide-noindex", outcome: "skipped" },
-      { name: "conflicting-index-signals", outcome: "clean", clears: ["conflicting-index-signals"] },
+      {
+        name: "conflicting-index-signals",
+        outcome: "clean",
+        clears: ["conflicting-index-signals"],
+      },
       { name: "conflicting-index-signals", outcome: "skipped" },
     ],
   },
@@ -238,6 +273,8 @@ export const conflictingIndexSignalsRule: Rule = {
       canonical: page.parsed.meta.canonical ?? null,
       reasons: isPageIndexable(page.parsed, page.headers).reasons,
     }));
-    return { checks: buildChecks(evaluateIndexSignals(rows, sitemapUrls, robotsTxt)) };
+    return {
+      checks: buildChecks(evaluateIndexSignals(rows, sitemapUrls, robotsTxt)),
+    };
   },
 };

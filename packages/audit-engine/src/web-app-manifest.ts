@@ -15,7 +15,7 @@
 // for any host but the site's own unless the site itself is private), so a same-site manifest
 // that redirects off-site is reported as not checked, never fetched there.
 
-import { Effect } from "effect";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 
 import {
   listWebAppManifestIconUrls,
@@ -23,25 +23,35 @@ import {
   type WebAppManifestData,
   type WebAppManifestPageThemeColor,
 } from "@squirrelscan/rules";
-
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+import { Effect } from "effect";
 
 import { headersWithheldFrom } from "./lib/header-scope";
-import { checkResourceSizes, type ResourceCheckerOptions } from "./resource-checker";
+import {
+  checkResourceSizes,
+  type ResourceCheckerOptions,
+} from "./resource-checker";
 import { fetchScriptContents } from "./script-fetcher";
 
 /** Manifest URLs fetched per site. A site links one; this bounds a template that links many. */
 export const WEB_APP_MANIFEST_FETCH_LIMIT = 5;
 
 /** Manifest URL to linking page URL to that page's theme-color metas. */
-export type WebAppManifestOccurrences = Map<string, Map<string, WebAppManifestPageThemeColor[]>>;
+export type WebAppManifestOccurrences = Map<
+  string,
+  Map<string, WebAppManifestPageThemeColor[]>
+>;
 
 export function emptyWebAppManifestOccurrences(): WebAppManifestOccurrences {
   return new Map();
 }
 
-function relTokens(link: { getAttribute(name: string): string | null }): string[] {
-  return (link.getAttribute("rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+function relTokens(link: {
+  getAttribute(name: string): string | null;
+}): string[] {
+  return (link.getAttribute("rel") ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 /**
@@ -51,7 +61,7 @@ function relTokens(link: { getAttribute(name: string): string | null }): string[
 export function absorbWebAppManifestLinks(
   target: WebAppManifestOccurrences,
   page: { url: string; finalUrl?: string; parsed: ParsedPage },
-  isSameSite: (url: string) => boolean,
+  isSameSite: (url: string) => boolean
 ): void {
   const doc = page.parsed.document;
   if (!doc) return;
@@ -60,7 +70,10 @@ export function absorbWebAppManifestLinks(
   // link), else the page URL.
   const pageUrl = page.finalUrl ?? page.url;
   let pageBase = pageUrl;
-  const baseHref = doc.querySelector("base[href]")?.getAttribute("href")?.trim();
+  const baseHref = doc
+    .querySelector("base[href]")
+    ?.getAttribute("href")
+    ?.trim();
   if (baseHref) {
     try {
       pageBase = new URL(baseHref, pageUrl).toString();
@@ -88,14 +101,19 @@ export function absorbWebAppManifestLinks(
 
   const themeColors: WebAppManifestPageThemeColor[] = [];
   for (const meta of Array.from(doc.querySelectorAll("meta"))) {
-    if ((meta.getAttribute("name") ?? "").trim().toLowerCase() !== "theme-color") continue;
+    if (
+      (meta.getAttribute("name") ?? "").trim().toLowerCase() !== "theme-color"
+    )
+      continue;
     const content = (meta.getAttribute("content") ?? "").trim();
     if (!content) continue;
     themeColors.push({ content, media: meta.getAttribute("media") });
   }
 
   for (const manifestUrl of new Set(manifestUrls)) {
-    const pages = target.get(manifestUrl) ?? new Map<string, WebAppManifestPageThemeColor[]>();
+    const pages =
+      target.get(manifestUrl) ??
+      new Map<string, WebAppManifestPageThemeColor[]>();
     pages.set(page.url, themeColors);
     target.set(manifestUrl, pages);
   }
@@ -116,7 +134,7 @@ export interface FetchedWebAppManifests {
 export function fetchWebAppManifests(
   occurrences: WebAppManifestOccurrences,
   options: Partial<ResourceCheckerOptions>,
-  egress: EgressPolicy,
+  egress: EgressPolicy
 ): Effect.Effect<FetchedWebAppManifests, never, never> {
   return Effect.gen(function* () {
     const linked = [...occurrences.keys()].sort();
@@ -139,7 +157,7 @@ export function fetchWebAppManifests(
       const content = bodyByUrl.get(url)?.content ?? null;
       const origin = new URL(url).origin;
       const icons = listWebAppManifestIconUrls(content, url).filter(
-        (icon) => icon.startsWith("http") && new URL(icon).origin === origin,
+        (icon) => icon.startsWith("http") && new URL(icon).origin === origin
       );
       iconUrlsByManifest.set(url, icons);
       for (const icon of icons) allIcons.add(icon);
@@ -147,7 +165,11 @@ export function fetchWebAppManifests(
 
     const iconChecks =
       allIcons.size > 0
-        ? yield* checkResourceSizes([...allIcons], { ...options, readImageHeader: true, egress })
+        ? yield* checkResourceSizes([...allIcons], {
+            ...options,
+            readImageHeader: true,
+            egress,
+          })
         : [];
     const checkByUrl = new Map(iconChecks.map((check) => [check.url, check]));
 
@@ -155,16 +177,22 @@ export function fetchWebAppManifests(
     const withheld = (
       url: string,
       status: number | null | undefined,
-      finalUrl?: string | null,
+      finalUrl?: string | null
     ): boolean =>
       (status === 401 || status === 403) &&
       (headersWithheldFrom(url, options.customHeaders, options.headerScope) ||
         (finalUrl != null &&
-          headersWithheldFrom(finalUrl, options.customHeaders, options.headerScope)));
+          headersWithheldFrom(
+            finalUrl,
+            options.customHeaders,
+            options.headerScope
+          )));
 
     const manifests = urls.map((url): WebAppManifestData => {
       const body = bodyByUrl.get(url);
-      const pages = occurrences.get(url) ?? new Map<string, WebAppManifestPageThemeColor[]>();
+      const pages =
+        occurrences.get(url) ??
+        new Map<string, WebAppManifestPageThemeColor[]>();
       const sourcePages = [...pages.keys()].sort();
       return {
         url,
@@ -172,12 +200,14 @@ export function fetchWebAppManifests(
         error: body?.error ?? (body ? null : "not fetched"),
         ...(body?.rateLimited ? { rateLimited: true } : {}),
         ...(body?.wafBlocked ? { wafBlocked: true } : {}),
-        ...(withheld(url, body?.status, body?.finalUrl) ? { headersWithheld: true } : {}),
+        ...(withheld(url, body?.status, body?.finalUrl)
+          ? { headersWithheld: true }
+          : {}),
         contentType: body?.contentType ?? null,
         content: body?.content ?? null,
         sourcePages,
         themeColorsByPage: Object.fromEntries(
-          sourcePages.map((page) => [page, pages.get(page) ?? []]),
+          sourcePages.map((page) => [page, pages.get(page) ?? []])
         ),
         icons: (iconUrlsByManifest.get(url) ?? []).map((iconUrl) => {
           const check = checkByUrl.get(iconUrl);
@@ -189,7 +219,9 @@ export function fetchWebAppManifests(
             naturalHeight: check?.naturalHeight ?? null,
             ...(check?.rateLimited ? { rateLimited: true } : {}),
             ...(check?.wafBlocked ? { wafBlocked: true } : {}),
-            ...(withheld(iconUrl, check?.status, check?.redirectTarget) ? { headersWithheld: true } : {}),
+            ...(withheld(iconUrl, check?.status, check?.redirectTarget)
+              ? { headersWithheld: true }
+              : {}),
           };
         }),
       };

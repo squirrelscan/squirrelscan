@@ -2,7 +2,9 @@
 // Based on WCAG 2.4.1 Bypass Blocks (Level A)
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { serializedPrefix } from "../shared/serialized-prefix";
 
 // How far into the body a heading still counts as "early" — enough for a nav,
@@ -23,7 +25,11 @@ export const SKIP_LINK_SELECTOR =
  */
 export function hasSkipLinkText(text: string): boolean {
   const lower = text.toLowerCase();
-  return lower.includes("skip") || lower.includes("jump to content") || lower.includes("go to main");
+  return (
+    lower.includes("skip") ||
+    lower.includes("jump to content") ||
+    lower.includes("go to main")
+  );
 }
 
 export const skipLinkRule: Rule = {
@@ -89,7 +95,10 @@ export const skipLinkRule: Rule = {
       // So only that prefix of `body.innerHTML` is built (#1864): serialising
       // the whole body read every inline script on the page, most of a
       // script-heavy page's megabyte, to look at its first two kilobytes.
-      const need = outers.reduce((n, outer) => Math.max(n, EARLY_HEADING_LIMIT + outer.length), 0);
+      const need = outers.reduce(
+        (n, outer) => Math.max(n, EARLY_HEADING_LIMIT + outer.length),
+        0
+      );
       const html = headings.length > 0 ? serializedPrefix(body, need) : "";
       for (const hOuterHTML of outers) {
         // Check if heading appears early in the document

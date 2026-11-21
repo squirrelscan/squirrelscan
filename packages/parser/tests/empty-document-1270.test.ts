@@ -6,8 +6,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseHTML } from "../src/dom";
-import { parseDocument } from "../src/index";
 import { parsePage } from "../src/html";
+import { parseDocument } from "../src/index";
 
 const DEGENERATE: Array<[string, string]> = [
   ["empty", ""],
@@ -40,11 +40,15 @@ describe("degenerate documents (#1270)", () => {
   }
 
   test("text lands in the body, as in a browser", () => {
-    expect(parseHTML("plain text").document.body.textContent).toBe("plain text");
+    expect(parseHTML("plain text").document.body.textContent).toBe(
+      "plain text"
+    );
   });
 
   test("a normal page is untouched", () => {
-    const { document } = parseHTML("<html><head><title>t</title></head><body><p>x</p></body></html>");
+    const { document } = parseHTML(
+      "<html><head><title>t</title></head><body><p>x</p></body></html>"
+    );
     expect(document.title).toBe("t");
     expect(document.body.querySelectorAll("p").length).toBe(1);
   });

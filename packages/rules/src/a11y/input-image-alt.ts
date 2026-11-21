@@ -1,8 +1,10 @@
 // a11y/input-image-alt - Input type=image has alt
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 export const inputImageAltRule: Rule = {
   meta: {
@@ -58,7 +60,11 @@ export const inputImageAltRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("input-image-alt", "image input(s) without alt text", unnamed.unconfirmed),
+        unconfirmedRow(
+          "input-image-alt",
+          "image input(s) without alt text",
+          unnamed.unconfirmed
+        )
       );
     }
     if (missingAlt.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -70,7 +76,9 @@ export const inputImageAltRule: Rule = {
             unnamed.hidden > 0
               ? "All image inputs in the accessibility tree have alt text"
               : `${imageInputs.length} image input(s) have alt text`,
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

@@ -3,10 +3,15 @@
 // exactly what went out. Unrouted URLs answer a 404 HTML page, like a site
 // with no GraphQL endpoint.
 
-import type { RuleContext } from "../../src/types";
-import type { EndpointCandidate, EndpointSurface } from "../../src/endpoint-surface";
-import { createProbeBudget, type ProbeLevel } from "../../src/probe-budget";
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
+import type {
+  EndpointCandidate,
+  EndpointSurface,
+} from "../../src/endpoint-surface";
+import type { RuleContext } from "../../src/types";
+
+import { createProbeBudget, type ProbeLevel } from "../../src/probe-budget";
 
 export interface SentRequest {
   url: string;
@@ -19,12 +24,25 @@ export interface SentRequest {
 
 export type Route = (req: SentRequest) => Response | Promise<Response>;
 
-export function json(body: unknown, status = 200, contentType = "application/json"): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": contentType } });
+export function json(
+  body: unknown,
+  status = 200,
+  contentType = "application/json"
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": contentType },
+  });
 }
 
-export function html(body = "<!doctype html><title>Not found</title>", status = 404): Response {
-  return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
+export function html(
+  body = "<!doctype html><title>Not found</title>",
+  status = 404
+): Response {
+  return new Response(body, {
+    status,
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 // The real fetch, captured when the first stub goes in. A test that stubs twice
@@ -39,14 +57,27 @@ export function stubFetch(routes: Record<string, Route>): {
 } {
   realFetch ??= globalThis.fetch;
   const sent: SentRequest[] = [];
-  const stub = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const stub = async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     const headers: Record<string, string> = {};
     for (const [k, v] of new Headers(init?.headers)) headers[k] = v;
     const req: SentRequest = {
       url,
       method: init?.method ?? "GET",
-      body: typeof init?.body === "string" ? init.body : init?.body ? "<non-string body>" : null,
+      body:
+        typeof init?.body === "string"
+          ? init.body
+          : init?.body
+            ? "<non-string body>"
+            : null,
       headers,
       credentials: init?.credentials,
       redirect: init?.redirect,
@@ -54,7 +85,7 @@ export function stubFetch(routes: Record<string, Route>): {
     sent.push(req);
     const u = new URL(url);
     const route = routes[`${u.origin}${u.pathname}`];
-    return route ? (await route(req)) : html();
+    return route ? await route(req) : html();
   };
   globalThis.fetch = stub as typeof fetch;
   return {
@@ -86,7 +117,12 @@ export function candidate(
 }
 
 export function surface(candidates: EndpointCandidate[]): EndpointSurface {
-  return { candidates, total: candidates.length, truncated: false, scriptsSkipped: 0 };
+  return {
+    candidates,
+    total: candidates.length,
+    truncated: false,
+    scriptsSkipped: 0,
+  };
 }
 
 export function robots(disallow: string[]): RobotsTxtData {
@@ -96,7 +132,12 @@ export function robots(disallow: string[]): RobotsTxtData {
     content: null,
     sizeBytes: 0,
     sitemaps: [],
-    rules: [{ userAgent: "*", rules: disallow.map((path) => ({ type: "disallow" as const, path })) }],
+    rules: [
+      {
+        userAgent: "*",
+        rules: disallow.map((path) => ({ type: "disallow" as const, path })),
+      },
+    ],
     errors: [],
   };
 }
@@ -110,7 +151,13 @@ export function ruleCtx(opts: {
   noProbe?: boolean;
 }): RuleContext {
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as RuleContext["parsed"],
     site: {
       baseUrl: `${BASE}/`,

@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { isRedundantPageItem } from "../src/affected-pages";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
@@ -20,7 +21,9 @@ import { renderXml } from "../src/output/xml";
 const BLOG = "https://example.com/blog";
 const LABEL = `${BLOG}, linked only from the footer and the navigation`;
 
-function rule(items: NonNullable<ReportRuleResult["checks"][number]["items"]>): ReportRuleResult {
+function rule(
+  items: NonNullable<ReportRuleResult["checks"][number]["items"]>
+): ReportRuleResult {
   return {
     meta: {
       id: "links/no-contextual-inbound",
@@ -98,10 +101,18 @@ describe("a labelled page-URL item prints its label in every format", () => {
 
   test("json", () => {
     const parsed = JSON.parse(renderJson(LABELLED)) as {
-      issues: Array<{ checks: Array<{ items?: Array<{ id: string; label?: string; meta?: unknown }> }> }>;
+      issues: Array<{
+        checks: Array<{
+          items?: Array<{ id: string; label?: string; meta?: unknown }>;
+        }>;
+      }>;
     };
     const item = parsed.issues[0]!.checks[0]!.items![0]!;
-    expect(item).toMatchObject({ id: BLOG, label: LABEL, meta: { sections: { footer: 3, navigation: 1 } } });
+    expect(item).toMatchObject({
+      id: BLOG,
+      label: LABEL,
+      meta: { sections: { footer: 3, navigation: 1 } },
+    });
   });
 });
 
@@ -110,7 +121,9 @@ describe("a page-URL item with no label of its own is still folded into the page
 
   test("markdown and html do not list it twice", () => {
     expect(renderMarkdown(bare)).not.toContain("1 item(s)");
-    expect(renderMarkdown(report([{ id: BLOG, label: BLOG }]))).not.toContain("1 item(s)");
+    expect(renderMarkdown(report([{ id: BLOG, label: BLOG }]))).not.toContain(
+      "1 item(s)"
+    );
     // The page list still carries it.
     expect(renderMarkdown(bare)).toContain("1 page(s) affected");
     expect(renderHtml(bare)).not.toContain("1 item");
@@ -121,19 +134,23 @@ describe("a label that embeds a site-controlled URL cannot inject markdown", () 
   test("brackets in a label are escaped, so a nested image is not rendered", () => {
     const evil = "https://example.com/blog?q=![t](https://evil.example/p.png)";
     const md = renderMarkdown(
-      report([{ id: evil, label: `${evil}, linked only from the footer` }]),
+      report([{ id: evil, label: `${evil}, linked only from the footer` }])
     );
-    const itemLine = md.split("\n").find((line) => line.includes("linked only from the footer"))!;
+    const itemLine = md
+      .split("\n")
+      .find((line) => line.includes("linked only from the footer"))!;
 
     // The label's brackets are literal text; the destination is one percent-encoded URL.
     expect(itemLine).toBe(
-      "- [https://example.com/blog?q=!\\[t\\](https://evil.example/p.png), linked only from the footer](https://example.com/blog?q=!%5Bt%5D%28https://evil.example/p.png%29)",
+      "- [https://example.com/blog?q=!\\[t\\](https://evil.example/p.png), linked only from the footer](https://example.com/blog?q=!%5Bt%5D%28https://evil.example/p.png%29)"
     );
   });
 
   test("parentheses in the link destination are percent-encoded", () => {
     const id = "https://example.com/a(b)";
-    const md = renderMarkdown(report([{ id, label: `${id}, linked in the footer` }]));
+    const md = renderMarkdown(
+      report([{ id, label: `${id}, linked in the footer` }])
+    );
 
     expect(md).toContain("(https://example.com/a%28b%29)");
   });

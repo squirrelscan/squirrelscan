@@ -45,7 +45,8 @@ const ISO_SHAPED = /^[+-]?\d{4,6}-\d/;
  * GMT-05:00`, `23:00 +2`). After a time only: in `10-09-2024` the `-2024` is
  * not a zone.
  */
-const NUMERIC_ZONE = /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*((?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?)$/i;
+const NUMERIC_ZONE =
+  /\d:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(?:[AP]\.?M\.?)?\s*((?:(?:GMT|UTC|UT)\s*)?([+-])(\d{1,2})(?::?(\d{2}))?)$/i;
 /** Zone names `Date` understands, at the end, with their offsets in minutes. */
 const NAMED_ZONE = /(?:^|[^a-z])(z|ut|utc|gmt|[ecmp][sd]t)$/i;
 const NAMED_ZONES: Record<string, number> = {
@@ -67,7 +68,20 @@ const MONTH_WORD =
   "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 /** A month and year written out (`September 2024`, `Sep. 2024`). */
 const MONTH_YEAR = new RegExp(`^${MONTH_WORD}\\.?,?\\s+(\\d{4})$`, "i");
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MONTHS = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
 /** A month named anywhere in a value. */
 const MONTH_NAME = new RegExp(`\\b${MONTH_WORD}\\b`, "i");
 /** A time of day (`12:00`, `08:30:15.5`): its numbers are not part of the date. */
@@ -116,8 +130,11 @@ function hasTimeRange(value: string): boolean {
     if (dash !== "-" || laterMeridiem) return true;
     if (secondHours > 14 || secondMinutes % 15 !== 0) return true;
     let firstHours = Number(h1) % 24;
-    if (meridiem) firstHours = (firstHours % 12) + (meridiem.toLowerCase() === "p" ? 12 : 0);
-    if (secondHours * 60 + secondMinutes > firstHours * 60 + Number(m1)) return true;
+    if (meridiem)
+      firstHours =
+        (firstHours % 12) + (meridiem.toLowerCase() === "p" ? 12 : 0);
+    if (secondHours * 60 + secondMinutes > firstHours * 60 + Number(m1))
+      return true;
   }
   return false;
 }
@@ -137,7 +154,7 @@ function utcTime(
   hours = 0,
   minutes = 0,
   seconds = 0,
-  ms = 0,
+  ms = 0
 ): number | null {
   const date = new Date(0);
   date.setUTCFullYear(year, month, day);
@@ -165,7 +182,11 @@ function wholeDay(start: number, day: string): DatePeriod {
 }
 
 function wholeMonth(year: number, month: number): DatePeriod {
-  return { start: utcMonthStart(year, month), end: utcMonthStart(year, month + 1) - 1, precision: "month" };
+  return {
+    start: utcMonthStart(year, month),
+    end: utcMonthStart(year, month + 1) - 1,
+    precision: "month",
+  };
 }
 
 /** The W3C forms, or null when `value` is not one. */
@@ -173,28 +194,51 @@ function w3cForm(value: string): DatePeriod | null {
   const year = YEAR.exec(value);
   if (year) {
     const y = Number(year[1]);
-    return { start: utcMonthStart(y, 0), end: utcMonthStart(y + 1, 0) - 1, precision: "year" };
+    return {
+      start: utcMonthStart(y, 0),
+      end: utcMonthStart(y + 1, 0) - 1,
+      precision: "year",
+    };
   }
   const month = YEAR_MONTH.exec(value);
   if (month) return wholeMonth(Number(month[1]), Number(month[2]) - 1);
   const date = DATE.exec(value);
   if (date) {
-    const start = utcTime(Number(date[1]), Number(date[2]) - 1, Number(date[3]));
+    const start = utcTime(
+      Number(date[1]),
+      Number(date[2]) - 1,
+      Number(date[3])
+    );
     return start === null ? null : wholeDay(start, value);
   }
   const dateTime = DATE_TIME.exec(value);
   if (dateTime) {
     const [, y, mo, d, h, mi, s, fraction, zone] = dateTime;
     const ms = fraction ? Number(fraction.slice(0, 3).padEnd(3, "0")) : 0;
-    const wall = utcTime(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s ?? 0), ms);
+    const wall = utcTime(
+      Number(y),
+      Number(mo) - 1,
+      Number(d),
+      Number(h),
+      Number(mi),
+      Number(s ?? 0),
+      ms
+    );
     if (wall === null) return null;
     let offsetMinutes = 0;
     if (zone && zone.toUpperCase() !== "Z") {
       const digits = zone.replace(":", "");
-      offsetMinutes = (zone[0] === "-" ? -1 : 1) * (Number(digits.slice(1, 3)) * 60 + Number(digits.slice(3, 5)));
+      offsetMinutes =
+        (zone[0] === "-" ? -1 : 1) *
+        (Number(digits.slice(1, 3)) * 60 + Number(digits.slice(3, 5)));
     }
     const instant = wall - offsetMinutes * 60_000;
-    return { start: instant, end: instant, precision: "instant", day: `${y}-${mo}-${d}` };
+    return {
+      start: instant,
+      end: instant,
+      precision: "instant",
+      day: `${y}-${mo}-${d}`,
+    };
   }
   return null;
 }
@@ -252,13 +296,17 @@ function writtenFields(value: string): {
 function writtenForm(value: string): DatePeriod | null {
   if (ISO_SHAPED.test(value)) return null;
   const monthYear = MONTH_YEAR.exec(value);
-  if (monthYear) return wholeMonth(Number(monthYear[2]), monthIndex(monthYear[1]!));
+  if (monthYear)
+    return wholeMonth(Number(monthYear[2]), monthIndex(monthYear[1]!));
   const yearMonth = YEAR_SLASH_MONTH.exec(value);
-  if (yearMonth) return wholeMonth(Number(yearMonth[1]), Number(yearMonth[2]) - 1);
+  if (yearMonth)
+    return wholeMonth(Number(yearMonth[1]), Number(yearMonth[2]) - 1);
   // A whole date: a four-digit year, and a month and a day, as three numbers
   // or a month name and two. A time's numbers do not count (`Sep 10 12:00`
   // has no year, and `Date` would make one up).
-  const numbers = (value.replace(TIME_OF_DAY, " ").match(/\d+/g) ?? []).map(Number);
+  const numbers = (value.replace(TIME_OF_DAY, " ").match(/\d+/g) ?? []).map(
+    Number
+  );
   const named = MONTH_NAME.exec(value);
   if (!numbers.some((n) => n >= 1000 && n <= 9999)) return null;
   if (numbers.length < 3 && !(numbers.length === 2 && named)) return null;
@@ -277,11 +325,13 @@ function writtenForm(value: string): DatePeriod | null {
     fields.hours,
     fields.minutes,
     fields.seconds,
-    fields.ms,
+    fields.ms
   );
   if (wall === null) return null;
   const day = isoDay(wall);
-  return /\d:\d/.test(value) ? { start: wall, end: wall, precision: "instant", day } : wholeDay(wall, day);
+  return /\d:\d/.test(value)
+    ? { start: wall, end: wall, precision: "instant", day }
+    : wholeDay(wall, day);
 }
 
 /** The 0-based month a month word names. */
@@ -321,7 +371,9 @@ function inZone(period: DatePeriod, offsetMinutes: number): DatePeriod {
  * The W3C form only, or null. For a value that must follow the sitemap
  * protocol, where anything else is worth reporting.
  */
-export function w3cDatePeriod(value: string | null | undefined): DatePeriod | null {
+export function w3cDatePeriod(
+  value: string | null | undefined
+): DatePeriod | null {
   const trimmed = value?.trim();
   return trimmed ? w3cForm(trimmed) : null;
 }
@@ -334,7 +386,9 @@ export function w3cDatePeriod(value: string | null | undefined): DatePeriod | nu
  * `… EST`) or else in UTC (`September 10, 2024`, `2024/09/10 08:00`), so it
  * reads the same on every machine. A comment in parentheses is ignored.
  */
-export function datePeriod(value: string | null | undefined): DatePeriod | null {
+export function datePeriod(
+  value: string | null | undefined
+): DatePeriod | null {
   const trimmed = value?.trim();
   if (!trimmed || trimmed.length > MAX_DATE_CHARS) return null;
   const exact = w3cForm(trimmed);
@@ -348,7 +402,8 @@ export function datePeriod(value: string | null | undefined): DatePeriod | null 
   const numeric = NUMERIC_ZONE.exec(bare);
   const named = numeric ? null : NAMED_ZONE.exec(bare);
   const zone = numeric ?? named;
-  if (!zone) return ZONE_TOKEN.test(bare) ? null : (w3cForm(bare) ?? writtenForm(bare));
+  if (!zone)
+    return ZONE_TOKEN.test(bare) ? null : (w3cForm(bare) ?? writtenForm(bare));
   let offsetMinutes = NAMED_ZONES[named?.[1]?.toLowerCase() ?? ""] ?? 0;
   if (numeric) {
     const hours = Number(numeric[3]);
@@ -357,7 +412,9 @@ export function datePeriod(value: string | null | undefined): DatePeriod | null 
     if (hours > 14 || minutes % 15 !== 0 || minutes > 45) return null;
     offsetMinutes = (numeric[2] === "-" ? -1 : 1) * (hours * 60 + minutes);
   }
-  const zoneless = bare.slice(0, zone.index + zone[0].length - zone[1]!.length).trim();
+  const zoneless = bare
+    .slice(0, zone.index + zone[0].length - zone[1]!.length)
+    .trim();
   // A second zone left in the value: `Date` would apply that one.
   if (ZONE_TOKEN.test(zoneless)) return null;
   const written = w3cForm(zoneless) ?? writtenForm(zoneless);

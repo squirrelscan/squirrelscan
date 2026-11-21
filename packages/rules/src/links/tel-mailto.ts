@@ -1,9 +1,17 @@
 // links/tel-mailto - Tel and mailto link validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem } from "@squirrelscan/core-contracts";
-import { MAX_CONTACT_LINKS, makeLinkSectionResolver } from "@squirrelscan/parser";
-import { decodeCloudflareEmail, isCloudflareEmailProtectionUrl } from "@squirrelscan/utils";
+
+import {
+  MAX_CONTACT_LINKS,
+  makeLinkSectionResolver,
+} from "@squirrelscan/parser";
+import {
+  decodeCloudflareEmail,
+  isCloudflareEmailProtectionUrl,
+} from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import {
   addSection,
@@ -135,7 +143,8 @@ export function withoutOptionalTrunkZero(text: string): string | null {
 export function looksLikeEmail(text: string): boolean {
   for (const line of text.split(/[\n\r\u2028\u2029]/)) {
     const at = line.indexOf("@", 1);
-    if (at >= 0 && line.lastIndexOf(".", line.length - 2) >= at + 2) return true;
+    if (at >= 0 && line.lastIndexOf(".", line.length - 2) >= at + 2)
+      return true;
   }
   return false;
 }
@@ -183,7 +192,8 @@ export const telMailtoRule: Rule = {
     }
     // The parse keeps the first MAX_CONTACT_LINKS contact anchors only. Past that, an anchor's
     // landmark is read from the DOM here (markup only: the classifier's answer is not kept for it).
-    const contactsCapped = (ctx.parsed.contactLinks?.length ?? 0) >= MAX_CONTACT_LINKS;
+    const contactsCapped =
+      (ctx.parsed.contactLinks?.length ?? 0) >= MAX_CONTACT_LINKS;
     const markupSectionOf = makeLinkSectionResolver();
     const placed = (
       item: CheckItem,
@@ -192,7 +202,11 @@ export const telMailtoRule: Rule = {
       text: string,
       anchor: Element
     ): CheckItem => {
-      const value = href.trim().slice(scheme.length + 1).split(/[?;]/)[0] ?? "";
+      const value =
+        href
+          .trim()
+          .slice(scheme.length + 1)
+          .split(/[?;]/)[0] ?? "";
       let sections = sectionsByContact.get(`${scheme}\n${value}\n${text}`);
       if (!sections && contactsCapped) {
         const own: SectionCounts = {};
@@ -278,14 +292,22 @@ export const telMailtoRule: Rule = {
         const isShareLink = email === "" && href.includes("?");
         // Basic email validation
         const hidden = obfuscated && email === "";
-        if (!isShareLink && !hidden && (!email.includes("@") || !email.includes("."))) {
+        if (
+          !isShareLink &&
+          !hidden &&
+          (!email.includes("@") || !email.includes("."))
+        ) {
           invalidMailto.push(href);
         }
 
         // Check for href/text email mismatch. An obfuscated link whose address did not decode
         // has none to compare.
         const text = link.textContent?.trim() || "";
-        if (!hidden && looksLikeEmail(text) && text.toLowerCase() !== email.toLowerCase()) {
+        if (
+          !hidden &&
+          looksLikeEmail(text) &&
+          text.toLowerCase() !== email.toLowerCase()
+        ) {
           mailtoMismatches.push(
             placed(
               {

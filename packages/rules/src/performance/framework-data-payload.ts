@@ -3,12 +3,13 @@
 
 import { z } from "zod";
 
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import {
   findFrameworkPayloads,
   measureInteractivity,
   visibleTextLength,
 } from "../shared/framework-payload";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 function formatKb(chars: number): string {
   return `${(chars / 1024).toFixed(chars >= 10 * 1024 ? 0 : 1)} KB`;
@@ -18,23 +19,33 @@ export const optionsSchema = z.object({
   min_bytes: z
     .number()
     .default(100 * 1024)
-    .describe("Combined size in characters of the page's framework data payloads that is worth reporting"),
+    .describe(
+      "Combined size in characters of the page's framework data payloads that is worth reporting"
+    ),
   min_text_chars: z
     .number()
     .default(1024)
-    .describe("Visible text below this many characters is too little to judge: an empty client-rendered shell is not a static text page"),
+    .describe(
+      "Visible text below this many characters is too little to judge: an empty client-rendered shell is not a static text page"
+    ),
   min_text_ratio: z
     .number()
     .default(20)
-    .describe("The payload must be at least this many times the page's visible text, so a page that is mostly data is not reported"),
+    .describe(
+      "The payload must be at least this many times the page's visible text, so a page that is mostly data is not reported"
+    ),
   max_interactive: z
     .number()
     .default(5)
-    .describe("Form controls plus embedded media a page may have and still count as static"),
+    .describe(
+      "Form controls plus embedded media a page may have and still count as static"
+    ),
   max_buttons: z
     .number()
     .default(50)
-    .describe("Buttons a page may have and still count as static (navigation menus alone can add dozens)"),
+    .describe(
+      "Buttons a page may have and still count as static (navigation menus alone can add dozens)"
+    ),
 });
 
 export const frameworkDataPayloadRule: Rule = {
@@ -70,18 +81,24 @@ export const frameworkDataPayloadRule: Rule = {
 
     if (total === 0) return pass("No framework data payload in the page");
     if (total < opts.min_bytes) {
-      return pass(`Framework data payload is ${formatKb(total)}, under the ${formatKb(opts.min_bytes)} threshold`);
+      return pass(
+        `Framework data payload is ${formatKb(total)}, under the ${formatKb(opts.min_bytes)} threshold`
+      );
     }
 
     const text = visibleTextLength(doc);
     // A shell with no text is client-rendered (its content arrives as script), or the
     // text was not measured: either way this is not a static text page.
     if (text < opts.min_text_chars) {
-      return pass(`Framework data payload is ${formatKb(total)} but the page has only ${formatKb(text)} of text, too little to judge`);
+      return pass(
+        `Framework data payload is ${formatKb(total)} but the page has only ${formatKb(text)} of text, too little to judge`
+      );
     }
     const ratio = total / text;
     if (ratio < opts.min_text_ratio) {
-      return pass(`Framework data payload is ${formatKb(total)} against ${formatKb(text)} of text: the page is mostly data`);
+      return pass(
+        `Framework data payload is ${formatKb(total)} against ${formatKb(text)} of text: the page is mostly data`
+      );
     }
 
     const interactivity = measureInteractivity(doc);
@@ -89,7 +106,9 @@ export const frameworkDataPayloadRule: Rule = {
       interactivity.fields + interactivity.embedded > opts.max_interactive ||
       interactivity.buttons > opts.max_buttons
     ) {
-      return pass("The page has interactive parts, so its framework data payload is not flagged");
+      return pass(
+        "The page has interactive parts, so its framework data payload is not flagged"
+      );
     }
 
     const largest = payloads[0]!;
@@ -100,7 +119,12 @@ export const frameworkDataPayloadRule: Rule = {
       value: total,
       items: payloads.map((p) => ({
         id: p.label,
-        meta: { kind: p.kind, size: formatKb(p.bytes), characters: p.bytes, elements: p.count },
+        meta: {
+          kind: p.kind,
+          size: formatKb(p.bytes),
+          characters: p.bytes,
+          elements: p.count,
+        },
       })),
       details: {
         payloadCharacters: total,

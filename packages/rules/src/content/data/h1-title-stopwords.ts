@@ -13,6 +13,12 @@ const LISTS: Record<string, string> = {
   nl: "aan al als bij dan dat de den der deze die dit doch door dus een en er geen had heb heeft hem het hier hij hoe hun ik in is je kan maar me met mij mijn na naar niet nog nu of om onder ons ook op over reeds te tegen toen tot u uit van veel voor was wat we wel werd wij wil worden zal ze zei zij zijn zo zou",
 };
 
-export const H1_TITLE_STOPWORDS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
-  Object.entries(LISTS).map(([lang, words]) => [lang, new Set(words.split(" "))]),
+export const H1_TITLE_STOPWORDS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map(
+  Object.entries(LISTS).map(([lang, words]) => [
+    lang,
+    new Set(words.split(" ")),
+  ])
 );

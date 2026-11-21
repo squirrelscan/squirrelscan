@@ -12,7 +12,13 @@
 
 import type { CspFetchKind } from "./csp-source-match";
 
-export type VendorCategory = "analytics" | "ads" | "payments" | "captcha" | "form" | "booking";
+export type VendorCategory =
+  | "analytics"
+  | "ads"
+  | "payments"
+  | "captcha"
+  | "form"
+  | "booking";
 
 /** What a page shows: every URL it names (comments removed) and its code text. */
 export interface PageSignals {
@@ -59,7 +65,8 @@ export interface CspVendor {
 
 export function urlMatches(url: URL, signal: UrlSignal): boolean {
   if (url.hostname.toLowerCase() !== signal.host) return false;
-  if (signal.pathPrefix && !url.pathname.startsWith(signal.pathPrefix)) return false;
+  if (signal.pathPrefix && !url.pathname.startsWith(signal.pathPrefix))
+    return false;
   if (signal.param) {
     const value = url.searchParams.get(signal.param.name);
     if (value === null || !signal.param.pattern.test(value)) return false;
@@ -67,24 +74,38 @@ export function urlMatches(url: URL, signal: UrlSignal): boolean {
   return true;
 }
 
-const hasHost = (signals: PageSignals, hosts: readonly string[], pathPrefix?: string) =>
+const hasHost = (
+  signals: PageSignals,
+  hosts: readonly string[],
+  pathPrefix?: string
+) =>
   signals.urls.some(
-    (u) => hosts.includes(u.hostname.toLowerCase()) && (!pathPrefix || u.pathname.startsWith(pathPrefix)),
+    (u) =>
+      hosts.includes(u.hostname.toLowerCase()) &&
+      (!pathPrefix || u.pathname.startsWith(pathPrefix))
   );
 
 export function deriveFlags(signals: PageSignals): Set<VendorFlag> {
   const flags = new Set<VendorFlag>();
   if (
     /AW-\d{6,}/.test(signals.code) ||
-    hasHost(signals, ["www.googleadservices.com", "googleads.g.doubleclick.net"])
+    hasHost(signals, [
+      "www.googleadservices.com",
+      "googleads.g.doubleclick.net",
+    ])
   ) {
     flags.add("ads-link");
   }
-  if (hasHost(signals, ["www.googletagmanager.com"], "/ns.html")) flags.add("gtm-noscript");
-  if (hasHost(signals, ["us.i.posthog.com", "us-assets.i.posthog.com"])) flags.add("posthog-us");
-  if (hasHost(signals, ["eu.i.posthog.com", "eu-assets.i.posthog.com"])) flags.add("posthog-eu");
-  if (hasHost(signals, ["us-assets.i.posthog.com"])) flags.add("posthog-us-assets");
-  if (hasHost(signals, ["eu-assets.i.posthog.com"])) flags.add("posthog-eu-assets");
+  if (hasHost(signals, ["www.googletagmanager.com"], "/ns.html"))
+    flags.add("gtm-noscript");
+  if (hasHost(signals, ["us.i.posthog.com", "us-assets.i.posthog.com"]))
+    flags.add("posthog-us");
+  if (hasHost(signals, ["eu.i.posthog.com", "eu-assets.i.posthog.com"]))
+    flags.add("posthog-eu");
+  if (hasHost(signals, ["us-assets.i.posthog.com"]))
+    flags.add("posthog-us-assets");
+  if (hasHost(signals, ["eu-assets.i.posthog.com"]))
+    flags.add("posthog-eu-assets");
   return flags;
 }
 
@@ -110,13 +131,26 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     category: "analytics",
     lastVerified: "2026-10-08",
     detect: {
-      urls: [{ host: GOOGLE_TAG, pathPrefix: "/gtag/js", param: { name: "id", pattern: /^G-[A-Z0-9]{6,}$/i } }],
+      urls: [
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtag/js",
+          param: { name: "id", pattern: /^G-[A-Z0-9]{6,}$/i },
+        },
+      ],
       code: [/gtag\(\s*['"]config['"]\s*,\s*['"]G-[A-Z0-9]{6,}['"]/i],
     },
     needs: [
-      { directive: "connect", hosts: ["www.google-analytics.com", "analytics.google.com"] },
+      {
+        directive: "connect",
+        hosts: ["www.google-analytics.com", "analytics.google.com"],
+      },
       // An Ads-linked property also reports through the Ads and Signals endpoints.
-      { directive: "connect", hosts: ["www.google.com", "stats.g.doubleclick.net"], when: "ads-link" },
+      {
+        directive: "connect",
+        hosts: ["www.google.com", "stats.g.doubleclick.net"],
+        when: "ads-link",
+      },
     ],
   },
   {
@@ -126,13 +160,24 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     lastVerified: "2026-10-08",
     detect: {
       urls: [
-        { host: GOOGLE_TAG, pathPrefix: "/gtag/js", param: { name: "id", pattern: /^AW-\d{6,}$/i } },
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtag/js",
+          param: { name: "id", pattern: /^AW-\d{6,}$/i },
+        },
         { host: "www.googleadservices.com", pathPrefix: "/pagead/conversion" },
       ],
       code: [/gtag\(\s*['"]config['"]\s*,\s*['"]AW-\d{6,}['"]/i],
     },
     needs: [
-      { directive: "script", hosts: ["googleads.g.doubleclick.net", "www.googleadservices.com", "www.google.com"] },
+      {
+        directive: "script",
+        hosts: [
+          "googleads.g.doubleclick.net",
+          "www.googleadservices.com",
+          "www.google.com",
+        ],
+      },
       { directive: "frame", hosts: ["td.doubleclick.net"] },
     ],
   },
@@ -143,8 +188,16 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     lastVerified: "2026-10-08",
     detect: {
       urls: [
-        { host: GOOGLE_TAG, pathPrefix: "/gtm.js", param: { name: "id", pattern: /^GTM-[A-Z0-9]+$/i } },
-        { host: GOOGLE_TAG, pathPrefix: "/ns.html", param: { name: "id", pattern: /^GTM-/i } },
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/gtm.js",
+          param: { name: "id", pattern: /^GTM-[A-Z0-9]+$/i },
+        },
+        {
+          host: GOOGLE_TAG,
+          pathPrefix: "/ns.html",
+          param: { name: "id", pattern: /^GTM-/i },
+        },
       ],
     },
     needs: [
@@ -168,8 +221,16 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     },
     unless: posthogProxied,
     needs: [
-      { directive: "script", hosts: ["us-assets.i.posthog.com"], when: "posthog-us-assets" },
-      { directive: "script", hosts: ["eu-assets.i.posthog.com"], when: "posthog-eu-assets" },
+      {
+        directive: "script",
+        hosts: ["us-assets.i.posthog.com"],
+        when: "posthog-us-assets",
+      },
+      {
+        directive: "script",
+        hosts: ["eu-assets.i.posthog.com"],
+        when: "posthog-eu-assets",
+      },
       { directive: "connect", hosts: ["us.i.posthog.com"], when: "posthog-us" },
       { directive: "connect", hosts: ["eu.i.posthog.com"], when: "posthog-eu" },
     ],
@@ -191,7 +252,9 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     name: "Cloudflare Turnstile",
     category: "captcha",
     lastVerified: "2026-10-08",
-    detect: { urls: [{ host: "challenges.cloudflare.com", pathPrefix: "/turnstile/" }] },
+    detect: {
+      urls: [{ host: "challenges.cloudflare.com", pathPrefix: "/turnstile/" }],
+    },
     needs: [
       { directive: "script", hosts: ["challenges.cloudflare.com"] },
       { directive: "frame", hosts: ["challenges.cloudflare.com"] },
@@ -205,7 +268,10 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     detect: {
       urls: [
         { host: "www.google.com", pathPrefix: `${RECAPTCHA_PATH}api.js` },
-        { host: "www.google.com", pathPrefix: `${RECAPTCHA_PATH}enterprise.js` },
+        {
+          host: "www.google.com",
+          pathPrefix: `${RECAPTCHA_PATH}enterprise.js`,
+        },
       ],
     },
     needs: [
@@ -221,7 +287,10 @@ export const CSP_VENDORS: readonly CspVendor[] = [
     detect: {
       urls: [
         { host: "www.recaptcha.net", pathPrefix: `${RECAPTCHA_PATH}api.js` },
-        { host: "www.recaptcha.net", pathPrefix: `${RECAPTCHA_PATH}enterprise.js` },
+        {
+          host: "www.recaptcha.net",
+          pathPrefix: `${RECAPTCHA_PATH}enterprise.js`,
+        },
       ],
     },
     needs: [
@@ -236,7 +305,10 @@ export const CSP_VENDORS: readonly CspVendor[] = [
  * itself. Only the severity of a blocked host reads this: a blocked booking or
  * form widget is an error, an unknown host a warning.
  */
-const HOST_CATEGORIES: ReadonlyArray<{ suffix: string; category: VendorCategory }> = [
+const HOST_CATEGORIES: ReadonlyArray<{
+  suffix: string;
+  category: VendorCategory;
+}> = [
   { suffix: "google-analytics.com", category: "analytics" },
   { suffix: "analytics.google.com", category: "analytics" },
   { suffix: "googletagmanager.com", category: "analytics" },
@@ -265,5 +337,7 @@ export function hostCategory(host: string): VendorCategory | undefined {
   const h = host.toLowerCase();
   // google.com and gstatic.com serve maps, fonts and more, so they are absent
   // here: a vendor need attributes them, never the bare host.
-  return HOST_CATEGORIES.find((e) => h === e.suffix || h.endsWith(`.${e.suffix}`))?.category;
+  return HOST_CATEGORIES.find(
+    (e) => h === e.suffix || h.endsWith(`.${e.suffix}`)
+  )?.category;
 }

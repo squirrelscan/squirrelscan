@@ -1,8 +1,8 @@
 // schema/entity-sameas-missing — an organization with no sameAs profiles.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { sameAsProfiles } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -71,7 +71,9 @@ export const entitySameAsMissingRule: Rule = {
           name: CHECK,
           status: "info",
           message: `${entityLabel(primary)} has no sameAs profiles`,
-          value: clipValue(`declared on ${pageTotal(primary)} ${pageTotal(primary) === 1 ? "page" : "pages"}`),
+          value: clipValue(
+            `declared on ${pageTotal(primary)} ${pageTotal(primary) === 1 ? "page" : "pages"}`
+          ),
           expected: "sameAs listing every profile the organization controls",
           items: [
             {

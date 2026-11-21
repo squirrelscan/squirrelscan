@@ -3,6 +3,10 @@
 // changes the row exactly when the table lists the move. updateCrawl's own edges are in
 // status-transitions-1659.test.ts.
 
+import {
+  CRAWL_STATUS_TRANSITIONS,
+  canTransitionCrawl,
+} from "@squirrelscan/core-contracts";
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -10,15 +14,27 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CRAWL_STATUS_TRANSITIONS, canTransitionCrawl } from "@squirrelscan/core-contracts";
-
-import { crawlStatusAllowedFrom, writeCrawlStatusGuarded } from "../src/storage";
-import { SQLiteStorage } from "../src/storage/sqlite";
 import type { CrawlMetadata, CrawlStatus } from "../src/storage/types";
+
+import {
+  crawlStatusAllowedFrom,
+  writeCrawlStatusGuarded,
+} from "../src/storage";
+import { SQLiteStorage } from "../src/storage/sqlite";
 
 const run = <A>(eff: Effect.Effect<A, unknown, never>): Promise<A> =>
   Effect.runPromise(eff as Effect.Effect<A, never, never>);
-const STATS = { pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0, linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0 };
+const STATS = {
+  pagesTotal: 0,
+  pagesFetched: 0,
+  pagesFailed: 0,
+  pagesSkipped: 0,
+  pagesUnchanged: 0,
+  linksTotal: 0,
+  imagesTotal: 0,
+  bytesTotal: 0,
+  avgLoadTimeMs: 0,
+};
 const STATUSES = Object.keys(CRAWL_STATUS_TRANSITIONS) as CrawlStatus[];
 
 let dir: string;
@@ -33,7 +49,13 @@ async function seedAt(from: CrawlStatus): Promise<string> {
   const s = new SQLiteStorage(dbPath);
   await run(s.init());
   const id = await run(
-    s.createCrawl({ baseUrl: "https://e.test", startedAt: 1, status: "running", config: {} as CrawlMetadata["config"], stats: STATS } as Omit<CrawlMetadata, "id">),
+    s.createCrawl({
+      baseUrl: "https://e.test",
+      startedAt: 1,
+      status: "running",
+      config: {} as CrawlMetadata["config"],
+      stats: STATS,
+    } as Omit<CrawlMetadata, "id">)
   );
   await run(s.close());
   // Put the row at `from` directly: this test is about the write, not about reaching a status.
@@ -46,7 +68,11 @@ async function seedAt(from: CrawlStatus): Promise<string> {
 const statusOf = (id: string): string => {
   const db = new Database(dbPath);
   try {
-    return (db.prepare("SELECT status FROM crawls WHERE id = ?").get(id) as { status: string }).status;
+    return (
+      db.prepare("SELECT status FROM crawls WHERE id = ?").get(id) as {
+        status: string;
+      }
+    ).status;
   } finally {
     db.close();
   }
@@ -81,7 +107,9 @@ describe("writeCrawlStatusGuarded", () => {
 
   test("the bound list is the table's own", () => {
     for (const to of STATUSES) {
-      expect(crawlStatusAllowedFrom(to)).toBe(`,${CRAWL_STATUS_TRANSITIONS[to].join(",")},`);
+      expect(crawlStatusAllowedFrom(to)).toBe(
+        `,${CRAWL_STATUS_TRANSITIONS[to].join(",")},`
+      );
     }
   });
 });

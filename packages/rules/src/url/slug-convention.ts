@@ -45,8 +45,9 @@
 // it is emitted, so the output is byte-identical by construction and independent of
 // crawl order (same shape as content/duplicate-title, #1021/#1022).
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const SLUG_NORM_MIN_PAGES = 10;
@@ -75,7 +76,13 @@ const SLUG_NORM_MAX_NORMS = 10;
 const CHECK_NAME = "slug-convention";
 
 /** Dimension ids, in the order they are reported. */
-const DIMENSIONS = ["separator", "case", "trailing-slash", "date-in-slug", "depth"] as const;
+const DIMENSIONS = [
+  "separator",
+  "case",
+  "trailing-slash",
+  "date-in-slug",
+  "depth",
+] as const;
 type Dimension = (typeof DIMENSIONS)[number];
 
 /** Dimensions computed per `pageType` rather than across the whole site. */
@@ -305,7 +312,8 @@ function compareScope(
   a: { dimension: Dimension; pageType: string | null },
   b: { dimension: Dimension; pageType: string | null }
 ): number {
-  const byDimension = DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension);
+  const byDimension =
+    DIMENSIONS.indexOf(a.dimension) - DIMENSIONS.indexOf(b.dimension);
   if (byDimension !== 0) return byDimension;
   const at = a.pageType ?? "";
   const bt = b.pageType ?? "";
@@ -335,7 +343,9 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   const buckets = [...rollup.buckets.values()].sort(compareScope);
   for (const bucket of buckets) {
     const floor =
-      bucket.pageType === null ? SLUG_NORM_MIN_SAMPLE : SLUG_NORM_MIN_GROUP_PAGES;
+      bucket.pageType === null
+        ? SLUG_NORM_MIN_SAMPLE
+        : SLUG_NORM_MIN_GROUP_PAGES;
     if (bucket.total < floor) continue;
 
     const modal = modalValue(bucket);
@@ -354,7 +364,9 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
     for (const [value, urls] of bucket.values) {
       if (value === modal.value) continue;
       // The per-page url rule already flags these pages; never accuse twice.
-      const kept = urls.filter((url) => !ownedByPageRule(bucket.dimension, url));
+      const kept = urls.filter(
+        (url) => !ownedByPageRule(bucket.dimension, url)
+      );
       if (kept.length < urls.length) {
         const owner = OWNING_PAGE_RULE[bucket.dimension];
         if (owner) deferred.add(`${bucket.dimension} -> ${owner}`);
@@ -380,7 +392,8 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   }
 
   const deferredTo = [...deferred].sort();
-  const deferredTail = deferredTo.length > 0 ? ` (deferred to ${deferredTo.join(", ")})` : "";
+  const deferredTail =
+    deferredTo.length > 0 ? ` (deferred to ${deferredTo.join(", ")})` : "";
   const normSummary = judged
     .slice(0, SLUG_NORM_MAX_NORMS)
     .map(
@@ -421,22 +434,27 @@ function buildChecks(rollup: SlugRollup, sitePageCount: number): CheckResult[] {
   // Biggest deviant group first; the scope key breaks ties so the list never
   // depends on crawl order.
   deviations.sort(
-    (a, b) => b.urls.length - a.urls.length || compareScope(a, b) || (a.value < b.value ? -1 : 1)
+    (a, b) =>
+      b.urls.length - a.urls.length ||
+      compareScope(a, b) ||
+      (a.value < b.value ? -1 : 1)
   );
-  const items: CheckItem[] = deviations.slice(0, SLUG_NORM_MAX_ITEMS).map((d) => ({
-    id: `${d.dimension}:${d.pageType ?? "*"}:${d.value}`,
-    // Counts, not percentages: one deviant in 200 rounds to "0%", which reads as
-    // a bug rather than as the finding.
-    label: `${d.urls.length} of ${d.total} ${scopeLabel(d.pageType)} use ${valueLabel(d.dimension, d.value)} but the ${DIMENSION_LABELS[d.dimension]} norm is ${valueLabel(d.dimension, d.norm)}`,
-    sourcePages: d.urls.slice(0, SLUG_NORM_MAX_URLS),
-    meta: {
-      dimension: d.dimension,
-      pageType: d.pageType,
-      value: d.value,
-      norm: d.norm,
-      pageCount: d.urls.length,
-    },
-  }));
+  const items: CheckItem[] = deviations
+    .slice(0, SLUG_NORM_MAX_ITEMS)
+    .map((d) => ({
+      id: `${d.dimension}:${d.pageType ?? "*"}:${d.value}`,
+      // Counts, not percentages: one deviant in 200 rounds to "0%", which reads as
+      // a bug rather than as the finding.
+      label: `${d.urls.length} of ${d.total} ${scopeLabel(d.pageType)} use ${valueLabel(d.dimension, d.value)} but the ${DIMENSION_LABELS[d.dimension]} norm is ${valueLabel(d.dimension, d.norm)}`,
+      sourcePages: d.urls.slice(0, SLUG_NORM_MAX_URLS),
+      meta: {
+        dimension: d.dimension,
+        pageType: d.pageType,
+        value: d.value,
+        norm: d.norm,
+        pageCount: d.urls.length,
+      },
+    }));
 
   const flaggedShare = flaggedUrls.size / sitePageCount;
   return [
@@ -505,7 +523,12 @@ export const slugConventionRule: Rule = {
       if (page.redirectSource) continue;
       // An error page with no document (v1 appends one per 4xx/5xx it could not parse) is not a page of the
       // site's own URLs: the streaming universe has no row for it, so neither count includes it (#1359).
-      if (page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")) continue;
+      if (
+        page.statusCode >= 400 &&
+        !page.parsed?.document &&
+        (!page.parsed?.pageType || page.parsed.pageType === "unknown")
+      )
+        continue;
       accumulatePage(rollup, {
         url: page.url,
         status: page.statusCode,

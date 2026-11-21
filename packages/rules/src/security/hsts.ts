@@ -24,7 +24,16 @@ export const hstsRule: Rule = {
       { name: "hsts-malformed", outcome: "problem" },
       { name: "hsts-disabled", outcome: "problem" },
       { name: "hsts-max-age-short", outcome: "problem" },
-      { name: "hsts", outcome: "clean", clears: ["hsts-missing", "hsts-malformed", "hsts-disabled", "hsts-max-age-short"] },
+      {
+        name: "hsts",
+        outcome: "clean",
+        clears: [
+          "hsts-missing",
+          "hsts-malformed",
+          "hsts-disabled",
+          "hsts-max-age-short",
+        ],
+      },
       { name: "hsts-no-pages", outcome: "skipped" },
       { name: "hsts-not-applicable", outcome: "skipped" },
     ],
@@ -88,7 +97,8 @@ function judgeHsts(page: SitePage): CheckResult[] {
       status: "warn",
       message: "Malformed HSTS header, no valid max-age directive",
       value: hsts,
-      expected: "Strict-Transport-Security: max-age=31536000; includeSubDomains",
+      expected:
+        "Strict-Transport-Security: max-age=31536000; includeSubDomains",
     });
     return checks;
   }
@@ -100,7 +110,8 @@ function judgeHsts(page: SitePage): CheckResult[] {
     checks.push({
       name: "hsts-disabled",
       status: "warn",
-      message: "HSTS disabled, max-age=0 tells browsers to stop enforcing HTTPS",
+      message:
+        "HSTS disabled, max-age=0 tells browsers to stop enforcing HTTPS",
       value: hsts,
       expected: "max-age of at least 6 months (15768000 seconds)",
     });

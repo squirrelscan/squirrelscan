@@ -9,7 +9,9 @@ const SITE = "https://example.com/";
 const AT = "2026-01-01T00:00:00.000Z";
 
 function render(pages: { url: string; raw: string | null }[]): string {
-  return renderEntityMapMarkdown(buildEntityMap(pages, SITE, { generatedAt: AT }));
+  return renderEntityMapMarkdown(
+    buildEntityMap(pages, SITE, { generatedAt: AT })
+  );
 }
 
 function page(url: string, jsonLd: unknown) {
@@ -36,7 +38,9 @@ describe("renderEntityMapMarkdown", () => {
     expect(markdown).toContain("| Pages crawled | 2 |");
     expect(markdown).toContain("| Entities with a stable @id | 1 (100%) |");
     expect(markdown).toContain("## Largest entities");
-    expect(markdown).toContain("| Organization | Acme | https://example.com/#org | 2 | 2 |");
+    expect(markdown).toContain(
+      "| Organization | Acme | https://example.com/#org | 2 | 2 |"
+    );
   });
 
   test("reports a conflict with its values and pages", () => {
@@ -70,7 +74,9 @@ describe("renderEntityMapMarkdown", () => {
     ]);
 
     expect(markdown).toContain("### Dangling references (1)");
-    expect(markdown).toContain("| publisher | https://example.com/#organization | 1 |");
+    expect(markdown).toContain(
+      "| publisher | https://example.com/#organization | 1 |"
+    );
   });
 
   test("names the entities declared on several pages with no @id", () => {
@@ -101,8 +107,12 @@ describe("renderEntityMapMarkdown", () => {
     ]);
 
     expect(markdown).toContain("No entity disagrees with itself across pages.");
-    expect(markdown).toContain("Every `@id` reference points at an entity some page declares.");
-    expect(markdown).toContain("Every entity declared on more than one page carries an `@id`.");
+    expect(markdown).toContain(
+      "Every `@id` reference points at an entity some page declares."
+    );
+    expect(markdown).toContain(
+      "Every entity declared on more than one page carries an `@id`."
+    );
   });
 
   test("a pipe or a newline in a name cannot break the table", () => {
@@ -117,9 +127,7 @@ describe("renderEntityMapMarkdown", () => {
     expect(markdown).toContain("Ac\\|me Widgets \\| Inc");
     // The row keeps the five cells its header declared: only the escaped pipes
     // came from the site, and markdown does not treat those as separators.
-    const row = markdown
-      .split("\n")
-      .find((line) => line.includes("Ac\\|me"));
+    const row = markdown.split("\n").find((line) => line.includes("Ac\\|me"));
     expect(row).toBeDefined();
     const separators = row!.replace(/\\\|/g, "").split("|");
     expect(separators.length).toBe(7);
@@ -140,7 +148,10 @@ describe("renderEntityMapMarkdown", () => {
     const row = markdown.split("\n").find((line) => line.includes("Acme"));
     expect(row).toBeDefined();
     expect(row).toContain("Acme \\\\\\| Inc");
-    const separators = row!.replace(/\\\\/g, "").replace(/\\\|/g, "").split("|");
+    const separators = row!
+      .replace(/\\\\/g, "")
+      .replace(/\\\|/g, "")
+      .split("|");
     expect(separators.length).toBe(7);
   });
 
@@ -156,7 +167,10 @@ describe("renderEntityMapMarkdown", () => {
     const row = markdown.split("\n").find((line) => line.includes("aaa"));
     expect(row).toBeDefined();
     // Whatever the clip did, every cell separator is still a bare pipe.
-    const separators = row!.replace(/\\\\/g, "").replace(/\\\|/g, "").split("|");
+    const separators = row!
+      .replace(/\\\\/g, "")
+      .replace(/\\\|/g, "")
+      .split("|");
     expect(separators.length).toBe(7);
   });
 

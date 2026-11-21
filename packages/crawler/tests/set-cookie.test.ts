@@ -25,14 +25,14 @@ describe("extractResponseHeaders Set-Cookie handling (#973)", () => {
         headers.append("Set-Cookie", "session=abc123; Path=/; HttpOnly");
         headers.append(
           "Set-Cookie",
-          "consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure",
+          "consent=1; Path=/; Expires=Wed, 09 Jun 2027 10:18:14 GMT; Secure"
         );
         return new Response("<!doctype html><title>t</title>", { headers });
       },
     });
     try {
       const result = await Effect.runPromise(
-        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS),
+        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
       );
       const setCookie = result.headers.setCookie ?? "";
       const cookies = setCookie.split("\n");
@@ -54,7 +54,7 @@ describe("extractResponseHeaders Set-Cookie handling (#973)", () => {
     });
     try {
       const result = await Effect.runPromise(
-        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS),
+        fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
       );
       expect(result.headers.setCookie).toBeNull();
     } finally {

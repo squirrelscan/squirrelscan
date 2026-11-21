@@ -10,6 +10,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -34,15 +35,23 @@ const inlineScripts = (html: string): string[] =>
 describe("Screenshot", () => {
   test("(a) present screenshotUrl renders the framed img with the hide-on-error hooks", () => {
     const html = renderHtml(
-      baseReport({ screenshotUrl: "https://assets.squirrelscan.com/shots/abc.png" }),
+      baseReport({
+        screenshotUrl: "https://assets.squirrelscan.com/shots/abc.png",
+      })
     );
-    expect(html).toMatch(/<a[^>]*class="screenshot-section[^"]*"[^>]*data-hide-scope="true"/);
-    expect(html).toContain('src="https://assets.squirrelscan.com/shots/abc.png"');
+    expect(html).toMatch(
+      /<a[^>]*class="screenshot-section[^"]*"[^>]*data-hide-scope="true"/
+    );
+    expect(html).toContain(
+      'src="https://assets.squirrelscan.com/shots/abc.png"'
+    );
     expect(html).toMatch(/<img[^>]*abc\.png"[^>]*data-hide-broken="true"/);
     // No per-element inline onerror handler (CSP-unsafe) on the img.
     expect(html).not.toContain("onerror=");
     // The static page script hides the image's frame when it fails to load.
-    expect(inlineScripts(html).join("")).toContain('closest("[data-hide-scope]")');
+    expect(inlineScripts(html).join("")).toContain(
+      'closest("[data-hide-scope]")'
+    );
   });
 
   test("(b) absent screenshotUrl renders no screenshot markup and no image", () => {
@@ -53,7 +62,9 @@ describe("Screenshot", () => {
   });
 
   test("(c) non-http (javascript:) URL is rejected", () => {
-    const html = renderHtml(baseReport({ screenshotUrl: "javascript:alert(1)" }));
+    const html = renderHtml(
+      baseReport({ screenshotUrl: "javascript:alert(1)" })
+    );
     expect(html).not.toContain("screenshot-section");
     expect(html).not.toContain("javascript:alert(1)");
     expect(html).not.toContain("<img");
@@ -63,7 +74,7 @@ describe("Screenshot", () => {
     const html = renderHtml(
       baseReport({
         screenshotUrl: 'https://evil.example.com/x.png"onerror="alert(1)',
-      }),
+      })
     );
     // The raw double-quote breakout must never appear unescaped.
     expect(html).not.toContain('x.png"onerror="alert(1)');
@@ -80,9 +91,12 @@ describe("Screenshot", () => {
         baseReport({
           baseUrl: "https://other.example/",
           screenshotUrl: "https://assets.squirrelscan.com/shots/abc.png",
-          homepage: { title: "</script><script>alert(1)</script>", description: null },
-        }),
-      ),
+          homepage: {
+            title: "</script><script>alert(1)</script>",
+            description: null,
+          },
+        })
+      )
     );
     expect(a.length).toBeGreaterThan(0);
     expect(b).toEqual(a);

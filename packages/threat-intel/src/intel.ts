@@ -9,16 +9,20 @@
 // Keeping the feed/lookup resolution OUT of buildIntelContext is deliberate: all
 // network happens up-front in the prefetch phase, so rules stay pure.
 
-import type { IntelContext, IntelUrlVerdict } from "@squirrelscan/core-contracts";
+import type {
+  IntelContext,
+  IntelUrlVerdict,
+} from "@squirrelscan/core-contracts";
+
+import type { KvStore } from "./cache";
+import type { Signature } from "./signatures";
+import type { IntelConfig, IntelTransport, ResolvedIntel } from "./types";
 
 import { MemoryKvStore } from "./cache";
-import type { KvStore } from "./cache";
 import { lookupInSnapshot, refreshFeeds } from "./feeds";
 import { runLookups } from "./lookups";
 import { LOOKUP_PROVIDERS, isProviderEnabled } from "./providers";
 import { loadSignatures, matchSignatures } from "./signatures";
-import type { Signature } from "./signatures";
-import type { IntelConfig, IntelTransport, ResolvedIntel } from "./types";
 import { normalizeUrl } from "./url";
 
 /** Default transport over the global `fetch`, narrowed to what providers read. */
@@ -87,7 +91,7 @@ export interface PrefetchIntelInput {
  */
 export async function prefetchIntel(
   config: IntelConfig,
-  input: PrefetchIntelInput,
+  input: PrefetchIntelInput
 ): Promise<ResolvedIntel> {
   const transport = input.transport ?? defaultTransport;
   const kv = input.kv ?? new MemoryKvStore();
@@ -98,9 +102,9 @@ export async function prefetchIntel(
     concurrency: input.lookupConcurrency,
   });
 
-  const lookupIds = LOOKUP_PROVIDERS.filter((p) => isProviderEnabled(config.providers[p.id])).map(
-    (p) => p.id,
-  );
+  const lookupIds = LOOKUP_PROVIDERS.filter((p) =>
+    isProviderEnabled(config.providers[p.id])
+  ).map((p) => p.id);
   const providers = [...new Set([...feeds.providers, ...lookupIds])];
 
   return { providers, feeds, verdicts };

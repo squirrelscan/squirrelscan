@@ -8,14 +8,25 @@ import type {
   LinkSection,
   SiteResourceOccurrence,
 } from "@squirrelscan/core-contracts";
+
 import {
   clampDetailsRecord,
   clampItemId,
   clampItemString,
 } from "@squirrelscan/core-contracts/clamp";
-import { addRegions, alignItemSources, pageRegions } from "@squirrelscan/core-contracts/item-sources";
-import { PUBLISH_LIMITS, REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { mergeCheckMessages, messageMergeKey } from "@squirrelscan/core-contracts/message-merge";
+import {
+  addRegions,
+  alignItemSources,
+  pageRegions,
+} from "@squirrelscan/core-contracts/item-sources";
+import {
+  PUBLISH_LIMITS,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
+import {
+  mergeCheckMessages,
+  messageMergeKey,
+} from "@squirrelscan/core-contracts/message-merge";
 
 /**
  * Bound every check item's `id`/`label` to the publish schema's medium-string
@@ -65,11 +76,18 @@ export function clampCheckStrings(checks: CheckResult[]): CheckResult[] {
   let arrayChanged = false;
   const out = checks.map((check) => {
     const message = clampItemString(check.message, max);
-    const value = typeof check.value === "string" ? clampItemString(check.value, max) : check.value;
+    const value =
+      typeof check.value === "string"
+        ? clampItemString(check.value, max)
+        : check.value;
     const expected =
-      typeof check.expected === "string" ? clampItemString(check.expected, max) : check.expected;
+      typeof check.expected === "string"
+        ? clampItemString(check.expected, max)
+        : check.expected;
     const skipReason =
-      check.skipReason === undefined ? undefined : clampItemString(check.skipReason, max);
+      check.skipReason === undefined
+        ? undefined
+        : clampItemString(check.skipReason, max);
     if (
       message === check.message &&
       value === check.value &&
@@ -106,7 +124,10 @@ export function clampCheckDetails(checks: CheckResult[]): CheckResult[] {
   let arrayChanged = false;
   const out = checks.map((check) => {
     if (!check.details) return check;
-    const clamped = clampDetailsRecord(check.details) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(check.details) as Record<
+      string,
+      unknown
+    >;
     if (clamped === check.details) return check;
     arrayChanged = true;
     return { ...check, details: clamped };
@@ -134,7 +155,7 @@ export function clampCheckDetails(checks: CheckResult[]): CheckResult[] {
  */
 export function clampCheckItemsOverflow(
   checks: CheckResult[],
-  maxItems: number = REPORT_LIMITS.maxItemsPerCheck,
+  maxItems: number = REPORT_LIMITS.maxItemsPerCheck
 ): CheckResult[] {
   let arrayChanged = false;
   const out = checks.map((check) => {
@@ -144,7 +165,10 @@ export function clampCheckItemsOverflow(
     return {
       ...check,
       items: check.items.slice(0, maxItems),
-      details: { ...check.details, additional: checkAdditional(check) + dropped },
+      details: {
+        ...check.details,
+        additional: checkAdditional(check) + dropped,
+      },
     };
   });
   return arrayChanged ? out : checks;
@@ -189,11 +213,15 @@ export interface PublishSampleLimits {
  */
 export function foldGroupKey(check: CheckResult): string {
   const provenance =
-    check.provenance === "carried" || check.provenance === "unrendered" ? check.provenance : "";
-  const foldKey = typeof check.details?.foldKey === "string" ? check.details.foldKey : "";
+    check.provenance === "carried" || check.provenance === "unrendered"
+      ? check.provenance
+      : "";
+  const foldKey =
+    typeof check.details?.foldKey === "string" ? check.details.foldKey : "";
   // (#1031) An inconclusive `info` ("could not judge") never folds with a plain one, so the marker
   // survives on the aggregate and resolution still reads it.
-  const inconclusive = check.details?.inconclusive === true ? "\u0000inconclusive" : "";
+  const inconclusive =
+    check.details?.inconclusive === true ? "\u0000inconclusive" : "";
   return `${check.name}\u0000${check.status}\u0000${provenance}\u0000${foldKey}${inconclusive}`;
 }
 
@@ -222,7 +250,7 @@ export const DEFAULT_PUBLISH_SAMPLE: PublishSampleLimits = {
  */
 export function sampleChecksForPublish(
   checks: CheckResult[],
-  limits: PublishSampleLimits = DEFAULT_PUBLISH_SAMPLE,
+  limits: PublishSampleLimits = DEFAULT_PUBLISH_SAMPLE
 ): CheckResult[] {
   let arrayChanged = false;
   const out = checks.map((check) => {
@@ -268,7 +296,8 @@ export function slimPageChecksForShell(checks: CheckResult[]): CheckResult[] {
     if (c.status === "pass") continue; // per-page pass — drop (renders nothing actionable)
     pageIssues.push(c); // per-page fail/warn — fold below
   }
-  if (pageIssues.length === 0) return kept.length === checks.length ? checks : kept;
+  if (pageIssues.length === 0)
+    return kept.length === checks.length ? checks : kept;
   // Fold every (name,status) class to one aggregate, then sample its pages. maxChecks
   // = the distinct class count FORCES the fold regardless of page count (the default
   // only folds past maxChecksPerRule) while keeping every class (out.length = classes,
@@ -277,12 +306,18 @@ export function slimPageChecksForShell(checks: CheckResult[]): CheckResult[] {
   // `details.pagesTruncated`; occurrences carries the folded per-page check count.
   const classes = new Set(pageIssues.map(foldGroupKey)).size;
   const folded = sampleChecksForPublish(
-    foldOverflowChecks(pageIssues, { ...DEFAULT_FOLD_LIMITS, maxChecks: classes }),
+    foldOverflowChecks(pageIssues, {
+      ...DEFAULT_FOLD_LIMITS,
+      maxChecks: classes,
+    })
   );
   return [...kept, ...folded];
 }
 
-function sampleCheckForPublish(check: CheckResult, limits: PublishSampleLimits): CheckResult {
+function sampleCheckForPublish(
+  check: CheckResult,
+  limits: PublishSampleLimits
+): CheckResult {
   let changed = false;
   let details = check.details;
 
@@ -304,7 +339,8 @@ function sampleCheckForPublish(check: CheckResult, limits: PublishSampleLimits):
   //    clamp each kept item's id/label + sourcePages.
   let items = check.items;
   if (items && items.length > 0) {
-    const kept = items.length > limits.maxItems ? items.slice(0, limits.maxItems) : items;
+    const kept =
+      items.length > limits.maxItems ? items.slice(0, limits.maxItems) : items;
     const dropped = items.length - kept.length;
     let itemsChanged = kept !== items;
     const clampedItems = kept.map((item) => {
@@ -322,11 +358,15 @@ function sampleCheckForPublish(check: CheckResult, limits: PublishSampleLimits):
           deduped.length > limits.maxSourcePagesPerItem
             ? deduped.slice(0, limits.maxSourcePagesPerItem)
             : deduped;
-        if (sliced.length < deduped.length && deduped.length > (pageCount ?? 0)) {
+        if (
+          sliced.length < deduped.length &&
+          deduped.length > (pageCount ?? 0)
+        ) {
           pageCount = deduped.length;
         }
         // Reuse the original ref only when dedupe + clip were both no-ops.
-        sourcePages = sliced.length === sourcePages.length ? sourcePages : sliced;
+        sourcePages =
+          sliced.length === sourcePages.length ? sourcePages : sliced;
       }
       const next =
         id === item.id &&
@@ -414,7 +454,6 @@ export function clipPageStatusesToBytes<
   return report;
 }
 
-
 export interface FoldLimits {
   /** Max checks per rule in the published report (REPORT_LIMITS.maxChecksPerRule). */
   maxChecks: number;
@@ -438,7 +477,9 @@ export const DEFAULT_FOLD_LIMITS: FoldLimits = {
 // checks must not lose it or the aggregate undercounts.
 function checkAdditional(check: CheckResult): number {
   const extra = check.details?.additional;
-  return typeof extra === "number" && Number.isFinite(extra) && extra > 0 ? Math.floor(extra) : 0;
+  return typeof extra === "number" && Number.isFinite(extra) && extra > 0
+    ? Math.floor(extra)
+    : 0;
 }
 
 /**
@@ -469,7 +510,7 @@ function checkAdditional(check: CheckResult): number {
  */
 export function foldOverflowChecks(
   checks: CheckResult[],
-  limits: FoldLimits = DEFAULT_FOLD_LIMITS,
+  limits: FoldLimits = DEFAULT_FOLD_LIMITS
 ): CheckResult[] {
   if (checks.length <= limits.maxChecks) return checks;
 
@@ -539,10 +580,15 @@ export function foldOverflowChecks(
  * `ruleResults.<id>.checks` (maxChecks = REPORT_LIMITS.maxChecksPerRule), the
  * shape #910 was designed for.
  */
-export function capChecksForPublish(checks: CheckResult[], maxChecks: number): CheckResult[] {
+export function capChecksForPublish(
+  checks: CheckResult[],
+  maxChecks: number
+): CheckResult[] {
   return foldOverflowChecks(
-    clampCheckItemsOverflow(clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks)))),
-    { ...DEFAULT_FOLD_LIMITS, maxChecks },
+    clampCheckItemsOverflow(
+      clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks)))
+    ),
+    { ...DEFAULT_FOLD_LIMITS, maxChecks }
   );
 }
 
@@ -575,10 +621,10 @@ export function capChecksForPublish(checks: CheckResult[], maxChecks: number): C
  */
 export function capMixedRuleChecksForPublish(
   checks: CheckResult[],
-  maxChecks: number,
+  maxChecks: number
 ): CheckResult[] {
   const clamped = clampCheckItemsOverflow(
-    clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))),
+    clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks)))
   );
   if (clamped.length <= maxChecks) return clamped;
   const total = Math.max(clamped.length, maxChecksTruncated(clamped));
@@ -616,7 +662,10 @@ export function maxChecksTruncated(checks: CheckResult[]): number {
  * rule. A cap that bites twice keeps the LARGEST total; pass a `total` already
  * reconciled against {@link maxChecksTruncated} of the pre-slice array.
  */
-export function stampChecksTruncated(check: CheckResult, total: number): CheckResult {
+export function stampChecksTruncated(
+  check: CheckResult,
+  total: number
+): CheckResult {
   const prior = check.details?.checksTruncated;
   if (typeof prior === "number" && prior >= total) return check;
   // Re-clamp: the stamp lands AFTER clampCheckDetails, so on a check already
@@ -630,10 +679,10 @@ export function stampChecksTruncated(check: CheckResult, total: number): CheckRe
   // position puts it among the keys that survive; a pre-existing (smaller)
   // marker is dropped from the spread so ours is the one that lands.
   const { checksTruncated: _superseded, ...rest } = check.details ?? {};
-  const details = clampDetailsRecord({ checksTruncated: total, ...rest }) as Record<
-    string,
-    unknown
-  >;
+  const details = clampDetailsRecord({
+    checksTruncated: total,
+    ...rest,
+  }) as Record<string, unknown>;
   return { ...check, details };
 }
 
@@ -669,7 +718,11 @@ function itemOnPage(item: CheckItem, page: string): CheckItem {
  * so this is a safe no-op to flatMap over a never-folded or mixed array.
  */
 export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
-  if (check.details?.aggregated !== true || !check.pages || check.pages.length === 0) {
+  if (
+    check.details?.aggregated !== true ||
+    !check.pages ||
+    check.pages.length === 0
+  ) {
     return [check];
   }
   // foldGroup composed the message as `${first.message} (+N more pages)`; strip
@@ -734,7 +787,7 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
   // (the payload boundary), so it is never overwritten by this softer one.
   const pageSet = new Set(check.pages);
   const unplaceable = (check.componentOccurrences ?? []).filter(
-    (occurrence) => !pageSet.has(occurrence.pageUrl),
+    (occurrence) => !pageSet.has(occurrence.pageUrl)
   );
   const componentEvidence =
     check.componentEvidence ??
@@ -750,7 +803,7 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
   // yields a unit naming fewer pages — a wrong answer that reads exactly like a
   // right one.
   const unplaceableResources = (check.siteResourceOccurrences ?? []).filter(
-    (occurrence) => !pageSet.has(occurrence.pageUrl),
+    (occurrence) => !pageSet.has(occurrence.pageUrl)
   );
   const siteResourceEvidence =
     check.siteResourceEvidence ??
@@ -775,7 +828,9 @@ export function unfoldAggregateCheck(check: CheckResult): CheckResult[] {
       pageUrl: page,
       pages: undefined,
       items:
-        pageItems && pageItems.length > 0 ? pageItems.map((item) => itemOnPage(item, page)) : undefined,
+        pageItems && pageItems.length > 0
+          ? pageItems.map((item) => itemOnPage(item, page))
+          : undefined,
       details: Object.keys(details).length > 0 ? details : undefined,
       componentOccurrences: pageOccurrences,
       siteResourceOccurrences: siteResourcesByPage.get(page),
@@ -795,23 +850,31 @@ const MORE_PAGES_SUFFIX = /(?: \(\+\d+ more pages\)| on \d+ pages?)$/;
 
 function occurrencesOf(check: CheckResult): number {
   const prior = check.details?.occurrences;
-  return typeof prior === "number" && Number.isFinite(prior) && prior > 0 ? Math.floor(prior) : 1;
+  return typeof prior === "number" && Number.isFinite(prior) && prior > 0
+    ? Math.floor(prior)
+    : 1;
 }
 
 /** The message one page would have shown: an aggregate keeps it in `details.pageMessage` (older ones carry the suffix). */
 function perPageMessage(check: CheckResult): string {
   if (check.details?.aggregated !== true) return check.message;
   const kept = check.details.pageMessage;
-  return typeof kept === "string" ? kept : check.message.replace(MORE_PAGES_SUFFIX, "");
+  return typeof kept === "string"
+    ? kept
+    : check.message.replace(MORE_PAGES_SUFFIX, "");
 }
 
 /** The `details.messages` an aggregate kept when its pages disagreed, with a count per message. */
-function messageVariantsOf(check: CheckResult): { message: string; count: number }[] | null {
-  const listed = check.details?.aggregated === true ? check.details.messages : undefined;
+function messageVariantsOf(
+  check: CheckResult
+): { message: string; count: number }[] | null {
+  const listed =
+    check.details?.aggregated === true ? check.details.messages : undefined;
   if (!Array.isArray(listed)) return null;
   const out: { message: string; count: number }[] = [];
   for (const v of listed) {
-    if (v && typeof v.message === "string" && typeof v.count === "number") out.push({ message: v.message, count: v.count });
+    if (v && typeof v.message === "string" && typeof v.count === "number")
+      out.push({ message: v.message, count: v.count });
   }
   return out.length > 0 ? out : null;
 }
@@ -828,7 +891,7 @@ const pagesWord = (n: number): string => `${n} page${n === 1 ? "" : "s"}`;
 function composeFoldedMessage(
   variants: ReadonlyMap<string, number>,
   occurrences: number,
-  distinctItems: number,
+  distinctItems: number
 ): string {
   const byShape = new Map<string, { messages: string[]; count: number }>();
   for (const [message, count] of variants) {
@@ -840,8 +903,14 @@ function composeFoldedMessage(
     } else byShape.set(key, { messages: [message], count });
   }
   const merged = [...byShape.values()]
-    .map((g) => ({ text: mergeCheckMessages(g.messages) ?? g.messages[0]!, count: g.count }))
-    .sort((a, b) => b.count - a.count || (a.text < b.text ? -1 : a.text > b.text ? 1 : 0));
+    .map((g) => ({
+      text: mergeCheckMessages(g.messages) ?? g.messages[0]!,
+      count: g.count,
+    }))
+    .sort(
+      (a, b) =>
+        b.count - a.count || (a.text < b.text ? -1 : a.text > b.text ? 1 : 0)
+    );
   if (merged.length === 1) {
     const text = merged[0]!.text;
     const counted = /^(?:\d+(?: to \d+)?) (.*)$/s.exec(text);
@@ -858,10 +927,14 @@ function composeFoldedMessage(
   }
   // "on N pages", not "(N pages)": a count in parentheses after a message that ends in a parenthesised
   // value reads as two values ("(2 to 5) (3 pages)").
-  const shown = merged.slice(0, 3).map((g) => `${g.text} on ${pagesWord(g.count)}`);
+  const shown = merged
+    .slice(0, 3)
+    .map((g) => `${g.text} on ${pagesWord(g.count)}`);
   const rest = merged.slice(3);
   if (rest.length > 0) {
-    shown.push(`${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`);
+    shown.push(
+      `${rest.length} other messages on ${pagesWord(rest.reduce((n, g) => n + g.count, 0))}`
+    );
   }
   return shown.join("; ");
 }
@@ -900,7 +973,11 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   let pagesTotal = pageSet.size;
   for (const check of group) {
     const prior = check.details?.pagesTruncated;
-    if (typeof prior === "number" && Number.isFinite(prior) && prior > pagesTotal) {
+    if (
+      typeof prior === "number" &&
+      Number.isFinite(prior) &&
+      prior > pagesTotal
+    ) {
       pagesTotal = Math.floor(prior);
     }
   }
@@ -936,12 +1013,16 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
         for (const src of item.sourcePages ?? []) sources.add(src);
       }
       const merged = itemMap.get(item.id)!;
-      if (typeof item.pageCount === "number" && item.pageCount > (merged.pageCount ?? 0)) {
+      if (
+        typeof item.pageCount === "number" &&
+        item.pageCount > (merged.pageCount ?? 0)
+      ) {
         merged.pageCount = item.pageCount;
       }
       let placed = placedSources.get(item.id);
       if (!placed) placedSources.set(item.id, (placed = new Map()));
-      for (const source of item.sources ?? []) if (!placed.has(source.page)) placed.set(source.page, source);
+      for (const source of item.sources ?? [])
+        if (!placed.has(source.page)) placed.set(source.page, source);
       if (check.pageUrl && item.regions) {
         // A per-page item's sections are where it sits on that page. One page counts once per
         // section, however many of its items share the id: the pairs already counted are kept
@@ -950,11 +1031,12 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
         if (!counted) countedRegions.set(item.id, (counted = new Set()));
         const fresh = pageRegions(
           (Object.keys(item.regions) as LinkSection[]).filter(
-            (s) => !counted!.has(`${check.pageUrl}\u0000${s}`),
-          ),
+            (s) => !counted!.has(`${check.pageUrl}\u0000${s}`)
+          )
         );
         if (fresh) {
-          for (const s of Object.keys(fresh)) counted.add(`${check.pageUrl}\u0000${s}`);
+          for (const s of Object.keys(fresh))
+            counted.add(`${check.pageUrl}\u0000${s}`);
           const prior = placed.get(check.pageUrl);
           placed.set(check.pageUrl, {
             ...prior,
@@ -1009,20 +1091,27 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   for (const check of group) {
     const prior = check.details?.occurrences;
     occurrences +=
-      typeof prior === "number" && Number.isFinite(prior) && prior > 0 ? Math.floor(prior) : 1;
+      typeof prior === "number" && Number.isFinite(prior) && prior > 0
+        ? Math.floor(prior)
+        : 1;
   }
 
   const details: Record<string, unknown> = { aggregated: true, occurrences };
   // Every constituent shares it: it is part of the group key.
-  if (typeof first.details?.foldKey === "string") details.foldKey = first.details.foldKey;
+  if (typeof first.details?.foldKey === "string")
+    details.foldKey = first.details.foldKey;
   // (#1031) Grouped by the marker (see foldGroupKey), so the first check speaks for the group.
   if (first.details?.inconclusive === true) details.inconclusive = true;
   // pub#846: a check that only reads one region (a footer copyright year) keeps naming it.
   const region = first.details?.region;
-  if (typeof region === "string" && group.every((c) => c.details?.region === region)) {
+  if (
+    typeof region === "string" &&
+    group.every((c) => c.details?.region === region)
+  ) {
     details.region = region;
   }
-  if (additional + droppedIds.size > 0) details.additional = additional + droppedIds.size;
+  if (additional + droppedIds.size > 0)
+    details.additional = additional + droppedIds.size;
   if (pagesTotal > pages.length) details.pagesTruncated = pagesTotal;
 
   // Smart audits (#110): stay "carried" only when every folded finding was.
@@ -1035,7 +1124,8 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   let lastSeenAt: number | undefined;
   if (allCarried) {
     for (const c of group) {
-      if (c.lastSeenAt !== undefined) lastSeenAt = Math.max(lastSeenAt ?? 0, c.lastSeenAt);
+      if (c.lastSeenAt !== undefined)
+        lastSeenAt = Math.max(lastSeenAt ?? 0, c.lastSeenAt);
     }
   }
 
@@ -1059,28 +1149,41 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     // `additional` is a count of dropped OCCURRENCES, not distinct items: it is not added here.
     itemMap.size + droppedIds.size,
     ...group.map((c) =>
-      typeof c.details?.distinctItems === "number" ? Math.floor(c.details.distinctItems) : 0,
-    ),
+      typeof c.details?.distinctItems === "number"
+        ? Math.floor(c.details.distinctItems)
+        : 0
+    )
   );
   const variants = new Map<string, number>();
   for (const check of group) {
     const weight = occurrencesOf(check);
     const listed = messageVariantsOf(check);
-    if (listed) for (const v of listed) variants.set(v.message, (variants.get(v.message) ?? 0) + v.count);
-    else variants.set(perPageMessage(check), (variants.get(perPageMessage(check)) ?? 0) + weight);
+    if (listed)
+      for (const v of listed)
+        variants.set(v.message, (variants.get(v.message) ?? 0) + v.count);
+    else
+      variants.set(
+        perPageMessage(check),
+        (variants.get(perPageMessage(check)) ?? 0) + weight
+      );
   }
-  const message = composeFoldedMessage(variants, occurrences, distinctItems).slice(
-    0,
-    REPORT_LIMITS.maxMediumString,
-  );
+  const message = composeFoldedMessage(
+    variants,
+    occurrences,
+    distinctItems
+  ).slice(0, REPORT_LIMITS.maxMediumString);
   details.pageMessage = perPageMessage(first);
   if (distinctItems > 0) details.distinctItems = distinctItems;
   if (variants.size > 1) {
     details.messages = [...variants]
       .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
       .slice(0, MAX_MESSAGE_VARIANTS)
-      .map(([m, count]) => ({ message: m.slice(0, REPORT_LIMITS.maxMediumString), count }));
-    if (variants.size > MAX_MESSAGE_VARIANTS) details.messagesTruncated = variants.size;
+      .map(([m, count]) => ({
+        message: m.slice(0, REPORT_LIMITS.maxMediumString),
+        count,
+      }));
+    if (variants.size > MAX_MESSAGE_VARIANTS)
+      details.messagesTruncated = variants.size;
   }
   // Component-aware fix grouping requires every observed element, unlike legacy
   // items/pages which are explicitly presentation samples. Do not cap this list:
@@ -1090,7 +1193,9 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   // check has to be merged forward or the fold erases the fact.
   const markers = group
     .map((check) => check.componentEvidence)
-    .filter((marker): marker is NonNullable<CheckResult["componentEvidence"]> => Boolean(marker));
+    .filter((marker): marker is NonNullable<CheckResult["componentEvidence"]> =>
+      Boolean(marker)
+    );
   const componentEvidence =
     markers.length > 0
       ? {
@@ -1102,7 +1207,10 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
             : markers.some((marker) => marker.reason === "page-sample-limit")
               ? ("page-sample-limit" as const)
               : ("sibling-row" as const),
-          occurrenceCount: markers.reduce((sum, marker) => sum + marker.occurrenceCount, 0),
+          occurrenceCount: markers.reduce(
+            (sum, marker) => sum + marker.occurrenceCount,
+            0
+          ),
         }
       : undefined;
   const componentOccurrences = group
@@ -1129,8 +1237,9 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
   // has to be merged forward or the fold erases the fact that evidence existed.
   const resourceMarkers = group
     .map((check) => check.siteResourceEvidence)
-    .filter((marker): marker is NonNullable<CheckResult["siteResourceEvidence"]> =>
-      Boolean(marker),
+    .filter(
+      (marker): marker is NonNullable<CheckResult["siteResourceEvidence"]> =>
+        Boolean(marker)
     );
   const siteResourceEvidence =
     resourceMarkers.length > 0
@@ -1138,14 +1247,18 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
           state: "omitted" as const,
           // Same precedence as the component markers above: `payload-limit`
           // outranks `page-sample-limit`, which outranks the bookkeeping one.
-          reason: resourceMarkers.some((marker) => marker.reason === "payload-limit")
+          reason: resourceMarkers.some(
+            (marker) => marker.reason === "payload-limit"
+          )
             ? ("payload-limit" as const)
-            : resourceMarkers.some((marker) => marker.reason === "page-sample-limit")
+            : resourceMarkers.some(
+                  (marker) => marker.reason === "page-sample-limit"
+                )
               ? ("page-sample-limit" as const)
               : ("sibling-row" as const),
           occurrenceCount: resourceMarkers.reduce(
             (sum, marker) => sum + marker.occurrenceCount,
-            0,
+            0
           ),
         }
       : undefined;
@@ -1165,7 +1278,10 @@ function foldGroup(group: CheckResult[], limits: FoldLimits): CheckResult {
     ...(allUnrendered
       ? { provenance: "unrendered" as const }
       : allCarried
-        ? { provenance: "carried" as const, ...(lastSeenAt !== undefined ? { lastSeenAt } : {}) }
+        ? {
+            provenance: "carried" as const,
+            ...(lastSeenAt !== undefined ? { lastSeenAt } : {}),
+          }
         : {}),
   };
 }

@@ -1,21 +1,42 @@
 // #1031: the `details.inconclusive` marker of an `info` check survives folding, so resolution still
 // reads a folded aggregate as "could not judge" and not as evidence the pages are clean.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks, slimPageChecksForShell } from "../src/fold";
+import { describe, expect, test } from "bun:test";
+
+import {
+  DEFAULT_FOLD_LIMITS,
+  foldOverflowChecks,
+  slimPageChecksForShell,
+} from "../src/fold";
 import { buildResolutionSignal } from "../src/resolution";
 
 const RULE = "schema/expected-type";
-const meta = { id: RULE, name: "Expected type", description: "d", category: "schema", scope: "page" as const, severity: "warning" as const, weight: 3 };
+const meta = {
+  id: RULE,
+  name: "Expected type",
+  description: "d",
+  category: "schema",
+  scope: "page" as const,
+  severity: "warning" as const,
+  weight: 3,
+};
 const url = (i: number) => `https://example.com/p${i}`;
-const row = (i: number, extra: Partial<CheckResult> = {}): CheckResult => ({ name: "expected-type", status: "info", message: "Page type not classified", pageUrl: url(i), ...extra });
+const row = (i: number, extra: Partial<CheckResult> = {}): CheckResult => ({
+  name: "expected-type",
+  status: "info",
+  message: "Page type not classified",
+  pageUrl: url(i),
+  ...extra,
+});
 const inconclusive = (i: number) => row(i, { details: { inconclusive: true } });
 
 const evaluatedFor = (checks: CheckResult[], pages: string[]) => {
-  const signal = buildResolutionSignal({ [RULE]: { meta, checks } } as never, pages)!;
+  const signal = buildResolutionSignal(
+    { [RULE]: { meta, checks } } as never,
+    pages
+  )!;
   return signal;
 };
 
@@ -30,20 +51,38 @@ describe("the inconclusive marker through the fold (#1031)", () => {
     const pages = rows.map((r) => r.pageUrl!);
     const raw = evaluatedFor(rows, pages);
     const viaFold = evaluatedFor(folded, pages);
-    expect(Object.keys(viaFold.failing ?? {})).toEqual(Object.keys(raw.failing ?? {}));
+    expect(Object.keys(viaFold.failing ?? {})).toEqual(
+      Object.keys(raw.failing ?? {})
+    );
     // pub#1863: `evaluated` became `notEvaluated` (the complement), so "nothing evaluated" is every page listed.
     expect(viaFold.notEvaluated).toEqual(raw.notEvaluated);
-    expect(viaFold.notEvaluated?.[`${RULE}|expected-type`]).toHaveLength(pages.length);
+    expect(viaFold.notEvaluated?.[`${RULE}|expected-type`]).toHaveLength(
+      pages.length
+    );
   });
 
   test("inconclusive and plain info of the same name fold apart, not into one smeared aggregate", () => {
-    const rows = [...Array.from({ length: 300 }, (_, i) => inconclusive(i)), ...Array.from({ length: 300 }, (_, i) => row(300 + i))];
-    const folded = foldOverflowChecks(rows, DEFAULT_FOLD_LIMITS).filter((c) => c.details?.aggregated === true);
-    expect(folded.map((c) => c.details?.inconclusive === true).sort()).toEqual([false, true]);
+    const rows = [
+      ...Array.from({ length: 300 }, (_, i) => inconclusive(i)),
+      ...Array.from({ length: 300 }, (_, i) => row(300 + i)),
+    ];
+    const folded = foldOverflowChecks(rows, DEFAULT_FOLD_LIMITS).filter(
+      (c) => c.details?.aggregated === true
+    );
+    expect(folded.map((c) => c.details?.inconclusive === true).sort()).toEqual([
+      false,
+      true,
+    ]);
   });
 
   test("the chunked-publish shell slim keeps the marker, even for three rows, and keeps plain info separate", () => {
-    const slim = slimPageChecksForShell([inconclusive(1), inconclusive(2), inconclusive(3), row(4), row(5)]);
+    const slim = slimPageChecksForShell([
+      inconclusive(1),
+      inconclusive(2),
+      inconclusive(3),
+      row(4),
+      row(5),
+    ]);
     const marked = slim.filter((c) => c.details?.inconclusive === true);
     const plain = slim.filter((c) => c.details?.inconclusive !== true);
     expect(marked).toHaveLength(1);

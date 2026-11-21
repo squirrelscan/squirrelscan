@@ -6,10 +6,14 @@
 
 import type { Database } from "bun:sqlite";
 
-import { CRAWL_STATUS_TRANSITIONS, type CrawlStatus } from "@squirrelscan/core-contracts";
+import {
+  CRAWL_STATUS_TRANSITIONS,
+  type CrawlStatus,
+} from "@squirrelscan/core-contracts";
 
 /** The SQL condition on `status`, with the allowed-from list bound twice (`,a,b,`), or null for no status. */
-export const CRAWL_STATUS_GUARD_SQL = "(? IS NULL OR instr(?, ',' || status || ',') > 0)";
+export const CRAWL_STATUS_GUARD_SQL =
+  "(? IS NULL OR instr(?, ',' || status || ',') > 0)";
 
 /** The bound parameter for a write to `to`: the statuses the table lets it be written from. */
 export function crawlStatusAllowedFrom(to: CrawlStatus): string {
@@ -21,10 +25,16 @@ export function crawlStatusAllowedFrom(to: CrawlStatus): string {
  * changed (0 for a missing crawl or a refused move). Synchronous, for a caller that cannot await
  * (a signal handler); the caller owns the connection.
  */
-export function writeCrawlStatusGuarded(db: Database, id: string, to: CrawlStatus): number {
+export function writeCrawlStatusGuarded(
+  db: Database,
+  id: string,
+  to: CrawlStatus
+): number {
   const allowedFrom = crawlStatusAllowedFrom(to);
   const result = db
-    .prepare(`UPDATE crawls SET status = ? WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`)
+    .prepare(
+      `UPDATE crawls SET status = ? WHERE id = ? AND ${CRAWL_STATUS_GUARD_SQL}`
+    )
     .run(to, id, allowedFrom, allowedFrom);
   return Number(result.changes ?? 0);
 }

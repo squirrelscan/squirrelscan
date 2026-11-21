@@ -13,7 +13,13 @@
 // browser would drop as invalid (`@foo {}`): that can only undercount, the safe
 // side for a rule that warns.
 
-import { isNameChar, skipComment, skipString, skipUnquotedUrl, stepBlocks } from "./css-tokens";
+import {
+  isNameChar,
+  skipComment,
+  skipString,
+  skipUnquotedUrl,
+  stepBlocks,
+} from "./css-tokens";
 
 export interface CssImport {
   /** The imported URL as written (unresolved). */
@@ -41,7 +47,10 @@ function skipSpaceAndComments(css: string, start: number, end: number): number {
  * comments, escapes and unquoted `url(...)` are stepped over, so a `;` or `{`
  * inside them is text.
  */
-function statementEnd(css: string, start: number): { end: number; block: boolean } {
+function statementEnd(
+  css: string,
+  start: number
+): { end: number; block: boolean } {
   let i = start;
   const closers: string[] = [];
   while (i < css.length) {
@@ -80,7 +89,10 @@ function statementEnd(css: string, start: number): { end: number; block: boolean
 }
 
 /** The at-keyword name at `start` (just past the `@`), lowercased. */
-function atKeywordName(css: string, start: number): { name: string; end: number } {
+function atKeywordName(
+  css: string,
+  start: number
+): { name: string; end: number } {
   let i = start;
   while (i < css.length && isNameChar(css[i]) && css[i] !== "\\") i++;
   return { name: css.slice(start, i).toLowerCase(), end: i };
@@ -89,7 +101,10 @@ function atKeywordName(css: string, start: number): { name: string; end: number 
 /** The text of a quoted string token starting at `start`, without its quotes. */
 function stringValue(css: string, start: number, end: number): string {
   const close = Math.min(skipString(css, start), end);
-  const inner = css.slice(start + 1, css[close - 1] === css[start] ? close - 1 : close);
+  const inner = css.slice(
+    start + 1,
+    css[close - 1] === css[start] ? close - 1 : close
+  );
   return inner.replace(/\\(.)/g, "$1");
 }
 
@@ -97,7 +112,11 @@ function stringValue(css: string, start: number, end: number): string {
  * The URL and the trailing conditions of an `@import` prelude (`css[start, end)`),
  * or null when it names no URL: a browser drops that rule and fetches nothing.
  */
-function parseImport(css: string, start: number, end: number): CssImport | null {
+function parseImport(
+  css: string,
+  start: number,
+  end: number
+): CssImport | null {
   let i = skipSpaceAndComments(css, start, end);
   let url: string | null = null;
   if (css[i] === '"' || css[i] === "'") {
@@ -115,7 +134,11 @@ function parseImport(css: string, start: number, end: number): CssImport | null 
       const q = skipSpaceAndComments(css, i + 4, end);
       if (css[q] === '"' || css[q] === "'") {
         url = stringValue(css, q, end);
-        const after = skipSpaceAndComments(css, Math.min(skipString(css, q), end), end);
+        const after = skipSpaceAndComments(
+          css,
+          Math.min(skipString(css, q), end),
+          end
+        );
         i = css[after] === ")" ? after + 1 : after;
       }
     }

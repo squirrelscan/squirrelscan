@@ -26,13 +26,20 @@ export const siteMetadataRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 0, // report-only / non-scoring
-    cloud: { service: "site-metadata", unit: "site", creditFeature: "site_metadata" },
+    cloud: {
+      service: "site-metadata",
+      unit: "site",
+      creditFeature: "site_metadata",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<SiteMetadataResponse>(ctx.cloudResults, "site-metadata");
+    const envelope = readCloudResult<SiteMetadataResponse>(
+      ctx.cloudResults,
+      "site-metadata"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
         envelope?.status === "skipped"
@@ -51,12 +58,17 @@ export const siteMetadataRule: Rule = {
 
     // Build a compact human-readable summary of the profile.
     const parts: string[] = [`type "${meta.siteType}"`];
-    if (meta.businessCategory) parts.push(`category "${meta.businessCategory}"`);
+    if (meta.businessCategory)
+      parts.push(`category "${meta.businessCategory}"`);
     if (meta.primaryCountry) parts.push(`country ${meta.primaryCountry}`);
     if (meta.audienceScope) parts.push(`audience ${meta.audienceScope}`);
     if (meta.domainAgeDays != null) {
       const years = Math.floor(meta.domainAgeDays / 365);
-      parts.push(years >= 1 ? `domain ~${years}y old` : `domain ${meta.domainAgeDays}d old`);
+      parts.push(
+        years >= 1
+          ? `domain ~${years}y old`
+          : `domain ${meta.domainAgeDays}d old`
+      );
     }
 
     checks.push({

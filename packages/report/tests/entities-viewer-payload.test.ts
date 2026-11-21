@@ -6,15 +6,15 @@
 // JSON — to draw 400 nodes and show 25 table rows. What the viewer never reads
 // (`pages`) must not travel, and what it cannot draw must not be free.
 
-import { describe, expect, test } from "bun:test";
-
 import {
   ENTITY_MAP_VIEWER_LIMITS,
   type EntityMapPage,
 } from "@squirrelscan/core-contracts/entity-map";
+import { describe, expect, test } from "bun:test";
+
+import type { EntityMap, EntityMapNode } from "../src/types";
 
 import { entityViewerData } from "../src/entities-viewer";
-import type { EntityMap, EntityMapNode } from "../src/types";
 
 function node(key: string, occurrences: number): EntityMapNode {
   return {
@@ -43,7 +43,7 @@ function page(i: number): EntityMapPage {
 
 function map(nodeCount: number, pageCount: number): EntityMap {
   const nodes = Array.from({ length: nodeCount }, (_, i) =>
-    node(`n${String(i).padStart(5, "0")}`, (i % 40) + 1),
+    node(`n${String(i).padStart(5, "0")}`, (i % 40) + 1)
   );
   return {
     format: "squirrelscan/entity-map",
@@ -109,31 +109,51 @@ describe("entityViewerData", () => {
     const payload = parse(entityViewerData(small));
 
     expect(payload.nodes).toHaveLength(12);
-    expect(payload.truncated).toEqual({ reason: "viewer", nodes: 0, edges: 0, pages: 4 });
+    expect(payload.truncated).toEqual({
+      reason: "viewer",
+      nodes: 0,
+      edges: 0,
+      pages: 4,
+    });
     // Every entity a small site declares still reaches the table.
-    expect(payload.nodes.map((n) => n.key)).toEqual(small.nodes.map((n) => n.key));
+    expect(payload.nodes.map((n) => n.key)).toEqual(
+      small.nodes.map((n) => n.key)
+    );
   });
 
   test("keeps the entities with the most reach", () => {
-    const nodes = Array.from({ length: ENTITY_MAP_VIEWER_LIMITS.maxNodes + 3 }, (_, i) =>
-      node(`n${String(i).padStart(5, "0")}`, i),
+    const nodes = Array.from(
+      { length: ENTITY_MAP_VIEWER_LIMITS.maxNodes + 3 },
+      (_, i) => node(`n${String(i).padStart(5, "0")}`, i)
     );
-    const full = { ...map(0, 0), nodes, summary: { ...map(0, 0).summary, nodeCount: nodes.length } };
+    const full = {
+      ...map(0, 0),
+      nodes,
+      summary: { ...map(0, 0).summary, nodeCount: nodes.length },
+    };
     const payload = parse(entityViewerData(full));
 
     const keys = new Set(payload.nodes.map((n) => n.key));
     expect(keys.has("n00000")).toBe(false);
-    expect(keys.has(`n${String(nodes.length - 1).padStart(5, "0")}`)).toBe(true);
+    expect(keys.has(`n${String(nodes.length - 1).padStart(5, "0")}`)).toBe(
+      true
+    );
   });
 
   test("still escapes what would close the script block", () => {
     const nodes = [node("</script><img src=x onerror=alert(1)>", 3)];
-    const full = { ...map(0, 0), nodes, summary: { ...map(0, 0).summary, nodeCount: 1 } };
+    const full = {
+      ...map(0, 0),
+      nodes,
+      summary: { ...map(0, 0).summary, nodeCount: 1 },
+    };
     const json = entityViewerData(full);
 
     expect(json).not.toContain("</script");
     expect(json).not.toContain("<img");
     // And it is still valid JSON carrying the real value.
-    expect(parse(json).nodes[0]!.key).toBe("</script><img src=x onerror=alert(1)>");
+    expect(parse(json).nodes[0]!.key).toBe(
+      "</script><img src=x onerror=alert(1)>"
+    );
   });
 });

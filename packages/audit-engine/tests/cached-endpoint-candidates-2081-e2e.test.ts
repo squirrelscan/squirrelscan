@@ -12,16 +12,33 @@
 // The endpoint surface each audit hands the site rules is read off the runner itself, so
 // the comparison is of the real candidates, not of a hand-built list.
 
-import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, SQLiteStorage, type ContentStoreAdapter } from "@squirrelscan/crawler";
-import { createProbeBudget, RuleRunner, type EndpointSurface } from "@squirrelscan/rules";
+
+import {
+  createCrawler,
+  SQLiteStorage,
+  type ContentStoreAdapter,
+} from "@squirrelscan/crawler";
+import {
+  createProbeBudget,
+  RuleRunner,
+  type EndpointSurface,
+} from "@squirrelscan/rules";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
+import { Effect } from "effect";
+
+import type { RuleCacheStats, RuleCacheStore } from "../src/rule-cache";
 
 import { runStreamingRules } from "../src/adapter";
-import type { RuleCacheStats, RuleCacheStore } from "../src/rule-cache";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -39,9 +56,13 @@ afterAll(() => {
   siteRulesSpy.mockRestore();
 });
 
-const PROBE_RULES = ["security/unauthenticated-api", "security/json-sensitive-fields"] as const;
+const PROBE_RULES = [
+  "security/unauthenticated-api",
+  "security/json-sensitive-fields",
+] as const;
 
-const words = (n: number): string => Array.from({ length: n }, (_, i) => `word${i % 40}`).join(" ");
+const words = (n: number): string =>
+  Array.from({ length: n }, (_, i) => `word${i % 40}`).join(" ");
 const page = (title: string, body: string): string =>
   `<!doctype html><html lang="en"><head><title>${title} | Nut demo</title></head><body>` +
   `<nav><a href="/">Home</a> <a href="/about">About</a> <a href="/faq">FAQ</a></nav>` +
@@ -54,7 +75,11 @@ const USERS = [
   { id: 1001, email: "ada.hazel@example.com", phone: "+61 400 000 100" },
   { id: 1002, email: "ben.walnut@example.com", phone: "+61 400 000 101" },
 ];
-const ACCOUNT = { id: 1001, username: "ada.hazel", password: "not-a-real-password-2081" };
+const ACCOUNT = {
+  id: 1001,
+  username: "ada.hazel",
+  password: "not-a-real-password-2081",
+};
 
 function serve(): { origin: string; hits: string[] } {
   const hits: string[] = [];
@@ -63,9 +88,14 @@ function serve(): { origin: string; hits: string[] } {
     fetch(req) {
       const { pathname } = new URL(req.url);
       hits.push(`${req.method} ${pathname}`);
-      const html = (body: string) => new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+      const html = (body: string) =>
+        new Response(body, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
       const json = (body: unknown) =>
-        new Response(JSON.stringify(body), { headers: { "content-type": "application/json; charset=utf-8" } });
+        new Response(JSON.stringify(body), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
       switch (pathname) {
         case "/":
           return html(page("Home", ""));
@@ -142,7 +172,7 @@ interface Audit {
 async function audit(
   storage: SQLiteStorage,
   origin: string,
-  opts: { incremental: boolean; ruleCache?: RuleCacheStore },
+  opts: { incremental: boolean; ruleCache?: RuleCacheStore }
 ): Promise<Audit> {
   const crawler = await Effect.runPromise(
     createCrawler({
@@ -159,10 +189,14 @@ async function audit(
         incremental: opts.incremental,
         useCacheControl: false,
       } as never,
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
-  const scope = { probe: createProbeBudget({ level: "aggressive", budgetMs: 20_000 }) };
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
+  const scope = {
+    probe: createProbeBudget({ level: "aggressive", budgetMs: 20_000 }),
+  };
   const callsBefore = siteRulesSpy.mock.calls.length;
   const ran = await Effect.runPromise(
     Effect.gen(function* () {
@@ -174,19 +208,29 @@ async function audit(
         pre.assets,
         scope,
         opts.ruleCache
-          ? { ruleCache: { store: opts.ruleCache, engineVersion: "test-2081", rulesVersion: "rules-2081" } }
-          : undefined,
+          ? {
+              ruleCache: {
+                store: opts.ruleCache,
+                engineVersion: "test-2081",
+                rulesVersion: "rules-2081",
+              },
+            }
+          : undefined
       );
     }) as Effect.Effect<
-      { ruleResultsMap: Map<string, { checks: CheckResult[] }>; ruleCache: RuleCacheStats },
+      {
+        ruleResultsMap: Map<string, { checks: CheckResult[] }>;
+        ruleCache: RuleCacheStats;
+      },
       never,
       never
-    >,
+    >
   );
   const calls = siteRulesSpy.mock.calls.slice(callsBefore);
   expect(calls).toHaveLength(1);
   const surface = calls[0]![3];
-  if (!surface) throw new Error("the site pass ran without an endpoint surface");
+  if (!surface)
+    throw new Error("the site pass ran without an endpoint surface");
   const stats = await Effect.runPromise(storage.getStats(crawlId));
   const pages = await Effect.runPromise(storage.getPages(crawlId));
   return {
@@ -246,7 +290,7 @@ describe("an all-cached re-audit feeds the probe rules the same endpoints as a r
           discoveredVia: "fetch",
           sameOrigin: true,
           probeEligible: true,
-        }),
+        })
       );
     }
     // ...and the all-cached run, and the cold one, hand the site rules exactly that surface.
@@ -256,22 +300,24 @@ describe("an all-cached re-audit feeds the probe rules the same endpoints as a r
     for (const ruleId of PROBE_RULES) {
       const warmVerdicts = verdicts(warm, ruleId);
       expect(warmVerdicts.length).toBeGreaterThan(0);
-      expect(warmVerdicts.filter((v) => v.skipReason === "no-endpoints")).toEqual([]);
+      expect(
+        warmVerdicts.filter((v) => v.skipReason === "no-endpoints")
+      ).toEqual([]);
       expect(warmVerdicts).toEqual(verdicts(refresh, ruleId));
       expect(warmVerdicts).toEqual(verdicts(cold, ruleId));
     }
     // Both endpoints are flagged on the all-cached run, not merely "not skipped".
-    const sensitive = (warm.results.get("security/unauthenticated-api") ?? []).find(
-      (c) => c.name === "unauthenticated-api-sensitive",
-    );
+    const sensitive = (
+      warm.results.get("security/unauthenticated-api") ?? []
+    ).find((c) => c.name === "unauthenticated-api-sensitive");
     expect(sensitive?.status).toBe("fail");
     expect((sensitive?.items ?? []).map((i) => i.id).sort()).toEqual([
       `${origin}/api/account`,
       `${origin}/api/users`,
     ]);
-    const credential = (warm.results.get("security/json-sensitive-fields") ?? []).find(
-      (c) => c.name === "json-sensitive-fields",
-    );
+    const credential = (
+      warm.results.get("security/json-sensitive-fields") ?? []
+    ).find((c) => c.name === "json-sensitive-fields");
     expect(credential?.status).toBe("fail");
   }, 30_000);
 });

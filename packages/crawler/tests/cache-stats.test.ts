@@ -1,12 +1,11 @@
 // Unit tests for the buildCacheStats aggregator (#108).
 
-import { describe, expect, test } from "bun:test";
-
 import {
   buildCacheStats,
   type CrawlStats,
   type ResourceSizeRecord,
 } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
 
 function stats(overrides: Partial<CrawlStats> = {}): CrawlStats {
   return {
@@ -23,7 +22,9 @@ function stats(overrides: Partial<CrawlStats> = {}): CrawlStats {
   };
 }
 
-function resource(overrides: Partial<ResourceSizeRecord> = {}): ResourceSizeRecord {
+function resource(
+  overrides: Partial<ResourceSizeRecord> = {}
+): ResourceSizeRecord {
   return {
     type: "css",
     url: "https://example.com/a.css",
@@ -73,9 +74,24 @@ describe("buildCacheStats", () => {
 
   test("counts a sub-resource hit only when cacheReason is set", () => {
     const records = [
-      resource({ url: "a.css", cacheReason: "max-age", transferBytes: 0, sizeBytes: 500 }),
-      resource({ url: "b.css", cacheReason: "304", transferBytes: 0, sizeBytes: 800 }),
-      resource({ url: "c.css", cacheReason: null, transferBytes: 1200, sizeBytes: 1200 }),
+      resource({
+        url: "a.css",
+        cacheReason: "max-age",
+        transferBytes: 0,
+        sizeBytes: 500,
+      }),
+      resource({
+        url: "b.css",
+        cacheReason: "304",
+        transferBytes: 0,
+        sizeBytes: 800,
+      }),
+      resource({
+        url: "c.css",
+        cacheReason: null,
+        transferBytes: 1200,
+        sizeBytes: 1200,
+      }),
     ];
     const result = buildCacheStats(stats(), records);
     expect(result).not.toBeNull();
@@ -94,8 +110,18 @@ describe("buildCacheStats", () => {
         cacheHitsByReason: { "304": 2 },
       }),
       [
-        resource({ url: "a.css", cacheReason: "304", transferBytes: 0, sizeBytes: 300 }),
-        resource({ url: "b.css", cacheReason: "max-age", transferBytes: 0, sizeBytes: 700 }),
+        resource({
+          url: "a.css",
+          cacheReason: "304",
+          transferBytes: 0,
+          sizeBytes: 300,
+        }),
+        resource({
+          url: "b.css",
+          cacheReason: "max-age",
+          transferBytes: 0,
+          sizeBytes: 700,
+        }),
       ]
     );
     expect(result!.total).toBe(6); // 4 pages + 2 resources

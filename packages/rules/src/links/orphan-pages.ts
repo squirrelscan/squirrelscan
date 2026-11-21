@@ -1,14 +1,15 @@
-import { logger } from "../logger";
+import {
+  CRAWL_CAPPED_SKIP_REASON,
+  type SiteQuery,
+} from "@squirrelscan/core-contracts";
 // links/orphan-pages - Pages with no internal links
-
+import { matchesExcludePattern } from "@squirrelscan/utils";
+import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import { CRAWL_CAPPED_SKIP_REASON, type SiteQuery } from "@squirrelscan/core-contracts";
 
-import { matchesExcludePattern } from "@squirrelscan/utils";
-import { getPathname, normalizeUrl } from "@squirrelscan/utils";
-
+import { logger } from "../logger";
 import { frontDoorTest } from "../shared/front-door";
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
@@ -19,7 +20,8 @@ const SKIP_CHECK: CheckResult = {
   observation: {
     mode: "crawl",
     applicability: "unknown",
-    uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+    uncertainty:
+      "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
   },
 };
 
@@ -44,7 +46,8 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
       observation: {
         mode: "crawl",
         applicability: "applicable",
-        uncertainty: "Inbound links are counted only in the observed crawl graph.",
+        uncertainty:
+          "Inbound links are counted only in the observed crawl graph.",
       },
       value: pathList + suffix,
     };
@@ -56,7 +59,8 @@ function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
     observation: {
       mode: "crawl",
       applicability: "applicable",
-      uncertainty: "Inbound links are counted only in the observed crawl graph.",
+      uncertainty:
+        "Inbound links are counted only in the observed crawl graph.",
     },
   };
 }
@@ -97,7 +101,9 @@ function collectOrphans(
 }
 
 // Stored urls of the noindex pages, from the page_features rows (streaming path).
-async function noindexUrlsViaSiteQuery(siteQuery: SiteQuery): Promise<Set<string>> {
+async function noindexUrlsViaSiteQuery(
+  siteQuery: SiteQuery
+): Promise<Set<string>> {
   const urls = new Set<string>();
   for await (const row of siteQuery.pagesMatching((r) => r.robotsNoindex)) {
     urls.add(row.normalizedUrl);
@@ -151,7 +157,8 @@ export const orphanPagesRule: Rule = {
         observation: {
           mode: "crawl",
           applicability: "unknown",
-          uncertainty: "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
+          uncertainty:
+            "The observed crawl graph is incomplete, so missing inbound links cannot be established.",
         },
       });
       return { checks };
@@ -239,16 +246,18 @@ export const orphanPagesRule: Rule = {
     // Phase 3: Find orphan pages (use cached normalized URLs)
     const noindexUrls = new Set(
       pages
-        .filter((page) => excludesNoindexPage(ctx.site, page.parsed, page.headers))
+        .filter((page) =>
+          excludesNoindexPage(ctx.site, page.parsed, page.headers)
+        )
         .map((page) => page.url)
     );
     const orphans = collectOrphans(
       pages.map(
         (page) =>
-          [page.url, incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0] as [
-            string,
-            number,
-          ]
+          [
+            page.url,
+            incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0,
+          ] as [string, number]
       ),
       minLinks,
       excludePatterns,

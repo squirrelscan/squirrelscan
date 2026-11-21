@@ -12,6 +12,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { Rule } from "../src/types";
+
 import { entityAuthorsRule } from "../src/schema/entity-authors";
 import { entityConflictsRule } from "../src/schema/entity-conflicts";
 import { entityDanglingRule } from "../src/schema/entity-dangling";
@@ -25,9 +27,14 @@ import { entitySameAsMissingRule } from "../src/schema/entity-sameas-missing";
 import { entitySplitIdentityRule } from "../src/schema/entity-split-identity";
 import { entityTypeDriftRule } from "../src/schema/entity-type-drift";
 import { entityWebsiteMissingRule } from "../src/schema/entity-website-missing";
-import type { Rule } from "../src/types";
-
-import { edge, entityMap, node, oneCheck, pages, runRule } from "./helpers/entity-map";
+import {
+  edge,
+  entityMap,
+  node,
+  oneCheck,
+  pages,
+  runRule,
+} from "./helpers/entity-map";
 
 const ALL: Rule[] = [
   entityIdentityRule,
@@ -57,7 +64,10 @@ const CLEAN = entityMap({
         name: "Example Ltd",
         url: "https://example.com/",
         logo: "https://example.com/logo.png",
-        sameAs: ["https://x.com/example", "https://www.linkedin.com/company/example"],
+        sameAs: [
+          "https://x.com/example",
+          "https://www.linkedin.com/company/example",
+        ],
       },
       occurrences: 3,
       pages: pages(3),
@@ -212,7 +222,9 @@ describe("schema/entity-identity", () => {
     });
     const check = await oneCheck(entityIdentityRule, map);
     expect(check.status).toBe("fail");
-    expect(check.message).toContain("1 entity is declared on several pages with no @id");
+    expect(check.message).toContain(
+      "1 entity is declared on several pages with no @id"
+    );
     expect(check.items?.[0]?.id).toBe("syn:Organization|name:example ltd");
   });
 
@@ -220,7 +232,14 @@ describe("schema/entity-identity", () => {
     // The distinction the rule exists for: with one declaration there is
     // nothing to tie together, so an `@id` buys nothing.
     const map = entityMap({
-      nodes: [node({ key: "syn:x", id: null, occurrences: 1, pages: ["https://example.com/"] })],
+      nodes: [
+        node({
+          key: "syn:x",
+          id: null,
+          occurrences: 1,
+          pages: ["https://example.com/"],
+        }),
+      ],
     });
     expect((await oneCheck(entityIdentityRule, map)).status).toBe("pass");
   });
@@ -247,7 +266,13 @@ describe("schema/entity-identity", () => {
   test("an unnamed entity is not reported: there is nothing to reconcile by", async () => {
     const map = entityMap({
       nodes: [
-        node({ key: "anon:1", id: null, name: null, occurrences: 3, pages: pages(3) }),
+        node({
+          key: "anon:1",
+          id: null,
+          name: null,
+          occurrences: 3,
+          pages: pages(3),
+        }),
       ],
       pageUrls: pages(3),
     });
@@ -313,8 +338,15 @@ describe("schema/entity-split-identity", () => {
     // double its weight against the schema score.
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#organization", name: "Example Ltd" }),
-        node({ key: "syn:Organization|name:example ltd", id: null, name: "Example Ltd" }),
+        node({
+          key: "id:https://example.com/#organization",
+          name: "Example Ltd",
+        }),
+        node({
+          key: "syn:Organization|name:example ltd",
+          id: null,
+          name: "Example Ltd",
+        }),
       ],
     });
     expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("pass");
@@ -375,8 +407,16 @@ describe("schema/entity-split-identity", () => {
   test("a different name under a different @id is two entities, not one split", async () => {
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#a", id: "https://example.com/#a", name: "Example Ltd" }),
-        node({ key: "id:https://example.com/#b", id: "https://example.com/#b", name: "Example Media" }),
+        node({
+          key: "id:https://example.com/#a",
+          id: "https://example.com/#a",
+          name: "Example Ltd",
+        }),
+        node({
+          key: "id:https://example.com/#b",
+          id: "https://example.com/#b",
+          name: "Example Media",
+        }),
       ],
     });
     expect((await oneCheck(entitySplitIdentityRule, map)).status).toBe("pass");
@@ -416,8 +456,16 @@ describe("schema/entity-conflicts", () => {
             {
               property: "logo",
               values: [
-                { value: "https://example.com/a.png", pages: ["https://example.com/"], morePages: 0 },
-                { value: "https://example.com/b.png", pages: ["https://example.com/p1"], morePages: 0 },
+                {
+                  value: "https://example.com/a.png",
+                  pages: ["https://example.com/"],
+                  morePages: 0,
+                },
+                {
+                  value: "https://example.com/b.png",
+                  pages: ["https://example.com/p1"],
+                  morePages: 0,
+                },
               ],
             },
           ],
@@ -468,7 +516,11 @@ describe("schema/entity-conflicts", () => {
             {
               property: "@type",
               values: [
-                { value: "Organization", pages: ["https://example.com/"], morePages: 0 },
+                {
+                  value: "Organization",
+                  pages: ["https://example.com/"],
+                  morePages: 0,
+                },
                 {
                   value: "LocalBusiness, Organization",
                   pages: ["https://example.com/p1"],
@@ -564,7 +616,11 @@ describe("schema/entity-id-format", () => {
     // The rule is about an identifier that silently means something different
     // on each page. A library's `urn:isbn:` is unique, stable and the same
     // everywhere, so warning about it would be advice to break it.
-    for (const id of ["urn:isbn:9780140328721", "urn:uuid:1234", "doi:10.1000/182"]) {
+    for (const id of [
+      "urn:isbn:9780140328721",
+      "urn:uuid:1234",
+      "doi:10.1000/182",
+    ]) {
       const map = entityMap({ nodes: [node({ key: `id:${id}`, id })] });
       expect((await oneCheck(entityIdFormatRule, map)).status).toBe("pass");
     }
@@ -572,7 +628,9 @@ describe("schema/entity-id-format", () => {
 
   test("mailto is a way to contact a thing, not a name for it", async () => {
     const map = entityMap({
-      nodes: [node({ key: "id:mailto:hi@example.com", id: "mailto:hi@example.com" })],
+      nodes: [
+        node({ key: "id:mailto:hi@example.com", id: "mailto:hi@example.com" }),
+      ],
     });
     expect((await oneCheck(entityIdFormatRule, map)).status).toBe("warn");
   });
@@ -595,7 +653,11 @@ describe("schema/entity-type-drift", () => {
             {
               property: "@type",
               values: [
-                { value: "Organization", pages: ["https://example.com/"], morePages: 0 },
+                {
+                  value: "Organization",
+                  pages: ["https://example.com/"],
+                  morePages: 0,
+                },
                 {
                   value: "LocalBusiness, Organization",
                   pages: ["https://example.com/p1"],
@@ -609,7 +671,9 @@ describe("schema/entity-type-drift", () => {
     });
     const check = await oneCheck(entityTypeDriftRule, map);
     expect(check.status).toBe("warn");
-    expect(check.value).toContain("Organization vs LocalBusiness, Organization");
+    expect(check.value).toContain(
+      "Organization vs LocalBusiness, Organization"
+    );
   });
 
   test("an entity with no @id is not reported: it has no identity to drift", async () => {
@@ -622,8 +686,16 @@ describe("schema/entity-type-drift", () => {
             {
               property: "@type",
               values: [
-                { value: "Organization", pages: ["https://example.com/"], morePages: 0 },
-                { value: "Person", pages: ["https://example.com/p1"], morePages: 0 },
+                {
+                  value: "Organization",
+                  pages: ["https://example.com/"],
+                  morePages: 0,
+                },
+                {
+                  value: "Person",
+                  pages: ["https://example.com/p1"],
+                  morePages: 0,
+                },
               ],
             },
           ],
@@ -712,7 +784,10 @@ describe("schema/entity-authors", () => {
           id: "https://example.com/#writer",
           types: ["Person"],
           name: "Ada Lovelace",
-          properties: { name: "Ada Lovelace", url: "https://example.com/about" },
+          properties: {
+            name: "Ada Lovelace",
+            url: "https://example.com/about",
+          },
         }),
         node({
           key: "id:https://example.com/#subject",
@@ -750,8 +825,18 @@ describe("schema/entity-publisher-mismatch", () => {
   test("fires when two publishers are named, and says which is the outlier", async () => {
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#org-a", id: "https://example.com/#org-a", name: "A", occurrences: 20 }),
-        node({ key: "id:https://example.com/#org-b", id: "https://example.com/#org-b", name: "B", occurrences: 1 }),
+        node({
+          key: "id:https://example.com/#org-a",
+          id: "https://example.com/#org-a",
+          name: "A",
+          occurrences: 20,
+        }),
+        node({
+          key: "id:https://example.com/#org-b",
+          id: "https://example.com/#org-b",
+          name: "B",
+          occurrences: 1,
+        }),
       ],
       edges: [
         edge({ target: "id:https://example.com/#org-a", occurrences: 20 }),
@@ -760,7 +845,9 @@ describe("schema/entity-publisher-mismatch", () => {
     });
     const check = await oneCheck(entityPublisherMismatchRule, map);
     expect(check.status).toBe("warn");
-    expect(check.message).toBe("1 publisher reference disagrees with the other 20");
+    expect(check.message).toBe(
+      "1 publisher reference disagrees with the other 20"
+    );
     // Weighted by how much of the site names each, not by distinct target: one
     // publisher named 20 times and another once is not a 50/50 disagreement.
     expect(check.value).toContain("A (20)");
@@ -774,8 +861,16 @@ describe("schema/entity-publisher-mismatch", () => {
     // warning about someone's architecture.
     const map = entityMap({
       nodes: [
-        node({ key: "id:https://example.com/#org-a", id: "https://example.com/#org-a", name: "A" }),
-        node({ key: "id:https://example.com/#org-b", id: "https://example.com/#org-b", name: "B" }),
+        node({
+          key: "id:https://example.com/#org-a",
+          id: "https://example.com/#org-a",
+          name: "A",
+        }),
+        node({
+          key: "id:https://example.com/#org-b",
+          id: "https://example.com/#org-b",
+          name: "B",
+        }),
       ],
       edges: [
         edge({ target: "id:https://example.com/#org-a", occurrences: 10 }),
@@ -887,7 +982,9 @@ describe("schema/entity-organization-missing", () => {
           }),
         ],
       });
-      expect((await oneCheck(entityOrganizationMissingRule, map)).status).toBe("pass");
+      expect((await oneCheck(entityOrganizationMissingRule, map)).status).toBe(
+        "pass"
+      );
     }
   });
 
@@ -911,7 +1008,11 @@ describe("schema/entity-organization-missing", () => {
 describe("schema/entity-sameas-missing", () => {
   test("fires on a primary organization with no sameAs", async () => {
     const map = entityMap({
-      nodes: [node({ properties: { name: "Example Ltd", url: "https://example.com/" } })],
+      nodes: [
+        node({
+          properties: { name: "Example Ltd", url: "https://example.com/" },
+        }),
+      ],
     });
     const check = await oneCheck(entitySameAsMissingRule, map);
     expect(check.status).toBe("info");
@@ -953,7 +1054,9 @@ describe("schema/entity-local-business-per-page", () => {
     });
     const check = await oneCheck(entityLocalBusinessPerPageRule, map);
     expect(check.status).toBe("warn");
-    expect(check.message).toContain("declared in full on 20 of 20 crawled pages");
+    expect(check.message).toContain(
+      "declared in full on 20 of 20 crawled pages"
+    );
     expect(check.value).toBe("100% of crawled pages");
   });
 
@@ -972,7 +1075,9 @@ describe("schema/entity-local-business-per-page", () => {
       ],
       pageUrls: urls,
     });
-    expect((await oneCheck(entityLocalBusinessPerPageRule, map)).status).toBe("pass");
+    expect((await oneCheck(entityLocalBusinessPerPageRule, map)).status).toBe(
+      "pass"
+    );
   });
 
   test("a crawl too small to tell repetition from coverage is skipped", async () => {
@@ -1010,7 +1115,9 @@ describe("schema/entity-local-business-per-page", () => {
       ],
       pageUrls: urls,
     });
-    expect((await oneCheck(entityLocalBusinessPerPageRule, map)).status).toBe("warn");
+    expect((await oneCheck(entityLocalBusinessPerPageRule, map)).status).toBe(
+      "warn"
+    );
   });
 });
 
@@ -1037,7 +1144,13 @@ describe("schema/entity-orphan", () => {
     // should point at these. An Article IS the page: expecting another node to
     // reference it is backwards, and without this the rule fires on every blog
     // post on the web (73 of 79 on a real kinsta.com crawl).
-    for (const type of ["WebPage", "BreadcrumbList", "FAQPage", "Article", "BlogPosting"]) {
+    for (const type of [
+      "WebPage",
+      "BreadcrumbList",
+      "FAQPage",
+      "Article",
+      "BlogPosting",
+    ]) {
       const map = entityMap({
         nodes: [
           node({

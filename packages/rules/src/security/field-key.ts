@@ -73,7 +73,10 @@ export function jsonFieldKey(path: string): string | undefined {
  * auth rule reports a secret field whole (a recovery code list, an OTP object),
  * so a credential json-sensitive-fields finds within it is that same leak.
  */
-export function fieldIsCovered(key: string, reported: ReadonlySet<string>): boolean {
+export function fieldIsCovered(
+  key: string,
+  reported: ReadonlySet<string>
+): boolean {
   if (reported.has(key)) return true;
   for (const r of reported) {
     if (key.startsWith(`${r}.`) || key.startsWith(`${r}[`)) return true;

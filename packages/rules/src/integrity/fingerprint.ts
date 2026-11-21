@@ -5,10 +5,10 @@
 //
 // Site-scope only; reads ctx.site.pages[].parsed.document. No external calls.
 
-import type { ParsedPage } from "../types";
-
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { ParsedPage } from "../types";
 
 export interface PageFingerprint {
   /** Distinct external asset hosts referenced by <link>/<script>/<img>. */
@@ -56,7 +56,8 @@ export function cssVarNames(css: string): string[] {
   for (const m of css.matchAll(CSS_NAME_RUN_RE)) {
     const run = m[0].replace(/\s*:$/, "");
     const at = run.indexOf("--");
-    if (at >= 0 && run.length - at >= 3) names.push(run.slice(at).toLowerCase());
+    if (at >= 0 && run.length - at >= 3)
+      names.push(run.slice(at).toLowerCase());
   }
   return names;
 }

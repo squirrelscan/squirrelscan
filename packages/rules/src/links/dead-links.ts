@@ -38,7 +38,8 @@ export const deadLinksRule: Rule = {
       checks.push({
         name: "dead-links",
         status: "skipped",
-        message: "External link checking was off for this audit, so external links were not verified",
+        message:
+          "External link checking was off for this audit, so external links were not verified",
         skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
       });
       return { checks };
@@ -49,7 +50,12 @@ export const deadLinksRule: Rule = {
     // repo#2759: links that look like actions or carry a token are never sent.
     const linkCheck = ctx.site?.externalLinkCheck;
     const notRequested = linkCheck?.notRequested ?? 0;
-    if (externalLinks.length === 0 && linkCheck && notRequested > 0 && notRequested >= linkCheck.found) {
+    if (
+      externalLinks.length === 0 &&
+      linkCheck &&
+      notRequested > 0 &&
+      notRequested >= linkCheck.found
+    ) {
       checks.push({
         name: "dead-links",
         status: "info",
@@ -84,11 +90,13 @@ export const deadLinksRule: Rule = {
       return { checks };
     }
 
-    const checked = externalLinks.filter((l) => l.status !== null || l.error !== null);
+    const checked = externalLinks.filter(
+      (l) => l.status !== null || l.error !== null
+    );
     // Mirror links/broken-external-links: unverifiable (a wall, a timeout,
     // pub#800) and rate-limited targets are not broken (#1829).
     const rateLimited = checked.filter(
-      (l) => l.rateLimited === true || isRateLimitStatus(l.status),
+      (l) => l.rateLimited === true || isRateLimitStatus(l.status)
     );
     const rateLimitedSet = new Set(rateLimited.map((l) => l.href));
     const broken = checked.filter((l) => {
@@ -100,7 +108,9 @@ export const deadLinksRule: Rule = {
     });
 
     const rateLimitedNote =
-      rateLimited.length === 0 ? "" : `; ${rateLimited.length} rate-limited (status unverifiable)`;
+      rateLimited.length === 0
+        ? ""
+        : `; ${rateLimited.length} rate-limited (status unverifiable)`;
 
     checks.push({
       name: "dead-links",

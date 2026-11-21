@@ -2,6 +2,57 @@
 // Bridges crawler storage data to the format expected by rules and reports.
 // No CLI-specific imports (no logger, no link-cache, no infra/context types).
 
+import type { Config, ExternalLinksConfig } from "@squirrelscan/config";
+import type {
+  CheckResult,
+  CloakingProbeData,
+  LlmsTxtData,
+  MarkdownProbeData,
+  WellKnownProbeData,
+  AgentAccessData,
+  RslData,
+  RedirectChain,
+  RenderedRequest,
+  ResourceSizeData,
+  ScriptContentData,
+  SitemapUrlStatusData,
+  SiteQuery,
+  UnverifiedReason,
+} from "@squirrelscan/core-contracts";
+import type { CrawlStats } from "@squirrelscan/core-contracts";
+import type {
+  CrawlStorage,
+  LlmsTxtRecord,
+  MarkdownProbeRecord,
+  WellKnownProbeRecord,
+  AgentAccessRecord,
+  RslRecord,
+  PageRecord,
+  LinkAppearanceRecord,
+  LinkPosition,
+} from "@squirrelscan/core-contracts/storage";
+import type { SQLiteStorage } from "@squirrelscan/crawler";
+import type {
+  CollectedPageSignal,
+  CollectedSiteSignals,
+  EndpointSurface,
+  ParsedPage,
+  RuleRunResult,
+  SiteData,
+  StylesheetBackgroundData,
+  StylesheetMotionData,
+  StylesheetContentData,
+  WebAppManifestData,
+} from "@squirrelscan/rules";
+
+import { buildJavascriptShipped } from "@squirrelscan/core-contracts";
+import {
+  CLOUD_RESOURCE_CHECK,
+  LINK_CHECK_LIMITS,
+  REPORT_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
+import { isInScope } from "@squirrelscan/crawler/frontier";
+import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
 import {
   extractFontUrls,
   extractLinks,
@@ -26,77 +77,73 @@ import {
   type PluginRegistrySnapshot,
   type RunnerScope,
 } from "@squirrelscan/rules";
+import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
+import {
+  CHROME_USER_AGENT,
+  RESOURCE_SIZE_LIMITS,
+  SQUIRRELSCAN_USER_AGENT,
+  STORED_SCRIPT_LIMITS,
+  STYLESHEET_FETCH_LIMITS,
+} from "@squirrelscan/utils/constants";
+import { headerScopeBase } from "@squirrelscan/utils/headers";
+import {
+  initialViewportFlags,
+  selectImageCandidate,
+} from "@squirrelscan/utils/image-loading";
+import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
+import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
+import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
+import {
+  type EgressPolicy,
+  memoizeResolveHost,
+  ownHostsPinned,
+  refusedWithoutLookup,
+  resolveHostAddresses,
+} from "@squirrelscan/utils/public-egress";
+import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+import { robotsGroupToken } from "@squirrelscan/utils/robots-txt";
+import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
+import { detectWafChallengePage } from "@squirrelscan/waf-detect";
 import { Duration, Effect } from "effect";
 
+import type {
+  LateLinkVerdicts,
+  LinkVerdictSettlement,
+} from "./late-link-verdicts";
+
+import { logger } from "./adapter-logger";
+import { collectDroppedBatch } from "./batch-gc";
+import { resolveCloakingProbes, selectCloakingPaths } from "./cloaking-probe";
+import { detachFromPage, detachParsedPage } from "./detach";
+import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
+import { createEndpointCollector, entryFirst } from "./endpoint-discovery";
+import {
+  checkExternalLinks,
+  EXTERNAL_LINK_USER_AGENT,
+  type ExternalCheckerOptions,
+  type ExternalCheckResult,
+  type LinkCache,
+} from "./external-checker";
+import {
+  createFetchBudget,
+  type FetchBudget,
+  type FetchBudgetSummary,
+} from "./fetch-budget";
+import { localIntelContext } from "./intel";
+import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
+import {
+  linkTextLooksLikeAnAction,
+  type LinkTargetProbe,
+  looksLikeAnAction,
+  probeLinkTargets,
+} from "./link-target-probe";
 import {
   type PageRuleLoopHooks,
   type PageRuleTask,
   runAndDispose,
   SerialPageRuleExecutor,
 } from "./page-rule-executor";
-import type { LateLinkVerdicts, LinkVerdictSettlement } from "./late-link-verdicts";
-
-import type { Config, ExternalLinksConfig } from "@squirrelscan/config";
-import type {
-  CrawlStorage,
-  LlmsTxtRecord,
-  MarkdownProbeRecord,
-  WellKnownProbeRecord,
-  AgentAccessRecord,
-  RslRecord,
-  PageRecord,
-  LinkAppearanceRecord,
-  LinkPosition,
-} from "@squirrelscan/core-contracts/storage";
-import type {
-  CollectedPageSignal,
-  CollectedSiteSignals,
-  EndpointSurface,
-  ParsedPage,
-  RuleRunResult,
-  SiteData,
-  StylesheetBackgroundData,
-  StylesheetMotionData,
-  StylesheetContentData,
-  WebAppManifestData,
-} from "@squirrelscan/rules";
-import type { SQLiteStorage } from "@squirrelscan/crawler";
-import { EMPTY_PARSED_PAGE } from "./empty-parsed-page";
 import { isRedirectSourcePage, redirectSourceEntry } from "./redirect-source";
-import type {
-  CheckResult,
-  CloakingProbeData,
-  LlmsTxtData,
-  MarkdownProbeData,
-  WellKnownProbeData,
-  AgentAccessData,
-  RslData,
-  RedirectChain,
-  RenderedRequest,
-  ResourceSizeData,
-  ScriptContentData,
-  SitemapUrlStatusData,
-  SiteQuery,
-  UnverifiedReason,
-} from "@squirrelscan/core-contracts";
-import type { CrawlStats } from "@squirrelscan/core-contracts";
-import { buildJavascriptShipped } from "@squirrelscan/core-contracts";
-import {
-  CLOUD_RESOURCE_CHECK,
-  LINK_CHECK_LIMITS,
-  REPORT_LIMITS,
-} from "@squirrelscan/core-contracts/limits";
-
-import { createFetchBudget, type FetchBudget, type FetchBudgetSummary } from "./fetch-budget";
-import {
-  calculateHealthScore,
-  deriveAuditStatusFromPages,
-  foldRuleResultIntoTallies,
-  type RuleTally,
-} from "./scoring";
-import { createEndpointCollector, entryFirst } from "./endpoint-discovery";
-import { localIntelContext } from "./intel";
-import { logger } from "./adapter-logger";
 // Report assembly extracted to ./report-stream (#1021, PR-F). adapter references
 // these internally — runRulesOnStorage/StreamingRuleExecutionResult reference
 // RuleExecutionResult, the generateReportFromStorage delegate returns
@@ -111,15 +158,10 @@ import {
   type FullAuditReport,
   type RuleExecutionResult,
 } from "./report-stream";
-// Streaming rule engine (#1021, PR-E). streaming.ts takes its shared helpers
-// from ./site-fetch, so there is no runtime import cycle with this module (#1409).
 import {
-  streamPageRules,
-  STREAM_PAGE_BATCH,
-  type PageResultSink,
-  type PageSignalCollector,
-  type StreamPageRulesHooks,
-} from "./streaming";
+  checkResourceSizes,
+  type ResourceCheckResult,
+} from "./resource-checker";
 import {
   bindRuleCache,
   withoutStoringAfterIgnoreTimeout,
@@ -129,64 +171,18 @@ import {
   type RuleCacheStore,
   type StreamRuleCache,
 } from "./rule-cache";
-import { collectDroppedBatch } from "./batch-gc";
-import { detachFromPage, detachParsedPage } from "./detach";
-import { resolveCloakingProbes, selectCloakingPaths } from "./cloaking-probe";
-import { createSiteQuery } from "./site-query";
-import { confirmSoft404Candidates, hasSoft404FetchWork, markUnresolvedSoft404 } from "./soft404-confirm";
-import { headerScopeBase } from "@squirrelscan/utils/headers";
-
-import { createHeaderScope, headersWithheldFrom } from "./lib/header-scope";
 import {
-  CHROME_USER_AGENT,
-  RESOURCE_SIZE_LIMITS,
-  SQUIRRELSCAN_USER_AGENT,
-  STORED_SCRIPT_LIMITS,
-  STYLESHEET_FETCH_LIMITS,
-} from "@squirrelscan/utils/constants";
-import { maskLinkTokens } from "@squirrelscan/utils/link-actions";
-import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
-
+  calculateHealthScore,
+  deriveAuditStatusFromPages,
+  foldRuleResultIntoTallies,
+  type RuleTally,
+} from "./scoring";
 import {
-  checkExternalLinks,
-  EXTERNAL_LINK_USER_AGENT,
-  type ExternalCheckerOptions,
-  type ExternalCheckResult,
-  type LinkCache,
-} from "./external-checker";
-import { checkResourceSizes, type ResourceCheckResult } from "./resource-checker";
-import {
-  linkTextLooksLikeAnAction,
-  type LinkTargetProbe,
-  looksLikeAnAction,
-  probeLinkTargets,
-} from "./link-target-probe";
-import {
-  absorbWebAppManifestLinks,
-  emptyWebAppManifestOccurrences,
-  fetchWebAppManifests,
-  type FetchedWebAppManifests,
-  type WebAppManifestOccurrences,
-} from "./web-app-manifest";
-import { toStylesheetContentData } from "./stylesheet-content";
-import { fetchScriptContents, scriptRuleLimit, type ScriptContentCache, type ScriptFetchResult } from "./script-fetcher";
-import { initialViewportFlags, selectImageCandidate } from "@squirrelscan/utils/image-loading";
-import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
-import { isNonPublicHostname } from "@squirrelscan/utils/non-public-host";
-import {
-  type EgressPolicy,
-  memoizeResolveHost,
-  ownHostsPinned,
-  refusedWithoutLookup,
-  resolveHostAddresses,
-} from "@squirrelscan/utils/public-egress";
-import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
-import { getHostname, normalizeUrl } from "@squirrelscan/utils/url";
-import { isInScope } from "@squirrelscan/crawler/frontier";
-import { createRobotsEvaluator } from "@squirrelscan/crawler/robots";
-import { robotsGroupToken } from "@squirrelscan/utils/robots-txt";
-import { detectWafChallengePage } from "@squirrelscan/waf-detect";
-
+  fetchScriptContents,
+  scriptRuleLimit,
+  type ScriptContentCache,
+  type ScriptFetchResult,
+} from "./script-fetcher";
 // Site-context + header helpers live in ./site-fetch so ./streaming and
 // ./page-features need not import this module back (#1409). Re-exported below
 // to keep the package barrel (index.ts) and every ./adapter importer unchanged.
@@ -201,6 +197,29 @@ import {
   releaseSiteContextDocuments,
   type SiteContextPage,
 } from "./site-fetch";
+import { createSiteQuery } from "./site-query";
+import {
+  confirmSoft404Candidates,
+  hasSoft404FetchWork,
+  markUnresolvedSoft404,
+} from "./soft404-confirm";
+// Streaming rule engine (#1021, PR-E). streaming.ts takes its shared helpers
+// from ./site-fetch, so there is no runtime import cycle with this module (#1409).
+import {
+  streamPageRules,
+  STREAM_PAGE_BATCH,
+  type PageResultSink,
+  type PageSignalCollector,
+  type StreamPageRulesHooks,
+} from "./streaming";
+import { toStylesheetContentData } from "./stylesheet-content";
+import {
+  absorbWebAppManifestLinks,
+  emptyWebAppManifestOccurrences,
+  fetchWebAppManifests,
+  type FetchedWebAppManifests,
+  type WebAppManifestOccurrences,
+} from "./web-app-manifest";
 export {
   buildHeadersMap,
   buildSiteContext,
@@ -230,13 +249,14 @@ export { setAdapterLogger, type AdapterLogger } from "./adapter-logger";
 // CONSTANTS
 // ============================================
 
-
 function buildLlmsTxtData(llms: LlmsTxtRecord | null): LlmsTxtData | null {
   if (!llms) return null;
   return { llmsTxt: llms.llmsTxt, llmsFullTxt: llms.llmsFullTxt };
 }
 
-function buildMarkdownProbeData(probe: MarkdownProbeRecord | null): MarkdownProbeData | null {
+function buildMarkdownProbeData(
+  probe: MarkdownProbeRecord | null
+): MarkdownProbeData | null {
   if (!probe) return null;
   return {
     negotiatedUrl: probe.negotiatedUrl,
@@ -256,16 +276,22 @@ function buildMarkdownProbeData(probe: MarkdownProbeRecord | null): MarkdownProb
     ...(probe.strictNegotiationAnswered !== undefined
       ? { strictNegotiationAnswered: probe.strictNegotiationAnswered }
       : {}),
-    ...(probe.mdVariantAnswered !== undefined ? { mdVariantAnswered: probe.mdVariantAnswered } : {}),
+    ...(probe.mdVariantAnswered !== undefined
+      ? { mdVariantAnswered: probe.mdVariantAnswered }
+      : {}),
   };
 }
 
-function buildWellKnownData(probe: WellKnownProbeRecord | null): WellKnownProbeData | null {
+function buildWellKnownData(
+  probe: WellKnownProbeRecord | null
+): WellKnownProbeData | null {
   if (!probe) return null;
   return { probes: probe.probes };
 }
 
-function buildAgentAccessData(access: AgentAccessRecord | null): AgentAccessData | null {
+function buildAgentAccessData(
+  access: AgentAccessRecord | null
+): AgentAccessData | null {
   if (!access) return null;
   return { probes: access.probes };
 }
@@ -339,9 +365,11 @@ const REDUCED_MOTION_RULE_ID = "a11y/reduced-motion";
 /** Reads stylesheet bodies (`ctx.site.stylesheets`) to tell palette colors from one-page outliers (repo#1377). */
 const COLOR_SPRAWL_RULE_ID = "content/color-sprawl";
 /** Same-site stylesheets read for the page background (#1756): the most widely linked first. */
-const STYLESHEET_BACKGROUND_FETCH_LIMIT = STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH;
+const STYLESHEET_BACKGROUND_FETCH_LIMIT =
+  STYLESHEET_FETCH_LIMITS.MAX_STYLESHEETS_TO_FETCH;
 /** A stylesheet over this many decoded bytes is not read (#1756). */
-const STYLESHEET_BACKGROUND_MAX_BYTES = STYLESHEET_FETCH_LIMITS.MAX_STYLESHEET_SIZE_BYTES;
+const STYLESHEET_BACKGROUND_MAX_BYTES =
+  STYLESHEET_FETCH_LIMITS.MAX_STYLESHEET_SIZE_BYTES;
 
 /** The one rule that reads the third-party asset pools (#703). */
 const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
@@ -526,7 +554,10 @@ export interface SiteAssetOccurrences {
    * linked and how many pages link to it. Bounded at
    * MAX_TRACKED_INTERNAL_LINK_TARGETS distinct targets.
    */
-  internalLinkTargets: Map<string, { url: string; pages: number; action?: boolean }>;
+  internalLinkTargets: Map<
+    string,
+    { url: string; pages: number; action?: boolean }
+  >;
   /** Normalized URL of every page the crawl stored, non-HTML and 4xx included. */
   crawledUrls: Set<string>;
 }
@@ -571,7 +602,7 @@ export function emptySiteAssetOccurrences(): SiteAssetOccurrences {
 export function createSiteAssetCollector(
   baseUrl: string,
   /** See {@link absorbResourceOccurrences}. */
-  isOwnHost?: (hostname: string) => boolean,
+  isOwnHost?: (hostname: string) => boolean
 ): {
   absorb: (siteContext: SiteContextPage[]) => void;
   occurrences: SiteAssetOccurrences;
@@ -660,14 +691,18 @@ export function createSiteAssetCollector(
             nofollowActions.has(key) ||
             linkTextLooksLikeAnAction(
               link.text ?? "",
-              link.isNofollow === true || (link.rel?.includes("nofollow") ?? false),
+              link.isNofollow === true ||
+                (link.rel?.includes("nofollow") ?? false)
             );
           const entry = occurrences.internalLinkTargets.get(key);
           if (entry && action) entry.action = true;
           if (seen.has(key)) continue;
           seen.add(key);
           if (entry) entry.pages++;
-          else if (occurrences.internalLinkTargets.size < MAX_TRACKED_INTERNAL_LINK_TARGETS) {
+          else if (
+            occurrences.internalLinkTargets.size <
+            MAX_TRACKED_INTERNAL_LINK_TARGETS
+          ) {
             occurrences.internalLinkTargets.set(key, {
               url: link.url,
               pages: 1,
@@ -680,7 +715,7 @@ export function createSiteAssetCollector(
       // Web app manifest links, same-site only (#710).
       for (const page of parsedPages) {
         absorbWebAppManifestLinks(occurrences.webAppManifests, page, (url) =>
-          isSameDomainResource(url, getHostname(baseUrl).toLowerCase()),
+          isSameDomainResource(url, getHostname(baseUrl).toLowerCase())
         );
       }
 
@@ -692,7 +727,8 @@ export function createSiteAssetCollector(
           try {
             const linkOrigin = new URL(link.url).origin;
             if (baseOrigin && linkOrigin === baseOrigin) {
-              const sources = occurrences.pdfs.get(link.url) ?? new Set<string>();
+              const sources =
+                occurrences.pdfs.get(link.url) ?? new Set<string>();
               sources.add(page.url);
               occurrences.pdfs.set(link.url, sources);
             }
@@ -714,7 +750,7 @@ export function createSiteAssetCollector(
  */
 export function imageLoadFlags(
   occurrences: Pick<SiteAssetOccurrences, "imagesSelected" | "imagesEager">,
-  url: string,
+  url: string
 ): { fallbackOnly?: true; deferredPages?: string[] } {
   const selected = occurrences.imagesSelected?.get(url);
   if (!occurrences.imagesSelected) return {};
@@ -727,7 +763,7 @@ export function imageLoadFlags(
 /** A status-only third-party record (#703): no body, cache or compression fields. */
 function externalAssetRecord(
   check: ResourceCheckResult,
-  sources: Map<string, Set<string>>,
+  sources: Map<string, Set<string>>
 ): ResourceSizeData {
   return {
     url: check.url,
@@ -748,7 +784,7 @@ function externalAssetRecord(
  */
 export function assetCapDroppedOf(
   referenced: Pick<SiteAssetOccurrences, keyof AssetCapDropped>,
-  fetched: Record<keyof AssetCapDropped, readonly unknown[]>,
+  fetched: Record<keyof AssetCapDropped, readonly unknown[]>
 ): AssetCapDropped {
   const dropped = (kind: keyof AssetCapDropped): number =>
     Math.max(0, referenced[kind].size - fetched[kind].length);
@@ -767,7 +803,7 @@ export function fetchResourceAssets(
   crawlId: string,
   siteContext: SiteContextPage[],
   config: Config,
-  overrides?: ResourceCheckOverrides,
+  overrides?: ResourceCheckOverrides
 ): Effect.Effect<PreFetchedAssets, never, never> {
   return Effect.gen(function* () {
     const crawl = yield* storage
@@ -776,8 +812,11 @@ export function fetchResourceAssets(
     const collector = createSiteAssetCollector(
       crawl?.baseUrl ?? "",
       overrides?.ownSiteOnly === true
-        ? ownSiteHostMatcher({ baseUrl: crawl?.baseUrl ?? "", domains: config.project?.domains })
-        : undefined,
+        ? ownSiteHostMatcher({
+            baseUrl: crawl?.baseUrl ?? "",
+            domains: config.project?.domains,
+          })
+        : undefined
     );
     collector.absorb(siteContext);
     return yield* fetchAssetsFromOccurrences(
@@ -785,7 +824,7 @@ export function fetchResourceAssets(
       crawlId,
       collector.occurrences,
       config,
-      overrides,
+      overrides
     );
   });
 }
@@ -801,7 +840,7 @@ export function fetchAssetsFromOccurrences(
   crawlId: string,
   occurrences: SiteAssetOccurrences,
   config: Config,
-  overrides?: ResourceCheckOverrides,
+  overrides?: ResourceCheckOverrides
 ): Effect.Effect<PreFetchedAssets, never, never> {
   return Effect.gen(function* () {
     const assetsSpan = logger.traceStart("fetchResourceAssets");
@@ -836,7 +875,7 @@ export function fetchAssetsFromOccurrences(
           lastmod: u.lastmod,
           changefreq: u.changefreq,
           priority: u.priority,
-        })),
+        }))
       );
     }
 
@@ -860,7 +899,9 @@ export function fetchAssetsFromOccurrences(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
-      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
+      ...(crawl?.stats?.sitemapReadState
+        ? { readState: crawl.stats.sitemapReadState }
+        : {}),
     };
 
     // Every orphan the coverage pass found, in its order. These are the
@@ -872,11 +913,20 @@ export function fetchAssetsFromOccurrences(
     // passes resourceCheckMaxItems = 100.
     let orphanCandidates: string[] = [];
     if (sitemapDiscovery.discovered.length > 0) {
-      const coverage = computeSitemapCoverageData(occurrences.coveragePages, sitemapDiscovery);
+      const coverage = computeSitemapCoverageData(
+        occurrences.coveragePages,
+        sitemapDiscovery
+      );
       orphanCandidates = coverage.orphanPages;
       // The arrays that TRAVEL stay capped at the schema's array limit.
-      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, REPORT_LIMITS.maxPages);
-      sitemapDiscovery.missingPages = coverage.missingPages.slice(0, REPORT_LIMITS.maxPages);
+      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(
+        0,
+        REPORT_LIMITS.maxPages
+      );
+      sitemapDiscovery.missingPages = coverage.missingPages.slice(
+        0,
+        REPORT_LIMITS.maxPages
+      );
       sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
@@ -889,9 +939,12 @@ export function fetchAssetsFromOccurrences(
     // re-fetch) AND use_cache_control is on. `--refresh` flips the crawler's
     // incremental flag, threaded in via overrides.
     const cacheReuseEnabled =
-      (overrides?.incremental ?? false) && (config.crawler?.use_cache_control ?? true);
+      (overrides?.incremental ?? false) &&
+      (config.crawler?.use_cache_control ?? true);
     const priorResources = cacheReuseEnabled
-      ? yield* storage.getCachedResources(crawlId).pipe(Effect.catchAll(() => Effect.succeed([])))
+      ? yield* storage
+          .getCachedResources(crawlId)
+          .pipe(Effect.catchAll(() => Effect.succeed([])))
       : [];
     const priorByUrl = new Map(priorResources.map((r) => [r.url, r]));
 
@@ -922,7 +975,9 @@ export function fetchAssetsFromOccurrences(
     // as it sends them; every other hop, subdomains included, is vetted
     // (private networks allowed: a LAN or dev-server audit) and connects to
     // the address it was vetted on.
-    const resolveOnce = memoizeResolveHost(overrides?.resolveHost ?? resolveHostAddresses);
+    const resolveOnce = memoizeResolveHost(
+      overrides?.resolveHost ?? resolveHostAddresses
+    );
     const ownSiteHost = getHostname(baseUrl).toLowerCase();
     // The crawl's own host scope: the base host, its www/apex pair and
     // `project.domains`. These are requested as the crawl requests them.
@@ -968,13 +1023,20 @@ export function fetchAssetsFromOccurrences(
     // not to every subdomain (#732).
     const headerScope = headerScopeOf(crawl, config);
     // Either the request or the redirect it ended on was sent without them.
-    const withheld = (url: string, status: number | null, finalUrl?: string | null): boolean =>
+    const withheld = (
+      url: string,
+      status: number | null,
+      finalUrl?: string | null
+    ): boolean =>
       (status === 401 || status === 403) &&
       (headersWithheldFrom(url, config.crawler?.headers, headerScope) ||
-        (finalUrl != null && headersWithheldFrom(finalUrl, config.crawler?.headers, headerScope)));
+        (finalUrl != null &&
+          headersWithheldFrom(finalUrl, config.crawler?.headers, headerScope)));
 
     const resourceCheckOptions = {
-      concurrency: config.external_links?.concurrency ?? RESOURCE_SIZE_LIMITS.CHECK_CONCURRENCY,
+      concurrency:
+        config.external_links?.concurrency ??
+        RESOURCE_SIZE_LIMITS.CHECK_CONCURRENCY,
       timeoutMs:
         overrides?.resourceCheckTimeoutMs ??
         config.external_links?.timeout_ms ??
@@ -988,7 +1050,8 @@ export function fetchAssetsFromOccurrences(
       // Web Bot Auth / custom headers apply to asset fetches too (#494). Only
       // the site's own: every pool on these options is same-site, and the
       // sitemap pool sends a URL on another host without them (below).
-      ...(config.crawler?.headers && Object.keys(config.crawler.headers).length > 0
+      ...(config.crawler?.headers &&
+      Object.keys(config.crawler.headers).length > 0
         ? { customHeaders: config.crawler.headers, headerScope }
         : {}),
       ...(fetchBudget ? { budget: fetchBudget } : {}),
@@ -1010,8 +1073,12 @@ export function fetchAssetsFromOccurrences(
               scriptRuleLimit(occurrences.pageCount, maxResources),
               Math.min(
                 STORED_SCRIPT_LIMITS.maxScriptsCeiling,
-                Math.max(1, config.storage?.store_scripts_max_scripts ?? STORED_SCRIPT_LIMITS.maxScripts),
-              ),
+                Math.max(
+                  1,
+                  config.storage?.store_scripts_max_scripts ??
+                    STORED_SCRIPT_LIMITS.maxScripts
+                )
+              )
             ),
             maxTotalBytes: STORED_SCRIPT_LIMITS.heldBytes,
             totalTimeoutMs: STORED_SCRIPT_LIMITS.fetchTimeBudgetMs,
@@ -1022,11 +1089,14 @@ export function fetchAssetsFromOccurrences(
       ...(overrides?.resourceCheckTimeoutMs != null
         ? { timeoutMs: overrides.resourceCheckTimeoutMs }
         : {}),
-      ...(config.crawler?.headers && Object.keys(config.crawler.headers).length > 0
+      ...(config.crawler?.headers &&
+      Object.keys(config.crawler.headers).length > 0
         ? { customHeaders: config.crawler.headers, headerScope }
         : {}),
       ...(fetchBudget ? { budget: fetchBudget } : {}),
-      ...(overrides?.scriptContentCache ? { contentCache: overrides.scriptContentCache } : {}),
+      ...(overrides?.scriptContentCache
+        ? { contentCache: overrides.scriptContentCache }
+        : {}),
       egress: ownSiteEgress,
     };
 
@@ -1040,14 +1110,16 @@ export function fetchAssetsFromOccurrences(
       maxScripts: _storeMaxScripts,
       ...nonStoreScriptOptions
     } = scriptFetchOptions;
-    const preloadFetchOptions: NonNullable<Parameters<typeof fetchScriptContents>[1]> = {
+    const preloadFetchOptions: NonNullable<
+      Parameters<typeof fetchScriptContents>[1]
+    > = {
       ...nonStoreScriptOptions,
       ...(maxResources != null ? { maxScripts: maxResources } : {}),
     };
 
     const sitemapStatusLimit = Math.min(
       orphanCandidates.length,
-      maxResources ?? config.crawler?.max_pages ?? 500,
+      maxResources ?? config.crawler?.max_pages ?? 500
     );
 
     const pdfCheckLimit = Math.min(pdfUrls.size, maxResources ?? 50);
@@ -1060,14 +1132,21 @@ export function fetchAssetsFromOccurrences(
     // token (link-target-probe.ts). Excluded paths like /logout are often on
     // every page, so without this they would be the first requested.
     const internalLinksEnabled = config.internal_links?.enabled !== false;
-    const probeCap = config.internal_links?.max_targets ?? LINK_CHECK_LIMITS.internalTargetProbes;
+    const probeCap =
+      config.internal_links?.max_targets ??
+      LINK_CHECK_LIMITS.internalTargetProbes;
     // The crawl's own user agent, so the request is UA-equivalent to the crawl
     // (a bot wall that let the crawl through lets this through too).
-    const probeUserAgent = crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT;
+    const probeUserAgent =
+      crawl?.config?.userAgent ||
+      config.crawler?.user_agent ||
+      CHROME_USER_AGENT;
     const respectRobots = config.crawler?.respect_robots ?? true;
     const robotsRecord =
       internalLinksEnabled && respectRobots
-        ? yield* storage.getRobotsTxt(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)))
+        ? yield* storage
+            .getRobotsTxt(crawlId)
+            .pipe(Effect.catchAll(() => Effect.succeed(null)))
         : null;
     const robots =
       robotsRecord?.exists && robotsRecord.content
@@ -1079,7 +1158,7 @@ export function fetchAssetsFromOccurrences(
             // without a row does this run's config say.
             (crawl?.config
               ? crawl.config.robotsUserAgent
-              : config.crawler?.robots_user_agent) || probeUserAgent,
+              : config.crawler?.robots_user_agent) || probeUserAgent
           )
         : null;
     const mayProbe = (url: string): boolean => {
@@ -1108,12 +1187,19 @@ export function fetchAssetsFromOccurrences(
               if (target.action || looksLikeAnAction(target.url)) actionLinks++;
               return false;
             })
-            .sort(([ak, a], [bk, b]) => b.pages - a.pages || (ak < bk ? -1 : ak > bk ? 1 : 0))
+            .sort(
+              ([ak, a], [bk, b]) =>
+                b.pages - a.pages || (ak < bk ? -1 : ak > bk ? 1 : 0)
+            )
         : [];
-    const probeTargets = unfetchedTargets.slice(0, probeCap).map(([, target]) => target.url);
+    const probeTargets = unfetchedTargets
+      .slice(0, probeCap)
+      .map(([, target]) => target.url);
     const probeControlUrl =
       crawl?.stats?.targetedRun === true
-        ? occurrences.coveragePages.find((p) => p.statusCode >= 200 && p.statusCode < 300)?.url
+        ? occurrences.coveragePages.find(
+            (p) => p.statusCode >= 200 && p.statusCode < 300
+          )?.url
         : baseUrl || undefined;
 
     // Third-party copies feed reliability/broken-resources alone (#703), so
@@ -1127,28 +1213,31 @@ export function fetchAssetsFromOccurrences(
         // The runner's own defaults (runner.ts), so the two never disagree.
         config.rules?.enable ?? [],
         config.rules?.disable ?? [],
-        (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
-          BROKEN_RESOURCES_RULE_ID
-        ],
+        (
+          config.rule_options as
+            | Record<string, { enabled?: boolean }>
+            | undefined
+        )?.[BROKEN_RESOURCES_RULE_ID]
       );
     const probeColorContrastSheets = isRuleEnabled(
       COLOR_CONTRAST_RULE_ID,
       config.rules?.enable ?? [],
       config.rules?.disable ?? [],
-      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
-        COLOR_CONTRAST_RULE_ID
-      ],
+      (
+        config.rule_options as Record<string, { enabled?: boolean }> | undefined
+      )?.[COLOR_CONTRAST_RULE_ID]
     );
     const probeStylesheetMotion = isRuleEnabled(
       REDUCED_MOTION_RULE_ID,
       config.rules?.enable ?? [],
       config.rules?.disable ?? [],
-      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
-        REDUCED_MOTION_RULE_ID
-      ],
+      (
+        config.rule_options as Record<string, { enabled?: boolean }> | undefined
+      )?.[REDUCED_MOTION_RULE_ID]
     );
     // One fetch feeds both rules (#711): same egress and budget.
-    const probeStylesheetBackgrounds = probeColorContrastSheets || probeStylesheetMotion;
+    const probeStylesheetBackgrounds =
+      probeColorContrastSheets || probeStylesheetMotion;
     // Bodies (ctx.site.stylesheets) go to color-contrast and color-sprawl (repo#1377); the background summary stays color-contrast's.
     const probeStylesheetContent =
       probeColorContrastSheets ||
@@ -1156,7 +1245,11 @@ export function fetchAssetsFromOccurrences(
         COLOR_SPRAWL_RULE_ID,
         config.rules?.enable ?? [],
         config.rules?.disable ?? [],
-        (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[COLOR_SPRAWL_RULE_ID],
+        (
+          config.rule_options as
+            | Record<string, { enabled?: boolean }>
+            | undefined
+        )?.[COLOR_SPRAWL_RULE_ID]
       );
     const stylesheetTargets = Array.from(resourceOccurrences.css.entries())
       .sort((a, b) => b[1].size - a[1].size)
@@ -1166,14 +1259,14 @@ export function fetchAssetsFromOccurrences(
       WEB_APP_MANIFEST_RULE_ID,
       config.rules?.enable ?? [],
       config.rules?.disable ?? [],
-      (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[
-        WEB_APP_MANIFEST_RULE_ID
-      ],
+      (
+        config.rule_options as Record<string, { enabled?: boolean }> | undefined
+      )?.[WEB_APP_MANIFEST_RULE_ID]
     );
     const externalAssetLimit = probeExternalAssets
       ? Math.min(
           maxResources ?? RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK,
-          RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK,
+          RESOURCE_SIZE_LIMITS.MAX_EXTERNAL_ASSETS_TO_CHECK
         )
       : 0;
     // Third-party status probes (#703) are not the site's own requests:
@@ -1187,8 +1280,11 @@ export function fetchAssetsFromOccurrences(
     //    base URL counts as public, the strict side. Each request connects to
     //    the address that was vetted, so DNS rebinding cannot swap it.
     //  - Status only: no body is read, and no prior-crawl cache is consulted.
-    const { customHeaders: _ownHostOnly, priorByUrl: _ownHostCache, ...probeShared } =
-      resourceCheckOptions;
+    const {
+      customHeaders: _ownHostOnly,
+      priorByUrl: _ownHostCache,
+      ...probeShared
+    } = resourceCheckOptions;
     const baseHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
     let siteOrigin = "";
     try {
@@ -1219,13 +1315,19 @@ export function fetchAssetsFromOccurrences(
       overrides?.ownSiteOnly === true
         ? orphanCandidates.filter((url) => isOwnSiteUrl(url))
         : orphanCandidates;
-    const sitemapOffSiteSkipped = orphanCandidates.length - sitemapCandidates.length;
+    const sitemapOffSiteSkipped =
+      orphanCandidates.length - sitemapCandidates.length;
     const sitemapTargets = sitemapCandidates.slice(
       0,
-      Math.min(sitemapStatusLimit, maxResources ?? RESOURCE_SIZE_LIMITS.MAX_RESOURCES_TO_CHECK),
+      Math.min(
+        sitemapStatusLimit,
+        maxResources ?? RESOURCE_SIZE_LIMITS.MAX_RESOURCES_TO_CHECK
+      )
     );
     const ownSitemapTargets = sitemapTargets.filter((url) => isOwnSiteUrl(url));
-    const foreignSitemapTargets = sitemapTargets.filter((url) => !isOwnSiteUrl(url));
+    const foreignSitemapTargets = sitemapTargets.filter(
+      (url) => !isOwnSiteUrl(url)
+    );
 
     const resourceCheckStart = Date.now();
 
@@ -1239,71 +1341,87 @@ export function fetchAssetsFromOccurrences(
           ...resourceCheckOptions,
           verifyCompression: true,
         }),
-        images: checkResourceSizes(Array.from(resourceOccurrences.images.keys()), {
-          ...resourceCheckOptions,
-          verifyCompression: true,
-          readImageHeader: true,
-        }),
+        images: checkResourceSizes(
+          Array.from(resourceOccurrences.images.keys()),
+          {
+            ...resourceCheckOptions,
+            verifyCompression: true,
+            readImageHeader: true,
+          }
+        ),
         // Same cheap HEAD path as the sitemap and pdf pools: a font's size is
         // all total-byte-weight reads.
         fonts: checkResourceSizes(
           Array.from(resourceOccurrences.fonts.keys()),
-          resourceCheckOptions,
+          resourceCheckOptions
         ),
         scripts: fetchScriptContents(
           Array.from(resourceOccurrences.scripts.keys()),
-          scriptFetchOptions,
+          scriptFetchOptions
         ),
         // Chunks no <script src> already covers, on a cap of their own so a
         // modulepreload-heavy site cannot grow the main script fetch.
         preloads: fetchScriptContents(
           Array.from(resourceOccurrences.preloads.keys()).filter(
-            (url) => !resourceOccurrences.scripts.has(url),
+            (url) => !resourceOccurrences.scripts.has(url)
           ),
           {
             ...preloadFetchOptions,
-            maxScripts: Math.min(preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT, PRELOAD_CHUNK_FETCH_LIMIT),
-          },
+            maxScripts: Math.min(
+              preloadFetchOptions.maxScripts ?? PRELOAD_CHUNK_FETCH_LIMIT,
+              PRELOAD_CHUNK_FETCH_LIMIT
+            ),
+          }
         ),
         // Only the html/body background is kept (#1756); same egress and budget as the scripts.
-        stylesheets: probeStylesheetBackgrounds || probeStylesheetContent
-          ? fetchScriptContents(stylesheetTargets, {
-              ...nonStoreScriptOptions,
-              fetchAll: true,
-              anyContentType: true,
-              maxScripts: STYLESHEET_BACKGROUND_FETCH_LIMIT,
-              maxSizeBytes: STYLESHEET_BACKGROUND_MAX_BYTES,
-            })
-          : Effect.succeed([] as ScriptFetchResult[]),
+        stylesheets:
+          probeStylesheetBackgrounds || probeStylesheetContent
+            ? fetchScriptContents(stylesheetTargets, {
+                ...nonStoreScriptOptions,
+                fetchAll: true,
+                anyContentType: true,
+                maxScripts: STYLESHEET_BACKGROUND_FETCH_LIMIT,
+                maxSizeBytes: STYLESHEET_BACKGROUND_MAX_BYTES,
+              })
+            : Effect.succeed([] as ScriptFetchResult[]),
         pdfs: checkResourceSizes(
           Array.from(pdfUrls.keys()).slice(0, pdfCheckLimit),
-          resourceCheckOptions,
+          resourceCheckOptions
         ),
         // Manifest body first, then its icons (the icon list comes from the body).
         // Every hop held to the site's own host and subdomains (#710): a manifest
         // or icon that redirects elsewhere is not followed there. Only when the
         // rule runs: disabled, it sends nothing and reads as not checked.
         webAppManifests: probeWebAppManifests
-          ? fetchWebAppManifests(resourceOccurrences.webAppManifests, resourceCheckOptions, {
-              // Private addresses only for a site that is itself private, or for the
-              // site's own origin, which the crawl already requested: a public site's
-              // subdomain (or another port) that resolves privately is refused.
-              allowPrivateNetwork: baseHost !== "" && isNonPublicHostname(baseHost),
-              allowPrivateTarget: (url) => siteOrigin !== "" && url.origin === siteOrigin,
-              allowHost: (host) =>
-                baseHost !== "" &&
-                (host === baseHost ||
-                  host.endsWith(`.${baseHost}`) ||
-                  // An offline audit reads the www or apex twin and the project
-                  // domains as the site's own everywhere else (#819).
-                  (offlineOwnHost?.(host) ?? false)),
-              resolve: resolveOnce,
-              pin: overrides?.egressPinnedByTransport !== true,
-            })
+          ? fetchWebAppManifests(
+              resourceOccurrences.webAppManifests,
+              resourceCheckOptions,
+              {
+                // Private addresses only for a site that is itself private, or for the
+                // site's own origin, which the crawl already requested: a public site's
+                // subdomain (or another port) that resolves privately is refused.
+                allowPrivateNetwork:
+                  baseHost !== "" && isNonPublicHostname(baseHost),
+                allowPrivateTarget: (url) =>
+                  siteOrigin !== "" && url.origin === siteOrigin,
+                allowHost: (host) =>
+                  baseHost !== "" &&
+                  (host === baseHost ||
+                    host.endsWith(`.${baseHost}`) ||
+                    // An offline audit reads the www or apex twin and the project
+                    // domains as the site's own everywhere else (#819).
+                    (offlineOwnHost?.(host) ?? false)),
+                resolve: resolveOnce,
+                pin: overrides?.egressPinnedByTransport !== true,
+              }
+            )
           : Effect.succeed(null as FetchedWebAppManifests | null),
         sitemap: Effect.all([
           checkResourceSizes(ownSitemapTargets, resourceCheckOptions),
-          checkResourceSizes(foreignSitemapTargets, { ...probeShared, egress: thirdPartyEgress }),
+          checkResourceSizes(foreignSitemapTargets, {
+            ...probeShared,
+            egress: thirdPartyEgress,
+          }),
         ]).pipe(
           // Back in the sitemap's order, as one pool.
           Effect.map(([own, foreign]) => {
@@ -1312,7 +1430,7 @@ export function fetchAssetsFromOccurrences(
               const result = byUrl.get(url);
               return result ? [result] : [];
             });
-          }),
+          })
         ),
         // Status only, and safe by construction (link-target-probe.ts): HEAD,
         // GET only on 405/501, no credentials or custom headers, every
@@ -1326,7 +1444,10 @@ export function fetchAssetsFromOccurrences(
           timeoutMs: resourceCheckOptions.timeoutMs,
           concurrency: Math.max(
             1,
-            Math.min(resourceCheckOptions.concurrency, config.crawler?.per_host_concurrency ?? 2),
+            Math.min(
+              resourceCheckOptions.concurrency,
+              config.crawler?.per_host_concurrency ?? 2
+            )
           ),
           mayRequest: mayProbe,
           // repo#2830: the asset pools' own-site policy, every hop, unless the
@@ -1342,19 +1463,28 @@ export function fetchAssetsFromOccurrences(
         // Third-party copies (#703): status only, through the HEAD-first checker, so
         // no body is stored. Read by reliability/broken-resources alone.
         externalCss: checkResourceSizes(
-          Array.from(resourceOccurrences.externalCss.keys()).slice(0, externalAssetLimit),
-          externalCheckOptions,
+          Array.from(resourceOccurrences.externalCss.keys()).slice(
+            0,
+            externalAssetLimit
+          ),
+          externalCheckOptions
         ),
         externalScripts: checkResourceSizes(
-          Array.from(resourceOccurrences.externalScripts.keys()).slice(0, externalAssetLimit),
-          externalCheckOptions,
+          Array.from(resourceOccurrences.externalScripts.keys()).slice(
+            0,
+            externalAssetLimit
+          ),
+          externalCheckOptions
         ),
         externalFonts: checkResourceSizes(
-          Array.from(resourceOccurrences.externalFonts.keys()).slice(0, externalAssetLimit),
-          externalCheckOptions,
+          Array.from(resourceOccurrences.externalFonts.keys()).slice(
+            0,
+            externalAssetLimit
+          ),
+          externalCheckOptions
         ),
       },
-      { concurrency: 5 },
+      { concurrency: 5 }
     );
 
     // Outer hard cliff is now a LAST resort: the shared fetchBudget skips
@@ -1371,12 +1501,17 @@ export function fetchAssetsFromOccurrences(
           Effect.timeoutFail(allResourceChecks, {
             duration: Duration.millis(outerBudgetMs),
             onTimeout: () =>
-              new Error(`Resource checks exceeded ${Math.round(outerBudgetMs / 1000)}s budget`),
+              new Error(
+                `Resource checks exceeded ${Math.round(outerBudgetMs / 1000)}s budget`
+              ),
           }),
           (err) => {
-            logger.warn("resource check budget exceeded, using partial results", {
-              error: String(err),
-            });
+            logger.warn(
+              "resource check budget exceeded, using partial results",
+              {
+                error: String(err),
+              }
+            );
             return Effect.succeed({
               css: [] as ResourceCheckResult[],
               images: [] as ResourceCheckResult[],
@@ -1386,13 +1521,16 @@ export function fetchAssetsFromOccurrences(
               preloads: [] as ScriptFetchResult[],
               pdfs: [] as ResourceCheckResult[],
               sitemap: [] as ResourceCheckResult[],
-              linkTargets: { results: [], headUnreliable: false } as LinkTargetProbe,
+              linkTargets: {
+                results: [],
+                headUnreliable: false,
+              } as LinkTargetProbe,
               externalCss: [] as ResourceCheckResult[],
               externalScripts: [] as ResourceCheckResult[],
               externalFonts: [] as ResourceCheckResult[],
               webAppManifests: null as FetchedWebAppManifests | null,
             });
-          },
+          }
         )
       : yield* allResourceChecks;
 
@@ -1430,27 +1568,35 @@ export function fetchAssetsFromOccurrences(
       return true;
     };
     const hostFirst = new Map<string, boolean | undefined>();
-    for (const fetch of resourceResults.scripts) hostFirst.set(fetch.url, hostFirstOf(fetch));
+    for (const fetch of resourceResults.scripts)
+      hostFirst.set(fetch.url, hostFirstOf(fetch));
     const toScriptData = (fetch: ScriptFetchResult): ScriptContentData => ({
-        url: fetch.url,
-        status: fetch.status,
-        error: fetch.error,
-        contentType: fetch.contentType,
-        sizeBytes: fetch.sizeBytes,
-        content: fetch.content,
-        sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
-        ...(fetch.fetchSkipReason ? { fetchSkipReason: fetch.fetchSkipReason } : {}),
-        ...(fetch.responseMs !== undefined
-          ? { responseMs: fetch.responseMs, ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}) }
-          : {}),
-        rateLimited: fetch.rateLimited,
-        wafBlocked: fetch.wafBlocked,
-        ...(withheld(fetch.url, fetch.status, fetch.finalUrl) ? { headersWithheld: true } : {}),
-        redirected: fetch.redirected,
-        finalUrl: fetch.finalUrl,
-        sourceMapHeader: fetch.sourceMapHeader,
-        contentEncoding: fetch.contentEncoding,
-        ...(fetch.cacheHeaders ? { cacheHeaders: fetch.cacheHeaders } : {}),
+      url: fetch.url,
+      status: fetch.status,
+      error: fetch.error,
+      contentType: fetch.contentType,
+      sizeBytes: fetch.sizeBytes,
+      content: fetch.content,
+      sourcePages: Array.from(resourceOccurrences.scripts.get(fetch.url) ?? []),
+      ...(fetch.fetchSkipReason
+        ? { fetchSkipReason: fetch.fetchSkipReason }
+        : {}),
+      ...(fetch.responseMs !== undefined
+        ? {
+            responseMs: fetch.responseMs,
+            ...(hostFirst.get(fetch.url) ? { hostFirst: true } : {}),
+          }
+        : {}),
+      rateLimited: fetch.rateLimited,
+      wafBlocked: fetch.wafBlocked,
+      ...(withheld(fetch.url, fetch.status, fetch.finalUrl)
+        ? { headersWithheld: true }
+        : {}),
+      redirected: fetch.redirected,
+      finalUrl: fetch.finalUrl,
+      sourceMapHeader: fetch.sourceMapHeader,
+      contentEncoding: fetch.contentEncoding,
+      ...(fetch.cacheHeaders ? { cacheHeaders: fetch.cacheHeaders } : {}),
     });
 
     const result: PreFetchedAssets = {
@@ -1471,7 +1617,9 @@ export function fetchAssetsFromOccurrences(
           sourcePages: Array.from(resourceOccurrences.css.get(check.url) ?? []),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
-          ...(withheld(check.url, check.status, check.redirectTarget) ? { headersWithheld: true } : {}),
+          ...(withheld(check.url, check.status, check.redirectTarget)
+            ? { headersWithheld: true }
+            : {}),
           contentEncoding: check.contentEncoding,
           transferBytes: check.transferBytes,
           cacheControl: check.cacheControl,
@@ -1488,7 +1636,9 @@ export function fetchAssetsFromOccurrences(
           error: check.error,
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
-          sourcePages: Array.from(resourceOccurrences.images.get(check.url) ?? []),
+          sourcePages: Array.from(
+            resourceOccurrences.images.get(check.url) ?? []
+          ),
           ...imageLoadFlags(resourceOccurrences, check.url),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
@@ -1511,10 +1661,14 @@ export function fetchAssetsFromOccurrences(
           error: check.error,
           contentType: check.contentType,
           sizeBytes: check.sizeBytes,
-          sourcePages: Array.from(resourceOccurrences.fonts.get(check.url) ?? []),
+          sourcePages: Array.from(
+            resourceOccurrences.fonts.get(check.url) ?? []
+          ),
           rateLimited: check.rateLimited,
           wafBlocked: check.wafBlocked,
-          ...(withheld(check.url, check.status, check.redirectTarget) ? { headersWithheld: true } : {}),
+          ...(withheld(check.url, check.status, check.redirectTarget)
+            ? { headersWithheld: true }
+            : {}),
           cacheControl: check.cacheControl,
           expires: check.expires,
           date: check.date,
@@ -1528,13 +1682,13 @@ export function fetchAssetsFromOccurrences(
         ? {
             externalAssets: {
               scripts: resourceResults.externalScripts.map((check) =>
-                externalAssetRecord(check, resourceOccurrences.externalScripts),
+                externalAssetRecord(check, resourceOccurrences.externalScripts)
               ),
               css: resourceResults.externalCss.map((check) =>
-                externalAssetRecord(check, resourceOccurrences.externalCss),
+                externalAssetRecord(check, resourceOccurrences.externalCss)
               ),
               fonts: resourceResults.externalFonts.map((check) =>
-                externalAssetRecord(check, resourceOccurrences.externalFonts),
+                externalAssetRecord(check, resourceOccurrences.externalFonts)
               ),
             },
           }
@@ -1556,53 +1710,92 @@ export function fetchAssetsFromOccurrences(
               externalCss: new Map(),
               externalFonts: new Map(),
             },
-        { ...resourceResults, scripts: ruleScripts },
+        { ...resourceResults, scripts: ruleScripts }
       ),
       scripts: ruleScripts.map(toScriptData),
       ...(resourceOccurrences.scripts.size > ruleScripts.length
-        ? { scriptsNotRead: resourceOccurrences.scripts.size - ruleScripts.length }
+        ? {
+            scriptsNotRead:
+              resourceOccurrences.scripts.size - ruleScripts.length,
+          }
         : {}),
       ...(probeStylesheetMotion
         ? {
-            stylesheetMotion: resourceResults.stylesheets.map((fetch): StylesheetMotionData => {
-              const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
-              return {
-                url: fetch.url,
-                status: fetch.status,
-                error: fetch.error,
-                read: readable,
-                ...(readable
-                  ? stylesheetMotionOf(fetch.content as string)
-                  : { mentionsReducedMotion: false, hasInfiniteAnimation: false, hasSmoothScroll: false, infiniteAnimationSelectors: [], smoothScrollSelectors: [], reducedMotionSelectors: [], reducedMotionMatchers: [], reducedMotionGlobal: false }),
-              };
-            }),
+            stylesheetMotion: resourceResults.stylesheets.map(
+              (fetch): StylesheetMotionData => {
+                const readable =
+                  fetch.content !== null &&
+                  !/html/i.test(fetch.contentType ?? "");
+                return {
+                  url: fetch.url,
+                  status: fetch.status,
+                  error: fetch.error,
+                  read: readable,
+                  ...(readable
+                    ? stylesheetMotionOf(fetch.content as string)
+                    : {
+                        mentionsReducedMotion: false,
+                        hasInfiniteAnimation: false,
+                        hasSmoothScroll: false,
+                        infiniteAnimationSelectors: [],
+                        smoothScrollSelectors: [],
+                        reducedMotionSelectors: [],
+                        reducedMotionMatchers: [],
+                        reducedMotionGlobal: false,
+                      }),
+                };
+              }
+            ),
           }
         : {}),
-      ...(probeStylesheetContent ? { stylesheets: resourceResults.stylesheets.map(toStylesheetContentData) } : {}),
+      ...(probeStylesheetContent
+        ? {
+            stylesheets: resourceResults.stylesheets.map(
+              toStylesheetContentData
+            ),
+          }
+        : {}),
       ...(probeColorContrastSheets
         ? {
             stylesheetBackgrounds: resourceResults.stylesheets.map((fetch) => {
-              const readable = fetch.content !== null && !/html/i.test(fetch.contentType ?? "");
-              const other = readable ? stylesheetBackgroundSelectorsOf(fetch.content as string) : null;
+              const readable =
+                fetch.content !== null &&
+                !/html/i.test(fetch.contentType ?? "");
+              const other = readable
+                ? stylesheetBackgroundSelectorsOf(fetch.content as string)
+                : null;
               return {
                 url: fetch.url,
                 status: fetch.status,
                 error: fetch.error,
-                background: readable ? stylesheetBackgroundOf(fetch.content as string) : null,
-                ...(other && other.selectors.length > 0 ? { selectors: other.selectors } : {}),
+                background: readable
+                  ? stylesheetBackgroundOf(fetch.content as string)
+                  : null,
+                ...(other && other.selectors.length > 0
+                  ? { selectors: other.selectors }
+                  : {}),
                 ...(other?.truncated ? { selectorsTruncated: true } : {}),
               };
             }),
           }
         : {}),
       ...(storedOnlyScripts.length > 0
-        ? { scriptsNotReadUrls: storedOnlyScripts.slice(0, SCRIPTS_NOT_READ_URLS_CAP).map((f) => f.url) }
+        ? {
+            scriptsNotReadUrls: storedOnlyScripts
+              .slice(0, SCRIPTS_NOT_READ_URLS_CAP)
+              .map((f) => f.url),
+          }
         : {}),
       ...(storedOnlyScripts.length > 0
         ? { storedOnlyScripts: storedOnlyScripts.map(toScriptData) }
         : {}),
       ...(storeScripts
-        ? { storedScriptsNotFetched: Math.max(0, resourceOccurrences.scripts.size - resourceResults.scripts.length) }
+        ? {
+            storedScriptsNotFetched: Math.max(
+              0,
+              resourceOccurrences.scripts.size - resourceResults.scripts.length
+            ),
+          }
         : {}),
       preloadedScripts: resourceResults.preloads.map((fetch) => ({
         url: fetch.url,
@@ -1611,7 +1804,9 @@ export function fetchAssetsFromOccurrences(
         contentType: fetch.contentType,
         sizeBytes: fetch.sizeBytes,
         content: fetch.content,
-        sourcePages: Array.from(resourceOccurrences.preloads.get(fetch.url) ?? []),
+        sourcePages: Array.from(
+          resourceOccurrences.preloads.get(fetch.url) ?? []
+        ),
         redirected: fetch.redirected,
         finalUrl: fetch.finalUrl,
         sourceMapHeader: fetch.sourceMapHeader,
@@ -1636,23 +1831,27 @@ export function fetchAssetsFromOccurrences(
       ...(sitemapOffSiteSkipped > 0 ? { sitemapOffSiteSkipped } : {}),
       ...(internalLinksEnabled
         ? {
-            linkTargetStatuses: resourceResults.linkTargets.results.map((check) => ({
-              url: check.url,
-              status: check.status,
-              error: check.error,
-              rateLimited: check.rateLimited,
-            })),
+            linkTargetStatuses: resourceResults.linkTargets.results.map(
+              (check) => ({
+                url: check.url,
+                status: check.status,
+                error: check.error,
+                rateLimited: check.rateLimited,
+              })
+            ),
             internalLinkProbe: {
               unfetched: unfetchedTargets.length,
               // Answered, not merely attempted: a fetch the budget skipped or
               // that failed outright says nothing about the target.
               probed: resourceResults.linkTargets.results.filter(
-                (r) => typeof r.status === "number" && r.status > 0,
+                (r) => typeof r.status === "number" && r.status > 0
               ).length,
               cap: probeCap,
               outOfScope,
               actionLinks,
-              ...(resourceResults.linkTargets.headUnreliable ? { headUnreliable: true } : {}),
+              ...(resourceResults.linkTargets.headUnreliable
+                ? { headUnreliable: true }
+                : {}),
             },
           }
         : {}),
@@ -1694,18 +1893,20 @@ export function fetchAssetsFromOccurrences(
  */
 function headerScopeOf(
   crawl: { baseUrl?: string; originalUrl?: string } | null | undefined,
-  config: Config,
+  config: Config
 ) {
   return createHeaderScope(
     headerScopeBase(crawl?.originalUrl, crawl?.baseUrl ?? ""),
-    config.crawler?.header_hosts ?? [],
+    config.crawler?.header_hosts ?? []
   );
 }
 
 function crawlEntryUrls(
-  crawl: { seedUrl?: string; originalUrl?: string } | null | undefined,
+  crawl: { seedUrl?: string; originalUrl?: string } | null | undefined
 ): string[] {
-  return [crawl?.seedUrl, crawl?.originalUrl].filter((url): url is string => !!url);
+  return [crawl?.seedUrl, crawl?.originalUrl].filter(
+    (url): url is string => !!url
+  );
 }
 
 /**
@@ -1717,17 +1918,25 @@ function crawlEntryUrls(
  */
 export function crawlRobotsUserAgent(
   crawl:
-    | { config?: { userAgent?: string; robotsUserAgent?: string; respectRobots?: boolean } }
+    | {
+        config?: {
+          userAgent?: string;
+          robotsUserAgent?: string;
+          respectRobots?: boolean;
+        };
+      }
     | null
     | undefined,
-  config: Config,
+  config: Config
 ): string | undefined {
   const respect = crawl?.config
     ? crawl.config.respectRobots !== false
     : (config.crawler?.respect_robots ?? true);
   if (!respect) return undefined;
   const agent =
-    (crawl?.config ? crawl.config.robotsUserAgent : config.crawler?.robots_user_agent) ||
+    (crawl?.config
+      ? crawl.config.robotsUserAgent
+      : config.crawler?.robots_user_agent) ||
     crawl?.config?.userAgent ||
     config.crawler?.user_agent ||
     CHROME_USER_AGENT;
@@ -1748,7 +1957,7 @@ export function runRulesOnStorage(
   // progress; the CLI omits them (byte-identical local behavior).
   pageLoopHooks?: PageRuleLoopHooks,
   // repo#3430: the end-of-crawl probes vet and pin the site's own hosts (the CLI).
-  pinOwnHosts?: boolean,
+  pinOwnHosts?: boolean
 ): Effect.Effect<RuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     const rulesSpan = logger.traceStart("runRulesOnStorage");
@@ -1759,7 +1968,9 @@ export function runRulesOnStorage(
     // resolve a full intel context (cloud prefetch does), thread a signatures-
     // only context so the kit-signature rule works on every opted-in run.
     const effectiveScope =
-      config.intel?.enabled && !scope?.intel ? { ...scope, intel: localIntelContext() } : scope;
+      config.intel?.enabled && !scope?.intel
+        ? { ...scope, intel: localIntelContext() }
+        : scope;
     const runner = createRunner(config, effectiveScope);
 
     const pageResults = new Map<string, CheckResult[]>();
@@ -1809,7 +2020,10 @@ export function runRulesOnStorage(
       if (isRedirectSourcePage(page)) {
         const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
         redirectSourcePages.push(entry);
-        fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
+        fetchedTargets.push({
+          url: page.normalizedUrl,
+          status: entry.statusCode,
+        });
         continue;
       }
       if (!parsed) {
@@ -1828,7 +2042,11 @@ export function runRulesOnStorage(
       if (isRateLimitStatus(page.status)) {
         rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
         rateLimitedPageSet.add(page.normalizedUrl);
-        fetchedTargets.push({ url: page.normalizedUrl, status: page.status, rateLimited: true });
+        fetchedTargets.push({
+          url: page.normalizedUrl,
+          status: page.status,
+          rateLimited: true,
+        });
         continue;
       }
       const wafChallenge = detectWafChallengePage({
@@ -1852,7 +2070,11 @@ export function runRulesOnStorage(
           provider: wafChallenge.provider,
         });
         wafBlockedPageSet.add(page.normalizedUrl);
-        fetchedTargets.push({ url: page.normalizedUrl, status: page.status, wafChallenge: true });
+        fetchedTargets.push({
+          url: page.normalizedUrl,
+          status: page.status,
+          wafChallenge: true,
+        });
         continue;
       }
 
@@ -1938,11 +2160,16 @@ export function runRulesOnStorage(
 
     // Batch fetch all link appearances if available, else use N+1 fallback
     const hasBatchLinkMethod = "getAllLinkAppearancesByHref" in storage;
-    const linkAppearancesByHref: Map<string, LinkAppearanceRecord[]> = hasBatchLinkMethod
-      ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
-          .getAllLinkAppearancesByHref(crawlId)
-          .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, LinkAppearanceRecord[]>())))
-      : new Map<string, LinkAppearanceRecord[]>();
+    const linkAppearancesByHref: Map<string, LinkAppearanceRecord[]> =
+      hasBatchLinkMethod
+        ? yield* (storage as import("@squirrelscan/crawler").SQLiteStorage)
+            .getAllLinkAppearancesByHref(crawlId)
+            .pipe(
+              Effect.catchAll(() =>
+                Effect.succeed(new Map<string, LinkAppearanceRecord[]>())
+              )
+            )
+        : new Map<string, LinkAppearanceRecord[]>();
 
     const externalLinksData: Array<{
       href: string;
@@ -1972,7 +2199,13 @@ export function runRulesOnStorage(
         // repo#2759: never requested this audit. A row for one can still be
         // here, a verdict an earlier engine wrote and an incremental crawl
         // copied over with the page; it is not this audit's answer.
-        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        if (
+          isNotRequestedExternalLink(
+            link.href,
+            appearances.map((a) => a.anchorText ?? "")
+          )
+        )
+          continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
@@ -1994,7 +2227,9 @@ export function runRulesOnStorage(
           wafBlocked: link.wafBlocked,
           rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
-          ...(link.unverifiedReason ? { unverifiedReason: link.unverifiedReason } : {}),
+          ...(link.unverifiedReason
+            ? { unverifiedReason: link.unverifiedReason }
+            : {}),
         });
       }
     }
@@ -2030,7 +2265,7 @@ export function runRulesOnStorage(
           lastmod: u.lastmod,
           changefreq: u.changefreq,
           priority: u.priority,
-        })),
+        }))
       );
     }
 
@@ -2054,7 +2289,9 @@ export function runRulesOnStorage(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
-      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
+      ...(crawl?.stats?.sitemapReadState
+        ? { readState: crawl.stats.sitemapReadState }
+        : {}),
     };
 
     // Sitemap array limits must match the API schema caps (REPORT_LIMITS.maxPages).
@@ -2068,10 +2305,16 @@ export function runRulesOnStorage(
           finalUrl: page.finalUrl,
           statusCode: page.statusCode,
         })),
-        sitemapDiscovery,
+        sitemapDiscovery
       );
-      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, SITEMAP_ARRAY_CAP);
-      sitemapDiscovery.missingPages = coverage.missingPages.slice(0, SITEMAP_ARRAY_CAP);
+      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(
+        0,
+        SITEMAP_ARRAY_CAP
+      );
+      sitemapDiscovery.missingPages = coverage.missingPages.slice(
+        0,
+        SITEMAP_ARRAY_CAP
+      );
       sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
@@ -2102,22 +2345,29 @@ export function runRulesOnStorage(
         {
           baseUrl: crawl?.baseUrl ?? "",
           entryUrls: crawlEntryUrls(crawl),
-          pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
-            url: p.url,
-            statusCode: p.statusCode,
-            parsed: { links: p.parsed.links },
-          })),
+          pages: parsedPages
+            .filter((p) => !p.redirectSource)
+            .map((p) => ({
+              url: p.url,
+              statusCode: p.statusCode,
+              parsed: { links: p.parsed.links },
+            })),
           sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
-            s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
+            s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod }))
           ),
         },
         {
           defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, undefined, pinOwnHosts),
-        },
-      ),
+          egress: probeEgress(
+            crawl?.baseUrl ?? "",
+            config,
+            undefined,
+            pinOwnHosts
+          ),
+        }
+      )
     );
 
     // Soft-404 confirmation (#1177) — before page rules run, re-fetch each page
@@ -2139,19 +2389,28 @@ export function runRulesOnStorage(
           // ON by default; opt out via [integrity.soft404_confirm] for
           // rate-limited/staging hosts (candidates then annotate `unconfirmed`).
           enabled: config.integrity?.soft404_confirm?.enabled ?? true,
-          maxConfirmations: config.integrity?.soft404_confirm?.max_confirmations,
+          maxConfirmations:
+            config.integrity?.soft404_confirm?.max_confirmations,
           wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
           // The RESOLVED effective UA the crawl used (sticky/random UA persisted
           // in the crawl config snapshot), NOT the raw config value — so the
           // confirmation request is UA-equivalent to the crawl (#1177).
-          userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
+          userAgent:
+            crawl?.config?.userAgent ||
+            config.crawler?.user_agent ||
+            CHROME_USER_AGENT,
           customHeaders: config.crawler?.headers,
           headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(crawl?.baseUrl ?? "", config, undefined, pinOwnHosts),
+          egress: probeEgress(
+            crawl?.baseUrl ?? "",
+            config,
+            undefined,
+            pinOwnHosts
+          ),
           // Honor the crawl's per-host politeness delay between same-host confirms.
           perHostDelayMs: config.crawler?.per_host_delay_ms,
-        },
-      ).catch((): undefined => undefined),
+        }
+      ).catch((): undefined => undefined)
     );
     if (soft404ConfirmSummary && soft404ConfirmSummary.candidates > 0) {
       logger.trace("soft-404 confirmation pass", soft404ConfirmSummary);
@@ -2185,7 +2444,10 @@ export function runRulesOnStorage(
       sitemaps: sitemapDiscovery,
       // repo#2729: undefined, not [], when external link checking was off, so
       // links/broken-external-links reports "not checked" instead of passing.
-      externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
+      externalLinks:
+        config.external_links?.enabled === false
+          ? undefined
+          : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
@@ -2254,7 +2516,7 @@ export function runRulesOnStorage(
     // the batch between pages instead of running every remaining page to
     // completion (a single native promise is otherwise non-preemptible).
     const pageRuleTaskResults = yield* Effect.promise((signal) =>
-      runAndDispose(pageExecutor, pageTasks, siteDataForPageRules, signal),
+      runAndDispose(pageExecutor, pageTasks, siteDataForPageRules, signal)
     );
 
     for (const { key: pageUrl, checks, ruleResults } of pageRuleTaskResults) {
@@ -2289,8 +2551,8 @@ export function runRulesOnStorage(
             redirectChain: entry.redirectChain,
           },
           siteDataForPageRules,
-          { redirectSource: true },
-        ),
+          { redirectSource: true }
+        )
       );
       for (const [ruleId, ruleResult] of raw.ruleResults) {
         for (const check of ruleResult.checks) {
@@ -2310,7 +2572,10 @@ export function runRulesOnStorage(
       headersOf: buildTechHeadersMap,
       entryUrl: siteDataForPageRules.baseUrl,
     });
-    for (const { page, parsed } of entryFirst(pageDataMap.values(), siteDataForPageRules.baseUrl)) {
+    for (const { page, parsed } of entryFirst(
+      pageDataMap.values(),
+      siteDataForPageRules.baseUrl
+    )) {
       endpointCollector.collect(page, parsed);
     }
     const siteResult = yield* Effect.promise(() =>
@@ -2318,8 +2583,8 @@ export function runRulesOnStorage(
         siteDataForPageRules,
         undefined,
         undefined,
-        endpointCollector.finish(siteDataForPageRules),
-      ),
+        endpointCollector.finish(siteDataForPageRules)
+      )
     );
 
     // Build site rule results map for storage
@@ -2334,12 +2599,13 @@ export function runRulesOnStorage(
         new Set(
           wafBlockedPages
             .map((page) => page.provider)
-            .filter((provider): provider is string => !!provider),
-        ),
+            .filter((provider): provider is string => !!provider)
+        )
       );
 
       const sampledPages = wafBlockedPages.slice(0, 5).map((page) => page.url);
-      const providerText = providers.length > 0 ? ` via ${providers.join(", ")}` : "";
+      const providerText =
+        providers.length > 0 ? ` via ${providers.join(", ")}` : "";
 
       const wafCheck: CheckResult = {
         name: "WAF challenge pages detected",
@@ -2373,7 +2639,7 @@ export function runRulesOnStorage(
       siteRuleResults.set(wafRuleResult.meta.id, [wafCheck]);
       ruleResultsMap.set(wafRuleResult.meta.id, wafRuleResult);
       logger.warn(
-        `Excluded ${wafBlockedPages.length} WAF challenge page(s) from page-level scoring`,
+        `Excluded ${wafBlockedPages.length} WAF challenge page(s) from page-level scoring`
       );
     }
 
@@ -2384,9 +2650,9 @@ export function runRulesOnStorage(
     // crawl down, not to change the site.
     if (rateLimitedPages.length > 0) {
       const sampledPages = rateLimitedPages.slice(0, 5).map((page) => page.url);
-      const statuses = Array.from(new Set(rateLimitedPages.map((page) => page.status))).sort(
-        (a, b) => a - b,
-      );
+      const statuses = Array.from(
+        new Set(rateLimitedPages.map((page) => page.status))
+      ).sort((a, b) => a - b);
 
       const rateLimitCheck: CheckResult = {
         name: "Rate-limited pages",
@@ -2420,7 +2686,7 @@ export function runRulesOnStorage(
       siteRuleResults.set(rateLimitRuleResult.meta.id, [rateLimitCheck]);
       ruleResultsMap.set(rateLimitRuleResult.meta.id, rateLimitRuleResult);
       logger.warn(
-        `Excluded ${rateLimitedPages.length} rate-limited page(s) from page-level scoring`,
+        `Excluded ${rateLimitedPages.length} rate-limited page(s) from page-level scoring`
       );
     }
 
@@ -2433,7 +2699,9 @@ export function runRulesOnStorage(
     if (assets.degradation?.degraded) {
       const d = assets.degradation;
       const hostText =
-        d.tarpitHosts.length > 0 ? ` (slow host(s): ${d.tarpitHosts.slice(0, 3).join(", ")})` : "";
+        d.tarpitHosts.length > 0
+          ? ` (slow host(s): ${d.tarpitHosts.slice(0, 3).join(", ")})`
+          : "";
       const reasonText =
         d.reason === "tarpit"
           ? "an escalating-latency (tarpitting) host"
@@ -2553,7 +2821,9 @@ type StreamParsedPage = {
  * end in an error. The crawler stores a 3xx only when following it failed (a
  * loop, a missing Location, the hop cap), and that is no answer.
  */
-function answeredOutsidePages(page: Pick<PageRecord, "status" | "redirectChain">): boolean {
+function answeredOutsidePages(
+  page: Pick<PageRecord, "status" | "redirectChain">
+): boolean {
   if (page.status < 200 || page.status >= 400) return false;
   return page.status < 300 || page.redirectChain?.endsInError !== true;
 }
@@ -2624,7 +2894,10 @@ function createParsedUniverseAccumulator(): {
         if (isRedirectSourcePage(page)) {
           const entry = redirectSourceEntry(page, EMPTY_PARSED_PAGE);
           redirectSources.push(entry);
-          fetchedTargets.push({ url: page.normalizedUrl, status: entry.statusCode });
+          fetchedTargets.push({
+            url: page.normalizedUrl,
+            status: entry.statusCode,
+          });
           continue;
         }
         // Error-page candidates are collected for EVERY page (parsed or not),
@@ -2644,15 +2917,25 @@ function createParsedUniverseAccumulator(): {
           // non-HTML / failed parse — v1 skips these too, keeping the status
           // of one that answered for links to it (pub#798).
           if (answeredOutsidePages(page)) {
-            fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+            fetchedTargets.push({
+              url: page.normalizedUrl,
+              status: page.status,
+            });
           }
           continue;
         }
         // Mirrors v1's rate-limit exclusion (#1829); the golden diff gates drift.
         if (isRateLimitStatus(page.status)) {
-          rateLimitedPages.push({ url: page.normalizedUrl, status: page.status });
+          rateLimitedPages.push({
+            url: page.normalizedUrl,
+            status: page.status,
+          });
           rateLimitedPageSet.add(page.normalizedUrl);
-          fetchedTargets.push({ url: page.normalizedUrl, status: page.status, rateLimited: true });
+          fetchedTargets.push({
+            url: page.normalizedUrl,
+            status: page.status,
+            rateLimited: true,
+          });
           continue;
         }
         const wafChallenge = detectWafChallengePage({
@@ -2666,9 +2949,16 @@ function createParsedUniverseAccumulator(): {
           html: page.html,
         });
         if (wafChallenge.detected) {
-          wafBlockedPages.push({ url: page.normalizedUrl, provider: wafChallenge.provider });
+          wafBlockedPages.push({
+            url: page.normalizedUrl,
+            provider: wafChallenge.provider,
+          });
           wafBlockedPageSet.add(page.normalizedUrl);
-          fetchedTargets.push({ url: page.normalizedUrl, status: page.status, wafChallenge: true });
+          fetchedTargets.push({
+            url: page.normalizedUrl,
+            status: page.status,
+            wafChallenge: true,
+          });
           continue;
         }
 
@@ -2707,7 +2997,7 @@ function createParsedUniverseAccumulator(): {
           fetchedAt: page.fetchedAt,
           rendered: isRenderedFetch(page.fetcherId),
           versionHeadersRecorded: recordsVersionHeaders(page),
-        headersRecorded: recordsResponseHeaders(page),
+          headersRecorded: recordsResponseHeaders(page),
         });
         // Scalars only — NOT the PageRecord (see StreamPageIdentity).
         pageDataMap.set(page.normalizedUrl, {
@@ -2756,7 +3046,7 @@ function streamParsedUniverse(
   storage: SQLiteStorage,
   crawlId: string,
   batchSize: number,
-  maxParseBytes?: number,
+  maxParseBytes?: number
 ): Effect.Effect<ParsedUniverse & { totalPageCount: number }, never, never> {
   return Effect.gen(function* () {
     const universe = createParsedUniverseAccumulator();
@@ -2766,7 +3056,9 @@ function streamParsedUniverse(
       // A read failure mid-stream is a HARD error, not end-of-crawl — orDie so a
       // transient batch failure crashes the audit loud rather than truncating the
       // page set silently (see streamPageRules; keeps the error channel `never`).
-      const batch = yield* storage.getPages(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie);
+      const batch = yield* storage
+        .getPages(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.orDie);
       if (batch.length === 0) break;
       totalPageCount += batch.length;
 
@@ -2784,7 +3076,10 @@ function streamParsedUniverse(
     }
 
     const built = universe.build();
-    return { ...built, totalPageCount: totalPageCount - built.redirectSourceCount };
+    return {
+      ...built,
+      totalPageCount: totalPageCount - built.redirectSourceCount,
+    };
   });
 }
 
@@ -2807,25 +3102,33 @@ function streamParsedUniverse(
  */
 export async function withinDeadline<T>(
   work: (cancel: AbortSignal) => Promise<T>,
-  deadlineAt: number | undefined,
-): Promise<{ timedOut: false; value: T } | { timedOut: true; started: boolean }> {
-  if (deadlineAt === undefined) return { timedOut: false, value: await work(new AbortController().signal) };
+  deadlineAt: number | undefined
+): Promise<
+  { timedOut: false; value: T } | { timedOut: true; started: boolean }
+> {
+  if (deadlineAt === undefined)
+    return { timedOut: false, value: await work(new AbortController().signal) };
   const remaining = deadlineAt - Date.now();
   if (remaining <= 0) return { timedOut: true, started: false };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<{ timedOut: true; started: boolean }>((resolve) => {
-    timer = setTimeout(() => {
-      // The work is told to stop: nothing further is dispatched and a request in flight is aborted.
-      controller.abort();
-      resolve({ timedOut: true, started: true });
-    }, remaining);
-  });
+  const expired = new Promise<{ timedOut: true; started: boolean }>(
+    (resolve) => {
+      timer = setTimeout(() => {
+        // The work is told to stop: nothing further is dispatched and a request in flight is aborted.
+        controller.abort();
+        resolve({ timedOut: true, started: true });
+      }, remaining);
+    }
+  );
   try {
     const pending = work(controller.signal);
     // The abandoned work may still reject later: that must not become unhandled.
     pending.catch(() => undefined);
-    return await Promise.race([pending.then((value) => ({ timedOut: false as const, value })), expired]);
+    return await Promise.race([
+      pending.then((value) => ({ timedOut: false as const, value })),
+      expired,
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -2840,7 +3143,9 @@ export async function withinDeadline<T>(
 export function readExternalLinkVerdicts(
   storage: SQLiteStorage,
   crawlId: string,
-  knownCrawl?: Effect.Effect.Success<ReturnType<SQLiteStorage["getCrawl"]>> | null,
+  knownCrawl?: Effect.Effect.Success<
+    ReturnType<SQLiteStorage["getCrawl"]>
+  > | null
 ): Effect.Effect<
   {
     externalLinks: NonNullable<SiteData["externalLinks"]>;
@@ -2853,7 +3158,9 @@ export function readExternalLinkVerdicts(
     const crawl =
       knownCrawl !== undefined
         ? knownCrawl
-        : yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        : yield* storage
+            .getCrawl(crawlId)
+            .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const allLinks = yield* storage
       .getLinks(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed([])));
@@ -2861,9 +3168,14 @@ export function readExternalLinkVerdicts(
     // `storage` is always SQLiteStorage here, which always exposes the batch
     // link-appearance query — so unlike runRulesOnStorage (generic CrawlStorage)
     // there is no N+1 fallback path; this is the batch branch v1 takes for SQLite.
-    const linkAppearancesByHref: Map<string, LinkAppearanceRecord[]> = yield* storage
-      .getAllLinkAppearancesByHref(crawlId)
-      .pipe(Effect.catchAll(() => Effect.succeed(new Map<string, LinkAppearanceRecord[]>())));
+    const linkAppearancesByHref: Map<string, LinkAppearanceRecord[]> =
+      yield* storage
+        .getAllLinkAppearancesByHref(crawlId)
+        .pipe(
+          Effect.catchAll(() =>
+            Effect.succeed(new Map<string, LinkAppearanceRecord[]>())
+          )
+        );
 
     const externalLinksData: Array<{
       href: string;
@@ -2884,7 +3196,13 @@ export function readExternalLinkVerdicts(
       if (!link.isInternal) {
         const appearances = linkAppearancesByHref.get(link.href) ?? [];
         // repo#2759: never requested this audit; see the v1 builder.
-        if (isNotRequestedExternalLink(link.href, appearances.map((a) => a.anchorText ?? ""))) continue;
+        if (
+          isNotRequestedExternalLink(
+            link.href,
+            appearances.map((a) => a.anchorText ?? "")
+          )
+        )
+          continue;
         // pub#770: nor one the external check refuses on its address.
         if (refusedWithoutLookup(link.href, staleRowEgress)) continue;
         // Nor any row this run did not write: an incremental crawl copies a
@@ -2905,12 +3223,17 @@ export function readExternalLinkVerdicts(
           wafBlocked: link.wafBlocked,
           rateLimited: link.rateLimited,
           wafProvider: link.wafProvider,
-          ...(link.unverifiedReason ? { unverifiedReason: link.unverifiedReason } : {}),
+          ...(link.unverifiedReason
+            ? { unverifiedReason: link.unverifiedReason }
+            : {}),
         });
       }
     }
 
-    return { externalLinks: externalLinksData, externalLinkCheck: crawl?.stats?.externalLinkCheck };
+    return {
+      externalLinks: externalLinksData,
+      externalLinkCheck: crawl?.stats?.externalLinkCheck,
+    };
   });
 }
 
@@ -2926,7 +3249,11 @@ function buildStreamingSiteData(
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
   ownSiteOnly?: boolean,
-  probes?: { deadlineAt?: number; onSkipped?: (probe: string) => void; maxParseBytes?: number },
+  probes?: {
+    deadlineAt?: number;
+    onSkipped?: (probe: string) => void;
+    maxParseBytes?: number;
+  }
 ): Effect.Effect<
   {
     siteDataForPageRules: SiteData;
@@ -2939,7 +3266,9 @@ function buildStreamingSiteData(
     const robots = yield* storage
       .getRobotsTxt(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const llms = yield* storage.getLlmsTxt(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const llms = yield* storage
+      .getLlmsTxt(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const markdownProbe = yield* storage
       .getMarkdownProbe(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
@@ -2949,14 +3278,19 @@ function buildStreamingSiteData(
     const agentAccessProbe = yield* storage
       .getAgentAccess(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
-    const rslProbe = yield* storage.getRsl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const rslProbe = yield* storage
+      .getRsl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const sitemaps = yield* storage
       .getSitemaps(crawlId)
       .pipe(Effect.catchAll(() => Effect.succeed([])));
-    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const crawl = yield* storage
+      .getCrawl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
 
     // repo#2144: the same reader the late-binding link view uses.
-    const { externalLinks: externalLinksData } = yield* readExternalLinkVerdicts(storage, crawlId, crawl);
+    const { externalLinks: externalLinksData } =
+      yield* readExternalLinkVerdicts(storage, crawlId, crawl);
 
     const robotsData = buildRobotsData(robots);
     const llmsData = buildLlmsTxtData(llms);
@@ -2967,7 +3301,12 @@ function buildStreamingSiteData(
 
     const sitemapUrlsMap = new Map<
       string,
-      Array<{ loc: string; lastmod?: string; changefreq?: string; priority?: number }>
+      Array<{
+        loc: string;
+        lastmod?: string;
+        changefreq?: string;
+        priority?: number;
+      }>
     >();
     for (const sitemap of sitemaps) {
       const urls = yield* storage
@@ -2980,7 +3319,7 @@ function buildStreamingSiteData(
           lastmod: u.lastmod,
           changefreq: u.changefreq,
           priority: u.priority,
-        })),
+        }))
       );
     }
 
@@ -3004,7 +3343,9 @@ function buildStreamingSiteData(
       // truncation flag has to be here or crawl/sitemap-exists still reports
       // "No XML sitemap found" for a walk that never looked (#1733).
       truncated: crawl?.stats?.sitemapDiscoveryTruncated ?? false,
-      ...(crawl?.stats?.sitemapReadState ? { readState: crawl.stats.sitemapReadState } : {}),
+      ...(crawl?.stats?.sitemapReadState
+        ? { readState: crawl.stats.sitemapReadState }
+        : {}),
     };
 
     const SITEMAP_ARRAY_CAP = REPORT_LIMITS.maxPages;
@@ -3015,10 +3356,16 @@ function buildStreamingSiteData(
           finalUrl: page.finalUrl,
           statusCode: page.statusCode,
         })),
-        sitemapDiscovery,
+        sitemapDiscovery
       );
-      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(0, SITEMAP_ARRAY_CAP);
-      sitemapDiscovery.missingPages = coverage.missingPages.slice(0, SITEMAP_ARRAY_CAP);
+      sitemapDiscovery.orphanPages = coverage.orphanPages.slice(
+        0,
+        SITEMAP_ARRAY_CAP
+      );
+      sitemapDiscovery.missingPages = coverage.missingPages.slice(
+        0,
+        SITEMAP_ARRAY_CAP
+      );
       sitemapDiscovery.orphanPagesTotal = coverage.orphanPages.length;
     }
 
@@ -3041,40 +3388,53 @@ function buildStreamingSiteData(
     const cloakingSite = {
       baseUrl: crawl?.baseUrl ?? "",
       entryUrls: crawlEntryUrls(crawl),
-      pages: parsedPages.filter((p) => !p.redirectSource).map((p) => ({
-        url: p.url,
-        statusCode: p.statusCode,
-        parsed: { links: p.parsed.links },
-      })),
+      pages: parsedPages
+        .filter((p) => !p.redirectSource)
+        .map((p) => ({
+          url: p.url,
+          statusCode: p.statusCode,
+          parsed: { links: p.parsed.links },
+        })),
       sitemapUrls: sitemapDiscovery.discovered.flatMap((s) =>
-        s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod })),
+        s.urls.map((u) => ({ loc: u.loc, lastmod: u.lastmod }))
       ),
     };
     const cloaking = yield* Effect.promise(() =>
-      withinDeadline((cancel) => resolveCloakingProbes(
-        config.integrity?.cloaking_probe,
-        cloakingSite,
-        {
-          defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
-          customHeaders: config.crawler?.headers,
-          headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(
-            crawl?.baseUrl ?? "",
-            config,
-            egressPinnedByTransport,
-            pinOwnHosts,
-            ownSiteOnly,
+      withinDeadline(
+        (cancel) =>
+          resolveCloakingProbes(
+            config.integrity?.cloaking_probe,
+            cloakingSite,
+            {
+              defaultUserAgent: config.crawler?.user_agent || CHROME_USER_AGENT,
+              customHeaders: config.crawler?.headers,
+              headerScope: headerScopeOf(crawl, config),
+              egress: probeEgress(
+                crawl?.baseUrl ?? "",
+                config,
+                egressPinnedByTransport,
+                pinOwnHosts,
+                ownSiteOnly
+              ),
+              signal: cancel,
+            }
           ),
-          signal: cancel,
-        },
-      ), probes?.deadlineAt),
+        probes?.deadlineAt
+      )
     );
     // A cloaking probe cut at its deadline leaves the rule with no data (it no-ops), same as the probe being off.
     // Skipped only when it had a path to fetch: one cut while running did; one that never started is checked.
     if (
       cloaking.timedOut &&
       config.integrity?.cloaking_probe?.enabled &&
-      (cloaking.started || selectCloakingPaths(cloakingSite, config.integrity.cloaking_probe && { maxPages: config.integrity.cloaking_probe.max_pages, recentDays: config.integrity.cloaking_probe.recent_days }).length > 0)
+      (cloaking.started ||
+        selectCloakingPaths(
+          cloakingSite,
+          config.integrity.cloaking_probe && {
+            maxPages: config.integrity.cloaking_probe.max_pages,
+            recentDays: config.integrity.cloaking_probe.recent_days,
+          }
+        ).length > 0)
     ) {
       probes?.onSkipped?.("cloaking-probe");
     }
@@ -3090,32 +3450,41 @@ function buildStreamingSiteData(
       rendered: isRenderedFetch(page.fetcherId),
     }));
     const soft404 = yield* Effect.promise(() =>
-      withinDeadline((cancel) =>
-      confirmSoft404Candidates(
-        soft404Pages,
-        {
-          enabled: config.integrity?.soft404_confirm?.enabled ?? true,
-          maxConfirmations: config.integrity?.soft404_confirm?.max_confirmations,
-          wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
-          userAgent: crawl?.config?.userAgent || config.crawler?.user_agent || CHROME_USER_AGENT,
-          customHeaders: config.crawler?.headers,
-          headerScope: headerScopeOf(crawl, config),
-          egress: probeEgress(
-            crawl?.baseUrl ?? "",
-            config,
-            egressPinnedByTransport,
-            pinOwnHosts,
-            ownSiteOnly,
-          ),
-          perHostDelayMs: config.crawler?.per_host_delay_ms,
-          maxParseBytes: probes?.maxParseBytes,
-          signal: cancel,
-        },
-      ).catch((): undefined => undefined), probes?.deadlineAt),
+      withinDeadline(
+        (cancel) =>
+          confirmSoft404Candidates(soft404Pages, {
+            enabled: config.integrity?.soft404_confirm?.enabled ?? true,
+            maxConfirmations:
+              config.integrity?.soft404_confirm?.max_confirmations,
+            wallBudgetMs: config.integrity?.soft404_confirm?.budget_ms,
+            userAgent:
+              crawl?.config?.userAgent ||
+              config.crawler?.user_agent ||
+              CHROME_USER_AGENT,
+            customHeaders: config.crawler?.headers,
+            headerScope: headerScopeOf(crawl, config),
+            egress: probeEgress(
+              crawl?.baseUrl ?? "",
+              config,
+              egressPinnedByTransport,
+              pinOwnHosts,
+              ownSiteOnly
+            ),
+            perHostDelayMs: config.crawler?.per_host_delay_ms,
+            maxParseBytes: probes?.maxParseBytes,
+            signal: cancel,
+          }).catch((): undefined => undefined),
+        probes?.deadlineAt
+      )
     );
     if (soft404.timedOut) {
       // Skipped only when it had a re-fetch to do: no candidate, or the pass off, is not a skip.
-      if (hasSoft404FetchWork(soft404Pages, config.integrity?.soft404_confirm?.enabled)) {
+      if (
+        hasSoft404FetchWork(
+          soft404Pages,
+          config.integrity?.soft404_confirm?.enabled
+        )
+      ) {
         probes?.onSkipped?.("soft-404-confirmation");
       }
       markUnresolvedSoft404(soft404Pages);
@@ -3144,7 +3513,10 @@ function buildStreamingSiteData(
       rsl: rslData,
       sitemaps: sitemapDiscovery,
       // repo#2729: see runRulesOnStorage — undefined means "not checked".
-      externalLinks: config.external_links?.enabled === false ? undefined : externalLinksData,
+      externalLinks:
+        config.external_links?.enabled === false
+          ? undefined
+          : externalLinksData,
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
@@ -3213,7 +3585,7 @@ function runSitePass(
   siteQuery: SiteQuery,
   endpointSurface: EndpointSurface,
   /** Run only these site rules, and add no crawl advisories (the late link pass, repo#2144). */
-  only?: (ruleId: string) => boolean,
+  only?: (ruleId: string) => boolean
 ): Effect.Effect<
   {
     siteResults: CheckResult[];
@@ -3230,7 +3602,13 @@ function runSitePass(
     // identical to v1: identical scalar universe, collectors reproduce the per-page
     // DOM signal, and siteQuery's universe is reconciled to v1's site.pages.
     const siteResult = yield* Effect.promise(() =>
-      runner.runSiteRules(siteData, siteQuery, collectedSignals, endpointSurface, only ? { only } : undefined),
+      runner.runSiteRules(
+        siteData,
+        siteQuery,
+        collectedSignals,
+        endpointSurface,
+        only ? { only } : undefined
+      )
     );
 
     const siteRuleResults = new Map<string, CheckResult[]>();
@@ -3240,18 +3618,24 @@ function runSitePass(
       siteRuleRunResults.set(ruleId, ruleResult);
     }
     // The crawl advisories below belong to the first site pass only.
-    if (only) return { siteResults: siteResult.checks, siteRuleResults, siteRuleRunResults };
+    if (only)
+      return {
+        siteResults: siteResult.checks,
+        siteRuleResults,
+        siteRuleRunResults,
+      };
 
     if (wafBlockedPages.length > 0) {
       const providers = Array.from(
         new Set(
           wafBlockedPages
             .map((page) => page.provider)
-            .filter((provider): provider is string => !!provider),
-        ),
+            .filter((provider): provider is string => !!provider)
+        )
       );
       const sampledPages = wafBlockedPages.slice(0, 5).map((page) => page.url);
-      const providerText = providers.length > 0 ? ` via ${providers.join(", ")}` : "";
+      const providerText =
+        providers.length > 0 ? ` via ${providers.join(", ")}` : "";
 
       const wafCheck: CheckResult = {
         name: "WAF challenge pages detected",
@@ -3292,9 +3676,9 @@ function runSitePass(
     // a throttled cloud crawl silently lost the advisory on this path.
     if (rateLimitedPages.length > 0) {
       const sampledPages = rateLimitedPages.slice(0, 5).map((page) => page.url);
-      const statuses = Array.from(new Set(rateLimitedPages.map((page) => page.status))).sort(
-        (a, b) => a - b,
-      );
+      const statuses = Array.from(
+        new Set(rateLimitedPages.map((page) => page.status))
+      ).sort((a, b) => a - b);
 
       const rateLimitCheck: CheckResult = {
         name: "Rate-limited pages",
@@ -3332,7 +3716,9 @@ function runSitePass(
     if (assets.degradation?.degraded) {
       const d = assets.degradation;
       const hostText =
-        d.tarpitHosts.length > 0 ? ` (slow host(s): ${d.tarpitHosts.slice(0, 3).join(", ")})` : "";
+        d.tarpitHosts.length > 0
+          ? ` (slow host(s): ${d.tarpitHosts.slice(0, 3).join(", ")})`
+          : "";
       const reasonText =
         d.reason === "tarpit"
           ? "an escalating-latency (tarpitting) host"
@@ -3369,7 +3755,11 @@ function runSitePass(
       siteRuleRunResults.set(degradedRuleResult.meta.id, degradedRuleResult);
     }
 
-    return { siteResults: siteResult.checks, siteRuleResults, siteRuleRunResults };
+    return {
+      siteResults: siteResult.checks,
+      siteRuleResults,
+      siteRuleRunResults,
+    };
   });
 }
 
@@ -3381,15 +3771,23 @@ function runSitePass(
 function notifyPluginListeners(
   listeners: PluginRegistrySnapshot["listeners"],
   eventName: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown>
 ): void {
   for (const listener of listeners.get(eventName) ?? []) {
     try {
-      void Promise.resolve(listener(eventName, payload)).catch((error: unknown) => {
-        logger.warn("plugin listener failed", { eventName, error: String(error) });
-      });
+      void Promise.resolve(listener(eventName, payload)).catch(
+        (error: unknown) => {
+          logger.warn("plugin listener failed", {
+            eventName,
+            error: String(error),
+          });
+        }
+      );
     } catch (error) {
-      logger.warn("plugin listener failed", { eventName, error: String(error) });
+      logger.warn("plugin listener failed", {
+        eventName,
+        error: String(error),
+      });
     }
   }
 }
@@ -3591,24 +3989,35 @@ export function runStreamingRules(
      */
     linkVerdicts?: LateLinkVerdicts;
     /** Called around the wait for the late-bound verdicts, with the settlement at "end". */
-    onLinkVerdicts?: (boundary: "start" | "end", settlement?: LinkVerdictSettlement) => void;
-  },
+    onLinkVerdicts?: (
+      boundary: "start" | "end",
+      settlement?: LinkVerdictSettlement
+    ) => void;
+  }
 ): Effect.Effect<StreamingRuleExecutionResult, never, never> {
   return Effect.gen(function* () {
     // Clamped — see streaming.ts; a 0 batch would loop forever over the crawl.
     const batchSize = Math.max(1, opts?.batchSize ?? STREAM_PAGE_BATCH);
     const retainPageResults = opts?.retainPageResults ?? true;
     const plugins = opts?.plugins;
-    const pluginRulePack = plugins && plugins.rules.length > 0 ? pluginNamespaces(plugins) : [];
-    const pluginListeners = plugins && plugins.listeners.size > 0 ? plugins.listeners : undefined;
+    const pluginRulePack =
+      plugins && plugins.rules.length > 0 ? pluginNamespaces(plugins) : [];
+    const pluginListeners =
+      plugins && plugins.listeners.size > 0 ? plugins.listeners : undefined;
     const userOnPhase = opts?.onPhase;
     const onPhase: typeof userOnPhase = pluginListeners
       ? (name, boundary) => {
           userOnPhase?.(name, boundary);
-          notifyPluginListeners(pluginListeners, "audit:rules-phase", { phase: name, boundary });
+          notifyPluginListeners(pluginListeners, "audit:rules-phase", {
+            phase: name,
+            boundary,
+          });
         }
       : userOnPhase;
-    const phase = <T,>(name: StreamingRulePhase, body: () => Effect.Effect<T, never, never>) =>
+    const phase = <T>(
+      name: StreamingRulePhase,
+      body: () => Effect.Effect<T, never, never>
+    ) =>
       Effect.gen(function* () {
         onPhase?.(name, "start");
         const out = yield* body();
@@ -3618,12 +4027,17 @@ export function runStreamingRules(
 
     // Threat-intel scope + runner (mirror of runRulesOnStorage).
     const intelScope =
-      config.intel?.enabled && !scope?.intel ? { ...scope, intel: localIntelContext() } : scope;
+      config.intel?.enabled && !scope?.intel
+        ? { ...scope, intel: localIntelContext() }
+        : scope;
     const effectiveScope =
       pluginRulePack.length > 0
         ? {
             ...intelScope,
-            additionalNamespaces: [...(intelScope?.additionalNamespaces ?? []), ...pluginRulePack],
+            additionalNamespaces: [
+              ...(intelScope?.additionalNamespaces ?? []),
+              ...pluginRulePack,
+            ],
           }
         : intelScope;
     const runner = createRunner(config, effectiveScope, {
@@ -3638,24 +4052,32 @@ export function runStreamingRules(
       wafBlockedPages,
       rateLimitedPages,
       fetchedTargets,
-    } = yield* phase("universe", () => streamParsedUniverse(storage, crawlId, batchSize, opts?.maxPageBytes));
+    } = yield* phase("universe", () =>
+      streamParsedUniverse(storage, crawlId, batchSize, opts?.maxPageBytes)
+    );
 
     // Steps 2+3: site-fetch phase + soft-404 verdict map.
-    const { siteDataForPageRules, soft404Map } = yield* phase("site-fetch", () =>
-      buildStreamingSiteData(
-        storage,
-        crawlId,
-        config,
-        assets,
-        parsedPages,
-        pageDataMap,
-        totalPageCount,
-        fetchedTargets,
-        opts?.egressPinnedByTransport,
-        opts?.pinOwnHosts,
-        opts?.ownSiteOnly,
-        { deadlineAt: opts?.probesDeadlineAt, onSkipped: opts?.onProbeSkipped, maxParseBytes: opts?.maxPageBytes },
-      ),
+    const { siteDataForPageRules, soft404Map } = yield* phase(
+      "site-fetch",
+      () =>
+        buildStreamingSiteData(
+          storage,
+          crawlId,
+          config,
+          assets,
+          parsedPages,
+          pageDataMap,
+          totalPageCount,
+          fetchedTargets,
+          opts?.egressPinnedByTransport,
+          opts?.pinOwnHosts,
+          opts?.ownSiteOnly,
+          {
+            deadlineAt: opts?.probesDeadlineAt,
+            onSkipped: opts?.onProbeSkipped,
+            maxParseBytes: opts?.maxPageBytes,
+          }
+        )
     );
 
     // Pass 2: streamed page-rule pass — per-page DOM-drop, merge + fold. The
@@ -3696,7 +4118,7 @@ export function runStreamingRules(
             utcYear: new Date().getUTCFullYear(),
             utcMonth: new Date().getUTCMonth(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }),
+          })
         );
         if ("hash" in ctxHash) {
           // An `[[ignore]]` entry that ran over its work budget stops waiving from that
@@ -3704,7 +4126,7 @@ export function runStreamingRules(
           // full budget: never stored, so a later run re-evaluates the page and says so.
           ruleCache = withoutStoringAfterIgnoreTimeout(
             bindRuleCache(ruleCacheOpts.store, ctxHash.hash),
-            () => runner.ignoreTimedOutEntries().length,
+            () => runner.ignoreTimedOutEntries().length
           );
         } else ruleCacheDisabled = ctxHash.disabled;
       }
@@ -3740,7 +4162,7 @@ export function runStreamingRules(
             // budget, including a `[rules] time_budget_ms` override (#578).
             budgetMs: runner.ruleTimeBudgetMs,
           }),
-          "collected-signal",
+          "collected-signal"
         );
         collectedPages.push(applySiteFindingBudget(signal, secretsBudget));
         // The value the rule cache stores for this page. It is already detached
@@ -3753,7 +4175,9 @@ export function runStreamingRules(
       // `collectedPages` stays in crawl order whether a page ran or replayed —
       // which matters because the site rules aggregate over that order.
       replay(_page, snapshot) {
-        collectedPages.push(applySiteFindingBudget(snapshot as CollectedPageSignal, secretsBudget));
+        collectedPages.push(
+          applySiteFindingBudget(snapshot as CollectedPageSignal, secretsBudget)
+        );
       },
     };
     const endpointCollector = createEndpointCollector({
@@ -3765,26 +4189,29 @@ export function runStreamingRules(
     });
     const streamed = yield* phase("page-rules", () =>
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
-      batchSize,
-      soft404Confirmations: soft404Map,
-      collectors: [signalCollector, endpointCollector],
-      hooks: opts?.hooks,
-      signal: opts?.signal,
-      deadlineAt: opts?.deadlineAt,
-      maxPageBytes: opts?.maxPageBytes,
-      // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
-      // pass can't drift from it — notably it excludes rate-limited pages, which
-      // `isAuditablePage` alone does not (#1829).
-      pageUniverse: new Set(pageDataMap.keys()),
-      totalPages: pageDataMap.size,
-      pageLoopHooks: opts?.pageLoopHooks,
-      templateFanout: opts?.templateFanout,
-      ruleCache,
-      pageSink: opts?.pageSink,
-      retainPageResults: opts?.retainPageResults,
-      }),
+        batchSize,
+        soft404Confirmations: soft404Map,
+        collectors: [signalCollector, endpointCollector],
+        hooks: opts?.hooks,
+        signal: opts?.signal,
+        deadlineAt: opts?.deadlineAt,
+        maxPageBytes: opts?.maxPageBytes,
+        // v1's page-rule universe verbatim (its `pageDataMap` keys), so the streamed
+        // pass can't drift from it — notably it excludes rate-limited pages, which
+        // `isAuditablePage` alone does not (#1829).
+        pageUniverse: new Set(pageDataMap.keys()),
+        totalPages: pageDataMap.size,
+        pageLoopHooks: opts?.pageLoopHooks,
+        templateFanout: opts?.templateFanout,
+        ruleCache,
+        pageSink: opts?.pageSink,
+        retainPageResults: opts?.retainPageResults,
+      })
     );
-    const collectedSignals: CollectedSiteSignals = { pages: collectedPages, secretsBudget };
+    const collectedSignals: CollectedSiteSignals = {
+      pages: collectedPages,
+      secretsBudget,
+    };
 
     // Bounded, read-only aggregate view over the crawl (#1022): the site pass's
     // Bucket-C/D dual-path rules read its rollups (incoming-link counts, duplicate
@@ -3796,26 +4223,37 @@ export function runStreamingRules(
     // graph's membership/order/sources match v1 exactly (E-E2 (b) reconciliation).
     const siteQuery = yield* phase("site-query", () =>
       createSiteQuery(storage, crawlId, {
-        universe: parsedPages.filter((p) => !p.redirectSource).map((p) => p.url),
+        universe: parsedPages
+          .filter((p) => !p.redirectSource)
+          .map((p) => p.url),
         pageScanBatchSize: batchSize,
         // Only a run with links/anchor-mismatch or links/anchor-target-conflict enabled pays for
         // the anchor graph (#110, #1372).
-        anchorGraph: ["links/anchor-mismatch", "links/anchor-target-conflict"].some((id) =>
+        anchorGraph: [
+          "links/anchor-mismatch",
+          "links/anchor-target-conflict",
+        ].some((id) =>
           isRuleEnabled(
             id,
             config.rules?.enable ?? [],
             config.rules?.disable ?? [],
-            (config.rule_options as Record<string, { enabled?: boolean }> | undefined)?.[id],
-          ),
+            (
+              config.rule_options as
+                | Record<string, { enabled?: boolean }>
+                | undefined
+            )?.[id]
+          )
         ),
-      }).pipe(Effect.orDie),
+      }).pipe(Effect.orDie)
     );
 
     // Step 5: site pass over the DOM-free scalar universe (no re-materialization).
     // repo#2144: with late-bound link verdicts, the rules that read them are left
     // out of this pass and run last, below.
     const linkVerdicts = opts?.linkVerdicts;
-    const pluginRuleIds = new Set(plugins?.rules.map((rule) => rule.meta.id) ?? []);
+    const pluginRuleIds = new Set(
+      plugins?.rules.map((rule) => rule.meta.id) ?? []
+    );
     const readsLinkVerdicts = (ruleId: string) =>
       LINK_VERDICT_RULE_IDS.has(ruleId) || pluginRuleIds.has(ruleId);
     const sitePass = yield* phase("site-rules", () =>
@@ -3830,7 +4268,7 @@ export function runStreamingRules(
           collectedSignals,
           siteQuery,
           endpointSurface,
-          linkVerdicts ? (ruleId) => !readsLinkVerdicts(ruleId) : undefined,
+          linkVerdicts ? (ruleId) => !readsLinkVerdicts(ruleId) : undefined
         );
         if (!linkVerdicts) return first;
 
@@ -3842,7 +4280,10 @@ export function runStreamingRules(
         const bound = yield* readExternalLinkVerdicts(storage, crawlId);
         const siteDataWithVerdicts: SiteData = {
           ...siteDataForPageRules,
-          externalLinks: config.external_links?.enabled === false ? undefined : bound.externalLinks,
+          externalLinks:
+            config.external_links?.enabled === false
+              ? undefined
+              : bound.externalLinks,
           externalLinkCheck: bound.externalLinkCheck,
         };
         const late = yield* runSitePass(
@@ -3854,16 +4295,18 @@ export function runStreamingRules(
           collectedSignals,
           siteQuery,
           endpointSurface,
-          readsLinkVerdicts,
+          readsLinkVerdicts
         );
-        for (const [ruleId, checks] of late.siteRuleResults) first.siteRuleResults.set(ruleId, checks);
-        for (const [ruleId, rr] of late.siteRuleRunResults) first.siteRuleRunResults.set(ruleId, rr);
+        for (const [ruleId, checks] of late.siteRuleResults)
+          first.siteRuleResults.set(ruleId, checks);
+        for (const [ruleId, rr] of late.siteRuleRunResults)
+          first.siteRuleRunResults.set(ruleId, rr);
         return {
           siteResults: [...first.siteResults, ...late.siteResults],
           siteRuleResults: first.siteRuleResults,
           siteRuleRunResults: first.siteRuleRunResults,
         };
-      }),
+      })
     );
 
     // Step 6: assemble. Page rules were already merged + folded by streamPageRules;
@@ -3874,29 +4317,35 @@ export function runStreamingRules(
     // cache is built, which is one of the structures that still scales with page
     // count, so it is exactly the step whose cost we want visible when deciding
     // whether to bound it. It was the one declared phase the pass never emitted.
-    const { ruleResultsMap, tallies, parsedPagesCache } = yield* phase("assemble", () =>
-      Effect.sync(() => {
-        const map = streamed.ruleResultsMap;
-        const folded = streamed.tallies;
-        for (const [ruleId, rr] of sitePass.siteRuleRunResults) {
-          mergeRuleRunResult(map, ruleId, rr);
-          foldRuleResultIntoTallies(folded, ruleId, rr);
-        }
+    const { ruleResultsMap, tallies, parsedPagesCache } = yield* phase(
+      "assemble",
+      () =>
+        Effect.sync(() => {
+          const map = streamed.ruleResultsMap;
+          const folded = streamed.tallies;
+          for (const [ruleId, rr] of sitePass.siteRuleRunResults) {
+            mergeRuleRunResult(map, ruleId, rr);
+            foldRuleResultIntoTallies(folded, ruleId, rr);
+          }
 
-        // Parsed-page cache for the report tail — same universe (auditable pages)
-        // v1 returns, with DOMs already dropped (report reads only extracted
-        // fields). Skipped in the bounded mode (#2343): its only readers are
-        // buildV1Report/buildV2Report's summary pass, and a caller that opted out
-        // of the retained maps is not on that path — the CLI rebuilds its report
-        // from SQLite. The pages themselves are held by `parsedPages` either way
-        // (this Map is a second index over the same objects), so what this saves
-        // is the index, and what it buys is a single owner for the universe.
-        const cache = new Map<string, ParsedPage>();
-        if (retainPageResults) {
-          for (const [url, { parsed }] of pageDataMap) cache.set(url, parsed);
-        }
-        return { ruleResultsMap: map, tallies: folded, parsedPagesCache: cache };
-      }),
+          // Parsed-page cache for the report tail — same universe (auditable pages)
+          // v1 returns, with DOMs already dropped (report reads only extracted
+          // fields). Skipped in the bounded mode (#2343): its only readers are
+          // buildV1Report/buildV2Report's summary pass, and a caller that opted out
+          // of the retained maps is not on that path — the CLI rebuilds its report
+          // from SQLite. The pages themselves are held by `parsedPages` either way
+          // (this Map is a second index over the same objects), so what this saves
+          // is the index, and what it buys is a single owner for the universe.
+          const cache = new Map<string, ParsedPage>();
+          if (retainPageResults) {
+            for (const [url, { parsed }] of pageDataMap) cache.set(url, parsed);
+          }
+          return {
+            ruleResultsMap: map,
+            tallies: folded,
+            parsedPagesCache: cache,
+          };
+        })
     );
 
     return {
@@ -3928,13 +4377,16 @@ export function runStreamingRules(
  * scripts (or passes a bare object) gets no block rather than a crash.
  */
 function javascriptShippedFrom(
-  assets: Partial<Pick<PreFetchedAssets, "scripts" | "externalAssets" | "assetCapDropped">>,
+  assets: Partial<
+    Pick<PreFetchedAssets, "scripts" | "externalAssets" | "assetCapDropped">
+  >
 ): { javascript?: ReturnType<typeof buildJavascriptShipped> } {
   const javascript = buildJavascriptShipped({
     sameSite: assets.scripts ?? [],
     thirdParty: assets.externalAssets?.scripts,
     unmeasuredCapped:
-      (assets.assetCapDropped?.scripts ?? 0) + (assets.assetCapDropped?.externalScripts ?? 0),
+      (assets.assetCapDropped?.scripts ?? 0) +
+      (assets.assetCapDropped?.externalScripts ?? 0),
   });
   return javascript ? { javascript } : {};
 }
@@ -3969,7 +4421,7 @@ export function generateReportFromStorage(
   storage: CrawlStorage,
   crawlId: string,
   ruleResults: RuleExecutionResult,
-  options?: BuildV1ReportOptions,
+  options?: BuildV1ReportOptions
 ): Effect.Effect<FullAuditReport, never, never> {
   return buildV1Report(storage, crawlId, ruleResults, options);
 }
@@ -4051,7 +4503,7 @@ export type ExternalLinkOccurrences = Map<string, ExternalLinkOccurrence[]>;
  */
 export function absorbExternalLinkOccurrences(
   target: ExternalLinkOccurrences,
-  siteContext: SiteContextPage[],
+  siteContext: SiteContextPage[]
 ): void {
   // Collected for THIS call first so the whole batch is detached in ONE
   // structuredClone. Cloning per link would be the same detach at many times
@@ -4111,7 +4563,12 @@ function nofollowActionTargets(page: {
     if (!rel.includes("nofollow")) continue;
     if (!linkTextLooksLikeAnAction(anchor.textContent ?? "", true)) continue;
     try {
-      out.add(normalizeUrl(new URL(anchor.getAttribute("href") ?? "", page.finalUrl ?? page.url).href));
+      out.add(
+        normalizeUrl(
+          new URL(anchor.getAttribute("href") ?? "", page.finalUrl ?? page.url)
+            .href
+        )
+      );
     } catch {
       // An href that does not resolve is not a link the probe could request.
     }
@@ -4130,7 +4587,7 @@ export function probeEgress(
   config: Config,
   egressPinnedByTransport?: boolean,
   pinOwnHosts?: boolean,
-  ownSiteOnly?: boolean,
+  ownSiteOnly?: boolean
 ): EgressPolicy {
   const policy: EgressPolicy = {
     allowPrivateNetwork: true,
@@ -4139,7 +4596,12 @@ export function probeEgress(
     // #819: an offline audit's probes reach the audited site and nothing else,
     // on the first hop and on every redirect after it.
     ...(ownSiteOnly === true
-      ? { allowHost: ownSiteHostMatcher({ baseUrl, domains: config.project?.domains }) }
+      ? {
+          allowHost: ownSiteHostMatcher({
+            baseUrl,
+            domains: config.project?.domains,
+          }),
+        }
       : {}),
   };
   // repo#3430: with the own hosts pinned, they are vetted like the rest.
@@ -4171,7 +4633,7 @@ export function probeEgress(
 function externalLinkEgress(
   baseUrl: string,
   egressPinnedByTransport?: boolean,
-  resolveHost?: (hostname: string) => Promise<string[]>,
+  resolveHost?: (hostname: string) => Promise<string[]>
 ): EgressPolicy {
   const siteHost = getHostname(baseUrl).replace(/^\[|\]$/g, "");
   return {
@@ -4192,9 +4654,13 @@ const NOT_REQUESTED_SAMPLE_PAGES = 10;
  * here as it does for internal links: on an external link it marks a paid or
  * untrusted link ("Buy on Amazon", "Follow us"), not an action.
  */
-export function isNotRequestedExternalLink(href: string, linkTexts: Iterable<string>): boolean {
+export function isNotRequestedExternalLink(
+  href: string,
+  linkTexts: Iterable<string>
+): boolean {
   if (looksLikeAnAction(href)) return true;
-  for (const text of linkTexts) if (linkTextLooksLikeAnAction(text, false)) return true;
+  for (const text of linkTexts)
+    if (linkTextLooksLikeAnAction(text, false)) return true;
   return false;
 }
 
@@ -4205,7 +4671,9 @@ export function isNotRequestedExternalLink(href: string, linkTexts: Iterable<str
  * source pages, how many pages link it, and its URL with token-like values
  * masked (`maskLinkTokens`, a best effort) for a report that may be published.
  */
-export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurrences): {
+export function splitNotRequestedExternalLinks(
+  occurrences: ExternalLinkOccurrences
+): {
   requestable: ExternalLinkOccurrences;
   notRequested: {
     count: number;
@@ -4215,7 +4683,12 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
   const requestable: ExternalLinkOccurrences = new Map();
   const skipped: Array<{ href: string; pages: string[] }> = [];
   for (const [href, occs] of occurrences) {
-    if (!isNotRequestedExternalLink(href, occs.map((o) => o.text))) {
+    if (
+      !isNotRequestedExternalLink(
+        href,
+        occs.map((o) => o.text)
+      )
+    ) {
       requestable.set(href, occs);
       continue;
     }
@@ -4229,10 +4702,13 @@ export function splitNotRequestedExternalLinks(occurrences: ExternalLinkOccurren
 
 /** {@link sampleLinkPages} over collected occurrences. */
 function sampleExternalLinks(
-  occurrences: ExternalLinkOccurrences,
+  occurrences: ExternalLinkOccurrences
 ): Array<{ href: string; sourcePages: string[]; pageCount: number }> {
   return sampleLinkPages(
-    [...occurrences].map(([href, occs]) => ({ href, pages: [...new Set(occs.map((o) => o.pageUrl))] })),
+    [...occurrences].map(([href, occs]) => ({
+      href,
+      pages: [...new Set(occs.map((o) => o.pageUrl))],
+    }))
   );
 }
 
@@ -4243,7 +4719,7 @@ function sampleExternalLinks(
  * a report keys items by id and would drop one.
  */
 function sampleLinkPages(
-  links: Array<{ href: string; pages: string[] }>,
+  links: Array<{ href: string; pages: string[] }>
 ): Array<{ href: string; sourcePages: string[]; pageCount: number }> {
   const byMasked = new Map<string, Set<string>>();
   for (const { href, pages } of links) {
@@ -4252,15 +4728,22 @@ function sampleLinkPages(
     for (const page of pages) merged.add(page);
     byMasked.set(masked, merged);
   }
-  const entries = [...byMasked].map(([href, pages]) => ({ href, pages: [...pages] }));
-  entries.sort(
-    (a, b) => b.pages.length - a.pages.length || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0),
-  );
-  return entries.slice(0, NOT_REQUESTED_SAMPLE_LINKS).map(({ href, pages }) => ({
+  const entries = [...byMasked].map(([href, pages]) => ({
     href,
-    sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
-    pageCount: pages.length,
+    pages: [...pages],
   }));
+  entries.sort(
+    (a, b) =>
+      b.pages.length - a.pages.length ||
+      (a.href < b.href ? -1 : a.href > b.href ? 1 : 0)
+  );
+  return entries
+    .slice(0, NOT_REQUESTED_SAMPLE_LINKS)
+    .map(({ href, pages }) => ({
+      href,
+      sourcePages: pages.slice(0, NOT_REQUESTED_SAMPLE_PAGES),
+      pageCount: pages.length,
+    }));
 }
 
 /**
@@ -4273,7 +4756,7 @@ function sampleLinkPages(
 export function selectExternalLinksToCheck(
   occurrences: ExternalLinkOccurrences,
   maxLinks: number | undefined,
-  priority: readonly string[] = [],
+  priority: readonly string[] = []
 ): string[] {
   const hrefs = Array.from(occurrences.keys());
   if (maxLinks === undefined || hrefs.length <= maxLinks) return hrefs;
@@ -4283,8 +4766,14 @@ export function selectExternalLinksToCheck(
   const ranked = hrefs
     .filter((href) => !first.has(href))
     .map((href) => ({ href, pages: pagesOf(href) }))
-    .sort((a, b) => b.pages - a.pages || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0));
-  return [...first, ...ranked.map((r) => r.href)].slice(0, Math.max(0, maxLinks));
+    .sort(
+      (a, b) =>
+        b.pages - a.pages || (a.href < b.href ? -1 : a.href > b.href ? 1 : 0)
+    );
+  return [...first, ...ranked.map((r) => r.href)].slice(
+    0,
+    Math.max(0, maxLinks)
+  );
 }
 
 export function checkExternalLinksOnStorage(
@@ -4294,7 +4783,7 @@ export function checkExternalLinksOnStorage(
   config: ExternalLinksConfig,
   onProgress?: (progress: ExternalLinkCheckProgress) => void,
   linkCache?: LinkCache | null,
-  bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>,
+  bulkChecker?: (urls: string[]) => Promise<Map<string, ExternalCheckResult>>
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   if (!config.enabled) return Effect.succeed([]);
   const externalLinkOccurrences: ExternalLinkOccurrences = new Map();
@@ -4306,7 +4795,7 @@ export function checkExternalLinksOnStorage(
     config,
     onProgress,
     linkCache,
-    bulkChecker,
+    bulkChecker
   );
 }
 
@@ -4329,15 +4818,21 @@ export function checkCollectedExternalLinks(
   egressPinnedByTransport?: boolean,
   limits?: ExternalLinkCheckLimits,
   /** The resolver behind the links' egress checks; the system's when unset (a test seam). */
-  resolveHost?: (hostname: string) => Promise<string[]>,
+  resolveHost?: (hostname: string) => Promise<string[]>
 ): Effect.Effect<ExternalCheckResult[], never, never> {
   return Effect.gen(function* () {
-    const plan = yield* planExternalLinkCheck(storage, crawlId, externalLinkOccurrences, config, {
-      linkCache,
-      priorityHrefs,
-      egressPinnedByTransport,
-      resolveHost,
-    });
+    const plan = yield* planExternalLinkCheck(
+      storage,
+      crawlId,
+      externalLinkOccurrences,
+      config,
+      {
+        linkCache,
+        priorityHrefs,
+        egressPinnedByTransport,
+        resolveHost,
+      }
+    );
     if (!plan) return [];
     yield* recordExternalLinkCoverage(storage, crawlId, plan.externalLinkCheck);
 
@@ -4351,10 +4846,16 @@ export function checkCollectedExternalLinks(
         deadlineAt: externalLinkBudgetDeadline(limits, Date.now()),
         maxWaitMs: limits?.maxWaitMs,
         onProgress,
-      }),
+      })
     );
 
-    yield* persistExternalLinkResults(storage, crawlId, externalLinkOccurrences, plan, results);
+    yield* persistExternalLinkResults(
+      storage,
+      crawlId,
+      externalLinkOccurrences,
+      plan,
+      results
+    );
 
     // Report progress
     const fromCache = results.filter((r) => r.fromCache).length;
@@ -4392,10 +4893,12 @@ export interface ExternalLinkCheckPlan {
 /** `limits.budgetMs` as an epoch-ms deadline from `now`; undefined when it is no budget. */
 export function externalLinkBudgetDeadline(
   limits: ExternalLinkCheckLimits | undefined,
-  now: number,
+  now: number
 ): number | undefined {
   const budgetMs = limits?.budgetMs;
-  return budgetMs !== undefined && Number.isFinite(budgetMs) && budgetMs > 0 ? now + budgetMs : undefined;
+  return budgetMs !== undefined && Number.isFinite(budgetMs) && budgetMs > 0
+    ? now + budgetMs
+    : undefined;
 }
 
 /**
@@ -4412,7 +4915,7 @@ export function planExternalLinkCheck(
     priorityHrefs?: readonly string[];
     egressPinnedByTransport?: boolean;
     resolveHost?: (hostname: string) => Promise<string[]>;
-  } = {},
+  } = {}
 ): Effect.Effect<ExternalLinkCheckPlan | null, never, never> {
   return Effect.gen(function* () {
     if (!config.enabled) {
@@ -4428,11 +4931,13 @@ export function planExternalLinkCheck(
     // public addresses only (private ones too when the audited site is itself
     // on a private network), never link-local or cloud metadata, and connected
     // to the address that was vetted. No custom headers ever go with it.
-    const crawl = yield* storage.getCrawl(crawlId).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const crawl = yield* storage
+      .getCrawl(crawlId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     const egress = externalLinkEgress(
       crawl?.baseUrl ?? "",
       options.egressPinnedByTransport,
-      options.resolveHost,
+      options.resolveHost
     );
 
     // repo#2759: a link that looks like an action or carries a token (a
@@ -4452,20 +4957,29 @@ export function planExternalLinkCheck(
       if (refusedWithoutLookup(href, egress)) refusedByUrl.push(href);
       else requestable.set(href, occs);
     }
-    const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter((href) => !requestable.has(href));
+    const notRequestedHrefs = [...externalLinkOccurrences.keys()].filter(
+      (href) => !requestable.has(href)
+    );
 
     // repo#2729: a site can link out to tens of thousands of URLs, and in the
     // cloud each link is a credit, so an audit checks at most `max_links` of
     // them: the most-linked first (nav and footer links every page shares),
     // then by URL so the choice is stable. The rest are counted and reported as
     // not checked.
-    const hrefs = selectExternalLinksToCheck(requestable, config.max_links, options.priorityHrefs);
+    const hrefs = selectExternalLinksToCheck(
+      requestable,
+      config.max_links,
+      options.priorityHrefs
+    );
     const externalLinkCheck = {
       found: externalLinkOccurrences.size,
       checked: hrefs.length,
       cap: config.max_links ?? requestable.size,
       ...(notRequested.count > 0
-        ? { notRequested: notRequested.count, notRequestedLinks: notRequested.sample }
+        ? {
+            notRequested: notRequested.count,
+            notRequestedLinks: notRequested.sample,
+          }
         : {}),
       ...(refusedByUrl.length > 0 ? { refusedByUrl: refusedByUrl.length } : {}),
     };
@@ -4489,19 +5003,19 @@ export function planExternalLinkCheck(
 export function recordExternalLinkCoverage(
   storage: CrawlStorage,
   crawlId: string,
-  externalLinkCheck: ExternalLinkCheckPlan["externalLinkCheck"],
+  externalLinkCheck: ExternalLinkCheckPlan["externalLinkCheck"]
 ): Effect.Effect<void, never, never> {
-  return storage
-    .updateStats(crawlId, { externalLinkCheck })
-    .pipe(
-      // Without the stat the over-limit "Not checked" line cannot be shown,
-      // so say so rather than read as a complete check.
-      Effect.catchAll((error) =>
-        Effect.sync(() =>
-          logger.warn("could not record external link check coverage", { error: String(error) }),
-        ),
-      ),
-    );
+  return storage.updateStats(crawlId, { externalLinkCheck }).pipe(
+    // Without the stat the over-limit "Not checked" line cannot be shown,
+    // so say so rather than read as a complete check.
+    Effect.catchAll((error) =>
+      Effect.sync(() =>
+        logger.warn("could not record external link check coverage", {
+          error: String(error),
+        })
+      )
+    )
+  );
 }
 
 /** The checker options a plan runs with. */
@@ -4513,7 +5027,7 @@ export function externalLinkCheckerOptions(
     maxWaitMs?: number;
     onProgress?: (progress: ExternalLinkCheckProgress) => void;
     onVerdict?: (result: ExternalCheckResult) => void;
-  },
+  }
 ): Partial<ExternalCheckerOptions> {
   return {
     ttlSeconds: plan.ttlSeconds,
@@ -4526,7 +5040,11 @@ export function externalLinkCheckerOptions(
     ...(run.maxWaitMs !== undefined ? { maxWaitMs: run.maxWaitMs } : {}),
     ...(run.onVerdict ? { onVerdict: run.onVerdict } : {}),
     onProgress: (progress) =>
-      run.onProgress?.({ checked: progress.done, total: plan.hrefs.length, fromCache: progress.fromCache }),
+      run.onProgress?.({
+        checked: progress.done,
+        total: plan.hrefs.length,
+        fromCache: progress.fromCache,
+      }),
   };
 }
 
@@ -4541,7 +5059,7 @@ export function persistExternalLinkResults(
   crawlId: string,
   externalLinkOccurrences: ExternalLinkOccurrences,
   plan: ExternalLinkCheckPlan,
-  results: readonly ExternalCheckResult[],
+  results: readonly ExternalCheckResult[]
 ): Effect.Effect<void, never, never> {
   return Effect.gen(function* () {
     const { externalLinkCheck, refusedByUrl, notRequestedHrefs } = plan;
@@ -4555,17 +5073,26 @@ export function persistExternalLinkResults(
     // metadata address on a public site's page) were never requested. Counted
     // and sampled like the not-requested ones, so the report can say so
     // rather than leave them out of every line.
-    const refusedHrefs = [...refusedByUrl, ...results.filter((r) => r.refused).map((r) => r.href)];
+    const refusedHrefs = [
+      ...refusedByUrl,
+      ...results.filter((r) => r.refused).map((r) => r.href),
+    ];
     if (refusedHrefs.length > 0 || outOfTime > 0) {
       const refusedOccurrences: ExternalLinkOccurrences = new Map(
-        refusedHrefs.map((href) => [href, externalLinkOccurrences.get(href) ?? []]),
+        refusedHrefs.map((href) => [
+          href,
+          externalLinkOccurrences.get(href) ?? [],
+        ])
       );
       yield* storage
         .updateStats(crawlId, {
           externalLinkCheck: {
             ...externalLinkCheck,
             ...(refusedHrefs.length > 0
-              ? { refused: refusedHrefs.length, refusedLinks: sampleExternalLinks(refusedOccurrences) }
+              ? {
+                  refused: refusedHrefs.length,
+                  refusedLinks: sampleExternalLinks(refusedOccurrences),
+                }
               : {}),
             ...(outOfTime > 0 ? { outOfTime } : {}),
           },
@@ -4573,11 +5100,14 @@ export function persistExternalLinkResults(
         .pipe(
           Effect.catchAll((error) =>
             Effect.sync(() =>
-              logger.warn("could not record refused or unreached external links", {
-                error: String(error),
-              }),
-            ),
-          ),
+              logger.warn(
+                "could not record refused or unreached external links",
+                {
+                  error: String(error),
+                }
+              )
+            )
+          )
         );
     }
 
@@ -4639,15 +5169,15 @@ export function persistExternalLinkResults(
 
     // Batch insert all appearances in one transaction
     if (allAppearances.length > 0) {
-      yield* storage
-        .addLinkAppearancesBatch(crawlId, allAppearances)
-        .pipe(
-          Effect.catchAll((error) =>
-            Effect.sync(() =>
-              logger.warn("could not record external link appearances", { error: String(error) }),
-            ),
-          ),
-        );
+      yield* storage.addLinkAppearancesBatch(crawlId, allAppearances).pipe(
+        Effect.catchAll((error) =>
+          Effect.sync(() =>
+            logger.warn("could not record external link appearances", {
+              error: String(error),
+            })
+          )
+        )
+      );
     }
   });
 }
@@ -4675,7 +5205,11 @@ interface ResourceOccurrenceMap {
 function hasMetaCsp(doc: Document | null): boolean {
   if (!doc) return false;
   for (const meta of doc.querySelectorAll("meta[http-equiv]")) {
-    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() === "content-security-policy") return true;
+    if (
+      meta.getAttribute("http-equiv")?.trim().toLowerCase() ===
+      "content-security-policy"
+    )
+      return true;
   }
   return false;
 }
@@ -4693,7 +5227,7 @@ function collectResourceOccurrences(
     finalUrl?: string;
     parsed: ParsedPage;
   }>,
-  baseUrl: string,
+  baseUrl: string
 ): ResourceOccurrenceMap {
   const target: ResourceOccurrenceMap = {
     css: new Map<string, Set<string>>(),
@@ -4729,15 +5263,25 @@ export function absorbResourceOccurrences(
    * (an offline audit's `www` or apex twin and `[project] domains`, #819): a
    * reference on one is read as the site's own, not as a third party's.
    */
-  isOwnHost?: (hostname: string) => boolean,
+  isOwnHost?: (hostname: string) => boolean
 ): void {
   const baseHost = getHostname(baseUrl).toLowerCase();
   const ownResource = (url: string): boolean =>
-    isSameDomainResource(url, baseHost) || (isOwnHost?.(getHostname(url)) ?? false);
+    isSameDomainResource(url, baseHost) ||
+    (isOwnHost?.(getHostname(url)) ?? false);
   const ownScript = (url: string): boolean =>
-    isSameDomainScript(url, baseHost) || (isOwnHost?.(getHostname(url)) ?? false);
-  const { css, images, scripts, preloads, fonts, externalCss, externalScripts, externalFonts } =
-    target;
+    isSameDomainScript(url, baseHost) ||
+    (isOwnHost?.(getHostname(url)) ?? false);
+  const {
+    css,
+    images,
+    scripts,
+    preloads,
+    fonts,
+    externalCss,
+    externalScripts,
+    externalFonts,
+  } = target;
 
   for (const page of pages) {
     const pageUrl = page.finalUrl ?? page.url;
@@ -4756,7 +5300,10 @@ export function absorbResourceOccurrences(
     // Which file each image loads, and whether it loads at page load (#1251, #1252).
     // Every referenced file is still measured (responsive-size pairs an <img> with
     // its `src`), but the two maps below say which of them visitors download.
-    const imagesSelected = (target.imagesSelected ??= new Map<string, Set<string>>());
+    const imagesSelected = (target.imagesSelected ??= new Map<
+      string,
+      Set<string>
+    >());
     const imagesEager = (target.imagesEager ??= new Map<string, Set<string>>());
     const inViewport = initialViewportFlags(page.parsed.images);
     const note = (map: Map<string, Set<string>>, url: string): void => {
@@ -4781,7 +5328,11 @@ export function absorbResourceOccurrences(
       // its <img> keeps its src as the loaded file, as before.
       const chosen =
         image.srcset && !image.inPicture
-          ? selectImageCandidate({ src: image.src, srcset: image.srcset, sizes: image.sizes })
+          ? selectImageCandidate({
+              src: image.src,
+              srcset: image.srcset,
+              sizes: image.sizes,
+            })
           : image.src;
       // A selected candidate on another origin is not measured (only the site's own
       // files are), so the image falls back to its own-host src, which stays measured
@@ -4790,7 +5341,8 @@ export function absorbResourceOccurrences(
       if (!selected) return;
       note(images, selected);
       note(imagesSelected, selected);
-      if (!(image.loading === "lazy" && !inViewport[index])) note(imagesEager, selected);
+      if (!(image.loading === "lazy" && !inViewport[index]))
+        note(imagesEager, selected);
     });
 
     for (const fontUrl of extractFontUrls(doc, pageUrl)) {
@@ -4813,7 +5365,9 @@ export function absorbResourceOccurrences(
     // Preloaded chunks name the lazy third-party scripts a page loads. They go in
     // their own map so no script rule's input changes, and only pages that
     // enforce a CSP are read, since nothing else needs them.
-    for (const src of page.hasCsp ? extractPreloadedScriptUrls(doc, pageUrl) : []) {
+    for (const src of page.hasCsp
+      ? extractPreloadedScriptUrls(doc, pageUrl)
+      : []) {
       if (!ownScript(src)) continue;
       const sources = preloads.get(src) ?? new Set<string>();
       sources.add(page.url);
@@ -4832,7 +5386,7 @@ function computeSitemapCoverageData(
     discovered: Array<{
       urls: Array<{ loc: string }>;
     }>;
-  },
+  }
 ): { orphanPages: string[]; missingPages: string[] } {
   const sitemapUrlMap = new Map<string, string>();
 
@@ -4876,7 +5430,7 @@ function computeSitemapCoverageData(
   for (const page of pages) {
     if (page.statusCode !== 200) continue;
     const candidates = [page.url, page.finalUrl].filter(
-      (candidate): candidate is string => !!candidate,
+      (candidate): candidate is string => !!candidate
     );
     let inSitemap = false;
     for (const candidate of candidates) {

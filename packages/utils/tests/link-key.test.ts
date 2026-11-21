@@ -7,11 +7,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  redactSecretText,
-  siteHostsOf,
-} from "../src/secret-url-redaction";
-
-import {
   applyTrailingSlashPolicy,
   canonicalLinkKey,
   canonicalQuery,
@@ -25,11 +20,20 @@ import {
   redactCredentialParams,
   sanitizeLinkUrl,
 } from "../src/link-key";
+import { redactSecretText, siteHostsOf } from "../src/secret-url-redaction";
 
 const cases: Array<{ desc: string; raw: string; key: string | null }> = [
   // ── scheme + host ────────────────────────────────────────────────────────
-  { desc: "lowercases the scheme", raw: "HTTPS://example.com/a", key: "https://example.com/a" },
-  { desc: "lowercases the host", raw: "https://ExAmPlE.COM/a", key: "https://example.com/a" },
+  {
+    desc: "lowercases the scheme",
+    raw: "HTTPS://example.com/a",
+    key: "https://example.com/a",
+  },
+  {
+    desc: "lowercases the host",
+    raw: "https://ExAmPlE.COM/a",
+    key: "https://example.com/a",
+  },
   {
     desc: "keeps http and https apart",
     raw: "http://example.com/a",
@@ -204,7 +208,11 @@ const cases: Array<{ desc: string; raw: string; key: string | null }> = [
     raw: "https://example.com/blog",
     key: "https://example.com/blog",
   },
-  { desc: "keeps the root path", raw: "https://example.com/", key: "https://example.com/" },
+  {
+    desc: "keeps the root path",
+    raw: "https://example.com/",
+    key: "https://example.com/",
+  },
   {
     desc: "a bare origin keys as the root path",
     raw: "https://example.com",
@@ -234,13 +242,37 @@ const cases: Array<{ desc: string; raw: string; key: string | null }> = [
     key: "https://example.com/blog?id=1",
   },
   // ── not checkable ────────────────────────────────────────────────────────
-  { desc: "mailto is not a checkable link", raw: "mailto:a@example.com", key: null },
+  {
+    desc: "mailto is not a checkable link",
+    raw: "mailto:a@example.com",
+    key: null,
+  },
   { desc: "tel is not a checkable link", raw: "tel:+15551234", key: null },
-  { desc: "javascript is not a checkable link", raw: "javascript:void(0)", key: null },
-  { desc: "ftp is not a checkable link", raw: "ftp://example.com/a", key: null },
-  { desc: "a data url is not a checkable link", raw: "data:text/plain,hi", key: null },
-  { desc: "a relative path has no base to resolve against", raw: "/about", key: null },
-  { desc: "a protocol-relative url has no scheme", raw: "//example.com/a", key: null },
+  {
+    desc: "javascript is not a checkable link",
+    raw: "javascript:void(0)",
+    key: null,
+  },
+  {
+    desc: "ftp is not a checkable link",
+    raw: "ftp://example.com/a",
+    key: null,
+  },
+  {
+    desc: "a data url is not a checkable link",
+    raw: "data:text/plain,hi",
+    key: null,
+  },
+  {
+    desc: "a relative path has no base to resolve against",
+    raw: "/about",
+    key: null,
+  },
+  {
+    desc: "a protocol-relative url has no scheme",
+    raw: "//example.com/a",
+    key: null,
+  },
   { desc: "an empty string is not a link", raw: "", key: null },
   { desc: "whitespace is not a link", raw: "   ", key: null },
   {
@@ -277,7 +309,7 @@ describe("canonicalLinkKey", () => {
         "https://EXAMPLE.com/post/#comments",
         "https://example.com:443/post?fbclid=abc",
         "https://example.com/post",
-      ].map((url) => canonicalLinkKey(url)?.key),
+      ].map((url) => canonicalLinkKey(url)?.key)
     );
     expect([...keys]).toEqual(["https://example.com/post"]);
   });
@@ -293,7 +325,9 @@ describe("canonicalLinkKey", () => {
       ["https://example.com/a", "https://example.com:8443/a"],
     ];
     for (const [left, right] of distinct) {
-      expect(canonicalLinkKey(left)?.key).not.toBe(canonicalLinkKey(right)?.key as string);
+      expect(canonicalLinkKey(left)?.key).not.toBe(
+        canonicalLinkKey(right)?.key as string
+      );
     }
   });
 });
@@ -311,7 +345,9 @@ describe("fetchUrl: the only spelling allowed to leave the process", () => {
   });
 
   test("drops a username with no password", () => {
-    expect(canonicalLinkKey("https://alice@example.com/a")?.fetchUrl).toBe("https://example.com/a");
+    expect(canonicalLinkKey("https://alice@example.com/a")?.fetchUrl).toBe(
+      "https://example.com/a"
+    );
   });
 
   test("drops the fragment, including one that looks like credentials", () => {
@@ -324,8 +360,12 @@ describe("fetchUrl: the only spelling allowed to leave the process", () => {
   test("keeps everything the origin actually needs", () => {
     // Path case, the trailing slash and the query are preserved verbatim: this
     // is the url a trailing-slash-sensitive origin will be asked for.
-    const canonical = canonicalLinkKey("https://example.com/Blog/?b=2&a=1&utm_source=x");
-    expect(canonical?.fetchUrl).toBe("https://example.com/Blog/?b=2&a=1&utm_source=x");
+    const canonical = canonicalLinkKey(
+      "https://example.com/Blog/?b=2&a=1&utm_source=x"
+    );
+    expect(canonical?.fetchUrl).toBe(
+      "https://example.com/Blog/?b=2&a=1&utm_source=x"
+    );
     // The KEY still normalises, which is the whole point of having both.
     expect(canonical?.key).toBe("https://example.com/Blog?a=1&b=2");
   });
@@ -357,12 +397,15 @@ describe("sanitizeLinkUrl", () => {
     expect(sanitizeLinkUrl(input as string)).toBe(expected);
   });
 
-  test.each(["mailto:a@example.com", "/relative", "", "not a url", "ftp://example.com/a"])(
-    "%s is not sanitisable",
-    (input) => {
-      expect(sanitizeLinkUrl(input as string)).toBeNull();
-    },
-  );
+  test.each([
+    "mailto:a@example.com",
+    "/relative",
+    "",
+    "not a url",
+    "ftp://example.com/a",
+  ])("%s is not sanitisable", (input) => {
+    expect(sanitizeLinkUrl(input as string)).toBeNull();
+  });
 });
 
 describe("isTrackingParam", () => {
@@ -439,11 +482,15 @@ describe("groupByLinkKey", () => {
 
 describe("credential query parameters (#2782)", () => {
   // A dummy JWT: three base64url segments, no real claims.
-  const JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJlLW5vdC1yZWFs";
-  const article = "https://www.bloomberg.com/news/articles/2026-10-06/example-story";
+  const JWT =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJlLW5vdC1yZWFs";
+  const article =
+    "https://www.bloomberg.com/news/articles/2026-10-06/example-story";
 
   test("a gift link and the plain article share one key, with no token in it", () => {
-    const gift = canonicalLinkKey(`${article}?accessToken=${JWT}&leadSource=article-gifting`);
+    const gift = canonicalLinkKey(
+      `${article}?accessToken=${JWT}&leadSource=article-gifting`
+    );
     const plain = canonicalLinkKey(`${article}?leadSource=article-gifting`);
     expect(gift?.key).toBe(plain?.key);
     expect(gift?.key).not.toContain(JWT);
@@ -454,7 +501,9 @@ describe("credential query parameters (#2782)", () => {
     const signed =
       "https://bucket.s3.amazonaws.com/report.pdf?X-Amz-Credential=AKIDEXAMPLE&X-Amz-Expires=600&X-Amz-Signature=deadbeef";
     const canonical = canonicalLinkKey(signed);
-    expect(canonical?.key).toBe("https://bucket.s3.amazonaws.com/report.pdf?X-Amz-Expires=600");
+    expect(canonical?.key).toBe(
+      "https://bucket.s3.amazonaws.com/report.pdf?X-Amz-Expires=600"
+    );
     expect(canonical?.fetchUrl).toContain("X-Amz-Signature=deadbeef");
   });
 
@@ -465,55 +514,65 @@ describe("credential query parameters (#2782)", () => {
     expect(isCredentialParam("tokenizer", "bpe")).toBe(false);
     expect(isCredentialParam("q", "eyJ")).toBe(false);
     expect(canonicalLinkKey(`https://example.com/p?t=${JWT}&page=2`)?.key).toBe(
-      "https://example.com/p?page=2",
+      "https://example.com/p?page=2"
     );
   });
 
   test("what is stored or printed keeps the names and redacts the values, idempotently", () => {
     const url = `${article}?accessToken=${JWT}&leadSource=article-gifting`;
     const redacted = redactCredentialParams(url);
-    expect(redacted).toBe(`${article}?accessToken=REDACTED&leadSource=article-gifting`);
+    expect(redacted).toBe(
+      `${article}?accessToken=REDACTED&leadSource=article-gifting`
+    );
     expect(redactCredentialParams(redacted)).toBe(redacted);
     expect(redactCredentialParams(article)).toBe(article);
     expect(redactCredentialParams("https://example.com/?a=1&sig=xyz#top")).toBe(
-      "https://example.com/?a=1&sig=REDACTED#top",
+      "https://example.com/?a=1&sig=REDACTED#top"
     );
   });
 
   test("a percent-encoded name or value is redacted as surely as it is dropped from the key", () => {
-    const encodedName = "https://example.com/p?access%5Ftoken=opaque123&%74oken=abc&page=2";
+    const encodedName =
+      "https://example.com/p?access%5Ftoken=opaque123&%74oken=abc&page=2";
     expect(redactCredentialParams(encodedName)).toBe(
-      "https://example.com/p?access%5Ftoken=REDACTED&%74oken=REDACTED&page=2",
+      "https://example.com/p?access%5Ftoken=REDACTED&%74oken=REDACTED&page=2"
     );
-    expect(canonicalLinkKey(encodedName)?.key).toBe("https://example.com/p?page=2");
+    expect(canonicalLinkKey(encodedName)?.key).toBe(
+      "https://example.com/p?page=2"
+    );
     // Encode only the FIRST dot so the token mixes encoded and literal separators.
     const [jwtHead, ...jwtRest] = JWT.split(".");
     const encodedJwt = `https://example.com/p?t=${jwtHead}%2E${jwtRest.join(".")}`;
-    expect(redactCredentialParams(encodedJwt)).toBe("https://example.com/p?t=REDACTED");
+    expect(redactCredentialParams(encodedJwt)).toBe(
+      "https://example.com/p?t=REDACTED"
+    );
     expect(keyCarriesCredential(encodedJwt)).toBe(true);
   });
 
   test("hyphenated credential names count too", () => {
     for (const name of ["access-token", "auth-token", "api-key", "X-Api-Key"]) {
       expect(isCredentialParam(name, "opaque")).toBe(true);
-      expect(redactCredentialParams(`https://example.com/?${name}=opaque`)).toBe(
-        `https://example.com/?${name}=REDACTED`,
-      );
+      expect(
+        redactCredentialParams(`https://example.com/?${name}=opaque`)
+      ).toBe(`https://example.com/?${name}=REDACTED`);
     }
   });
 
   test("a key from before the change is recognisable", () => {
     expect(keyCarriesCredential(`${article}?accessToken=${JWT}`)).toBe(true);
-    expect(keyCarriesCredential(canonicalLinkKey(`${article}?accessToken=${JWT}`)!.key)).toBe(
-      false,
-    );
+    expect(
+      keyCarriesCredential(
+        canonicalLinkKey(`${article}?accessToken=${JWT}`)!.key
+      )
+    ).toBe(false);
   });
 });
 
 // #3384: the key is computed from the redacted href, so a raw href and the
 // published report's redacted copy of it are one key, and no secret is in one.
 describe("keys join the report's redacted href (#3384)", () => {
-  const JWT_VALUE = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlc2lnbmF0dXJl";
+  const JWT_VALUE =
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJlc2lnbmF0dXJl";
   const TOKEN = "0f8e7d6c5b4a39281706f5e4d3c2b1a0";
   const site = siteHostsOf(["https://mysite.example/"]);
   const SECRETS = [JWT_VALUE, TOKEN, "hunter2"];
@@ -532,18 +591,28 @@ describe("keys join the report's redacted href (#3384)", () => {
     `https://partner.example.org/a%20b/?q=1`,
   ];
 
-  test.each(hrefs)("the key of the raw href is the key of its redacted copy: %s", (raw) => {
-    const redacted = redactSecretText(raw, site);
-    expect(canonicalLinkKey(raw)?.key).toBeDefined();
-    expect(canonicalLinkKey(redacted)?.key).toBe(canonicalLinkKey(raw)?.key);
-  });
+  test.each(hrefs)(
+    "the key of the raw href is the key of its redacted copy: %s",
+    (raw) => {
+      const redacted = redactSecretText(raw, site);
+      expect(canonicalLinkKey(raw)?.key).toBeDefined();
+      expect(canonicalLinkKey(redacted)?.key).toBe(canonicalLinkKey(raw)?.key);
+    }
+  );
 
   // A session parameter on an off-site link stays in its key (not a credential: #3339).
   const credentialHrefs = hrefs.filter((raw) => !raw.includes("sid="));
-  test.each(credentialHrefs)("no credential, userinfo or JWT reaches the key: %s", (raw) => {
-    const keys = [canonicalLinkKey(raw)!.key, ...groupByLinkKey([raw]).byKey.keys()];
-    for (const key of keys) for (const secret of SECRETS) expect(key).not.toContain(secret);
-  });
+  test.each(credentialHrefs)(
+    "no credential, userinfo or JWT reaches the key: %s",
+    (raw) => {
+      const keys = [
+        canonicalLinkKey(raw)!.key,
+        ...groupByLinkKey([raw]).byKey.keys(),
+      ];
+      for (const key of keys)
+        for (const secret of SECRETS) expect(key).not.toContain(secret);
+    }
+  );
 
   test("the fetch url keeps what the request needs (a signed url), the key does not", () => {
     const raw = `https://partner.example.org/dl?access_token=${TOKEN}&page=2`;
@@ -553,7 +622,9 @@ describe("keys join the report's redacted href (#3384)", () => {
   });
 
   test("links that differ only by a JWT under an ordinary name share a key", () => {
-    const a = canonicalLinkKey(`https://partner.example.org/p?t=${JWT_VALUE}&page=2`)!.key;
+    const a = canonicalLinkKey(
+      `https://partner.example.org/p?t=${JWT_VALUE}&page=2`
+    )!.key;
     const b = canonicalLinkKey(`https://partner.example.org/p?page=2`)!.key;
     expect(a).toBe(b);
   });
@@ -594,8 +665,12 @@ describe("keys join the report's redacted href (#3384)", () => {
       expect(keyCarriesCredential(old)).toBe(false);
       expect(keyCarriesSecret(old)).toBe(true);
     }
-    expect(keyCarriesSecret(`https://partner.example.org/p?access_token=${TOKEN}`)).toBe(true);
-    expect(keyCarriesSecret("https://partner.example.org/p?page=2")).toBe(false);
+    expect(
+      keyCarriesSecret(`https://partner.example.org/p?access_token=${TOKEN}`)
+    ).toBe(true);
+    expect(keyCarriesSecret("https://partner.example.org/p?page=2")).toBe(
+      false
+    );
   });
 
   test("an over-long fetch url never falls back to a key whose path was redacted", () => {
@@ -604,15 +679,21 @@ describe("keys join the report's redacted href (#3384)", () => {
     // a long tracking tail has no redacted value to fall back on.
     expect(canonicalLinkKey(long)).toBeNull();
     const tail = `utm_x=${"a".repeat(MAX_LINK_KEY_LENGTH)}`;
-    const ok = canonicalLinkKey(`https://partner.example.org/share/${JWT_VALUE}?${tail}`);
+    const ok = canonicalLinkKey(
+      `https://partner.example.org/share/${JWT_VALUE}?${tail}`
+    );
     expect(ok).toBeNull();
-    const plain = canonicalLinkKey(`https://partner.example.org/p?${tail}&page=2`);
+    const plain = canonicalLinkKey(
+      `https://partner.example.org/p?${tail}&page=2`
+    );
     expect(plain?.key).toBe("https://partner.example.org/p?page=2");
     expect(plain?.fetchUrl).toBe("https://partner.example.org/p?page=2");
   });
 
   test("an href far past the key limit is unkeyable without being redacted", () => {
-    expect(canonicalLinkKey(`https://partner.example.org/p?q=${"a".repeat(40_000)}`)).toBeNull();
+    expect(
+      canonicalLinkKey(`https://partner.example.org/p?q=${"a".repeat(40_000)}`)
+    ).toBeNull();
   });
 });
 
@@ -624,8 +705,14 @@ describe("an indexed credential name is dropped from the key (repo#3433)", () =>
 
   test.each([
     [`https://example.com/x?token[0]=${HEX}`, "https://example.com/x"],
-    [`https://example.com/x?token[]=${HEX}&page=2`, "https://example.com/x?page=2"],
-    [`https://example.com/x?access_token[0][1]=${HEX}&page=2`, "https://example.com/x?page=2"],
+    [
+      `https://example.com/x?token[]=${HEX}&page=2`,
+      "https://example.com/x?page=2",
+    ],
+    [
+      `https://example.com/x?access_token[0][1]=${HEX}&page=2`,
+      "https://example.com/x?page=2",
+    ],
   ])("%s keys as %s", (raw, key) => {
     expect(canonicalLinkKey(raw)?.key).toBe(key);
   });

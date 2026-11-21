@@ -1,11 +1,12 @@
 // links/anchor-text - Link anchor text quality
 
 import { coerceSchemelessUrl } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { isConventionalLinkLabel } from "../shared/conventional-link-labels";
 import { CORE_GENERIC_ANCHORS } from "../shared/generic-anchor-phrases";
 import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import {
   addSection,
   mergeSections,
@@ -123,7 +124,8 @@ export const anchorTextRule: Rule = {
     const placedOf = (target: string): SectionCounts | undefined => {
       if (!placed) {
         placed = new Map();
-        for (const link of ctx.parsed.links ?? []) addSection(placed, link.url, link.section);
+        for (const link of ctx.parsed.links ?? [])
+          addSection(placed, link.url, link.section);
       }
       // The parse stores a link under `coerceSchemelessUrl`'s reading (`www.example.org` is a host,
       // not a path), so that is the key for where it sits. Grouping above is unchanged.
@@ -131,7 +133,10 @@ export const anchorTextRule: Rule = {
       const href = firstHref.get(target);
       if (href !== undefined) {
         try {
-          key = new URL(coerceSchemelessUrl(href.trim()), ctx.page.url).toString();
+          key = new URL(
+            coerceSchemelessUrl(href.trim()),
+            ctx.page.url
+          ).toString();
         } catch {
           // keep the resolved target
         }
@@ -139,7 +144,11 @@ export const anchorTextRule: Rule = {
       return placed.get(key);
     };
 
-    const emptyAnchors: Array<{ href: string; snippet: string; sections?: SectionCounts }> = [];
+    const emptyAnchors: Array<{
+      href: string;
+      snippet: string;
+      sections?: SectionCounts;
+    }> = [];
     const genericAnchors: string[] = [];
     // The same, per generic anchor text: the item is the text, not a target.
     const genericSections = new Map<string, SectionCounts>();
@@ -147,11 +156,13 @@ export const anchorTextRule: Rule = {
     for (const [target, groupLinks] of groups) {
       // A group passes if any member carries a descriptive (non-generic) accessible name.
       const hasDescriptiveLink = groupLinks.some(
-        (link) => hasAccessibleName(link, doc) && !isGeneric(link, lang),
+        (link) => hasAccessibleName(link, doc) && !isGeneric(link, lang)
       );
       if (hasDescriptiveLink) continue;
 
-      const anyAccessible = groupLinks.some((link) => hasAccessibleName(link, doc));
+      const anyAccessible = groupLinks.some((link) =>
+        hasAccessibleName(link, doc)
+      );
 
       if (!anyAccessible) {
         const first = groupLinks[0];
@@ -183,7 +194,10 @@ export const anchorTextRule: Rule = {
           id: a.href,
           snippet: a.snippet,
           ...(a.sections
-            ? { label: withSection(a.href, a.sections), meta: sectionMeta(a.sections) }
+            ? {
+                label: withSection(a.href, a.sections),
+                meta: sectionMeta(a.sections),
+              }
             : {}),
           // pub#846: the sections it sits in on this page, so the report can scope it to one.
           ...pageRegionsField(a.sections),

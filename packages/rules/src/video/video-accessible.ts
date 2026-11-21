@@ -1,7 +1,11 @@
 // video/video-accessible - Video accessibility check
 
-import { hasCaptionTrack, partitionDecorativeVideos } from "../shared/decorative-video";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  hasCaptionTrack,
+  partitionDecorativeVideos,
+} from "../shared/decorative-video";
 
 export const videoAccessibleRule: Rule = {
   meta: {

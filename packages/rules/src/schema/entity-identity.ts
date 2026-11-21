@@ -1,8 +1,8 @@
 // schema/entity-identity — the same thing declared on many pages with no `@id`.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { isNoIdIdentityNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -41,9 +41,7 @@ export const entityIdentityRule: Rule = {
     // Named, multi-page, no `@id`, and of a type a search engine reconciles
     // site-wide. A one-page entity with no `@id` is ordinary, not a problem:
     // there is only one declaration, so there is nothing to tie together.
-    const offenders = map.nodes
-      .filter(isNoIdIdentityNode)
-      .sort(byReach);
+    const offenders = map.nodes.filter(isNoIdIdentityNode).sort(byReach);
 
     if (offenders.length === 0) {
       return {
@@ -57,7 +55,9 @@ export const entityIdentityRule: Rule = {
       };
     }
 
-    const { items, hidden } = cappedItems(offenders.map((node) => entityItem(node)));
+    const { items, hidden } = cappedItems(
+      offenders.map((node) => entityItem(node))
+    );
     const worst = offenders[0]!;
 
     return {
@@ -66,7 +66,9 @@ export const entityIdentityRule: Rule = {
           name: CHECK,
           status: "fail",
           message: `${offenders.length} ${offenders.length === 1 ? "entity is" : "entities are"} declared on several pages with no @id${moreSuffix(hidden)}`,
-          value: clipValue(`${entityLabel(worst)} on ${pageTotal(worst)} pages`),
+          value: clipValue(
+            `${entityLabel(worst)} on ${pageTotal(worst)} pages`
+          ),
           expected: "one absolute @id per entity, referenced elsewhere",
           items,
         },

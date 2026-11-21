@@ -11,13 +11,43 @@ import {
   type FrontierStatus,
 } from "../src/storage";
 
-const CRAWL: CrawlStatus[] = ["running", "paused", "crawled", "analyzed", "completed", "stopped", "failed"];
-const FRONTIER: FrontierStatus[] = ["pending", "fetching", "done", "failed", "skipped"];
+const CRAWL: CrawlStatus[] = [
+  "running",
+  "paused",
+  "crawled",
+  "analyzed",
+  "completed",
+  "stopped",
+  "failed",
+];
+const FRONTIER: FrontierStatus[] = [
+  "pending",
+  "fetching",
+  "done",
+  "failed",
+  "skipped",
+];
 
 // from -> the statuses it may be written to, spelled out edge by edge.
 const CRAWL_LEGAL: Record<CrawlStatus, CrawlStatus[]> = {
-  running: ["running", "paused", "completed", "stopped", "crawled", "analyzed", "failed"],
-  paused: ["running", "paused", "completed", "stopped", "crawled", "analyzed", "failed"],
+  running: [
+    "running",
+    "paused",
+    "completed",
+    "stopped",
+    "crawled",
+    "analyzed",
+    "failed",
+  ],
+  paused: [
+    "running",
+    "paused",
+    "completed",
+    "stopped",
+    "crawled",
+    "analyzed",
+    "failed",
+  ],
   completed: ["running", "completed", "crawled", "analyzed"],
   stopped: ["running", "stopped", "crawled", "analyzed"],
   crawled: ["running", "crawled", "analyzed"],
@@ -44,12 +74,21 @@ describe("crawl status transitions", () => {
   }
 
   test("every status has an entry, and every entry lists real statuses", () => {
-    expect(Object.keys(CRAWL_STATUS_TRANSITIONS).sort()).toEqual([...CRAWL].sort());
-    for (const froms of Object.values(CRAWL_STATUS_TRANSITIONS)) for (const f of froms) expect(CRAWL).toContain(f);
+    expect(Object.keys(CRAWL_STATUS_TRANSITIONS).sort()).toEqual(
+      [...CRAWL].sort()
+    );
+    for (const froms of Object.values(CRAWL_STATUS_TRANSITIONS))
+      for (const f of froms) expect(CRAWL).toContain(f);
   });
 
   test("a finished crawl cannot be paused or re-finished by a late write", () => {
-    for (const from of ["completed", "stopped", "crawled", "analyzed", "failed"] as const) {
+    for (const from of [
+      "completed",
+      "stopped",
+      "crawled",
+      "analyzed",
+      "failed",
+    ] as const) {
       expect(canTransitionCrawl(from, "paused"), from).toBe(false);
     }
   });
@@ -67,11 +106,14 @@ describe("frontier status transitions", () => {
 
   test("done, failed and skipped are final", () => {
     for (const from of ["done", "failed", "skipped"] as const) {
-      for (const to of FRONTIER) expect(canTransitionFrontier(from, to)).toBe(false);
+      for (const to of FRONTIER)
+        expect(canTransitionFrontier(from, to)).toBe(false);
     }
   });
 
   test("every status has an entry", () => {
-    expect(Object.keys(FRONTIER_STATUS_TRANSITIONS).sort()).toEqual([...FRONTIER].sort());
+    expect(Object.keys(FRONTIER_STATUS_TRANSITIONS).sort()).toEqual(
+      [...FRONTIER].sort()
+    );
   });
 });

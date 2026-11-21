@@ -17,14 +17,17 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { LIBRARY_INLINE_PATTERNS } from "../src/performance/js-libraries";
+import {
+  CONTEXT_PATTERNS,
+  FAST_PATTERNS,
+} from "../src/security/leaked-secrets";
 import {
   buildGramIndex,
   mandatoryLiterals,
   mayContain,
   mayMatch,
 } from "../src/shared/literal-prefilter";
-import { CONTEXT_PATTERNS, FAST_PATTERNS } from "../src/security/leaked-secrets";
-import { LIBRARY_INLINE_PATTERNS } from "../src/performance/js-libraries";
 
 // ── a tiny generator: build strings FROM a regex source ─────────────────────
 // Supports the syntax the rule tables actually use: literals, escapes, classes
@@ -66,7 +69,8 @@ function expandClass(body: string): string {
     if (body[i + 1] === "-" && i + 2 < body.length && body[i + 2] !== "]") {
       const from = body.charCodeAt(i);
       const to = body.charCodeAt(i + 2);
-      for (let c2 = from; c2 <= to && c2 - from < 64; c2++) chars.push(String.fromCharCode(c2));
+      for (let c2 = from; c2 <= to && c2 - from < 64; c2++)
+        chars.push(String.fromCharCode(c2));
       i += 2;
       continue;
     }
@@ -77,7 +81,12 @@ function expandClass(body: string): string {
   return [...SAFE].filter((c) => !banned.has(c)).join("");
 }
 
-function closeAt(src: string, open: number, openCh: string, closeCh: string): number {
+function closeAt(
+  src: string,
+  open: number,
+  openCh: string,
+  closeCh: string
+): number {
   let depth = 0;
   for (let i = open; i < src.length; i++) {
     const c = src[i];
@@ -159,7 +168,9 @@ function generate(src: string, depth = 0): string {
         continue;
       } else if (n === "u" && src[i + 2] === "{") {
         const close = src.indexOf("}", i + 3);
-        literal = String.fromCodePoint(Number.parseInt(src.slice(i + 3, close), 16));
+        literal = String.fromCodePoint(
+          Number.parseInt(src.slice(i + 3, close), 16)
+        );
         i = close + 1;
         // fall through to the quantifier read below
         const q0 = src[i];
@@ -168,10 +179,14 @@ function generate(src: string, depth = 0): string {
           continue;
         }
       } else if (n === "u") {
-        literal = String.fromCharCode(Number.parseInt(src.slice(i + 2, i + 6), 16));
+        literal = String.fromCharCode(
+          Number.parseInt(src.slice(i + 2, i + 6), 16)
+        );
         i += 6;
       } else if (n === "x") {
-        literal = String.fromCharCode(Number.parseInt(src.slice(i + 2, i + 4), 16));
+        literal = String.fromCharCode(
+          Number.parseInt(src.slice(i + 2, i + 4), 16)
+        );
         i += 4;
       } else if (n === "n") {
         literal = "\n";
@@ -197,16 +212,27 @@ function generate(src: string, depth = 0): string {
       // Lookarounds consume nothing; a sample they reject is dropped by the probe below.
       if (/^\?(?:[=!]|<[=!])/.test(inner)) continue;
       if (inner.startsWith("?:")) inner = inner.slice(2);
-      else if (inner.startsWith("?<") && !inner.startsWith("?<=") && !inner.startsWith("?<!"))
+      else if (
+        inner.startsWith("?<") &&
+        !inner.startsWith("?<=") &&
+        !inner.startsWith("?<!")
+      )
         inner = inner.slice(inner.indexOf(">") + 1);
       literal = generate(inner, depth + 1);
-    } else if (c === "." ) {
+    } else if (c === ".") {
       unit = [..."abcXYZ019-_."];
       i += 1;
     } else if (c === "^" || c === "$") {
       i += 1;
       continue;
-    } else if (c === "*" || c === "+" || c === "?" || c === "{" || c === ")" || c === "]") {
+    } else if (
+      c === "*" ||
+      c === "+" ||
+      c === "?" ||
+      c === "{" ||
+      c === ")" ||
+      c === "]"
+    ) {
       throw new Error(`dangling ${c} in ${src}`);
     } else {
       literal = c;
@@ -262,9 +288,18 @@ function admits(pattern: RegExp, sample: string): boolean {
 }
 
 const ALL_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
-  ...FAST_PATTERNS.map((p) => ({ label: `secret/${p.name}`, pattern: p.pattern })),
-  ...CONTEXT_PATTERNS.map((p) => ({ label: `context/${p.name}`, pattern: p.pattern })),
-  ...LIBRARY_INLINE_PATTERNS.map((p, i) => ({ label: `lib/${i}:${p.source}`, pattern: p })),
+  ...FAST_PATTERNS.map((p) => ({
+    label: `secret/${p.name}`,
+    pattern: p.pattern,
+  })),
+  ...CONTEXT_PATTERNS.map((p) => ({
+    label: `context/${p.name}`,
+    pattern: p.pattern,
+  })),
+  ...LIBRARY_INLINE_PATTERNS.map((p, i) => ({
+    label: `lib/${i}:${p.source}`,
+    pattern: p,
+  })),
 ];
 
 describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
@@ -294,11 +329,14 @@ describe("mandatoryLiterals is sound on every pattern the rules ship", () => {
         admittedAny = true;
         checked += 1;
         if (!admits(pattern, sample)) {
-          failures.push(`${label}: filter REJECTED a real match: ${JSON.stringify(sample.slice(0, 120))}`);
+          failures.push(
+            `${label}: filter REJECTED a real match: ${JSON.stringify(sample.slice(0, 120))}`
+          );
           break;
         }
       }
-      if (!admittedAny) failures.push(`${label}: generator produced no matching sample`);
+      if (!admittedAny)
+        failures.push(`${label}: generator produced no matching sample`);
       shapes += seen.size;
     }
     expect(failures).toEqual([]);
@@ -375,7 +413,10 @@ describe("mandatoryLiterals extraction", () => {
     // first would prove `alpha`, which two thirds of the matches do not contain,
     // and the generative test alone does not reliably reach the later branches.
     [/alpha|bravo|charlie/, [["alpha", "bravo", "charlie"]]],
-    [/(?:alpha|bravo|charlie)wxyz/, [["alphawxyz", "bravowxyz", "charliewxyz"]]],
+    [
+      /(?:alpha|bravo|charlie)wxyz/,
+      [["alphawxyz", "bravowxyz", "charliewxyz"]],
+    ],
     // The shipped Generic Secret Assignment alternation proves NOTHING, because
     // `pwd` is below the four-character floor and one unprovable branch sinks
     // the set. Pinned because narrowing this alternation to its first branch is
@@ -385,7 +426,19 @@ describe("mandatoryLiterals extraction", () => {
       [],
     ],
     // an optional single-character class expands into variants
-    [/apikeys?[_-]?value/i, [["apikeyvalue", "apikey_value", "apikey-value", "apikeysvalue", "apikeys_value", "apikeys-value"]]],
+    [
+      /apikeys?[_-]?value/i,
+      [
+        [
+          "apikeyvalue",
+          "apikey_value",
+          "apikey-value",
+          "apikeysvalue",
+          "apikeys_value",
+          "apikeys-value",
+        ],
+      ],
+    ],
     // a `+` keeps its own character but ends the run after it
     [/abcde+fghij/, [["abcde"], ["fghij"]]],
     // `{0,3}` can repeat, so it ENDS the run: gluing the two sides would deny
@@ -450,7 +503,10 @@ describe("mandatoryLiterals extraction", () => {
   test("an escape whose length is misread does not invent a literal", () => {
     const cases: Array<[RegExp, string]> = [
       // `\12` is a backreference to group 12, not `\1` followed by the digit 2.
-      [/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)wxyz\12abcd/, "abcdefghijklwxyzlabcd"],
+      [
+        /(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)(l)wxyz\12abcd/,
+        "abcdefghijklwxyzlabcd",
+      ],
       // `\k<x>` is a named backreference, not `\k` followed by `<x>`.
       [/(?<x>zz)wxyz\k<x>abcd/, "zzwxyzzzabcd"],
       // Without the `u` flag `\u{41}` is the letter `u` repeated 41 times, not
@@ -464,7 +520,8 @@ describe("mandatoryLiterals extraction", () => {
         failures.push(`${pattern.source}: fixture does not match`);
         continue;
       }
-      if (!admits(pattern, subject)) failures.push(`${pattern.source}: filter REJECTED a real match`);
+      if (!admits(pattern, subject))
+        failures.push(`${pattern.source}: filter REJECTED a real match`);
     }
     expect(failures).toEqual([]);
   });
@@ -509,11 +566,15 @@ describe("mandatoryLiterals extraction", () => {
     for (const [pattern, subject] of cases) {
       const probe = new RegExp(pattern.source, pattern.flags.replace("g", ""));
       if (!probe.test(subject)) {
-        failures.push(`/${pattern.source}/${pattern.flags}: fixture does not match`);
+        failures.push(
+          `/${pattern.source}/${pattern.flags}: fixture does not match`
+        );
         continue;
       }
       if (!admits(pattern, subject)) {
-        failures.push(`/${pattern.source}/${pattern.flags}: filter REJECTED a real match`);
+        failures.push(
+          `/${pattern.source}/${pattern.flags}: filter REJECTED a real match`
+        );
       }
     }
     expect(failures).toEqual([]);
@@ -521,6 +582,8 @@ describe("mandatoryLiterals extraction", () => {
 
   test("an unproven pattern is always run", () => {
     const index = buildGramIndex("z".repeat(9000))!;
-    expect(mayMatch(index, mandatoryLiterals(/[0-9]{8,10}:[a-zA-Z0-9_-]{35}/))).toBe(true);
+    expect(
+      mayMatch(index, mandatoryLiterals(/[0-9]{8,10}:[a-zA-Z0-9_-]{35}/))
+    ).toBe(true);
   });
 });

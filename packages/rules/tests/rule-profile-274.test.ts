@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 async function run(
-  profile: boolean,
+  profile: boolean
 ): Promise<{ stdout: string; profiles: Record<string, unknown>[] }> {
   const env: Record<string, string | undefined> = { ...process.env };
   delete env.SQUIRREL_RULE_PROFILE;
@@ -18,7 +18,7 @@ async function run(
       stdout: "pipe",
       stderr: "pipe",
       env,
-    },
+    }
   );
   const killer = setTimeout(() => child.kill(), 15_000);
   const [stdout, stderr] = await Promise.all([
@@ -30,11 +30,25 @@ async function run(
   const profiles = stderr
     .split("\n")
     .filter((line) => line.startsWith("[rule-profile] "))
-    .map((line) => JSON.parse(line.slice("[rule-profile] ".length)) as Record<string, unknown>);
+    .map(
+      (line) =>
+        JSON.parse(line.slice("[rule-profile] ".length)) as Record<
+          string,
+          unknown
+        >
+    );
   return { stdout, profiles };
 }
 
-const FIELDS = ["checks", "durationMs", "durationUs", "failed", "passed", "ruleId", "warned"];
+const FIELDS = [
+  "checks",
+  "durationMs",
+  "durationUs",
+  "failed",
+  "passed",
+  "ruleId",
+  "warned",
+];
 
 describe("per-rule profile lines (pub#274)", () => {
   test("SQUIRREL_RULE_PROFILE=1 prints one line per rule, page and site, with the same fields", async () => {
@@ -43,7 +57,9 @@ describe("per-rule profile lines (pub#274)", () => {
     expect(stdout).toBe("filters=3\n");
     const page = profiles.find((p) => p.ruleId === "core/meta-title");
     const site = profiles.find((p) => p.ruleId === "core/title-unique");
-    expect(Object.keys(page ?? {}).sort()).toEqual([...FIELDS, "pageUrl"].sort());
+    expect(Object.keys(page ?? {}).sort()).toEqual(
+      [...FIELDS, "pageUrl"].sort()
+    );
     expect(page?.pageUrl).toBe("https://example.com/");
     expect(Object.keys(site ?? {}).sort()).toEqual([...FIELDS, "scope"].sort());
     expect(site?.scope).toBe("site");

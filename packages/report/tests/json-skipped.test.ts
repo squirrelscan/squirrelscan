@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -19,7 +20,11 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   };
 }
 
-function rule(id: string, name: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  name: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -41,14 +46,29 @@ describe("renderJson skipped checks (#518)", () => {
         baseReport({
           ruleResults: {
             "core/h1": rule("core/h1", "H1", [
-              { name: "core/h1", status: "skipped", message: "Not evaluated", pageUrl: "https://example.com/unread", skipReason: "unread-page" },
+              {
+                name: "core/h1",
+                status: "skipped",
+                message: "Not evaluated",
+                pageUrl: "https://example.com/unread",
+                skipReason: "unread-page",
+              },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.skippedChecks).toEqual([
-      { ruleId: "core/h1", name: "H1", check: "core/h1", reason: "unread-page", outcome: "coverage_gap", pages: ["https://example.com/unread"], pagesCount: 1, pagesHasMore: false },
+      {
+        ruleId: "core/h1",
+        name: "H1",
+        check: "core/h1",
+        reason: "unread-page",
+        outcome: "coverage_gap",
+        pages: ["https://example.com/unread"],
+        pagesCount: 1,
+        pagesHasMore: false,
+      },
     ]);
     expect(parsed.issues).toEqual([]);
   });
@@ -74,8 +94,8 @@ describe("renderJson skipped checks (#518)", () => {
               },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.skippedChecks).toEqual([
       {
@@ -98,7 +118,11 @@ describe("renderJson skipped checks (#518)", () => {
   });
 
   test("a folded skip carrying pages[] lists every page", () => {
-    const pages = ["https://example.com/a", "https://example.com/b", "https://example.com/c"];
+    const pages = [
+      "https://example.com/a",
+      "https://example.com/b",
+      "https://example.com/c",
+    ];
     const parsed = JSON.parse(
       renderJson(
         baseReport({
@@ -110,12 +134,16 @@ describe("renderJson skipped checks (#518)", () => {
                 message: "Page too large to scan in full (+2 more pages)",
                 pages,
                 skipReason: "scan-truncated",
-                details: { aggregated: true, occurrences: 3, foldKey: "scan-truncated" },
+                details: {
+                  aggregated: true,
+                  occurrences: 3,
+                  foldKey: "scan-truncated",
+                },
               },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.skippedChecks).toHaveLength(1);
     expect(parsed.skippedChecks[0].ruleId).toBe("content/dev-leakage");
@@ -142,8 +170,8 @@ describe("renderJson skipped checks (#518)", () => {
               },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.skippedChecks[0].pages).toHaveLength(2);
     expect(parsed.skippedChecks[0].pagesCount).toBe(50);
@@ -172,11 +200,15 @@ describe("renderJson skipped checks (#518)", () => {
               },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.issues).toHaveLength(1);
-    expect(parsed.issues[0].checks.every((c: { status: string }) => c.status === "fail")).toBe(true);
+    expect(
+      parsed.issues[0].checks.every(
+        (c: { status: string }) => c.status === "fail"
+      )
+    ).toBe(true);
     expect(parsed.skippedChecks[0].pages).toEqual(["https://example.com/big"]);
   });
 
@@ -195,8 +227,8 @@ describe("renderJson skipped checks (#518)", () => {
               },
             ]),
           },
-        }),
-      ),
+        })
+      )
     );
     expect("skippedChecks" in parsed).toBe(false);
     expect(parsed.summary.skipped).toBe(0);
@@ -204,7 +236,18 @@ describe("renderJson skipped checks (#518)", () => {
 
   test("negative control: no skips gives summary.skipped 0 and the same top-level keys", () => {
     const parsed = JSON.parse(renderJson(baseReport()));
-    expect(parsed.summary).toEqual({ passed: 10, warnings: 1, failed: 2, skipped: 0 });
-    expect(Object.keys(parsed)).toEqual(["meta", "status", "score", "summary", "issues"]);
+    expect(parsed.summary).toEqual({
+      passed: 10,
+      warnings: 1,
+      failed: 2,
+      skipped: 0,
+    });
+    expect(Object.keys(parsed)).toEqual([
+      "meta",
+      "status",
+      "score",
+      "summary",
+      "issues",
+    ]);
   });
 });

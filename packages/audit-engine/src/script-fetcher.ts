@@ -1,26 +1,33 @@
 // Script content fetcher for security scanning
 // Fetches actual JS content for secrets detection
 
-import { Effect } from "effect";
-
 import {
   ASSET_FETCH_REFUSED_ERROR,
   ASSET_FETCH_SKIPPED_ERROR,
   SCRIPT_FETCH_LIMITS,
   SQUIRRELSCAN_USER_AGENT,
 } from "@squirrelscan/utils/constants";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import {
   EgressRefusedError,
   egressGuardedSend,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
-import { fetchUndecoded, readBodyCapped } from "@squirrelscan/utils/response-body";
-import { isHttpOrHttpsUrl, safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import {
+  fetchUndecoded,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
+import {
+  isHttpOrHttpsUrl,
+  safeRedirectFetch,
+} from "@squirrelscan/utils/safe-fetch";
+import { Effect } from "effect";
+
 import type { FetchBudget, FetchOutcome } from "./fetch-budget";
-import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
+
 import { rateLimitedFlag, wafBlockedFlag } from "./lib/asset-status";
+import { customHeadersFor, type HeaderScope } from "./lib/header-scope";
 import { normalizeEncoding } from "./resource-checker";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 export interface ScriptCacheHeaders {
   cacheControl: string | null;
@@ -149,8 +156,14 @@ const DEFAULT_OPTIONS: ScriptFetcherOptions = {
  * what an audit fetches when it is not storing scripts (#1280). A run that
  * stores scripts fetches more, but only this many go to the rules.
  */
-export function scriptRuleLimit(pageCount: number | undefined, maxScripts?: number): number {
-  return calculateScriptLimit(pageCount, maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH);
+export function scriptRuleLimit(
+  pageCount: number | undefined,
+  maxScripts?: number
+): number {
+  return calculateScriptLimit(
+    pageCount,
+    maxScripts ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPTS_TO_FETCH
+  );
 }
 
 function calculateScriptLimit(
@@ -215,13 +228,18 @@ async function fetchScriptAttempt(
       {
         method: "GET",
         headers: mergeHeaderRecords(
-          { "User-Agent": options.userAgent, Accept: "application/javascript, text/javascript, */*" },
-          customHeadersFor(url, options.customHeaders, options.headerScope),
+          {
+            "User-Agent": options.userAgent,
+            Accept: "application/javascript, text/javascript, */*",
+          },
+          customHeadersFor(url, options.customHeaders, options.headerScope)
         ),
         signal: controller.signal,
       },
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
-      options.egress ? egressGuardedSend(fetchUndecoded, options.egress) : fetchUndecoded
+      options.egress
+        ? egressGuardedSend(fetchUndecoded, options.egress)
+        : fetchUndecoded
     );
 
     const contentType = response.headers.get("content-type");
@@ -302,7 +320,8 @@ async function fetchScriptAttempt(
       };
     }
 
-    const maxSizeBytes = options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES;
+    const maxSizeBytes =
+      options.maxSizeBytes ?? SCRIPT_FETCH_LIMITS.MAX_SCRIPT_SIZE_BYTES;
     // Read one byte past the limit rather than the limit itself: the check below
     // rejects anything OVER the cap, so reading exactly `maxSizeBytes` would
     // truncate an oversized script to precisely the limit and the rejection
@@ -394,9 +413,17 @@ async function fetchSingleScriptAsync(
  * host: a site whose linked manifests 404 is not a tarpit. Slow answers still
  * strike on their latency.
  */
-function scriptOutcome(result: ScriptFetchResult, anyContentType = false): FetchOutcome {
+function scriptOutcome(
+  result: ScriptFetchResult,
+  anyContentType = false
+): FetchOutcome {
   if (result.error === "timeout") return "timeout";
-  if (anyContentType && result.status !== null && result.error?.startsWith("HTTP ")) return "ok";
+  if (
+    anyContentType &&
+    result.status !== null &&
+    result.error?.startsWith("HTTP ")
+  )
+    return "ok";
   if (result.error != null) return "error";
   return "ok";
 }
@@ -414,7 +441,13 @@ interface ScriptCacheEntry {
   responseMs: number;
 }
 
-const CACHE_HEADER_KEYS = ["cacheControl", "expires", "date", "etag", "lastModified"] as const;
+const CACHE_HEADER_KEYS = [
+  "cacheControl",
+  "expires",
+  "date",
+  "etag",
+  "lastModified",
+] as const;
 
 function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === "string";
@@ -429,7 +462,10 @@ function parseCacheEntry(raw: string): ScriptCacheEntry | null {
   }
   if (typeof parsed !== "object" || parsed === null) return null;
   const entry = parsed as Record<string, unknown>;
-  const headers = entry.cacheHeaders as Record<string, unknown> | null | undefined;
+  const headers = entry.cacheHeaders as
+    | Record<string, unknown>
+    | null
+    | undefined;
   if (
     entry.v !== SCRIPT_CACHE_ENTRY_VERSION ||
     typeof entry.body !== "string" ||
@@ -459,7 +495,10 @@ function parseCacheEntry(raw: string): ScriptCacheEntry | null {
   };
 }
 
-function readCache(cache: ScriptContentCache, url: string): ScriptCacheEntry | null {
+function readCache(
+  cache: ScriptContentCache,
+  url: string
+): ScriptCacheEntry | null {
   try {
     const raw = cache.get(url);
     return raw === null ? null : parseCacheEntry(raw);

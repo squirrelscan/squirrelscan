@@ -15,9 +15,17 @@
 // passes here. A report-only policy blocks nothing and is ignored the same way.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 
-import { policiesAllow, parseCspPolicies, type CspFetchKind, type CspPolicy } from "./csp-source-match";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import {
+  policiesAllow,
+  parseCspPolicies,
+  type CspFetchKind,
+  type CspPolicy,
+} from "./csp-source-match";
 import {
   CSP_VENDORS,
   deriveFlags,
@@ -27,20 +35,24 @@ import {
   type VendorCategory,
 } from "./csp-vendors";
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 const MAX_ITEMS = 25;
 /** Bytes of one chunk scanned for script URLs, and of all chunks of one page. */
 const MAX_CHUNK_SCAN = 2_000_000;
 const MAX_TOTAL_SCAN = 6_000_000;
 
 /** Quoted absolute URL of a script file, with an optional query string. */
-const CHUNK_SCRIPT_URL_RE = /(["'`])(https?:\/\/[^"'`\s\\<>]{1,300}?\.m?js)(?:\?[^"'`\s\\<>]{0,200})?\1/g;
+const CHUNK_SCRIPT_URL_RE =
+  /(["'`])(https?:\/\/[^"'`\s\\<>]{1,300}?\.m?js)(?:\?[^"'`\s\\<>]{0,200})?\1/g;
 /** A URL literal only counts when code near it loads a script. */
 const SCRIPT_LOAD_HINT =
   /createElement\(\s*["']script["']\s*\)|\.src\s*=|\bimport\(|importScripts\(|loadScript|appendChild/;
 /** Hosts that appear in chunks as namespaces and documentation links, never as loads. */
-const IGNORED_CHUNK_HOSTS = new Set(["www.w3.org", "schema.org", "localhost", "127.0.0.1"]);
+const IGNORED_CHUNK_HOSTS = new Set([
+  "www.w3.org",
+  "schema.org",
+  "localhost",
+  "127.0.0.1",
+]);
 
 type Origin = "html" | "chunk" | "vendor";
 
@@ -75,7 +87,10 @@ function parseUrl(raw: string, base: string): URL | null {
   }
 }
 
-function headerValue(headers: Record<string, string>, name: string): string | undefined {
+function headerValue(
+  headers: Record<string, string>,
+  name: string
+): string | undefined {
   for (const key of Object.keys(headers)) {
     if (key.toLowerCase() === name) return headers[key];
   }
@@ -87,7 +102,11 @@ function enforcedPolicies(ctx: RuleContext, doc: Document): CspPolicy[] {
   const header = headerValue(ctx.page.headers ?? {}, "content-security-policy");
   const policies = header ? parseCspPolicies(header) : [];
   for (const meta of querySelectorAllOutsideNoscript(doc, "meta[http-equiv]")) {
-    if (meta.getAttribute("http-equiv")?.trim().toLowerCase() !== "content-security-policy") continue;
+    if (
+      meta.getAttribute("http-equiv")?.trim().toLowerCase() !==
+      "content-security-policy"
+    )
+      continue;
     const content = meta.getAttribute("content");
     if (content) policies.push(...parseCspPolicies(content, false));
   }
@@ -136,7 +155,10 @@ function htmlReferences(doc: Document, base: string): Reference[] {
     add(el.getAttribute("src"), "script", el);
   }
   for (const el of querySelectorAllOutsideNoscript(doc, "link[rel][href]")) {
-    const kind = linkKind(el.getAttribute("rel") ?? "", el.getAttribute("as") ?? "");
+    const kind = linkKind(
+      el.getAttribute("rel") ?? "",
+      el.getAttribute("as") ?? ""
+    );
     if (kind) add(el.getAttribute("href"), kind, el);
   }
   for (const el of querySelectorAllOutsideNoscript(doc, "iframe[src]")) {
@@ -149,19 +171,37 @@ function htmlReferences(doc: Document, base: string): Reference[] {
 }
 
 /** Third-party script URLs that a same-origin chunk loads at runtime. */
-function chunkReferences(ctx: RuleContext, pageUrls: Set<string>, pageHost: string): Reference[] {
+function chunkReferences(
+  ctx: RuleContext,
+  pageUrls: Set<string>,
+  pageHost: string
+): Reference[] {
   const refs: Reference[] = [];
   let scanned = 0;
-  for (const script of [...(ctx.site?.scripts ?? []), ...(ctx.site?.preloadedScripts ?? [])]) {
-    if (!script.content || !script.sourcePages.some((p) => pageUrls.has(p))) continue;
+  for (const script of [
+    ...(ctx.site?.scripts ?? []),
+    ...(ctx.site?.preloadedScripts ?? []),
+  ]) {
+    if (!script.content || !script.sourcePages.some((p) => pageUrls.has(p)))
+      continue;
     if (scanned >= MAX_TOTAL_SCAN) break;
     const text = script.content.slice(0, MAX_CHUNK_SCAN);
     scanned += text.length;
     for (const m of text.matchAll(CHUNK_SCRIPT_URL_RE)) {
       const at = m.index ?? 0;
-      if (!SCRIPT_LOAD_HINT.test(text.slice(Math.max(0, at - 300), at + m[0].length + 300))) continue;
+      if (
+        !SCRIPT_LOAD_HINT.test(
+          text.slice(Math.max(0, at - 300), at + m[0].length + 300)
+        )
+      )
+        continue;
       const url = parseUrl(m[2]!, script.url);
-      if (!url || url.hostname === pageHost || IGNORED_CHUNK_HOSTS.has(url.hostname)) continue;
+      if (
+        !url ||
+        url.hostname === pageHost ||
+        IGNORED_CHUNK_HOSTS.has(url.hostname)
+      )
+        continue;
       refs.push({ url, kind: "script", origin: "chunk" });
     }
   }
@@ -216,8 +256,9 @@ function vendorReferences(signals: PageSignals): Reference[] {
   const flags = deriveFlags(signals);
   for (const vendor of CSP_VENDORS) {
     const used =
-      !!vendor.detect.urls?.some((sig) => signals.urls.some((u) => urlMatches(u, sig))) ||
-      !!vendor.detect.code?.some((re) => re.test(signals.code));
+      !!vendor.detect.urls?.some((sig) =>
+        signals.urls.some((u) => urlMatches(u, sig))
+      ) || !!vendor.detect.code?.some((re) => re.test(signals.code));
     if (!used || vendor.unless?.(signals)) continue;
     for (const need of vendor.needs) {
       if (need.when && !flags.has(need.when)) continue;
@@ -263,7 +304,8 @@ export const cspBlocksOwnResourcesRule: Rule = {
           {
             name: "csp-blocks-own-resources",
             status: "pass",
-            message: "No enforced Content-Security-Policy to check (security/csp covers a missing policy)",
+            message:
+              "No enforced Content-Security-Policy to check (security/csp covers a missing policy)",
           },
         ],
       };
@@ -274,9 +316,12 @@ export const cspBlocksOwnResourcesRule: Rule = {
 
     // <base href> changes how relative URLs resolve, not what 'self' means.
     const baseHref = doc.querySelector("base[href]")?.getAttribute("href");
-    const base = (baseHref && parseUrl(baseHref, pageUrl.href)?.href) || pageUrl.href;
+    const base =
+      (baseHref && parseUrl(baseHref, pageUrl.href)?.href) || pageUrl.href;
 
-    const pageUrls = new Set([ctx.page.url, ctx.page.finalUrl].filter((u): u is string => !!u));
+    const pageUrls = new Set(
+      [ctx.page.url, ctx.page.finalUrl].filter((u): u is string => !!u)
+    );
     const references = [
       ...htmlReferences(doc, base),
       ...chunkReferences(ctx, pageUrls, pageUrl.hostname),
@@ -300,7 +345,8 @@ export const cspBlocksOwnResourcesRule: Rule = {
         // A load the HTML or a vendor makes outranks a chunk sighting.
         if (seen.origin === "chunk" && ref.origin !== "chunk") {
           seen.origin = ref.origin;
-          seen.example = ref.origin === "vendor" ? ref.url.origin : ref.url.href;
+          seen.example =
+            ref.origin === "vendor" ? ref.url.origin : ref.url.href;
         }
         // A vendor or known category outranks the first sighting of a bare host.
         if (!seen.category && ref.category) {
@@ -324,7 +370,9 @@ export const cspBlocksOwnResourcesRule: Rule = {
     // pub#776: a host named only as a URL inside a script chunk may never be
     // requested (an SDK's fallback behind a feature flag), so it is a note,
     // never counted as a blocked dependency.
-    const chunkOnly = [...blocked.values()].filter((b) => b.origins.size === 1 && b.origins.has("chunk"));
+    const chunkOnly = [...blocked.values()].filter(
+      (b) => b.origins.size === 1 && b.origins.has("chunk")
+    );
     const all = [...blocked.values()].filter((b) => !chunkOnly.includes(b));
     const note = chunkOnly.length > 0 ? chunkOnlyNote(chunkOnly) : null;
 
@@ -334,7 +382,8 @@ export const cspBlocksOwnResourcesRule: Rule = {
           {
             name: "csp-blocks-own-resources",
             status: "pass",
-            message: "The page's CSP allows the resources it references and the vendor hosts it uses",
+            message:
+              "The page's CSP allows the resources it references and the vendor hosts it uses",
           },
           ...(note ? [note] : []),
         ],
@@ -343,9 +392,16 @@ export const cspBlocksOwnResourcesRule: Rule = {
 
     const hasKnownVendor = all.some((b) => b.category !== undefined);
     const byDirective = new Map<string, string[]>();
-    for (const b of all) byDirective.set(b.directive, [...(byDirective.get(b.directive) ?? []), b.host]);
+    for (const b of all)
+      byDirective.set(b.directive, [
+        ...(byDirective.get(b.directive) ?? []),
+        b.host,
+      ]);
     const summary = [...byDirective]
-      .map(([directive, hosts]) => `${directive}: add ${hosts.slice(0, 5).join(", ")}${hosts.length > 5 ? ` and ${hosts.length - 5} more` : ""}`)
+      .map(
+        ([directive, hosts]) =>
+          `${directive}: add ${hosts.slice(0, 5).join(", ")}${hosts.length > 5 ? ` and ${hosts.length - 5} more` : ""}`
+      )
       .join("; ");
 
     const items: CheckItem[] = all.slice(0, MAX_ITEMS).map((b) => ({
@@ -378,9 +434,16 @@ export const cspBlocksOwnResourcesRule: Rule = {
 /** The informational row for hosts named only inside script chunks (pub#776). */
 function chunkOnlyNote(hosts: Blocked[]): CheckResult {
   const byDirective = new Map<string, string[]>();
-  for (const b of hosts) byDirective.set(b.directive, [...(byDirective.get(b.directive) ?? []), b.host]);
+  for (const b of hosts)
+    byDirective.set(b.directive, [
+      ...(byDirective.get(b.directive) ?? []),
+      b.host,
+    ]);
   const summary = [...byDirective]
-    .map(([directive, list]) => `${directive}: ${list.slice(0, 5).join(", ")}${list.length > 5 ? ` and ${list.length - 5} more` : ""}`)
+    .map(
+      ([directive, list]) =>
+        `${directive}: ${list.slice(0, 5).join(", ")}${list.length > 5 ? ` and ${list.length - 5} more` : ""}`
+    )
     .join("; ");
   const one = hosts.length === 1;
   return {
@@ -393,6 +456,8 @@ function chunkOnlyNote(hosts: Blocked[]): CheckResult {
       snippet: b.example,
       meta: { directive: b.directive, host: b.host, found: "chunk" },
     })),
-    ...(hosts.length > MAX_ITEMS ? { details: { additional: hosts.length - MAX_ITEMS } } : {}),
+    ...(hosts.length > MAX_ITEMS
+      ? { details: { additional: hosts.length - MAX_ITEMS } }
+      : {}),
   };
 }

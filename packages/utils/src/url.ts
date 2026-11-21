@@ -53,7 +53,9 @@ function isPrivateIPv4(hostname: string): boolean {
 function isPrivateIPv6(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return (
-    normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:")
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe80:")
   );
 }
 
@@ -106,7 +108,10 @@ export function isLoopbackHost(hostname: string): boolean {
  */
 export function isReservedIpv4(hostname: string): boolean {
   const octets = hostname.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((o) => Number.isNaN(o) || o < 0 || o > 255)) {
+  if (
+    octets.length !== 4 ||
+    octets.some((o) => Number.isNaN(o) || o < 0 || o > 255)
+  ) {
     return false;
   }
   const [a, b] = octets;
@@ -133,12 +138,16 @@ export function isReservedIpv6(hostname: string): boolean {
   // IPv4-mapped/-translated ::ffff:[0:]a.b.c.d — the WHATWG URL parser
   // canonicalizes the dotted tail into two hex hextets, so match both forms (with
   // the optional `0:` translated prefix) and re-check the embedded v4.
-  const mappedDotted = lower.match(/^::ffff:(?:0:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  const mappedDotted = lower.match(
+    /^::ffff:(?:0:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/
+  );
   if (mappedDotted) {
     const v4 = mappedDotted[1];
     return isLocalhost(v4) || isReservedIpv4(v4);
   }
-  const mappedHex = lower.match(/^::ffff:(?:0:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  const mappedHex = lower.match(
+    /^::ffff:(?:0:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+  );
   if (mappedHex) {
     const hi = parseInt(mappedHex[1], 16);
     const lo = parseInt(mappedHex[2], 16);
@@ -301,7 +310,8 @@ export function parseUserUrl(input: string): UrlParseResult {
     // Credentials and the fragment never leave the machine in a start URL: they
     // are not part of the page that is audited and would end up in cloud calls,
     // logs and reports. Authenticated crawls use --header.
-    const strippedCredentials = parsed.username !== "" || parsed.password !== "";
+    const strippedCredentials =
+      parsed.username !== "" || parsed.password !== "";
     parsed.username = "";
     parsed.password = "";
     parsed.hash = "";
@@ -317,7 +327,8 @@ export function parseUserUrl(input: string): UrlParseResult {
     }
 
     const local =
-      isLocalhost(parsed.hostname) || isNonPublicHostnameForPolicy(normalizeIpHostname(parsed.hostname));
+      isLocalhost(parsed.hostname) ||
+      isNonPublicHostnameForPolicy(normalizeIpHostname(parsed.hostname));
 
     // Only normalize scheme when user didn't provide one
     if (!hasScheme) {
@@ -436,7 +447,7 @@ export function crawledPageKeys(urls: Iterable<string>): Set<string> {
 export function redirectedAway(
   url: string,
   finalUrl: string | null | undefined,
-  crawled?: ReadonlySet<string>,
+  crawled?: ReadonlySet<string>
 ): boolean {
   if (!finalUrl || !crawled) return false;
   const target = normalizePageUrl(finalUrl);
@@ -604,8 +615,10 @@ const SCHEMELESS_COERCIBLE_TLDS = new Set([
  */
 export function coerceSchemelessUrl(href: string): string {
   const lowerHref = href.toLowerCase();
-  if (lowerHref.startsWith("http://") || lowerHref.startsWith("https://")) return href;
-  if (href.startsWith("/") || href.startsWith("./") || href.startsWith("../")) return href;
+  if (lowerHref.startsWith("http://") || lowerHref.startsWith("https://"))
+    return href;
+  if (href.startsWith("/") || href.startsWith("./") || href.startsWith("../"))
+    return href;
   if (href.includes(":")) return href;
 
   const host = href.split(/[/?#]/, 1)[0];
@@ -705,7 +718,10 @@ export interface ProjectNameContext {
  * Get project name context for a URL
  * Determines if a custom project name should be prompted for local addresses
  */
-export function getProjectNameContext(url: string, configName?: string): ProjectNameContext {
+export function getProjectNameContext(
+  url: string,
+  configName?: string
+): ProjectNameContext {
   try {
     const parsed = new URL(url);
     const local = isLocalhost(parsed.hostname);
@@ -713,7 +729,8 @@ export function getProjectNameContext(url: string, configName?: string): Project
     // Generate suggested name (matches domainToProjectName logic)
     const hostname = parsed.hostname;
     const base = hostname.replace(/\./g, "-");
-    const suggestedName = local && parsed.port ? `${base}-${parsed.port}` : base;
+    const suggestedName =
+      local && parsed.port ? `${base}-${parsed.port}` : base;
 
     return {
       isLocal: local,

@@ -28,20 +28,25 @@ export interface PrivateTargetReportShape {
  * sorted by name (then id) so the line reads in order. Empty for a public host,
  * and for reports written before pub#629.
  */
-export function privateTargetSkippedRules(report: PrivateTargetReportShape): PrivateTargetRule[] {
+export function privateTargetSkippedRules(
+  report: PrivateTargetReportShape
+): PrivateTargetRule[] {
   const rules: PrivateTargetRule[] = [];
   for (const ruleId of Object.keys(report.ruleResults)) {
     const result = report.ruleResults[ruleId];
     if (!result) continue;
     if (
       result.checks.some(
-        (c) => c.status === "skipped" && c.skipReason === PRIVATE_TARGET_SKIP_REASON,
+        (c) =>
+          c.status === "skipped" && c.skipReason === PRIVATE_TARGET_SKIP_REASON
       )
     ) {
       rules.push({ id: ruleId, name: result.meta.name });
     }
   }
-  return rules.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return rules.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
+  );
 }
 
 /**
@@ -50,7 +55,9 @@ export function privateTargetSkippedRules(report: PrivateTargetReportShape): Pri
  *   here and are not scored (HTTPS, Compression)."
  * Returns null when no rule was skipped for that reason.
  */
-export function privateTargetLine(report: PrivateTargetReportShape): string | null {
+export function privateTargetLine(
+  report: PrivateTargetReportShape
+): string | null {
   const rules = privateTargetSkippedRules(report);
   if (rules.length === 0) return null;
   const one = rules.length === 1;

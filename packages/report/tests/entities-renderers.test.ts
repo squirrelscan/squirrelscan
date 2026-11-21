@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, EntityMap, EntityMapNode } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -60,8 +61,16 @@ const MAP: EntityMap = {
         {
           property: "url",
           values: [
-            { value: "https://example.com/ada", pages: ["https://example.com/a"], morePages: 0 },
-            { value: "https://example.com/lovelace", pages: ["https://example.com/b"], morePages: 0 },
+            {
+              value: "https://example.com/ada",
+              pages: ["https://example.com/a"],
+              morePages: 0,
+            },
+            {
+              value: "https://example.com/lovelace",
+              pages: ["https://example.com/b"],
+              morePages: 0,
+            },
           ],
         },
       ],
@@ -171,22 +180,32 @@ describe("section placement", () => {
   // where it pushed the things a reader opened the report for off the screen.
   test.each([
     ["text", (r: AuditReport) => renderText(r), "ENTITIES", "ISSUES"],
-    ["markdown", (r: AuditReport) => renderMarkdown(r), "## Entities", "## Issues"],
+    [
+      "markdown",
+      (r: AuditReport) => renderMarkdown(r),
+      "## Entities",
+      "## Issues",
+    ],
     ["llm", (r: AuditReport) => renderLlm(r), "<entities", "<issues"],
     ["xml", (r: AuditReport) => renderXml(r), "<entities", "<issues"],
     ["html", (r: AuditReport) => renderHtml(r), 'id="em-data"', "issue"],
-  ])("%s puts the entities section after the findings", (_name, render, entities, issues) => {
-    const out = render(reportWithIssues());
-    const entitiesAt = out.indexOf(entities);
-    const issuesAt = out.indexOf(issues);
-    expect(entitiesAt).toBeGreaterThan(-1);
-    expect(issuesAt).toBeGreaterThan(-1);
-    expect(entitiesAt).toBeGreaterThan(issuesAt);
-  });
+  ])(
+    "%s puts the entities section after the findings",
+    (_name, render, entities, issues) => {
+      const out = render(reportWithIssues());
+      const entitiesAt = out.indexOf(entities);
+      const issuesAt = out.indexOf(issues);
+      expect(entitiesAt).toBeGreaterThan(-1);
+      expect(issuesAt).toBeGreaterThan(-1);
+      expect(entitiesAt).toBeGreaterThan(issuesAt);
+    }
+  );
 
   test("xml keeps the entities element inside the root", () => {
     const out = renderXml(reportWithIssues());
-    expect(out.indexOf("<entities")).toBeLessThan(out.indexOf("</squirrelscan-audit>"));
+    expect(out.indexOf("<entities")).toBeLessThan(
+      out.indexOf("</squirrelscan-audit>")
+    );
   });
 
   test("llm keeps the entities block inside the audit element", () => {
@@ -243,9 +262,13 @@ describe("markdown report", () => {
     const out = renderMarkdown(report(clipped));
 
     expect(out).toContain("### Conflicting properties (1)");
-    expect(out).toContain("1 entity affected, not included in this copy of the map.");
+    expect(out).toContain(
+      "1 entity affected, not included in this copy of the map."
+    );
     expect(out).toContain("### Dangling references (1)");
-    expect(out).toContain("1 reference affected, not included in this copy of the map.");
+    expect(out).toContain(
+      "1 reference affected, not included in this copy of the map."
+    );
     expect(out).not.toContain("No entity disagrees with itself across pages.");
   });
 });
@@ -267,7 +290,9 @@ describe("llm report", () => {
 
 describe("json report", () => {
   test("carries the map document verbatim under `entities`", () => {
-    const parsed = JSON.parse(renderJson(report(MAP))) as { entities?: EntityMap };
+    const parsed = JSON.parse(renderJson(report(MAP))) as {
+      entities?: EntityMap;
+    };
     expect(parsed.entities).toBeDefined();
     expect(parsed.entities!.format).toBe("squirrelscan/entity-map");
     expect(parsed.entities!.version).toBe(1);
@@ -277,7 +302,9 @@ describe("json report", () => {
   });
 
   test("omits the key when there is no map", () => {
-    const parsed = JSON.parse(renderJson(report(undefined))) as { entities?: EntityMap };
+    const parsed = JSON.parse(renderJson(report(undefined))) as {
+      entities?: EntityMap;
+    };
     expect(parsed.entities).toBeUndefined();
   });
 });
@@ -285,7 +312,9 @@ describe("json report", () => {
 describe("xml report", () => {
   test("carries an <entities> element with every node and reference", () => {
     const out = renderXml(report(MAP));
-    expect(out).toContain('<entities format="squirrelscan/entity-map" version="1"');
+    expect(out).toContain(
+      '<entities format="squirrelscan/entity-map" version="1"'
+    );
     expect(out).toContain('count="3"');
     expect(out).toContain('<entity key="id:https://example.com/#org"');
     expect(out).toContain('name="Acme Widgets"');
@@ -337,7 +366,9 @@ describe("html report", () => {
     const out = renderHtml(report(MAP));
     // One page-local control for the whole section. A table that kept listing
     // every unnamed image while the graph hid them would read as a bug.
-    expect(out).toContain("if (!showPageLocal && node.pageLocal) return false;");
+    expect(out).toContain(
+      "if (!showPageLocal && node.pageLocal) return false;"
+    );
   });
 
   test("the label budget is anchored to the fit scale, not to scale 1", () => {
@@ -362,8 +393,12 @@ describe("html report", () => {
     // The inlined JSON still parses back to the original name.
     const start = out.indexOf('id="em-data">') + 'id="em-data">'.length;
     const end = out.indexOf("</script>", start);
-    const parsed = JSON.parse(out.slice(start, end)) as { nodes: { name: string }[] };
-    expect(parsed.nodes[0]?.name).toBe("</script><script>window.pwned=1</script>");
+    const parsed = JSON.parse(out.slice(start, end)) as {
+      nodes: { name: string }[];
+    };
+    expect(parsed.nodes[0]?.name).toBe(
+      "</script><script>window.pwned=1</script>"
+    );
   });
 
   test("omits the section when there is no map", () => {

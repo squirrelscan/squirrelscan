@@ -32,8 +32,11 @@ export function isValidHeaderHost(value: string): boolean {
   if (raw === "" || /[*@\s\\]/.test(raw) || raw.includes("..")) return false;
   const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(raw);
   if (scheme && !/^https?$/i.test(scheme[1]!)) return false;
-  const authority = (scheme ? raw.slice(scheme[0].length) : raw).split(/[/?#]/)[0]!;
-  if (authority === "" || authority.replace(/:\d{1,5}$/, "").endsWith(".")) return false;
+  const authority = (scheme ? raw.slice(scheme[0].length) : raw).split(
+    /[/?#]/
+  )[0]!;
+  if (authority === "" || authority.replace(/:\d{1,5}$/, "").endsWith("."))
+    return false;
   try {
     return new URL(`https://${authority}`).hostname !== "";
   } catch {
@@ -48,11 +51,15 @@ export function isValidHeaderHost(value: string): boolean {
  * redirect, but the headers are never sent over http on the strength of it.
  * A missing or unreadable start URL falls back to the base URL.
  */
-export function headerScopeBase(seedUrl: string | null | undefined, baseUrl: string): string {
+export function headerScopeBase(
+  seedUrl: string | null | undefined,
+  baseUrl: string
+): string {
   try {
     const seed = seedUrl ? new URL(seedUrl) : null;
     const base = baseUrl ? new URL(baseUrl) : null;
-    if (seed && base && seed.protocol === "https:" && base.protocol === "http:") return seed.origin;
+    if (seed && base && seed.protocol === "https:" && base.protocol === "http:")
+      return seed.origin;
   } catch {
     // Unreadable: fall through to the base URL.
   }
@@ -90,7 +97,7 @@ export function mergeHeaderRecords(
  * here so they match the crawl (#1152).
  */
 export function customUserAgent(
-  headers: Readonly<Record<string, string>> | null | undefined,
+  headers: Readonly<Record<string, string>> | null | undefined
 ): string {
   const found = mergeHeaderRecords(headers);
   for (const [name, value] of Object.entries(found)) {
@@ -128,7 +135,7 @@ const CROSS_ORIGIN_REDIRECT_HEADER_ALLOWLIST = new Set([
 export function headersForRedirect(
   headers: HeadersInit | undefined,
   fromUrl: string,
-  toUrl: string,
+  toUrl: string
 ): Headers {
   const result = new Headers(headers);
   if (new URL(fromUrl).origin === new URL(toUrl).origin) return result;
@@ -152,7 +159,7 @@ export function headersForRedirect(
  */
 export function overlayTechHeaders(
   map: Record<string, string>,
-  techHeaders: Record<string, string> | null | undefined,
+  techHeaders: Record<string, string> | null | undefined
 ): Record<string, string> {
   if (techHeaders === undefined) return map;
   for (const name of TECH_DETECT_HEADER_NAMES) delete map[name];
@@ -171,7 +178,11 @@ export function techCookieNames(setCookies: Iterable<string>): string | null {
   const names: string[] = [];
   for (const cookie of setCookies) {
     const name = /^[^=;]*/.exec(cookie)?.[0]?.trim() ?? "";
-    if (name === "" || name.length > TECH_DETECT_HEADER_MAX_CHARS || names.includes(`${name}=`)) {
+    if (
+      name === "" ||
+      name.length > TECH_DETECT_HEADER_MAX_CHARS ||
+      names.includes(`${name}=`)
+    ) {
       continue;
     }
     names.push(`${name}=`);
@@ -258,7 +269,9 @@ interface NamedHeaderHost {
 function parseNamedHeaderHost(value: string): NamedHeaderHost | null {
   const raw = value.trim().toLowerCase();
   try {
-    const host = new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^\[|\]$/g, "");
+    const host = new URL(
+      raw.includes("://") ? raw : `https://${raw}`
+    ).hostname.replace(/^\[|\]$/g, "");
     return host === "" ? null : { host, allowHttp: raw.startsWith("http://") };
   } catch {
     return null;
@@ -273,7 +286,7 @@ function parseNamedHeaderHost(value: string): NamedHeaderHost | null {
  */
 export function createHeaderScope(
   baseUrl: string,
-  extraHosts: readonly string[] = [],
+  extraHosts: readonly string[] = []
 ): HeaderScope {
   let origin = "";
   try {
@@ -284,15 +297,24 @@ export function createHeaderScope(
   const named = new Map<string, boolean>();
   for (const entry of extraHosts) {
     const parsed = parseNamedHeaderHost(entry);
-    if (parsed) named.set(parsed.host, (named.get(parsed.host) ?? false) || parsed.allowHttp);
+    if (parsed)
+      named.set(
+        parsed.host,
+        (named.get(parsed.host) ?? false) || parsed.allowHttp
+      );
   }
   return (url) => {
     try {
       const parsed = new URL(url);
       if (origin !== "" && parsed.origin === origin) return true;
-      const allowHttp = named.get(parsed.hostname.toLowerCase().replace(/^\[|\]$/g, ""));
+      const allowHttp = named.get(
+        parsed.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+      );
       if (allowHttp === undefined) return false;
-      return parsed.protocol === "https:" || (allowHttp && parsed.protocol === "http:");
+      return (
+        parsed.protocol === "https:" ||
+        (allowHttp && parsed.protocol === "http:")
+      );
     } catch {
       return false;
     }

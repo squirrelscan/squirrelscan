@@ -8,12 +8,15 @@
 // than a grind. A focused in-harness unit test hit an unrelated store-failure
 // edge in the test harness; tracked as a follow-up.)
 
-import { readFileSync } from "fs";
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "fs";
 
 describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
   test("every 'ALTER TABLE pages ADD COLUMN' in MIGRATIONS is in PAGES_ALTER_COLUMNS", () => {
-    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+    const src = readFileSync(
+      new URL("../src/storage/sqlite.ts", import.meta.url),
+      "utf8"
+    );
 
     // Columns that any migration adds to `pages`.
     const migrationCols = new Set<string>();
@@ -37,7 +40,10 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
   // The same gap bit `sitemaps`: DBs recorded at 22 without is_news_sitemap
   // (migration 21) failed every audit at the first sitemap write.
   test("every 'ALTER TABLE sitemaps ADD COLUMN' in MIGRATIONS is in SITEMAPS_ALTER_COLUMNS", () => {
-    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+    const src = readFileSync(
+      new URL("../src/storage/sqlite.ts", import.meta.url),
+      "utf8"
+    );
 
     const migrationCols = new Set<string>();
     for (const m of src.matchAll(/ALTER TABLE sitemaps ADD COLUMN\s+(\w+)/g)) {
@@ -60,10 +66,15 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
   // produced nothing — without it setRobotsTxt throws on a version-collided DB
   // and the crawl fails at its first write (squirrelscan/repo#1733).
   test("every 'ALTER TABLE robots_txt ADD COLUMN' in MIGRATIONS is in ROBOTS_TXT_ALTER_COLUMNS", () => {
-    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+    const src = readFileSync(
+      new URL("../src/storage/sqlite.ts", import.meta.url),
+      "utf8"
+    );
 
     const migrationCols = new Set<string>();
-    for (const m of src.matchAll(/ALTER TABLE robots_txt ADD COLUMN\s+(\w+)/g)) {
+    for (const m of src.matchAll(
+      /ALTER TABLE robots_txt ADD COLUMN\s+(\w+)/g
+    )) {
       migrationCols.add(m[1]!);
     }
 
@@ -83,7 +94,10 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
   // (migration 34, pub#821) are written by every upsertLink, so a
   // version-collided DB without them fails the whole external-link phase.
   test("every 'ALTER TABLE links ADD COLUMN' in MIGRATIONS is in LINKS_ALTER_COLUMNS", () => {
-    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+    const src = readFileSync(
+      new URL("../src/storage/sqlite.ts", import.meta.url),
+      "utf8"
+    );
 
     const migrationCols = new Set<string>();
     for (const m of src.matchAll(/ALTER TABLE links ADD COLUMN\s+(\w+)/g)) {
@@ -106,14 +120,21 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
   // upsertSitePages, so a version-collided DB without it fails every smart-audit
   // page write.
   test("every 'ALTER TABLE site_pages ADD COLUMN' in MIGRATIONS is in SITE_PAGES_ALTER_COLUMNS", () => {
-    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+    const src = readFileSync(
+      new URL("../src/storage/sqlite.ts", import.meta.url),
+      "utf8"
+    );
 
     const migrationCols = new Set<string>();
-    for (const m of src.matchAll(/ALTER TABLE site_pages ADD COLUMN\s+(\w+)/g)) {
+    for (const m of src.matchAll(
+      /ALTER TABLE site_pages ADD COLUMN\s+(\w+)/g
+    )) {
       migrationCols.add(m[1]!);
     }
 
-    const listBlock = src.match(/const SITE_PAGES_ALTER_COLUMNS[^[]*\[([\s\S]*?)\];/);
+    const listBlock = src.match(
+      /const SITE_PAGES_ALTER_COLUMNS[^[]*\[([\s\S]*?)\];/
+    );
     expect(listBlock).not.toBeNull();
     const reconciledCols = new Set<string>();
     for (const m of listBlock![1]!.matchAll(/name:\s*"(\w+)"/g)) {

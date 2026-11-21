@@ -4,12 +4,16 @@
 // renderers show "0 pages affected" for exactly the link-heavy sites the fold
 // exists for.
 
-import { describe, expect, test } from "bun:test";
 import type { ReportRuleResult } from "@squirrelscan/core-contracts";
+
+import { describe, expect, test } from "bun:test";
 
 import { groupIssuesByCategory } from "../src/grouping";
 
-function rule(id: string, checks: ReportRuleResult["checks"]): ReportRuleResult {
+function rule(
+  id: string,
+  checks: ReportRuleResult["checks"]
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -63,6 +67,9 @@ describe("groupIssuesByCategory check.pages union (#910)", () => {
         },
       ]),
     });
-    expect(grouped[0].rules[0].checks[0].pages).toEqual(["https://e.com/a", "https://e.com/b"]);
+    expect(grouped[0].rules[0].checks[0].pages).toEqual([
+      "https://e.com/a",
+      "https://e.com/b",
+    ]);
   });
 });

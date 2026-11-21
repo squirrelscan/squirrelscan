@@ -9,7 +9,13 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
  * `sid` and `sessionid` are also ordinary words in other systems, so they need the strict generated
  * form; the other names are unambiguous and take the looser one.
  */
-const SESSION_NAMES = new Set(["phpsessid", "jsessionid", "sid", "sessionid", "session_id"]);
+const SESSION_NAMES = new Set([
+  "phpsessid",
+  "jsessionid",
+  "sid",
+  "sessionid",
+  "session_id",
+]);
 const WEAK_NAMES = new Set(["sid", "sessionid"]);
 
 const MIN_SESSION_VALUE = 8;
@@ -48,7 +54,12 @@ const WORD_PAIR = /[A-Za-z]{3,}[-_][A-Za-z]{3,}/;
 export function looksLikeSessionValue(value: string, strict = false): boolean {
   if (/^\d+$/.test(value)) return false;
   if (strict) {
-    return value.length >= 16 && /[a-z]/i.test(value) && /\d/.test(value) && !WORD_PAIR.test(value);
+    return (
+      value.length >= 16 &&
+      /[a-z]/i.test(value) &&
+      /\d/.test(value) &&
+      !WORD_PAIR.test(value)
+    );
   }
   return value.length >= MIN_SESSION_VALUE && !HUMAN_PHRASE.test(value);
 }
@@ -90,20 +101,28 @@ export function sessionParamsOf(rawUrl: string): SessionParam[] {
   }
   // ColdFusion sends the pair: CFID alone is a short counter.
   const cftoken = query.get("cftoken");
-  if (query.has("cfid") && cftoken !== undefined && cftoken.length >= MIN_SESSION_VALUE) {
+  if (
+    query.has("cfid") &&
+    cftoken !== undefined &&
+    cftoken.length >= MIN_SESSION_VALUE
+  ) {
     add("CFID", "query");
     add("CFTOKEN", "query");
   }
 
   for (const match of url.pathname.matchAll(/;([A-Za-z0-9_]+)=([^;/?#]*)/g)) {
     const name = match[1]!;
-    if (isSessionName(name) && valueFits(name, decodeSafe(match[2]!))) add(name, "path");
+    if (isSessionName(name) && valueFits(name, decodeSafe(match[2]!)))
+      add(name, "path");
   }
   return found;
 }
 
 /** The URL with every session value replaced by `…`, and no fragment or userinfo. */
-export function maskSessionValues(rawUrl: string, params: SessionParam[]): string {
+export function maskSessionValues(
+  rawUrl: string,
+  params: SessionParam[]
+): string {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -111,8 +130,10 @@ export function maskSessionValues(rawUrl: string, params: SessionParam[]): strin
     return MASK;
   }
   const names = new Set(params.map((p) => p.name.toLowerCase()));
-  const path = url.pathname.replace(/;([A-Za-z0-9_]+)=([^;/?#]*)/g, (whole, name: string) =>
-    names.has(name.toLowerCase()) ? `;${name}=${MASK}` : whole,
+  const path = url.pathname.replace(
+    /;([A-Za-z0-9_]+)=([^;/?#]*)/g,
+    (whole, name: string) =>
+      names.has(name.toLowerCase()) ? `;${name}=${MASK}` : whole
   );
   const query = url.search
     .replace(/^\?/, "")
@@ -121,13 +142,16 @@ export function maskSessionValues(rawUrl: string, params: SessionParam[]): strin
     .map((pair) => {
       const eq = pair.indexOf("=");
       const name = eq === -1 ? pair : pair.slice(0, eq);
-      return names.has(decodeSafe(name).toLowerCase()) ? `${name}=${MASK}` : pair;
+      return names.has(decodeSafe(name).toLowerCase())
+        ? `${name}=${MASK}`
+        : pair;
     })
     .join("&");
   return `${url.protocol}//${url.host}${path}${query ? `?${query}` : ""}`;
 }
 
-const nameList = (params: SessionParam[]) => [...new Set(params.map((p) => p.name))].join(", ");
+const nameList = (params: SessionParam[]) =>
+  [...new Set(params.map((p) => p.name))].join(", ");
 
 export const sessionIdsRule: Rule = {
   meta: {
@@ -135,7 +159,7 @@ export const sessionIdsRule: Rule = {
     name: "Session IDs in URLs",
     description: "Checks that crawlable URLs do not carry a session ID",
     solution:
-      "A session ID in the URL gives every visitor, and every crawler visit, a different URL for the same page, so search engines see unlimited duplicates, and a shared link can hand one visitor's session to another. Keep the session in a cookie. For PHP set session.use_only_cookies=1 and session.use_trans_sid=0; for Java servlet containers disable URL rewriting (tracking-mode COOKIE); for ASP.NET use cookieless=\"false\". Redirect the old URLs to the clean ones and add a canonical tag.",
+      'A session ID in the URL gives every visitor, and every crawler visit, a different URL for the same page, so search engines see unlimited duplicates, and a shared link can hand one visitor\'s session to another. Keep the session in a cookie. For PHP set session.use_only_cookies=1 and session.use_trans_sid=0; for Java servlet containers disable URL rewriting (tracking-mode COOKIE); for ASP.NET use cookieless="false". Redirect the old URLs to the clean ones and add a canonical tag.',
     category: "url",
     scope: "page",
     findingScope: "page",
@@ -153,8 +177,16 @@ export const sessionIdsRule: Rule = {
         name: "session-id-in-url",
         status: "warn",
         message: `Page URL carries a session ID (${nameList(own)})`,
-        items: [{ id: maskSessionValues(ctx.page.url, own), label: `${own[0]!.where} parameter ${own[0]!.name}` }],
-        details: { parameters: own.map((p) => p.name), where: own.map((p) => p.where) },
+        items: [
+          {
+            id: maskSessionValues(ctx.page.url, own),
+            label: `${own[0]!.where} parameter ${own[0]!.name}`,
+          },
+        ],
+        details: {
+          parameters: own.map((p) => p.name),
+          where: own.map((p) => p.where),
+        },
       });
     }
 
@@ -167,7 +199,10 @@ export const sessionIdsRule: Rule = {
       const masked = maskSessionValues(link.url, params);
       if (carriers.has(masked)) continue;
       names.push(...params);
-      carriers.set(masked, { id: masked, label: `${nameList(params)} in the ${params[0]!.where}` });
+      carriers.set(masked, {
+        id: masked,
+        label: `${nameList(params)} in the ${params[0]!.where}`,
+      });
     }
     if (carriers.size > 0) {
       const items = [...carriers.values()];
@@ -178,13 +213,19 @@ export const sessionIdsRule: Rule = {
         items: items.slice(0, SAMPLE_LIMIT),
         details: {
           count: items.length,
-          ...(items.length > SAMPLE_LIMIT ? { additional: items.length - SAMPLE_LIMIT } : {}),
+          ...(items.length > SAMPLE_LIMIT
+            ? { additional: items.length - SAMPLE_LIMIT }
+            : {}),
         },
       });
     }
 
     if (checks.length === 0) {
-      checks.push({ name: "session-ids", status: "pass", message: "No session IDs in URLs" });
+      checks.push({
+        name: "session-ids",
+        status: "pass",
+        message: "No session IDs in URLs",
+      });
     }
     return { checks };
   },

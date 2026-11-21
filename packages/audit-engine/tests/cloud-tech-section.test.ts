@@ -3,9 +3,8 @@
 // dashboard reads. Before this, runCloudAudit returned `technologies` only in a
 // side field, so cloud audits left websiteTechnologies empty ("0 detected").
 
-import { describe, expect, test } from "bun:test";
-
 import { detectTechnologies } from "@squirrelscan/tech-detect";
+import { describe, expect, test } from "bun:test";
 
 import {
   buildReportTechnologies,
@@ -59,7 +58,7 @@ describe("buildReportTechnologies", () => {
             title: "x",
           },
         ],
-      },
+      }
     );
 
     expect(section.added).toEqual(["wix"]);
@@ -105,7 +104,9 @@ describe("detectReportTechnologies (local base scan)", () => {
     const ids = section.items.map((t) => t.id);
     expect(ids).toContain("wix");
     expect(ids).toContain("waf-cloudflare");
-    expect(section.items.find((t) => t.id === "waf-cloudflare")?.category).toBe("security");
+    expect(section.items.find((t) => t.id === "waf-cloudflare")?.category).toBe(
+      "security"
+    );
     expect(section.added).toEqual([]);
     expect(section.firstScan).toBe(false);
   });

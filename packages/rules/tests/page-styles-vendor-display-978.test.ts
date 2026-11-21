@@ -2,27 +2,30 @@
 // are shown values, not an unreadable declaration. Chromium rows for them are
 // in static-hidden-chromium.json.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaCommandNameRule as aria } from "../src/a11y/aria-command-name";
 import { buttonNameRule } from "../src/a11y/button-name";
 import { readDeclarations } from "../src/shared/page-styles";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 async function statuses(
   rule: Pick<Rule, "run">,
-  css: string,
+  css: string
 ): Promise<Record<string, string>> {
   const url = "https://example.com/";
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body><main><div class="menu"><div class="item"><button type="button"></button></div></div></main></body></html>`;
-  const checks = (await rule.run({
-    page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
-    parsed: parsePage(html, url) as ParsedPage,
-    options: {},
-  })).checks as CheckResult[];
+  const checks = (
+    await rule.run({
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url) as ParsedPage,
+      options: {},
+    })
+  ).checks as CheckResult[];
   return Object.fromEntries(checks.map((c) => [c.name, c.status]));
 }
 
@@ -38,11 +41,14 @@ const SHOWN = [
   "-moz-box",
   "-moz-inline-box",
 ];
-const CHAIN = "display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex";
+const CHAIN =
+  "display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex";
 
 describe("readDeclarations: vendor-prefixed display", () => {
   test("the standard-last chain reads as shown", () => {
-    expect(readDeclarations(CHAIN)).toEqual({ display: { value: "shown", important: false } });
+    expect(readDeclarations(CHAIN)).toEqual({
+      display: { value: "shown", important: false },
+    });
   });
 
   test("-webkit-* values read as shown alone", () => {
@@ -60,12 +66,16 @@ describe("readDeclarations: vendor-prefixed display", () => {
   });
 
   test("an engine-dependent value after display:none is unknown, not shown", () => {
-    expect(readDeclarations("display:none;display:-ms-flexbox")).toBe("unknown");
+    expect(readDeclarations("display:none;display:-ms-flexbox")).toBe(
+      "unknown"
+    );
     expect(readDeclarations("display:flex;display:-moz-box")).toBe("unknown");
   });
 
   test("a later standard value overrides an engine-dependent one everywhere", () => {
-    expect(readDeclarations("display:none;display:-ms-flexbox;display:flex")).toEqual({
+    expect(
+      readDeclarations("display:none;display:-ms-flexbox;display:flex")
+    ).toEqual({
       display: { value: "shown", important: false },
     });
   });
@@ -77,7 +87,9 @@ describe("readDeclarations: vendor-prefixed display", () => {
   });
 
   test("an !important engine-dependent value is not overridden by a plain one", () => {
-    expect(readDeclarations("display:-ms-flexbox!important;display:flex")).toBe("unknown");
+    expect(readDeclarations("display:-ms-flexbox!important;display:flex")).toBe(
+      "unknown"
+    );
   });
 
   test("unreadable values stay unknown", () => {
@@ -106,22 +118,35 @@ describe("the issue's repro table: an unnamed button under the rule fails", () =
   };
   for (const [name, css] of Object.entries(cases)) {
     test(name, async () => {
-      expect(await statuses(buttonNameRule, css)).toEqual({ "button-name": "fail" });
-      expect(await statuses(aria, css)).toEqual({ "aria-command-name": "fail" });
+      expect(await statuses(buttonNameRule, css)).toEqual({
+        "button-name": "fail",
+      });
+      expect(await statuses(aria, css)).toEqual({
+        "aria-command-name": "fail",
+      });
     });
   }
 
   test("var(--x) stays unconfirmed", async () => {
-    expect(await statuses(buttonNameRule, ".menu .item{display:var(--x)}")).toEqual({
+    expect(
+      await statuses(buttonNameRule, ".menu .item{display:var(--x)}")
+    ).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });
 
   test("display:none last in a vendor chain still hides, or stays unconfirmed", async () => {
-    expect(await statuses(buttonNameRule, ".item{display:-webkit-box;display:none}")).toEqual({
+    expect(
+      await statuses(buttonNameRule, ".item{display:-webkit-box;display:none}")
+    ).toEqual({
       "button-name": "pass",
     });
-    expect(await statuses(buttonNameRule, ".menu .item{display:-webkit-box;display:none}")).toEqual({
+    expect(
+      await statuses(
+        buttonNameRule,
+        ".menu .item{display:-webkit-box;display:none}"
+      )
+    ).toEqual({
       "button-name-unconfirmed": "warn",
     });
   });

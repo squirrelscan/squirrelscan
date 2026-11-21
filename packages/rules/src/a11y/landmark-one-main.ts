@@ -1,8 +1,9 @@
 // a11y/landmark-one-main - Page has one main landmark
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const landmarkOneMainRule: Rule = {
   meta: {
@@ -50,7 +51,10 @@ export const landmarkOneMainRule: Rule = {
       for (const main of mainElements) {
         const tagName = main.tagName.toLowerCase();
         const id = main.getAttribute("id");
-        const cls = main.getAttribute("class")?.split(CLASS_SPLIT).find(Boolean);
+        const cls = main
+          .getAttribute("class")
+          ?.split(CLASS_SPLIT)
+          .find(Boolean);
         mainIdentifiers.push(
           id ? `${tagName}#${id}` : cls ? `${tagName}.${cls}` : tagName
         );

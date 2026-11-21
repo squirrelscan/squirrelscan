@@ -65,7 +65,10 @@ function srcsetKeys(value: string | null, base: string): string[] {
 }
 
 /** Eligible LCP candidates in document order, at most `limit`. */
-export function findLcpCandidates(doc: Document, limit = Number.POSITIVE_INFINITY): Element[] {
+export function findLcpCandidates(
+  doc: Document,
+  limit = Number.POSITIVE_INFINITY
+): Element[] {
   const candidates: Element[] = [];
   for (const img of querySelectorAllOutsideNoscript(doc, "img")) {
     if (candidates.length >= limit) break;
@@ -75,7 +78,8 @@ export function findLcpCandidates(doc: Document, limit = Number.POSITIVE_INFINIT
     const lower = src.toLowerCase().split("?")[0] ?? src;
     if (lower.endsWith(".svg") || lower.endsWith(".ico")) continue;
     if (img.getAttribute("loading") === "lazy") continue;
-    if (isSmallDeclared(img.getAttribute("width"), img.getAttribute("height"))) continue;
+    if (isSmallDeclared(img.getAttribute("width"), img.getAttribute("height")))
+      continue;
     // Skip logos inside header/nav; rarely the LCP element.
     if (img.closest("header, nav")) continue;
     candidates.push(img);
@@ -89,28 +93,46 @@ export function findLcpCandidate(doc: Document): Element | null {
 }
 
 /** URL keys of every `<link rel="preload" as="image">` (href and imagesrcset). */
-export function collectImagePreloadKeys(doc: Document, pageUrl: string): Set<string> {
+export function collectImagePreloadKeys(
+  doc: Document,
+  pageUrl: string
+): Set<string> {
   const keys = new Set<string>();
-  for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="preload"][as="image"]')) {
+  for (const link of querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel~="preload"][as="image"]'
+  )) {
     const href = link.getAttribute("href");
     if (href) {
       const key = urlKey(href, pageUrl);
       if (key) keys.add(key);
     }
-    for (const key of srcsetKeys(link.getAttribute("imagesrcset"), pageUrl)) keys.add(key);
+    for (const key of srcsetKeys(link.getAttribute("imagesrcset"), pageUrl))
+      keys.add(key);
   }
   return keys;
 }
 
 /** Resolved href and imagesrcset URLs from every image preload, in document order. */
-export function collectImagePreloadUrls(doc: Document, pageUrl: string): string[] {
+export function collectImagePreloadUrls(
+  doc: Document,
+  pageUrl: string
+): string[] {
   const urls = new Set<string>();
   const addResolved = (value: string) => {
     const resolved = resolveImageUrl(value, pageUrl);
-    if (!resolved || resolved.startsWith("data:") || resolved.startsWith("blob:")) return;
+    if (
+      !resolved ||
+      resolved.startsWith("data:") ||
+      resolved.startsWith("blob:")
+    )
+      return;
     urls.add(resolved);
   };
-  for (const link of querySelectorAllOutsideNoscript(doc, 'link[rel~="preload"][as="image"]')) {
+  for (const link of querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel~="preload"][as="image"]'
+  )) {
     const href = link.getAttribute("href");
     if (href) addResolved(href);
     for (const value of srcsetValues(link.getAttribute("imagesrcset"))) {
@@ -125,7 +147,11 @@ export function collectImagePreloadUrls(doc: Document, pageUrl: string): string[
  * (a responsive hero preloads a srcset variant). URL-matched only: a preload for
  * some other image is no evidence this one is handled.
  */
-export function isImagePreloaded(img: Element, preloadKeys: Set<string>, pageUrl: string): boolean {
+export function isImagePreloaded(
+  img: Element,
+  preloadKeys: Set<string>,
+  pageUrl: string
+): boolean {
   const keys = srcsetKeys(img.getAttribute("srcset"), pageUrl);
   const src = img.getAttribute("src");
   const srcKey = src ? urlKey(src, pageUrl) : null;

@@ -2,10 +2,16 @@
 // Pages are real parsed HTML, so the legacy path derives the score with the same function the
 // streaming engine stores; the streaming ctx is fed those stored scores.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+
+import type { RuleContext } from "../src/types";
 
 import { pageReadingLevel } from "../src/content/reading-level";
 import {
@@ -13,13 +19,14 @@ import {
   VOICE_MIN_PAGES,
   VOICE_MIN_SAMPLE,
 } from "../src/content/voice-consistency";
-import type { RuleContext } from "../src/types";
 
-const PLAIN = "Every customer receives careful support during the first week of service. ";
+const PLAIN =
+  "Every customer receives careful support during the first week of service. ";
 const HARD =
   "Institutional comprehensiveness necessitates multidimensional organizational transformation considerations. ";
 const EASY = "We like to run. The dog can jump. It is fun to play. ";
-const MIXED = "Good tools make daily work simpler for busy families in every community. ";
+const MIXED =
+  "Good tools make daily work simpler for busy families in every community. ";
 
 function html(text: string, copies: number): string {
   return `<!DOCTYPE html><html><head><title>t</title></head><body><main><p>${text.repeat(copies)}</p></main></body></html>`;
@@ -55,8 +62,13 @@ function legacyCtx(specs: Spec[]): RuleContext {
         url: u(s.path),
         statusCode: s.status ?? 200,
         parsed: parsePage(
-          s.noindex ? s.html.replace("<head>", '<head><meta name="robots" content="noindex">') : s.html,
-          u(s.path),
+          s.noindex
+            ? s.html.replace(
+                "<head>",
+                '<head><meta name="robots" content="noindex">'
+              )
+            : s.html,
+          u(s.path)
         ),
         headers: {},
       })),
@@ -130,7 +142,13 @@ function streamCtx(specs: Spec[]): RuleContext {
     page: { url: u("/"), html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {},
     options: {},
-    site: { baseUrl: u("/"), pages: [], robotsTxt: null, sitemaps: null, siteIndexable: true },
+    site: {
+      baseUrl: u("/"),
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      siteIndexable: true,
+    },
     siteQuery,
   } as unknown as RuleContext;
 }
@@ -149,7 +167,8 @@ async function bothPaths(specs: Spec[]): Promise<CheckResult> {
 
 describe("content/voice-consistency", () => {
   test("fixtures read at the levels the tests assume", () => {
-    const lvl = (t: string, n: number) => pageReadingLevel(parsePage(html(t, n), u("/x")))!;
+    const lvl = (t: string, n: number) =>
+      pageReadingLevel(parsePage(html(t, n), u("/x")))!;
     expect(Math.abs(lvl(PLAIN, 12) - lvl(MIXED, 12))).toBeLessThan(15);
     expect(lvl(PLAIN, 12) - lvl(HARD, 16)).toBeGreaterThanOrEqual(25);
     expect(lvl(EASY, 12) - lvl(PLAIN, 12)).toBeGreaterThanOrEqual(25);
@@ -168,11 +187,17 @@ describe("content/voice-consistency", () => {
     expect(check.items?.[0]?.id).toBe(u("/odd"));
     expect(check.items?.[0]?.label).toContain("harder");
     expect(check.items?.[0]?.label).toContain("site norm of");
-    expect(check.items?.[0]?.meta).toMatchObject({ medianFlesch: expect.any(Number), fleschScore: expect.any(Number) });
+    expect(check.items?.[0]?.meta).toMatchObject({
+      medianFlesch: expect.any(Number),
+      fleschScore: expect.any(Number),
+    });
   });
 
   test("a much easier page is flagged too", async () => {
-    const check = await bothPaths([...normals(14), { path: "/kids", html: html(EASY, 12) }]);
+    const check = await bothPaths([
+      ...normals(14),
+      { path: "/kids", html: html(EASY, 12) },
+    ]);
     expect(check.status).toBe("info");
     expect(check.items?.[0]?.label).toContain("easier");
   });
@@ -190,7 +215,10 @@ describe("content/voice-consistency", () => {
   });
 
   test("a stored page type of legal is excluded wherever the URL sits", async () => {
-    const specs = [...normals(14), { path: "/policies/page-7", html: html(HARD, 16), pageType: "legal" }];
+    const specs = [
+      ...normals(14),
+      { path: "/policies/page-7", html: html(HARD, 16), pageType: "legal" },
+    ];
     const check = (await run(streamCtx(specs)))[0]!;
     expect(check.status).toBe("pass");
     expect(check.details).toMatchObject({ excludedLegalPages: 1 });
@@ -203,7 +231,10 @@ describe("content/voice-consistency", () => {
   });
 
   test("too few scorable pages is skipped", async () => {
-    const short = Array.from({ length: 12 }, (_, i) => ({ path: `/s${i}`, html: html("Hi there. ", 2) }));
+    const short = Array.from({ length: 12 }, (_, i) => ({
+      path: `/s${i}`,
+      html: html("Hi there. ", 2),
+    }));
     const check = await bothPaths([...normals(VOICE_MIN_SAMPLE - 1), ...short]);
     expect(check.status).toBe("skipped");
     expect(check.message).toContain("enough text to score");

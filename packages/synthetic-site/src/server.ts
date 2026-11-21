@@ -32,7 +32,10 @@ export interface ServedSite {
 // least reproducible-per-model, even though true per-request ordering isn't
 // guaranteed under concurrent load — this is a timing simulation, not model
 // content, so that caveat is acceptable.
-function resolveLatencyMs(rng: Rng, latency: number | LatencyRange | undefined): number {
+function resolveLatencyMs(
+  rng: Rng,
+  latency: number | LatencyRange | undefined
+): number {
   if (latency === undefined) return 0;
   if (typeof latency === "number") return latency;
   const { minMs, maxMs } = latency;
@@ -40,11 +43,16 @@ function resolveLatencyMs(rng: Rng, latency: number | LatencyRange | undefined):
 }
 
 function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+  return ms > 0
+    ? new Promise((resolve) => setTimeout(resolve, ms))
+    : Promise.resolve();
 }
 
 /** Serves `model` over HTTP. Caller must call `stop()` when done (tests: afterEach). */
-export function serveSite(model: SiteModel, opts: ServeSiteOptions = {}): ServedSite {
+export function serveSite(
+  model: SiteModel,
+  opts: ServeSiteOptions = {}
+): ServedSite {
   const byPath = new Map(model.pages.map((p) => [p.path, p]));
   const latencyRng = createRng(deriveSeed(model.seed, "latency"));
   // Set once the listener is up (see below) — closed over by fetch, always
@@ -84,14 +92,18 @@ export function serveSite(model: SiteModel, opts: ServeSiteOptions = {}): Served
       }
 
       const html = renderPageHtml(page, origin);
-      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+      return new Response(html, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
     },
   });
 
   // "0.0.0.0"/undefined is what Bun listens on but isn't always connectable
   // as a literal fetch() target — normalize to localhost for the returned URL.
   const connectHost =
-    !server.hostname || server.hostname === "0.0.0.0" ? "localhost" : server.hostname;
+    !server.hostname || server.hostname === "0.0.0.0"
+      ? "localhost"
+      : server.hostname;
   origin = `http://${connectHost}:${server.port}`;
 
   return {

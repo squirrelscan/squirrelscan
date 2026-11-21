@@ -23,7 +23,9 @@ const server = Bun.serve({
           controller.enqueue(new TextEncoder().encode("<?xml"));
         },
       });
-      return new Response(stall, { headers: { "content-type": "application/xml" } });
+      return new Response(stall, {
+        headers: { "content-type": "application/xml" },
+      });
     }
     if (path === "/missing.xml") return new Response("nope", { status: 404 });
     if (path === "/sitemap.xml") {
@@ -32,7 +34,7 @@ const server = Bun.serve({
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://example.com/one</loc></url>
 </urlset>`,
-        { headers: { "content-type": "application/xml" } },
+        { headers: { "content-type": "application/xml" } }
       );
     }
     return new Response("ok", { headers: { "content-type": "text/plain" } });
@@ -45,7 +47,15 @@ afterAll(() => {
 });
 
 const fetchWithin = (path: string) =>
-  Effect.runPromise(fetchSitemap(`${base}${path}`, "test-agent", undefined, undefined, DEADLINE_MS));
+  Effect.runPromise(
+    fetchSitemap(
+      `${base}${path}`,
+      "test-agent",
+      undefined,
+      undefined,
+      DEADLINE_MS
+    )
+  );
 
 describe("sitemap fetch deadline (#1729)", () => {
   test("a sitemap body that stalls after the headers ends at the deadline", async () => {
@@ -61,7 +71,10 @@ describe("sitemap fetch deadline (#1729)", () => {
   test("a sitemap that answers promptly is still parsed", async () => {
     const result = await fetchWithin("/sitemap.xml");
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.urls.map((u) => u.loc)).toEqual(["https://example.com/one"]);
+    if (result.success)
+      expect(result.data.urls.map((u) => u.loc)).toEqual([
+        "https://example.com/one",
+      ]);
   });
 
   test("a stalled body, an HTTP error and a connect failure keep their own reasons", async () => {
@@ -81,13 +94,18 @@ describe("sitemap fetch deadline (#1729)", () => {
       globalThis.fetch = realFetch;
     }
 
-    expect(stalled.success || notFound.success || unreachable.success).toBe(false);
+    expect(stalled.success || notFound.success || unreachable.success).toBe(
+      false
+    );
     if (stalled.success || notFound.success || unreachable.success) return;
     // A body that never arrives reads as "Empty response", the text persisted
     // sitemap-failure records have always carried; it is not settled, so it
     // is not reported as the origin's answer.
     expect(stalled).toMatchObject({ error: "Empty response", settled: false });
     expect(notFound).toMatchObject({ error: "HTTP 404", settled: true });
-    expect(unreachable).toMatchObject({ error: "connection refused", settled: false });
+    expect(unreachable).toMatchObject({
+      error: "connection refused",
+      settled: false,
+    });
   });
 });

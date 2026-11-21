@@ -2,13 +2,14 @@
 // page is soft-404, noindex or (pub#841) classified contact or legal is per page, and a gated
 // representative would otherwise hand its skip to healthy members.
 
-import { describe, expect, test } from "bun:test";
-
 import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import { fannableRules } from "../src/template-fanout";
 
-const template = [...loadAllRules().values()].find((r) => r.meta.verdictScope === "template")!;
+const template = [...loadAllRules().values()].find(
+  (r) => r.meta.verdictScope === "template"
+)!;
 const withMeta = (id: string, extra: Record<string, unknown>) => ({
   ...template,
   meta: { ...template.meta, id, ...extra },
@@ -16,7 +17,9 @@ const withMeta = (id: string, extra: Record<string, unknown>) => ({
 
 describe("fannableRules", () => {
   test("a template-scoped rule with no gate is fannable", () => {
-    expect(fannableRules([withMeta("plugin/plain", {})]).map((r) => r.meta.id)).toEqual(["plugin/plain"]);
+    expect(
+      fannableRules([withMeta("plugin/plain", {})]).map((r) => r.meta.id)
+    ).toEqual(["plugin/plain"]);
   });
 
   test.each([
@@ -28,10 +31,14 @@ describe("fannableRules", () => {
   });
 
   test("an empty skipOnPageType list gates nothing", () => {
-    expect(fannableRules([withMeta("plugin/empty", { skipOnPageType: [] })]).length).toBe(1);
+    expect(
+      fannableRules([withMeta("plugin/empty", { skipOnPageType: [] })]).length
+    ).toBe(1);
   });
 
   test("a page-scoped rule is never fannable", () => {
-    expect(fannableRules([withMeta("plugin/page", { verdictScope: "page" })])).toEqual([]);
+    expect(
+      fannableRules([withMeta("plugin/page", { verdictScope: "page" })])
+    ).toEqual([]);
   });
 });

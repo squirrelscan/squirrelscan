@@ -4,9 +4,6 @@
 // `Retry-After` is read (seconds and HTTP-date), and how a wait is bounded.
 // The scheduling half lives in rate-limit-backoff.test.ts.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import {
   MIN_RATE_LIMIT_WAIT_MS,
   isRateLimitedResponse,
@@ -14,6 +11,8 @@ import {
   parseRetryAfterMs,
   rateLimitBackoffMs,
 } from "@squirrelscan/utils/rate-limit";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { applyStatusGuards, CrawlError } from "../src/fetcher";
 
@@ -21,10 +20,12 @@ const URL = "https://shop.example.com/";
 
 async function guard(
   status: number,
-  opts: { body?: string; headers?: Record<string, string> } = {},
+  opts: { body?: string; headers?: Record<string, string> } = {}
 ): Promise<CrawlError | null> {
   const result = await Effect.runPromise(
-    Effect.either(applyStatusGuards(URL, status, new Headers(opts.headers), opts.body)),
+    Effect.either(
+      applyStatusGuards(URL, status, new Headers(opts.headers), opts.body)
+    )
   );
   return result._tag === "Left" ? result.left : null;
 }
@@ -104,7 +105,9 @@ describe("parseRetryAfterMs (#1829)", () => {
 
   test("HTTP-date, resolved against the supplied clock", () => {
     const now = Date.parse("Wed, 21 Oct 2015 07:28:00 GMT");
-    expect(parseRetryAfterMs("Wed, 21 Oct 2015 07:28:30 GMT", now)).toBe(30_000);
+    expect(parseRetryAfterMs("Wed, 21 Oct 2015 07:28:30 GMT", now)).toBe(
+      30_000
+    );
   });
 
   test("an HTTP-date already in the past means retry now, never a negative wait", () => {
@@ -140,7 +143,9 @@ describe("rateLimitBackoffMs (#1829)", () => {
     expect(wait(5)).toBe(80_000);
     // Five retries fit inside the 5-minute cap, which is the contract that
     // makes "at least 5 attempts" reachable.
-    expect(wait(1) + wait(2) + wait(3) + wait(4) + wait(5)).toBeLessThan(300_000);
+    expect(wait(1) + wait(2) + wait(3) + wait(4) + wait(5)).toBeLessThan(
+      300_000
+    );
   });
 
   test("jitter only ever adds, and never more than a quarter", () => {

@@ -40,6 +40,7 @@ import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 import type { EndpointCandidate } from "../endpoint-surface";
 import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import { isStateChangingPath } from "./graphql-probe";
 import {
   ANONYMOUS_GET_CAP,
@@ -51,7 +52,8 @@ import {
   sendAnonymousGet,
 } from "./probe-http";
 
-export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID = "security/auth-endpoint-disclosure";
+export const AUTH_ENDPOINT_DISCLOSURE_RULE_ID =
+  "security/auth-endpoint-disclosure";
 
 const CHECK_PROBLEM = "auth-endpoint-disclosure";
 const CHECK_CLEAN = "auth-endpoint-clean";
@@ -97,7 +99,17 @@ const AUTH_LEAVES = new Set([
 
 // A segment that marks the path as an API or auth route, for candidates that
 // are not call sites (string literals, conventions).
-const API_SEGMENTS = new Set(["api", "auth", "rest", "identity", "users", "accounts", "v1", "v2", "v3"]);
+const API_SEGMENTS = new Set([
+  "api",
+  "auth",
+  "rest",
+  "identity",
+  "users",
+  "accounts",
+  "v1",
+  "v2",
+  "v3",
+]);
 
 // Words that mark a credential flow. Such a path is never probed, even by GET:
 // a GET to an OAuth callback or a magic-link verifier can complete a sign-in.
@@ -154,7 +166,11 @@ export function isCredentialPath(pathname: string): boolean {
   const words = pathWords(pathname);
   for (let i = 0; i < words.length; i++) {
     if (CREDENTIAL_WORDS.has(words[i]!)) return true;
-    if (i + 1 < words.length && CREDENTIAL_PAIRS.has(`${words[i]} ${words[i + 1]}`)) return true;
+    if (
+      i + 1 < words.length &&
+      CREDENTIAL_PAIRS.has(`${words[i]} ${words[i + 1]}`)
+    )
+      return true;
   }
   return false;
 }
@@ -172,7 +188,10 @@ function segments(pathname: string): string[] {
  * names one, and it sits under an API or auth segment unless a call site named
  * it.
  */
-export function isAuthEndpointPath(pathname: string, callSite: boolean): boolean {
+export function isAuthEndpointPath(
+  pathname: string,
+  callSite: boolean
+): boolean {
   const segs = segments(pathname);
   if (segs.length === 0) return false;
   const leaf = segs[segs.length - 1]!.replace(/[^a-z0-9]/g, "");
@@ -276,7 +295,8 @@ export function selectAuthCandidates(
     if (!c.probeEligible || !c.sameOrigin) continue;
     consider(c.url, candidateSource(c), c.discoveredVia, c.method);
   }
-  for (const path of AUTH_CONVENTION_PATHS) consider(path, "convention", "convention", "GET");
+  for (const path of AUTH_CONVENTION_PATHS)
+    consider(path, "convention", "convention", "GET");
   return selection;
 }
 
@@ -301,7 +321,10 @@ export type AuthProbeOutcome =
   | { sent: true; error: string };
 
 /** The exact URL and init for one probe. Exported so tests can pin what is sent. */
-export function buildAuthProbe(endpointUrl: string): { url: string; init: RequestInit } {
+export function buildAuthProbe(endpointUrl: string): {
+  url: string;
+  init: RequestInit;
+} {
   // The same anonymous GET security/unauthenticated-api sends: one answer per
   // endpoint per audit serves both rules (squirrelscan#1886).
   return buildAnonymousGet(endpointUrl);
@@ -321,7 +344,11 @@ export function sendAuthProbe(
 
 // ── reading ─────────────────────────────────────────────────────────
 
-export type DisclosureKind = "password" | "password-hash" | "secret" | "internal-record";
+export type DisclosureKind =
+  | "password"
+  | "password-hash"
+  | "secret"
+  | "internal-record";
 
 export interface DisclosedField {
   /** JSON path of the field, such as `user.encrypted_password` or `users[0].password`. */
@@ -432,10 +459,15 @@ function normalizeKey(key: string): string {
 function hasContent(value: unknown): boolean {
   if (typeof value === "string") {
     const t = value.trim();
-    return t.length > 0 && !/^[*•.\-_]+$/.test(t) && !/^(?:null|undefined|redacted|\[redacted\]|\[filtered\])$/i.test(t);
+    return (
+      t.length > 0 &&
+      !/^[*•.\-_]+$/.test(t) &&
+      !/^(?:null|undefined|redacted|\[redacted\]|\[filtered\])$/i.test(t)
+    );
   }
   if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object" && value !== null) return Object.keys(value).length > 0;
+  if (typeof value === "object" && value !== null)
+    return Object.keys(value).length > 0;
   return false;
 }
 
@@ -469,16 +501,23 @@ export function findDisclosures(json: unknown): DisclosedField[] {
       return;
     }
     if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) walk(value[i], `${path}[${i}]`, depth + 1);
+      for (let i = 0; i < value.length; i++)
+        walk(value[i], `${path}[${i}]`, depth + 1);
       return;
     }
     if (typeof value !== "object" || value === null) return;
 
     const internal: string[] = [];
-    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, child] of Object.entries(
+      value as Record<string, unknown>
+    )) {
       const nk = normalizeKey(key);
       const p = childPath(path, key);
-      if (PASSWORD_KEYS.has(nk) && typeof child === "string" && hasContent(child)) {
+      if (
+        PASSWORD_KEYS.has(nk) &&
+        typeof child === "string" &&
+        hasContent(child)
+      ) {
         add(p, looksLikePasswordHash(child) ? "password-hash" : "password");
         continue;
       }
@@ -486,12 +525,18 @@ export function findDisclosures(json: unknown): DisclosedField[] {
         add(p, "secret");
         continue;
       }
-      if (INTERNAL_COLUMNS.has(nk) && child !== null && child !== undefined && child !== "") {
+      if (
+        INTERNAL_COLUMNS.has(nk) &&
+        child !== null &&
+        child !== undefined &&
+        child !== ""
+      ) {
         internal.push(p);
       }
       walk(child, p, depth + 1);
     }
-    if (internal.length >= INTERNAL_ROW_MIN) for (const p of internal) add(p, "internal-record");
+    if (internal.length >= INTERNAL_ROW_MIN)
+      for (const p of internal) add(p, "internal-record");
   };
 
   walk(json, "", 0);
@@ -501,7 +546,8 @@ export function findDisclosures(json: unknown): DisclosedField[] {
 /** The parsed JSON of a 2xx, non-HTML, complete answer, or undefined. */
 export function parseJsonAnswer(response: AuthProbeResponse): unknown {
   if (response.status < 200 || response.status >= 300) return undefined;
-  if (response.truncated || response.contentType.includes("html")) return undefined;
+  if (response.truncated || response.contentType.includes("html"))
+    return undefined;
   const text = response.body.trim();
   if (!text.startsWith("{") && !text.startsWith("[")) return undefined;
   try {
@@ -517,7 +563,12 @@ const KIND_LABEL: Record<DisclosureKind, string> = {
   secret: "credential secret",
   "internal-record": "internal user column",
 };
-const KIND_ORDER: readonly DisclosureKind[] = ["password-hash", "password", "secret", "internal-record"];
+const KIND_ORDER: readonly DisclosureKind[] = [
+  "password-hash",
+  "password",
+  "secret",
+  "internal-record",
+];
 
 function summarize(fields: DisclosedField[]): string {
   const parts: string[] = [];
@@ -526,7 +577,9 @@ function summarize(fields: DisclosedField[]): string {
     if (paths.length === 0) continue;
     const shown = paths.slice(0, 3).join(", ");
     const more = paths.length > 3 ? ` and ${paths.length - 3} more` : "";
-    parts.push(`${paths.length} ${KIND_LABEL[kind]}${paths.length === 1 ? "" : "s"} (${shown}${more})`);
+    parts.push(
+      `${paths.length} ${KIND_LABEL[kind]}${paths.length === 1 ? "" : "s"} (${shown}${more})`
+    );
   }
   return parts.join("; ");
 }
@@ -554,7 +607,11 @@ async function probeEndpoint(
   if (!outcome.sent) return { kind: "not-sent" };
   if ("error" in outcome) return { kind: "errored" };
   const { response } = outcome;
-  const reply = { status: response.status, headers: response.headers, text: response.body };
+  const reply = {
+    status: response.status,
+    headers: response.headers,
+    text: response.body,
+  };
   // Never read a throttled, challenged or 5xx answer as "no disclosure" (#1920).
   if (isThrottledOrChallenged(reply)) return { kind: "pushback" };
   if (isUnverifiedReply(reply)) return { kind: "server-error" };
@@ -611,7 +668,8 @@ export const authEndpointDisclosureRule: Rule = {
         name: CHECK_SKIPPED,
         status: "skipped",
         skipReason: "no-endpoints",
-        message: "Not checked: no same-origin auth or session endpoint could be probed",
+        message:
+          "Not checked: no same-origin auth or session endpoint could be probed",
         details,
       });
       return { checks };
@@ -623,7 +681,8 @@ export const authEndpointDisclosureRule: Rule = {
     let serverErrors = 0;
     let budgetStopped = false;
     let pushback = false;
-    const leaks: Array<{ candidate: AuthCandidate; fields: DisclosedField[] }> = [];
+    const leaks: Array<{ candidate: AuthCandidate; fields: DisclosedField[] }> =
+      [];
     for (const candidate of selection.candidates) {
       // After pushback nothing new is sent (#1920), but an answer another rule
       // already got in this audit is still read, so the more specific finding is
@@ -643,7 +702,8 @@ export const authEndpointDisclosureRule: Rule = {
       if (verdict.kind === "server-error") serverErrors++;
       if (verdict.kind === "errored") errored++;
       if (verdict.kind === "leaks" || verdict.kind === "json") jsonAnswers++;
-      if (verdict.kind === "leaks") leaks.push({ candidate, fields: verdict.fields });
+      if (verdict.kind === "leaks")
+        leaks.push({ candidate, fields: verdict.fields });
     }
 
     if (probed === 0) {
@@ -651,7 +711,8 @@ export const authEndpointDisclosureRule: Rule = {
         name: CHECK_SKIPPED,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any auth or session endpoint was probed",
+        message:
+          "The probe budget ran out before any auth or session endpoint was probed",
         details,
       });
       return { checks };
@@ -689,7 +750,9 @@ export const authEndpointDisclosureRule: Rule = {
           endpoint: candidate.url,
           kinds,
           fields: fields.length,
-          ...(fields.length > MAX_FIELDS_PER_ENDPOINT ? { fieldsTruncated: true } : {}),
+          ...(fields.length > MAX_FIELDS_PER_ENDPOINT
+            ? { fieldsTruncated: true }
+            : {}),
         },
       });
     }
@@ -698,7 +761,16 @@ export const authEndpointDisclosureRule: Rule = {
     // could be leaking, so a run that left one unread is not clean (#1920).
     const total = selection.candidates.length;
     const unverified = total - probed + serverErrors + (pushback ? 1 : 0);
-    const runDetails = { ...details, probed, jsonAnswers, errored, serverErrors, pushback, budgetStopped, unverified };
+    const runDetails = {
+      ...details,
+      probed,
+      jsonAnswers,
+      errored,
+      serverErrors,
+      pushback,
+      budgetStopped,
+      unverified,
+    };
     const onlyBudget = budgetStopped && !pushback && serverErrors === 0;
     if (leaks.length === 0 && unverified > 0 && onlyBudget) {
       checks.push({
@@ -715,8 +787,14 @@ export const authEndpointDisclosureRule: Rule = {
           `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} endpoint(s), so no further request was sent`
         );
       }
-      if (budgetStopped) why.push(`the probe budget ran out after ${probed} of ${total} endpoint(s)`);
-      if (serverErrors > 0) why.push(`${serverErrors} endpoint(s) answered with a server error (5xx)`);
+      if (budgetStopped)
+        why.push(
+          `the probe budget ran out after ${probed} of ${total} endpoint(s)`
+        );
+      if (serverErrors > 0)
+        why.push(
+          `${serverErrors} endpoint(s) answered with a server error (5xx)`
+        );
       checks.push({
         name: CHECK_SKIPPED,
         status: "skipped",

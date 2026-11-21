@@ -14,8 +14,16 @@ import {
 
 const LOCAL_SIGNED_IN: ProbeRunContext = { surface: "local", signedIn: true };
 const LOCAL_ANON: ProbeRunContext = { surface: "local", signedIn: false };
-const CLOUD_VERIFIED: ProbeRunContext = { surface: "cloud", signedIn: true, ownershipVerified: true };
-const CLOUD_UNVERIFIED: ProbeRunContext = { surface: "cloud", signedIn: true, ownershipVerified: false };
+const CLOUD_VERIFIED: ProbeRunContext = {
+  surface: "cloud",
+  signedIn: true,
+  ownershipVerified: true,
+};
+const CLOUD_UNVERIFIED: ProbeRunContext = {
+  surface: "cloud",
+  signedIn: true,
+  ownershipVerified: false,
+};
 
 function resolved(input: Parameters<typeof resolveProbeIntensity>[0]) {
   const out = resolveProbeIntensity(input);
@@ -25,7 +33,8 @@ function resolved(input: Parameters<typeof resolveProbeIntensity>[0]) {
 
 function refused(input: Parameters<typeof resolveProbeIntensity>[0]) {
   const out = resolveProbeIntensity(input);
-  if (out.ok) throw new Error(`expected an error, got level ${out.value.level}`);
+  if (out.ok)
+    throw new Error(`expected an error, got level ${out.value.level}`);
   return out;
 }
 
@@ -58,7 +67,19 @@ describe("parseProbeBudget", () => {
   // The coverage NaN-cap bug: a value that parses to NaN or Infinity is an
   // unbounded cap, because every `elapsed >= NaN` check is false.
   test("never returns NaN, Infinity, zero or a negative", () => {
-    for (const raw of ["", "abc", "NaN", "Infinity", "-5s", "0", "0s", "30x", "s", "1e999", "30 seconds"]) {
+    for (const raw of [
+      "",
+      "abc",
+      "NaN",
+      "Infinity",
+      "-5s",
+      "0",
+      "0s",
+      "30x",
+      "s",
+      "1e999",
+      "30 seconds",
+    ]) {
       expect(parseProbeBudget(raw)).toBeNull();
     }
     for (const raw of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
@@ -118,7 +139,9 @@ describe("default level by context", () => {
   });
 
   test("only cloud unverified is locked", () => {
-    expect(resolved({ flags: {}, context: CLOUD_UNVERIFIED }).locked).toBe(true);
+    expect(resolved({ flags: {}, context: CLOUD_UNVERIFIED }).locked).toBe(
+      true
+    );
     for (const context of [LOCAL_SIGNED_IN, LOCAL_ANON, CLOUD_VERIFIED]) {
       expect(resolved({ flags: {}, context }).locked).toBe(false);
     }
@@ -136,34 +159,60 @@ describe("precedence: --probe > shortcuts > [security] probe > default", () => {
   });
 
   test("--probe agreeing with its shortcut is fine", () => {
-    expect(resolved({ flags: { probe: "aggressive", aggressive: true }, context: LOCAL_ANON }).level).toBe(
-      "aggressive",
-    );
-    expect(resolved({ flags: { probe: "passive", passive: true }, context: LOCAL_SIGNED_IN }).level).toBe("passive");
+    expect(
+      resolved({
+        flags: { probe: "aggressive", aggressive: true },
+        context: LOCAL_ANON,
+      }).level
+    ).toBe("aggressive");
+    expect(
+      resolved({
+        flags: { probe: "passive", passive: true },
+        context: LOCAL_SIGNED_IN,
+      }).level
+    ).toBe("passive");
   });
 
   test("--aggressive and --passive beat [security] probe", () => {
     expect(
-      resolved({ flags: { aggressive: true }, config: { probe: "passive" }, context: LOCAL_ANON }),
+      resolved({
+        flags: { aggressive: true },
+        config: { probe: "passive" },
+        context: LOCAL_ANON,
+      })
     ).toMatchObject({ level: "aggressive", source: "shortcut" });
     expect(
-      resolved({ flags: { passive: true }, config: { probe: "aggressive" }, context: LOCAL_SIGNED_IN }),
+      resolved({
+        flags: { passive: true },
+        config: { probe: "aggressive" },
+        context: LOCAL_SIGNED_IN,
+      })
     ).toMatchObject({ level: "passive", source: "shortcut", budgetMs: 0 });
   });
 
   test("--pentest is --probe aggressive", () => {
-    expect(resolved({ flags: { pentest: true }, context: LOCAL_ANON })).toMatchObject({
+    expect(
+      resolved({ flags: { pentest: true }, context: LOCAL_ANON })
+    ).toMatchObject({
       level: "aggressive",
       source: "shortcut",
     });
   });
 
   test("[security] probe beats the context default", () => {
-    expect(resolved({ flags: {}, config: { probe: "active" }, context: LOCAL_ANON })).toMatchObject({
+    expect(
+      resolved({ flags: {}, config: { probe: "active" }, context: LOCAL_ANON })
+    ).toMatchObject({
       level: "active",
       source: "config",
     });
-    expect(resolved({ flags: {}, config: { probe: "passive" }, context: LOCAL_SIGNED_IN })).toMatchObject({
+    expect(
+      resolved({
+        flags: {},
+        config: { probe: "passive" },
+        context: LOCAL_SIGNED_IN,
+      })
+    ).toMatchObject({
       level: "passive",
       source: "config",
     });
@@ -172,12 +221,16 @@ describe("precedence: --probe > shortcuts > [security] probe > default", () => {
 
 describe("the audit level's probe setting", () => {
   test("is the default when no flag or config value picks one, whoever is signed in", () => {
-    expect(resolved({ flags: {}, context: LOCAL_ANON, levelDefault: "active" })).toMatchObject({
+    expect(
+      resolved({ flags: {}, context: LOCAL_ANON, levelDefault: "active" })
+    ).toMatchObject({
       level: "active",
       source: "level",
       budgetMs: 30_000,
     });
-    expect(resolved({ flags: {}, context: LOCAL_SIGNED_IN, levelDefault: "passive" })).toMatchObject({
+    expect(
+      resolved({ flags: {}, context: LOCAL_SIGNED_IN, levelDefault: "passive" })
+    ).toMatchObject({
       level: "passive",
       source: "level",
       budgetMs: 0,
@@ -186,19 +239,36 @@ describe("the audit level's probe setting", () => {
 
   test("loses to [security] probe and to every flag", () => {
     expect(
-      resolved({ flags: {}, config: { probe: "passive" }, context: LOCAL_SIGNED_IN, levelDefault: "active" }),
+      resolved({
+        flags: {},
+        config: { probe: "passive" },
+        context: LOCAL_SIGNED_IN,
+        levelDefault: "active",
+      })
     ).toMatchObject({ level: "passive", source: "config" });
     expect(
-      resolved({ flags: { probe: "active" }, context: LOCAL_SIGNED_IN, levelDefault: "passive" }),
+      resolved({
+        flags: { probe: "active" },
+        context: LOCAL_SIGNED_IN,
+        levelDefault: "passive",
+      })
     ).toMatchObject({ level: "active", source: "flag" });
-    expect(resolved({ flags: { pentest: true }, context: LOCAL_ANON, levelDefault: "passive" })).toMatchObject({
+    expect(
+      resolved({
+        flags: { pentest: true },
+        context: LOCAL_ANON,
+        levelDefault: "passive",
+      })
+    ).toMatchObject({
       level: "aggressive",
       source: "shortcut",
     });
   });
 
   test("a locked cloud run stays passive, and is not refused for it", () => {
-    expect(resolved({ flags: {}, context: CLOUD_UNVERIFIED, levelDefault: "active" })).toMatchObject({
+    expect(
+      resolved({ flags: {}, context: CLOUD_UNVERIFIED, levelDefault: "active" })
+    ).toMatchObject({
       level: "passive",
       locked: true,
     });
@@ -217,16 +287,32 @@ describe("the audit level's probe setting", () => {
 
 describe("budget precedence: --probe-budget > [security] budget > level default", () => {
   test("level defaults", () => {
-    expect(resolved({ flags: { probe: "active" }, context: LOCAL_ANON }).budgetMs).toBe(30_000);
-    expect(resolved({ flags: { probe: "aggressive" }, context: LOCAL_ANON }).budgetMs).toBe(120_000);
-    expect(resolved({ flags: { probe: "passive" }, context: LOCAL_ANON }).budgetMs).toBe(0);
+    expect(
+      resolved({ flags: { probe: "active" }, context: LOCAL_ANON }).budgetMs
+    ).toBe(30_000);
+    expect(
+      resolved({ flags: { probe: "aggressive" }, context: LOCAL_ANON }).budgetMs
+    ).toBe(120_000);
+    expect(
+      resolved({ flags: { probe: "passive" }, context: LOCAL_ANON }).budgetMs
+    ).toBe(0);
   });
 
   test("[security] budget overrides the level default", () => {
-    expect(resolved({ flags: { probe: "active" }, config: { budget: "45s" }, context: LOCAL_ANON }).budgetMs).toBe(
-      45_000,
-    );
-    expect(resolved({ flags: { probe: "active" }, config: { budget: 10 }, context: LOCAL_ANON }).budgetMs).toBe(10_000);
+    expect(
+      resolved({
+        flags: { probe: "active" },
+        config: { budget: "45s" },
+        context: LOCAL_ANON,
+      }).budgetMs
+    ).toBe(45_000);
+    expect(
+      resolved({
+        flags: { probe: "active" },
+        config: { budget: 10 },
+        context: LOCAL_ANON,
+      }).budgetMs
+    ).toBe(10_000);
   });
 
   test("--probe-budget overrides [security] budget", () => {
@@ -235,20 +321,34 @@ describe("budget precedence: --probe-budget > [security] budget > level default"
         flags: { probe: "active", probeBudget: "5s" },
         config: { budget: "45s" },
         context: LOCAL_ANON,
-      }).budgetMs,
+      }).budgetMs
     ).toBe(5_000);
   });
 
   test("--probe-budget on a passive run says it has no effect", () => {
-    const value = resolved({ flags: { probeBudget: "30s" }, context: LOCAL_ANON });
+    const value = resolved({
+      flags: { probeBudget: "30s" },
+      context: LOCAL_ANON,
+    });
     expect(value.level).toBe("passive");
-    expect(value.notices).toEqual(["--probe-budget has no effect: probing is passive, so no probe runs."]);
-    expect(resolved({ flags: { probe: "active", probeBudget: "30s" }, context: LOCAL_ANON }).notices).toEqual([]);
+    expect(value.notices).toEqual([
+      "--probe-budget has no effect: probing is passive, so no probe runs.",
+    ]);
+    expect(
+      resolved({
+        flags: { probe: "active", probeBudget: "30s" },
+        context: LOCAL_ANON,
+      }).notices
+    ).toEqual([]);
   });
 
   test("passive has no budget, whatever was asked for", () => {
     expect(
-      resolved({ flags: { passive: true, probeBudget: "5m" }, config: { budget: "45s" }, context: LOCAL_ANON }).budgetMs,
+      resolved({
+        flags: { passive: true, probeBudget: "5m" },
+        config: { budget: "45s" },
+        context: LOCAL_ANON,
+      }).budgetMs
     ).toBe(0);
   });
 });
@@ -256,47 +356,81 @@ describe("budget precedence: --probe-budget > [security] budget > level default"
 describe("validation", () => {
   test("an unknown --probe level is a clear error naming the valid ones", () => {
     const out = refused({ flags: { probe: "loud" }, context: LOCAL_SIGNED_IN });
-    expect(out.error).toBe("unknown --probe level 'loud'. Valid: passive, active, aggressive.");
+    expect(out.error).toBe(
+      "unknown --probe level 'loud'. Valid: passive, active, aggressive."
+    );
   });
 
   test("an invalid --probe-budget is refused, not turned into an unbounded cap", () => {
     for (const probeBudget of ["abc", "NaN", "0", "-1s", "2h"]) {
-      const out = refused({ flags: { probe: "active", probeBudget }, context: LOCAL_SIGNED_IN });
+      const out = refused({
+        flags: { probe: "active", probeBudget },
+        context: LOCAL_SIGNED_IN,
+      });
       expect(out.error).toContain("--probe-budget must be a positive duration");
       expect(out.error).toContain(`'${probeBudget}'`);
     }
   });
 
   test("--passive with --aggressive is refused", () => {
-    expect(refused({ flags: { passive: true, aggressive: true }, context: LOCAL_ANON }).error).toBe(
-      "--passive and --aggressive cannot be combined",
-    );
+    expect(
+      refused({
+        flags: { passive: true, aggressive: true },
+        context: LOCAL_ANON,
+      }).error
+    ).toBe("--passive and --aggressive cannot be combined");
   });
 
   test("a shortcut with a conflicting --probe is refused", () => {
-    expect(refused({ flags: { probe: "active", aggressive: true }, context: LOCAL_ANON }).error).toBe(
-      "--aggressive cannot be combined with --probe active",
-    );
-    expect(refused({ flags: { probe: "aggressive", passive: true }, context: LOCAL_ANON }).error).toBe(
-      "--passive cannot be combined with --probe aggressive",
-    );
-    expect(refused({ flags: { probe: "passive", pentest: true }, context: LOCAL_ANON }).error).toContain(
-      "--pentest cannot be combined with --probe passive",
-    );
-    expect(refused({ flags: { pentest: true, passive: true }, context: LOCAL_ANON }).error).toContain(
-      "--pentest and --passive cannot be combined",
-    );
+    expect(
+      refused({
+        flags: { probe: "active", aggressive: true },
+        context: LOCAL_ANON,
+      }).error
+    ).toBe("--aggressive cannot be combined with --probe active");
+    expect(
+      refused({
+        flags: { probe: "aggressive", passive: true },
+        context: LOCAL_ANON,
+      }).error
+    ).toBe("--passive cannot be combined with --probe aggressive");
+    expect(
+      refused({
+        flags: { probe: "passive", pentest: true },
+        context: LOCAL_ANON,
+      }).error
+    ).toContain("--pentest cannot be combined with --probe passive");
+    expect(
+      refused({ flags: { pentest: true, passive: true }, context: LOCAL_ANON })
+        .error
+    ).toContain("--pentest and --passive cannot be combined");
   });
 
   test("--pentest with a level other than full is refused", () => {
-    expect(refused({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "quick" }).error).toContain(
-      "--pentest cannot be combined with --level quick (--pentest is --level full)",
+    expect(
+      refused({
+        flags: { pentest: true },
+        context: LOCAL_ANON,
+        coverage: "quick",
+      }).error
+    ).toContain(
+      "--pentest cannot be combined with --level quick (--pentest is --level full)"
     );
     // `fast` is the old name for quick, so it conflicts too.
-    expect(refused({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "fast" }).error).toContain(
-      "--pentest cannot be combined with --level fast",
-    );
-    expect(resolved({ flags: { pentest: true }, context: LOCAL_ANON, coverage: "Full" }).level).toBe("aggressive");
+    expect(
+      refused({
+        flags: { pentest: true },
+        context: LOCAL_ANON,
+        coverage: "fast",
+      }).error
+    ).toContain("--pentest cannot be combined with --level fast");
+    expect(
+      resolved({
+        flags: { pentest: true },
+        context: LOCAL_ANON,
+        coverage: "Full",
+      }).level
+    ).toBe("aggressive");
   });
 });
 
@@ -304,42 +438,62 @@ describe("cloud, unverified ownership: locked to passive", () => {
   test.each(["active", "aggressive"] as ProbeLevel[])(
     "an explicit %s is refused with why it is locked and how to verify",
     (level) => {
-      for (const flags of [{ probe: level }, level === "aggressive" ? { aggressive: true } : { probe: level }]) {
+      for (const flags of [
+        { probe: level },
+        level === "aggressive" ? { aggressive: true } : { probe: level },
+      ]) {
         const out = refused({ flags, context: CLOUD_UNVERIFIED });
         expect(out.locked).toBe(true);
         expect(out.error).toContain(`'${level}' cannot run`);
         expect(out.error).toContain("ownership is verified");
-        expect(out.error).toContain("Verify ownership of the site in the squirrelscan dashboard");
+        expect(out.error).toContain(
+          "Verify ownership of the site in the squirrelscan dashboard"
+        );
       }
-    },
+    }
   );
 
   test("[security] probe above passive is refused too, never silently downgraded", () => {
-    const out = refused({ flags: {}, config: { probe: "aggressive" }, context: CLOUD_UNVERIFIED });
+    const out = refused({
+      flags: {},
+      config: { probe: "aggressive" },
+      context: CLOUD_UNVERIFIED,
+    });
     expect(out.locked).toBe(true);
   });
 
   test("--pentest is refused", () => {
-    expect(refused({ flags: { pentest: true }, context: CLOUD_UNVERIFIED }).locked).toBe(true);
+    expect(
+      refused({ flags: { pentest: true }, context: CLOUD_UNVERIFIED }).locked
+    ).toBe(true);
   });
 
   test("an explicit passive is fine", () => {
-    expect(resolved({ flags: { passive: true }, context: CLOUD_UNVERIFIED })).toMatchObject({
+    expect(
+      resolved({ flags: { passive: true }, context: CLOUD_UNVERIFIED })
+    ).toMatchObject({
       level: "passive",
       locked: true,
     });
   });
 
   test("verified ownership unlocks aggressive", () => {
-    expect(resolved({ flags: { aggressive: true }, context: CLOUD_VERIFIED }).level).toBe("aggressive");
+    expect(
+      resolved({ flags: { aggressive: true }, context: CLOUD_VERIFIED }).level
+    ).toBe("aggressive");
   });
 });
 
 describe("disable_discovery_probes is honoured", () => {
-  const disabled = (context: ProbeRunContext): ProbeRunContext => ({ ...context, discoveryProbesDisabled: true });
+  const disabled = (context: ProbeRunContext): ProbeRunContext => ({
+    ...context,
+    discoveryProbesDisabled: true,
+  });
 
   test("the signed-in default resolves to passive with no budget and no notice", () => {
-    expect(resolved({ flags: {}, context: disabled(LOCAL_SIGNED_IN) })).toMatchObject({
+    expect(
+      resolved({ flags: {}, context: disabled(LOCAL_SIGNED_IN) })
+    ).toMatchObject({
       level: "passive",
       budgetMs: 0,
       notices: [],
@@ -347,20 +501,31 @@ describe("disable_discovery_probes is honoured", () => {
   });
 
   test("an explicit level resolves to passive and says why", () => {
-    for (const flags of [{ aggressive: true }, { probe: "active" }, { pentest: true }]) {
+    for (const flags of [
+      { aggressive: true },
+      { probe: "active" },
+      { pentest: true },
+    ]) {
       const value = resolved({ flags, context: disabled(LOCAL_SIGNED_IN) });
       expect(value.level).toBe("passive");
       expect(value.budgetMs).toBe(0);
       expect(value.notices).toHaveLength(1);
       expect(value.notices[0]).toContain("discovery probes are disabled");
     }
-    const fromConfig = resolved({ flags: {}, config: { probe: "aggressive" }, context: disabled(LOCAL_ANON) });
+    const fromConfig = resolved({
+      flags: {},
+      config: { probe: "aggressive" },
+      context: disabled(LOCAL_ANON),
+    });
     expect(fromConfig.level).toBe("passive");
     expect(fromConfig.notices).toHaveLength(1);
   });
 
   test("flag validation still runs", () => {
-    expect(refused({ flags: { probe: "bogus" }, context: disabled(LOCAL_ANON) }).error).toContain("unknown --probe");
+    expect(
+      refused({ flags: { probe: "bogus" }, context: disabled(LOCAL_ANON) })
+        .error
+    ).toContain("unknown --probe");
   });
 });
 
@@ -370,15 +535,24 @@ describe("[security] in the config schema", () => {
   });
 
   test("probe and budget parse; budget stays as written", () => {
-    const parsed = ConfigSchema.parse({ security: { probe: "active", budget: "30s" } });
+    const parsed = ConfigSchema.parse({
+      security: { probe: "active", budget: "30s" },
+    });
     expect(parsed.security).toEqual({ probe: "active", budget: "30s" });
     // Re-parsing a parsed config is stable (no ms reread as seconds).
-    expect(ConfigSchema.parse(parsed).security).toEqual({ probe: "active", budget: "30s" });
-    expect(ConfigSchema.parse({ security: { budget: 45 } }).security?.budget).toBe(45);
+    expect(ConfigSchema.parse(parsed).security).toEqual({
+      probe: "active",
+      budget: "30s",
+    });
+    expect(
+      ConfigSchema.parse({ security: { budget: 45 } }).security?.budget
+    ).toBe(45);
   });
 
   test("an unknown probe or a bad budget fails validation", () => {
-    expect(ConfigSchema.safeParse({ security: { probe: "loud" } }).success).toBe(false);
+    expect(
+      ConfigSchema.safeParse({ security: { probe: "loud" } }).success
+    ).toBe(false);
     for (const budget of ["abc", "0s", "2h", -1, 0]) {
       const out = ConfigSchema.safeParse({ security: { budget } });
       expect(out.success).toBe(false);

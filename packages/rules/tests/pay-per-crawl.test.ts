@@ -1,13 +1,17 @@
 // ax/pay-per-crawl — Cloudflare Pay Per Crawl / x402 monetized agent access.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  AgentAccessData,
+  AgentAccessProbe,
+  CheckResult,
+} from "@squirrelscan/core-contracts";
 
 import { PROBE_NOT_ATTEMPTED_ERROR } from "@squirrelscan/core-contracts/storage";
+import { describe, expect, test } from "bun:test";
 
-import type { AgentAccessData, AgentAccessProbe, CheckResult } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { payPerCrawlRule } from "../src/ax/pay-per-crawl";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function probe(over: Partial<AgentAccessProbe> = {}): AgentAccessProbe {
   return {
@@ -26,77 +30,113 @@ function probe(over: Partial<AgentAccessProbe> = {}): AgentAccessProbe {
 
 function ctx(data: AgentAccessData | null | undefined): RuleContext {
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, agentAccess: data },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      agentAccess: data,
+    },
     options: {},
   };
 }
 
-async function run(data: AgentAccessData | null | undefined): Promise<CheckResult[]> {
+async function run(
+  data: AgentAccessData | null | undefined
+): Promise<CheckResult[]> {
   return (await payPerCrawlRule.run(ctx(data))).checks;
 }
 
 describe("ax/pay-per-crawl", () => {
   test("data unavailable → not checked info, no crash", async () => {
-    const checks = (await run(undefined));
+    const checks = await run(undefined);
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
   });
 
   test("a probe that got no answer → not checked, not absent", async () => {
-    const checks = (await run({
-      probes: [probe({ userAgent: "browser" }), probe({ userAgent: "gptbot", status: 0, error: "ECONNREFUSED" })],
-    }));
+    const checks = await run({
+      probes: [
+        probe({ userAgent: "browser" }),
+        probe({ userAgent: "gptbot", status: 0, error: "ECONNREFUSED" }),
+      ],
+    });
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("got no answer");
   });
 
   test("probes skipped by the preamble budget → not checked, not absent", async () => {
     const skipped = { status: 0, error: PROBE_NOT_ATTEMPTED_ERROR };
-    const checks = (await run({
-      probes: [probe({ userAgent: "browser" }), probe({ userAgent: "claude-user", ...skipped })],
-    }));
+    const checks = await run({
+      probes: [
+        probe({ userAgent: "browser" }),
+        probe({ userAgent: "claude-user", ...skipped }),
+      ],
+    });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.details?.notChecked).toEqual(["claude-user"]);
   });
 
   test("no payment wall anywhere → quiet absent", async () => {
-    const checks = (await run({ probes: [probe({ userAgent: "browser" }), probe({ userAgent: "gptbot" })] }));
+    const checks = await run({
+      probes: [probe({ userAgent: "browser" }), probe({ userAgent: "gptbot" })],
+    });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.value).toBe("absent");
     expect(checks[0]?.status).toBe("info");
   });
 
   test("Cloudflare Pay Per Crawl on gptbot only → info, names mechanism", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [
         probe({ userAgent: "browser" }),
-        probe({ userAgent: "gptbot", status: 402, paymentRequired: true, paymentSignal: "crawler-price" }),
+        probe({
+          userAgent: "gptbot",
+          status: 402,
+          paymentRequired: true,
+          paymentSignal: "crawler-price",
+        }),
         probe({ userAgent: "claude-user" }),
       ],
-    }));
+    });
     const main = checks.find((c) => c.name === "pay-per-crawl");
     expect(main?.value).toBe("configured");
     expect(main?.message).toContain("Cloudflare Pay Per Crawl");
-    expect(checks.some((c) => c.name === "pay-per-crawl-user-action")).toBe(false);
+    expect(checks.some((c) => c.name === "pay-per-crawl-user-action")).toBe(
+      false
+    );
   });
 
   test("x402 signal named correctly", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [
         probe({ userAgent: "browser" }),
-        probe({ userAgent: "gptbot", status: 402, paymentRequired: true, paymentSignal: "x402-body" }),
+        probe({
+          userAgent: "gptbot",
+          status: 402,
+          paymentRequired: true,
+          paymentSignal: "x402-body",
+        }),
         probe({ userAgent: "claude-user" }),
       ],
-    }));
-    expect(checks.find((c) => c.name === "pay-per-crawl")?.message).toContain("x402");
+    });
+    expect(checks.find((c) => c.name === "pay-per-crawl")?.message).toContain(
+      "x402"
+    );
   });
 
   test("Claude-User charged while browser gets 2xx → warn (bills a live user question)", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [
         probe({ userAgent: "browser", status: 200 }),
         probe({ userAgent: "gptbot" }),
@@ -107,16 +147,21 @@ describe("ax/pay-per-crawl", () => {
           paymentSignal: "crawler-price",
         }),
       ],
-    }));
+    });
     const warn = checks.find((c) => c.name === "pay-per-crawl-user-action");
     expect(warn?.status).toBe("warn");
     expect(warn?.message).toContain("live");
   });
 
   test("Claude-User charged but browser ALSO charged (not user-targeted) → no warn escalation", async () => {
-    const checks = (await run({
+    const checks = await run({
       probes: [
-        probe({ userAgent: "browser", status: 402, paymentRequired: true, paymentSignal: "crawler-price" }),
+        probe({
+          userAgent: "browser",
+          status: 402,
+          paymentRequired: true,
+          paymentSignal: "crawler-price",
+        }),
         probe({ userAgent: "gptbot" }),
         probe({
           userAgent: "claude-user",
@@ -125,7 +170,9 @@ describe("ax/pay-per-crawl", () => {
           paymentSignal: "crawler-price",
         }),
       ],
-    }));
-    expect(checks.some((c) => c.name === "pay-per-crawl-user-action")).toBe(false);
+    });
+    expect(checks.some((c) => c.name === "pay-per-crawl-user-action")).toBe(
+      false
+    );
   });
 });

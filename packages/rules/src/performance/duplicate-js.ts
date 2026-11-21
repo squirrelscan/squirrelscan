@@ -1,8 +1,8 @@
 // performance/duplicate-js - Duplicate JavaScript modules
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Extract library name and version from script URL
 function extractLibraryInfo(

@@ -6,12 +6,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { hostname } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
+import { hostname } from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CrawlMetadata, PageRecord } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -113,7 +114,11 @@ const rowsOf = (id: string): string[] => {
   const db = new Database(dbPath, { readonly: true });
   try {
     return (
-      db.query("SELECT normalized_url AS u FROM pages WHERE crawl_id = ? ORDER BY u").all(id) as Array<{
+      db
+        .query(
+          "SELECT normalized_url AS u FROM pages WHERE crawl_id = ? ORDER BY u"
+        )
+        .all(id) as Array<{
         u: string;
       }>
     ).map((r) => r.u);
@@ -125,7 +130,11 @@ const rowsOf = (id: string): string[] => {
 describe("#289: the repair of rows superseded before automatic retention", () => {
   async function pre285State(): Promise<{ first: string }> {
     const s = await open();
-    const first = await crawl(s, 1_000, ["https://e.test/a", "https://e.test/b", "https://e.test/c"]);
+    const first = await crawl(s, 1_000, [
+      "https://e.test/a",
+      "https://e.test/b",
+      "https://e.test/c",
+    ]);
     // `self disk --prune` retired it, keeping all rows (each was the freshest).
     await run(s.retireCrawls([first], 1_500));
     // A later audit re-crawls /a and /b. Before #285 nothing collected what it superseded.
@@ -137,7 +146,11 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
   test("init() never deletes: a big project's open is not a long transaction", async () => {
     const { first } = await pre285State();
     const s = await open();
-    expect(rowsOf(first)).toEqual(["https://e.test/a", "https://e.test/b", "https://e.test/c"]);
+    expect(rowsOf(first)).toEqual([
+      "https://e.test/a",
+      "https://e.test/b",
+      "https://e.test/c",
+    ]);
     s.close?.();
   });
 
@@ -160,7 +173,11 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
     const db = new Database(dbPath, { readonly: true });
     try {
       return (
-        db.query("SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'").get() as {
+        db
+          .query(
+            "SELECT done_at AS at FROM maintenance_marks WHERE name = 'superseded-pages-cursor'"
+          )
+          .get() as {
           at: number;
         } | null
       )?.at;
@@ -171,7 +188,13 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
   const marked = () => {
     const db = new Database(dbPath, { readonly: true });
     try {
-      return db.query("SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'").get() !== null;
+      return (
+        db
+          .query(
+            "SELECT 1 FROM maintenance_marks WHERE name = 'superseded-pages'"
+          )
+          .get() !== null
+      );
     } finally {
       db.close();
     }
@@ -192,7 +215,10 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
   test("a cursor means a row that stays is examined once: many only copies cost chunks, not chunks squared", async () => {
     const s = await open();
     // 60 only-copy rows in a retired crawl, plus 3 that a later audit supersedes.
-    const urls = Array.from({ length: 63 }, (_, i) => `https://e.test/p${String(i).padStart(2, "0")}`);
+    const urls = Array.from(
+      { length: 63 },
+      (_, i) => `https://e.test/p${String(i).padStart(2, "0")}`
+    );
     const first = await crawl(s, 1_000, urls);
     await run(s.retireCrawls([first], 1_500));
     await crawl(s, 2_000, urls.slice(0, 3));
@@ -220,7 +246,10 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
 
   test("a call is budgeted: with no time it does one chunk, and later calls finish", async () => {
     const s = await open();
-    const urls = Array.from({ length: 30 }, (_, i) => `https://e.test/q${String(i).padStart(2, "0")}`);
+    const urls = Array.from(
+      { length: 30 },
+      (_, i) => `https://e.test/q${String(i).padStart(2, "0")}`
+    );
     const first = await crawl(s, 1_000, urls);
     await run(s.retireCrawls([first], 1_500));
     await crawl(s, 2_000, urls);
@@ -228,7 +257,8 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
     await run(s.repairSupersededPagesOnce({ chunk: 10, budgetMs: 0 }));
     expect(rowsOf(first)).toHaveLength(20);
     expect(marked()).toBe(false);
-    for (let i = 0; i < 6 && !marked(); i++) await run(s.repairSupersededPagesOnce({ chunk: 10, budgetMs: 0 }));
+    for (let i = 0; i < 6 && !marked(); i++)
+      await run(s.repairSupersededPagesOnce({ chunk: 10, budgetMs: 0 }));
     expect(rowsOf(first)).toHaveLength(0);
     expect(marked()).toBe(true);
     s.close?.();
@@ -236,7 +266,10 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
 
   test("the default chunk is 500 rows, so the write lock is held briefly", async () => {
     const s = await open();
-    const urls = Array.from({ length: 1200 }, (_, i) => `https://e.test/d${String(i).padStart(4, "0")}`);
+    const urls = Array.from(
+      { length: 1200 },
+      (_, i) => `https://e.test/d${String(i).padStart(4, "0")}`
+    );
     const first = await crawl(s, 1_000, urls);
     await run(s.retireCrawls([first], 1_500));
     await crawl(s, 2_000, urls);
@@ -266,10 +299,17 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     fn(db);
     db.close();
   };
-  const own = (id: string, heartbeatAgeMs: number, pid = process.pid, host = hostname()) =>
+  const own = (
+    id: string,
+    heartbeatAgeMs: number,
+    pid = process.pid,
+    host = hostname()
+  ) =>
     raw((db) =>
       db
-        .query("UPDATE crawls SET heartbeat_at = ?, owner_pid = ?, owner_host = ? WHERE id = ?")
+        .query(
+          "UPDATE crawls SET heartbeat_at = ?, owner_pid = ?, owner_host = ? WHERE id = ?"
+        )
         .run(Date.now() - heartbeatAgeMs, pid, host, id)
     );
   const buildingSince = (id: string, ageMs: number | null) =>
@@ -278,7 +318,8 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
         .query("UPDATE crawls SET building_at = ? WHERE id = ?")
         .run(ageMs === null ? null : Date.now() - ageMs, id)
     );
-  const interrupted = async (s: SQLiteStorage) => (await run(s.listInterruptedReports())).map((c) => c.id);
+  const interrupted = async (s: SQLiteStorage) =>
+    (await run(s.listInterruptedReports())).map((c) => c.id);
 
   test("the sentinel stamps building_at, and analyze's keepBuilding does not move it", async () => {
     const s = await open();
@@ -286,7 +327,11 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     const stamp = () => {
       const db = new Database(dbPath, { readonly: true });
       try {
-        return (db.query("SELECT building_at AS b FROM crawls WHERE id = ?").get(id) as { b: number | null }).b;
+        return (
+          db
+            .query("SELECT building_at AS b FROM crawls WHERE id = ?")
+            .get(id) as { b: number | null }
+        ).b;
       } finally {
         db.close();
       }
@@ -325,7 +370,12 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     // Its pages are from 1970 here, so the week has long passed.
     expect(await interrupted(s)).toEqual([legacy]);
     // ...but not when its last activity is recent.
-    const recent = await crawl(s, Date.now() - 2 * DAY, ["https://e.test/b"], "building");
+    const recent = await crawl(
+      s,
+      Date.now() - 2 * DAY,
+      ["https://e.test/b"],
+      "building"
+    );
     buildingSince(recent, null);
     await crawl(s, Date.now() - DAY, ["https://e.test/b"]);
     expect(await interrupted(s)).toEqual([legacy]);
@@ -339,7 +389,9 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     own(laptop, 3 * DAY); // closed over a weekend: the process is alive, its beats stopped
     await crawl(s, 2_000, ["https://e.test/a"]);
     expect(await interrupted(s)).toEqual([]);
-    const out = await run(s.retireCrawlsDetailed([laptop], Date.now(), { allowAbandoned: true }));
+    const out = await run(
+      s.retireCrawlsDetailed([laptop], Date.now(), { allowAbandoned: true })
+    );
     expect(out.skipped).toEqual([laptop]);
     s.close?.();
   });
@@ -374,7 +426,9 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     const stuck = await crawl(s, 1_000, ["https://e.test/a"], "building");
     buildingSince(stuck, 7 * HOUR);
     await crawl(s, 2_000, ["https://e.test/b"]);
-    const out = await run(s.retireCrawlsDetailed([stuck], Date.now(), { allowAbandoned: true }));
+    const out = await run(
+      s.retireCrawlsDetailed([stuck], Date.now(), { allowAbandoned: true })
+    );
     expect(out.retired).toEqual([stuck]);
     s.close?.();
   });
@@ -384,7 +438,9 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     const building = await crawl(s, 1_000, ["https://e.test/a"], "building");
     buildingSince(building, HOUR);
     await crawl(s, 2_000, ["https://e.test/a"]);
-    expect((await run(s.listLiveBuildingReports())).map((c) => c.id)).toEqual([building]);
+    expect((await run(s.listLiveBuildingReports())).map((c) => c.id)).toEqual([
+      building,
+    ]);
     s.close?.();
   });
 
@@ -392,13 +448,17 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     const s = await open();
     await crawl(s, 1_000, ["https://e.test/a"], "building");
     s.close?.();
-    const sql = (SQLiteStorage as unknown as { interruptedReportSql(now: number): string }).interruptedReportSql(
-      Date.now()
-    );
+    const sql = (
+      SQLiteStorage as unknown as { interruptedReportSql(now: number): string }
+    ).interruptedReportSql(Date.now());
     const db = new Database(dbPath, { readonly: true });
     try {
       const plan = (
-        db.query(`EXPLAIN QUERY PLAN SELECT id, started_at FROM crawls WHERE ${sql}`).all() as Array<{ detail: string }>
+        db
+          .query(
+            `EXPLAIN QUERY PLAN SELECT id, started_at FROM crawls WHERE ${sql}`
+          )
+          .all() as Array<{ detail: string }>
       )
         .map((r) => r.detail)
         .join("\n");
@@ -416,11 +476,15 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
     const sqls = SQLiteStorage.SUPERSEDED_REPAIR_SQL;
     const db = new Database(dbPath, { readonly: true });
     const plan = (sql: string): string =>
-      (db.query(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join("\n");
+      (db.query(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>)
+        .map((r) => r.detail)
+        .join("\n");
     try {
       // The marker probe every audit pays once the repair is done: a keyed lookup, never a scan.
       const probe = plan(sqls.probe);
-      expect(probe).toMatch(/SEARCH maintenance_marks USING (COVERING )?INDEX|SEARCH maintenance_marks USING PRIMARY KEY/);
+      expect(probe).toMatch(
+        /SEARCH maintenance_marks USING (COVERING )?INDEX|SEARCH maintenance_marks USING PRIMARY KEY/
+      );
       expect(probe).not.toMatch(/SCAN maintenance_marks/);
       expect(plan(sqls.cursor)).not.toMatch(/SCAN maintenance_marks/);
 
@@ -428,13 +492,19 @@ describe("#288: an interrupted report build is recovered, a live one never", () 
       // their own index, and each one's rows past the cursor from the per-crawl index. No table scan.
       for (const sql of [sqls.chunkUpper, sqls.chunkDelete]) {
         const p = plan(sql);
-        expect(p).toMatch(/SEARCH p (EXISTS )?USING (COVERING )?INDEX idx_pages_crawl \(crawl_id=\? AND rowid>/);
-        expect(p).toMatch(/SEARCH crawls (EXISTS )?USING (COVERING )?INDEX idx_crawls_retired/);
+        expect(p).toMatch(
+          /SEARCH p (EXISTS )?USING (COVERING )?INDEX idx_pages_crawl \(crawl_id=\? AND rowid>/
+        );
+        expect(p).toMatch(
+          /SEARCH crawls (EXISTS )?USING (COVERING )?INDEX idx_crawls_retired/
+        );
         expect(p).not.toMatch(/SCAN (p|pages|crawls)\b/);
       }
       // The newer copy of a row is looked up by its url, so a chunk costs its rows, not the project's history.
       const del = plan(sqls.chunkDelete);
-      expect(del).toMatch(/SEARCH newer (EXISTS )?USING (COVERING )?INDEX idx_pages_url_recency \(normalized_url=\?/);
+      expect(del).toMatch(
+        /SEARCH newer (EXISTS )?USING (COVERING )?INDEX idx_pages_url_recency \(normalized_url=\?/
+      );
       expect(del).not.toMatch(/SCAN newer\b/);
     } finally {
       db.close();

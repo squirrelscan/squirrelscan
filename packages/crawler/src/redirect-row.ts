@@ -13,7 +13,10 @@ import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 
 import { normalizeUrl } from "./frontier";
 
-export type RedirectRow = Pick<PageRecord, "status" | "normalizedUrl" | "finalUrl" | "redirectChain"> & {
+export type RedirectRow = Pick<
+  PageRecord,
+  "status" | "normalizedUrl" | "finalUrl" | "redirectChain"
+> & {
   html?: string | null;
   /**
    * A read without bodies (`getPagesWithoutBodies`) has `html` null whatever the row holds, but it still
@@ -28,7 +31,11 @@ function hasBody(page: RedirectRow): boolean {
 }
 
 function pathKey(url: string, base: string): string | null {
-  const normalized = normalizeUrl(url, { baseUrl: base, allowQueryParams: [], dropQueryPrefixes: [] });
+  const normalized = normalizeUrl(url, {
+    baseUrl: base,
+    allowQueryParams: [],
+    dropQueryPrefixes: [],
+  });
   if (!normalized) return null;
   const parsed = new URL(normalized);
   return `${parsed.origin}${parsed.pathname}`;
@@ -57,7 +64,13 @@ export function isRedirectRecord(page: RedirectRow): boolean {
  * purpose because the destination is out of scope (`redirectChain.keptAsPage`), so it stays a page.
  */
 export function isLegacyRedirectRow(page: RedirectRow): boolean {
-  if (page.status < 200 || page.status >= 300 || !hasBody(page) || !page.finalUrl) return false;
+  if (
+    page.status < 200 ||
+    page.status >= 300 ||
+    !hasBody(page) ||
+    !page.finalUrl
+  )
+    return false;
   if (page.redirectChain?.keptAsPage) return false;
   const from = pathKey(page.normalizedUrl, page.normalizedUrl);
   const to = pathKey(page.finalUrl, page.normalizedUrl);

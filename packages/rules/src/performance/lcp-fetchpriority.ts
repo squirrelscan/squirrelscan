@@ -52,7 +52,7 @@ export const lcpFetchpriorityRule: Rule = {
     const isPreloaded = isImagePreloaded(
       candidate,
       collectImagePreloadKeys(doc, ctx.page.url),
-      ctx.page.url,
+      ctx.page.url
     );
 
     if (hasHighPriority || isPreloaded) {
@@ -70,7 +70,8 @@ export const lcpFetchpriorityRule: Rule = {
     checks.push({
       name: "lcp-fetchpriority",
       status: "warn",
-      message: "Hero/LCP image loaded eagerly without fetchpriority='high' or preload",
+      message:
+        "Hero/LCP image loaded eagerly without fetchpriority='high' or preload",
       items: [
         {
           id: src,

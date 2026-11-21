@@ -6,13 +6,13 @@
 // pages full of the shapes that decide the verdicts, and (2) a time budget on
 // the deeply nested shapes.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { ariaHiddenFocusRule } from "../src/a11y/aria-hidden-focus";
 import { ariaTextRule } from "../src/a11y/aria-text";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 import { referenceAriaHiddenFocusRule } from "./fixtures/reference-3066/aria-hidden-focus";
 import { referenceAriaTextRule } from "./fixtures/reference-3066/aria-text";
 
@@ -39,7 +39,8 @@ function rng(seed: number): () => number {
   };
 }
 
-const pick = <T>(r: () => number, items: readonly T[]): T => items[Math.floor(r() * items.length)]!;
+const pick = <T>(r: () => number, items: readonly T[]): T =>
+  items[Math.floor(r() * items.length)]!;
 
 const CONTAINER_ATTRS = [
   "",
@@ -102,12 +103,20 @@ const LEAVES = [
 /** A random tree of containers and leaves, `depth` levels at most. */
 function tree(r: () => number, depth: number): string {
   if (depth === 0 || r() < 0.25) return pick(r, LEAVES);
-  const tag = pick(r, ["div", "span", "section", "button", 'a href="/c"', "form", "template"]);
+  const tag = pick(r, [
+    "div",
+    "span",
+    "section",
+    "button",
+    'a href="/c"',
+    "form",
+    "template",
+  ]);
   const name = tag.split(" ")[0]!;
   const id = r() < 0.3 ? ` id="c${Math.floor(r() * 1000)}"` : "";
-  const children = Array.from({ length: 1 + Math.floor(r() * 3) }, () => tree(r, depth - 1)).join(
-    "",
-  );
+  const children = Array.from({ length: 1 + Math.floor(r() * 3) }, () =>
+    tree(r, depth - 1)
+  ).join("");
   return `<${tag}${pick(r, CONTAINER_ATTRS)}${id}>${children}</${name}>`;
 }
 
@@ -118,7 +127,9 @@ function page(seed: number): string {
       ? "<style>.m-hide{display:none} @media (max-width:600px){.maybe{display:none}}</style>"
       : "";
   const external = r() < 0.2 ? '<link rel="stylesheet" href="/site.css">' : "";
-  const body = Array.from({ length: 1 + Math.floor(r() * 4) }, () => tree(r, 6)).join("");
+  const body = Array.from({ length: 1 + Math.floor(r() * 4) }, () =>
+    tree(r, 6)
+  ).join("");
   // Document shapes: wrapped; no <html> tag; a warning printed ahead of the
   // doctype; content after </html>. All but the first have several top-level
   // elements in the parsed document.
@@ -139,19 +150,28 @@ describe("the single-pass rewrites report what the old rules did (#3066)", () =>
     ["aria-text", ariaTextRule, referenceAriaTextRule],
     ["aria-hidden-focus", ariaHiddenFocusRule, referenceAriaHiddenFocusRule],
   ] as const) {
-    test(`${name}: identical results on 600 seeded random pages`, async () => {
-      let nonTrivial = 0;
-      for (let seed = 1; seed <= 600; seed++) {
-        const html = page(seed);
-        const actual = (await run(rule, html));
-        const expected = (await run(reference, html));
-        // The seed in the message makes a failure reproducible.
-        expect({ seed, ...actual }).toEqual({ seed, ...expected });
-        if (expected.checks.some((c) => c.status === "warn" || c.status === "fail")) nonTrivial++;
-      }
-      // Non-vacuous: most pages produce findings.
-      expect(nonTrivial).toBeGreaterThan(200);
-    }, { timeout: 30_000 });
+    test(
+      `${name}: identical results on 600 seeded random pages`,
+      async () => {
+        let nonTrivial = 0;
+        for (let seed = 1; seed <= 600; seed++) {
+          const html = page(seed);
+          const actual = await run(rule, html);
+          const expected = await run(reference, html);
+          // The seed in the message makes a failure reproducible.
+          expect({ seed, ...actual }).toEqual({ seed, ...expected });
+          if (
+            expected.checks.some(
+              (c) => c.status === "warn" || c.status === "fail"
+            )
+          )
+            nonTrivial++;
+        }
+        // Non-vacuous: most pages produce findings.
+        expect(nonTrivial).toBeGreaterThan(200);
+      },
+      { timeout: 30_000 }
+    );
   }
 
   test("nested containers file a control once per container, in container order", async () => {
@@ -167,9 +187,15 @@ describe("the single-pass rewrites report what the old rules did (#3066)", () =>
     ] as const) {
       expect(await run(rule, html)).toEqual(await run(reference, html));
     }
-    const fail = (await run(ariaHiddenFocusRule, html)).checks.find((c) => c.name === "aria-hidden-focus");
+    const fail = (await run(ariaHiddenFocusRule, html)).checks.find(
+      (c) => c.name === "aria-hidden-focus"
+    );
     expect(fail?.message).toBe("3 focusable element(s) inside aria-hidden");
-    expect(fail?.items).toEqual([{ id: "a" }, { id: "button#b" }, { id: "button#b" }]);
+    expect(fail?.items).toEqual([
+      { id: "a" },
+      { id: "button#b" },
+      { id: "button#b" },
+    ]);
   });
 });
 
@@ -183,17 +209,27 @@ describe("deeply nested shapes run in bounded time (#3066)", () => {
   // levels. The budget leaves room for a loaded CI runner.
   test.each([
     ["aria-text", ariaTextRule, '<span role="text">', "</span>"],
-    ["aria-hidden-focus", ariaHiddenFocusRule, '<div aria-hidden="true">', "</div>"],
-  ] as const)("%s at 5,000 levels stays under 1 s", async (_name, rule, open, close) => {
-    const html = nested(5000, open, close);
-    const ctx: RuleContext = {
-      page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
-      parsed: parsePage(html, URL) as ParsedPage,
-      options: {},
-    };
-    const started = performance.now();
-    const result = (await rule.run(ctx));
-    expect(performance.now() - started).toBeLessThan(1000);
-    expect(result.checks.some((c) => c.status === "warn" || c.status === "fail")).toBe(true);
-  });
+    [
+      "aria-hidden-focus",
+      ariaHiddenFocusRule,
+      '<div aria-hidden="true">',
+      "</div>",
+    ],
+  ] as const)(
+    "%s at 5,000 levels stays under 1 s",
+    async (_name, rule, open, close) => {
+      const html = nested(5000, open, close);
+      const ctx: RuleContext = {
+        page: { url: URL, html, statusCode: 200, loadTime: 0, headers: {} },
+        parsed: parsePage(html, URL) as ParsedPage,
+        options: {},
+      };
+      const started = performance.now();
+      const result = await rule.run(ctx);
+      expect(performance.now() - started).toBeLessThan(1000);
+      expect(
+        result.checks.some((c) => c.status === "warn" || c.status === "fail")
+      ).toBe(true);
+    }
+  );
 });

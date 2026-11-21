@@ -6,12 +6,12 @@
 // the local per-link check straight away, and their LOCAL status is what the
 // rules read. An empty answer is never "all links fine".
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { runStreamingRules } from "../src/adapter";
 import {
@@ -47,15 +47,16 @@ function serveTargets(): string {
           `<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`,
           {
             headers: { "content-type": "text/html; charset=utf-8" },
-          },
+          }
         );
       if (url.pathname === "/") {
         const elsewhere = `http://127.0.0.1:${url.port}`;
         return html(
-          `<a href="${elsewhere}/elsewhere">Elsewhere</a> <a href="${elsewhere}/gone">Gone</a>`,
+          `<a href="${elsewhere}/elsewhere">Elsewhere</a> <a href="${elsewhere}/gone">Gone</a>`
         );
       }
-      if (url.pathname.startsWith("/gone")) return new Response("gone", { status: 404 });
+      if (url.pathname.startsWith("/gone"))
+        return new Response("gone", { status: 404 });
       return html("Another site");
     },
   });
@@ -66,19 +67,29 @@ function serveTargets(): string {
 /** A stand-in for the dead-links service: answers whichever urls `pick` names, as live. */
 function service(pick: (urls: string[], call: number) => string[]) {
   const calls: string[][] = [];
-  const checker = async (urls: string[]): Promise<Map<string, ExternalCheckResult>> => {
+  const checker = async (
+    urls: string[]
+  ): Promise<Map<string, ExternalCheckResult>> => {
     calls.push(urls);
     return new Map(
       pick(urls, calls.length).map((url) => [
         url,
-        { href: url, status: 200, error: null, redirectTarget: null, fromCache: true },
-      ]),
+        {
+          href: url,
+          status: 200,
+          error: null,
+          redirectTarget: null,
+          fromCache: true,
+        },
+      ])
     );
   };
   return { calls, checker };
 }
 
-const URLS = ["a", "b", "c", "d", "e", "f"].map((p) => `https://example.com/${p}`);
+const URLS = ["a", "b", "c", "d", "e", "f"].map(
+  (p) => `https://example.com/${p}`
+);
 
 describe("runBulkChecker", () => {
   test("a chunk answered with none of its urls ends the pass", async () => {
@@ -89,7 +100,9 @@ describe("runBulkChecker", () => {
   });
 
   test("an unanswered chunk after answered ones ends the pass there", async () => {
-    const { calls, checker } = service((urls, call) => (call === 1 ? urls : []));
+    const { calls, checker } = service((urls, call) =>
+      call === 1 ? urls : []
+    );
     const resolved = await runBulkChecker(checker, URLS, 2);
     expect(calls).toEqual([URLS.slice(0, 2), URLS.slice(2, 4)]);
     expect([...resolved.keys()]).toEqual(URLS.slice(0, 2));
@@ -116,7 +129,7 @@ describe("runBulkChecker", () => {
         throw new Error("service_unavailable");
       },
       URLS,
-      2,
+      2
     );
     expect(callCount).toBe(1);
     expect(resolved.size).toBe(0);
@@ -138,18 +151,35 @@ describe("checkExternalLinks with a bulk checker", () => {
 
   test("urls the service leaves out of a chunk are checked locally, with their local status", async () => {
     const origin = byName(serveTargets());
-    const [answered, gone, unanswered] = [`${origin}/ok-1`, `${origin}/gone-1`, `${origin}/ok-2`];
+    const [answered, gone, unanswered] = [
+      `${origin}/ok-1`,
+      `${origin}/gone-1`,
+      `${origin}/ok-2`,
+    ];
     const { calls, checker } = service(() => [answered]);
 
     const results = await Effect.runPromise(
-      checkExternalLinks([answered, gone, unanswered], null, { ...OPTIONS, bulkChecker: checker }),
+      checkExternalLinks([answered, gone, unanswered], null, {
+        ...OPTIONS,
+        bulkChecker: checker,
+      })
     );
 
     expect(calls).toHaveLength(1);
     const byHref = new Map(results.map((r) => [r.href, r]));
-    expect(byHref.get(answered)).toMatchObject({ status: 200, fromCache: true });
-    expect(byHref.get(gone)).toMatchObject({ status: 404, error: null, fromCache: false });
-    expect(byHref.get(unanswered)).toMatchObject({ status: 200, fromCache: false });
+    expect(byHref.get(answered)).toMatchObject({
+      status: 200,
+      fromCache: true,
+    });
+    expect(byHref.get(gone)).toMatchObject({
+      status: 404,
+      error: null,
+      fromCache: false,
+    });
+    expect(byHref.get(unanswered)).toMatchObject({
+      status: 200,
+      fromCache: false,
+    });
     // The answered url never left the machine; the other two did.
     expect(new Set(requested)).toEqual(new Set(["/gone-1", "/ok-2"]));
   });
@@ -157,13 +187,14 @@ describe("checkExternalLinks with a bulk checker", () => {
   test("a first chunk with no answers: no further chunks are sent, every url is checked locally", async () => {
     const origin = byName(serveTargets());
     // Three chunks' worth; every tenth url is a 404.
-    const urls = Array.from({ length: BULK_CHECK_CHUNK_SIZE * 2 + 50 }, (_, i) =>
-      i % 10 === 0 ? `${origin}/gone-${i}` : `${origin}/ok-${i}`,
+    const urls = Array.from(
+      { length: BULK_CHECK_CHUNK_SIZE * 2 + 50 },
+      (_, i) => (i % 10 === 0 ? `${origin}/gone-${i}` : `${origin}/ok-${i}`)
     );
     const { calls, checker } = service(() => []);
 
     const results = await Effect.runPromise(
-      checkExternalLinks(urls, null, { ...OPTIONS, bulkChecker: checker }),
+      checkExternalLinks(urls, null, { ...OPTIONS, bulkChecker: checker })
     );
 
     expect(calls).toHaveLength(1);
@@ -180,15 +211,19 @@ describe("checkExternalLinks with a bulk checker", () => {
     const origin = byName(serveTargets());
     const urls = Array.from(
       { length: BULK_CHECK_CHUNK_SIZE * 2 + 50 },
-      (_, i) => `${origin}/ok-${i}`,
+      (_, i) => `${origin}/ok-${i}`
     );
     const { calls, checker } = service((chunk) => [chunk[0]!]);
 
     const results = await Effect.runPromise(
-      checkExternalLinks(urls, null, { ...OPTIONS, bulkChecker: checker }),
+      checkExternalLinks(urls, null, { ...OPTIONS, bulkChecker: checker })
     );
 
-    expect(calls.map((c) => c.length)).toEqual([BULK_CHECK_CHUNK_SIZE, BULK_CHECK_CHUNK_SIZE, 50]);
+    expect(calls.map((c) => c.length)).toEqual([
+      BULK_CHECK_CHUNK_SIZE,
+      BULK_CHECK_CHUNK_SIZE,
+      50,
+    ]);
     expect(results).toHaveLength(urls.length);
     expect(results.filter((r) => r.fromCache)).toHaveLength(3);
     expect(new Set(requested).size).toBe(urls.length - 3);
@@ -218,7 +253,7 @@ describe("a local site's external links and the dead-links service", () => {
           incremental: false,
           useCacheControl: false,
         },
-      }),
+      })
     );
     const crawlId = await Effect.runPromise(crawler.start(home, home));
     const storage = crawler.storage as SQLiteStorage;
@@ -226,24 +261,38 @@ describe("a local site's external links and the dead-links service", () => {
       rule_options: {},
       rules: { enable: ["links/dead-links", "links/broken-external-links"] },
       crawler: { max_pages: 1, exclude: [] },
-      external_links: { enabled: true, concurrency: 1, timeout_ms: 5_000, cache_ttl_days: 1 },
+      external_links: {
+        enabled: true,
+        concurrency: 1,
+        timeout_ms: 5_000,
+        cache_ttl_days: 1,
+      },
       internal_links: { enabled: false },
     } as unknown as Config;
 
     const preRules = await Effect.runPromise(
       runStreamingPreRules(storage, crawlId, config, {
-        externalLinks: { config: config.external_links, linkCache: null, bulkChecker: checker },
-      }),
+        externalLinks: {
+          config: config.external_links,
+          linkCache: null,
+          bulkChecker: checker,
+        },
+      })
     );
     expect(calls).toEqual([]);
     expect(requested).toContain("/gone");
 
     const ran = await Effect.runPromise(
-      runStreamingRules(storage, crawlId, config, preRules.assets) as Effect.Effect<
+      runStreamingRules(
+        storage,
+        crawlId,
+        config,
+        preRules.assets
+      ) as Effect.Effect<
         { siteRuleResults: Map<string, CheckResult[]> },
         never,
         never
-      >,
+      >
     );
     const checksOf = (id: string) => ran.siteRuleResults.get(id) ?? [];
     expect(checksOf("links/dead-links").map((c) => c.message)).toEqual([
@@ -253,6 +302,8 @@ describe("a local site's external links and the dead-links service", () => {
     const broken = checksOf("links/broken-external-links");
     // A 404 is confirmed broken, so it fails (#1739).
     expect(broken.map((c) => c.status)).toEqual(["fail"]);
-    expect(broken[0]!.items?.map((i) => i.id)).toEqual([`http://127.0.0.1:${port}/gone`]);
+    expect(broken[0]!.items?.map((i) => i.id)).toEqual([
+      `http://127.0.0.1:${port}/gone`,
+    ]);
   });
 });

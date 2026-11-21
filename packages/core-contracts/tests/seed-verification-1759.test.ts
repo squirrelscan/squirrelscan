@@ -8,12 +8,18 @@ import {
 
 describe("summarizeSeedVerification (#1759)", () => {
   test("is null when no known page carries findings", () => {
-    expect(summarizeSeedVerification({ carriedPages: [], pages: [] })).toBeNull();
+    expect(
+      summarizeSeedVerification({ carriedPages: [], pages: [] })
+    ).toBeNull();
   });
 
   test("a 404 and a 410 are gone with their status, a 3xx redirect row is redirected with its destination", () => {
     const sv = summarizeSeedVerification({
-      carriedPages: ["https://a.test/x", "https://a.test/y", "https://a.test/z"],
+      carriedPages: [
+        "https://a.test/x",
+        "https://a.test/y",
+        "https://a.test/z",
+      ],
       seeded: ["https://a.test/x", "https://a.test/y", "https://a.test/z"],
       pages: [
         { normalizedUrl: "https://a.test/x", status: 404 },
@@ -44,7 +50,13 @@ describe("summarizeSeedVerification (#1759)", () => {
         { normalizedUrl: "https://a.test/y", status: 429 },
       ],
     })!;
-    expect(sv).toMatchObject({ unverified: 2, gone: 0, live: 0, reverified: 0, leftCarried: 2 });
+    expect(sv).toMatchObject({
+      unverified: 2,
+      gone: 0,
+      live: 0,
+      reverified: 0,
+      leftCarried: 2,
+    });
   });
 
   test("not queued and not seeded is no longer linked; queued and pending is the page budget; a budget skip reason too", () => {
@@ -58,8 +70,16 @@ describe("summarizeSeedVerification (#1759)", () => {
       pages: [],
       frontier: [
         { normalizedUrl: "https://a.test/2", status: "pending" },
-        { normalizedUrl: "https://a.test/3", status: "skipped", reason: "over_max_pages" },
-        { normalizedUrl: "https://a.test/4", status: "skipped", reason: "robots" },
+        {
+          normalizedUrl: "https://a.test/3",
+          status: "skipped",
+          reason: "over_max_pages",
+        },
+        {
+          normalizedUrl: "https://a.test/4",
+          status: "skipped",
+          reason: "robots",
+        },
       ],
     })!;
     expect(sv).toMatchObject({
@@ -73,7 +93,7 @@ describe("summarizeSeedVerification (#1759)", () => {
   test("pages outside the known set are ignored and the page list is clipped while the counts stay exact", () => {
     const urls = Array.from(
       { length: SEED_VERIFICATION_MAX_PAGES + 20 },
-      (_, i) => `https://a.test/p${i}`,
+      (_, i) => `https://a.test/p${i}`
     );
     const sv = summarizeSeedVerification({
       carriedPages: urls,
@@ -100,9 +120,9 @@ describe("seedVerificationLine", () => {
         leftCarried: 3,
         skippedByBudget: 2,
         noLongerLinked: 1,
-      }),
+      })
     ).toBe(
-      "Known pages with open findings: 5 re-verified (2 gone, 1 redirected, 2 still live), 3 left carried (2 skipped by the page budget, 1 no longer linked).",
+      "Known pages with open findings: 5 re-verified (2 gone, 1 redirected, 2 still live), 3 left carried (2 skipped by the page budget, 1 no longer linked)."
     );
   });
 

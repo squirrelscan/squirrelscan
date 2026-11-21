@@ -3,12 +3,16 @@
 // probe; covered in packages/audit-engine/tests/cloaking-probe.test.ts). This file
 // proves the WIRING + rule verdict logic across divergent vs identical fixtures.
 
+import type {
+  CheckResult,
+  CloakingProbeData,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, CloakingProbeData } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 import { cloakingRule } from "../src/integrity/cloaking";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 const SITE = "https://example.com";
@@ -49,7 +53,9 @@ function siteCtx(cloakingProbes: CloakingProbeData[] | undefined): RuleContext {
   };
 }
 
-async function run(probes: CloakingProbeData[] | undefined): Promise<CheckResult[]> {
+async function run(
+  probes: CloakingProbeData[] | undefined
+): Promise<CheckResult[]> {
   const out = (await cloakingRule.run(siteCtx(probes))).checks;
   expectDeclaredChecks(cloakingRule, out);
   return out;
@@ -57,19 +63,19 @@ async function run(probes: CloakingProbeData[] | undefined): Promise<CheckResult
 
 describe("integrity/cloaking", () => {
   test("says it did not run when the probe is off (cloakingProbes undefined), never clean (#1741)", async () => {
-    expect((await run(undefined)).map((c) => [c.name, c.status, c.skipReason])).toEqual([
-      ["cloaking", "skipped", "not-applicable"],
-    ]);
+    expect(
+      (await run(undefined)).map((c) => [c.name, c.status, c.skipReason])
+    ).toEqual([["cloaking", "skipped", "not-applicable"]]);
   });
 
   test("pass when probe ran but found no suspicious paths (empty array)", async () => {
-    const checks = (await run([]));
+    const checks = await run([]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
   });
 
   test("fail on UA cloaking (status flip)", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         url: `${SITE}/hidden`,
         defaultStatus: 403,
@@ -77,7 +83,7 @@ describe("integrity/cloaking", () => {
         uaSimilarity: 0,
         uaCloaking: true,
       }),
-    ]));
+    ]);
     const fail = checks.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail!.name).toBe("cloaking");
@@ -86,14 +92,16 @@ describe("integrity/cloaking", () => {
   });
 
   test("fail on UA cloaking (low text similarity)", async () => {
-    const checks = (await run([probe({ url: `${SITE}/x`, uaSimilarity: 0.21, uaCloaking: true })]));
+    const checks = await run([
+      probe({ url: `${SITE}/x`, uaSimilarity: 0.21, uaCloaking: true }),
+    ]);
     const fail = checks.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail!.value).toContain("21% similar");
   });
 
   test("warn on token-gating (no UA cloaking)", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         url: `${SITE}/g`,
         tokenGated: true,
@@ -101,7 +109,7 @@ describe("integrity/cloaking", () => {
         queryStatus: 200,
         querySimilarity: 0.1,
       }),
-    ]));
+    ]);
     expect(checks.find((c) => c.status === "fail")).toBeUndefined();
     const warn = checks.find((c) => c.status === "warn");
     expect(warn).toBeDefined();
@@ -109,26 +117,28 @@ describe("integrity/cloaking", () => {
   });
 
   test("token-gating not double-reported when page also UA-cloaks", async () => {
-    const checks = (await run([probe({ url: `${SITE}/both`, uaCloaking: true, tokenGated: true })]));
+    const checks = await run([
+      probe({ url: `${SITE}/both`, uaCloaking: true, tokenGated: true }),
+    ]);
     expect(checks.find((c) => c.status === "fail")).toBeDefined();
     expect(checks.find((c) => c.status === "warn")).toBeUndefined();
   });
 
   test("pass when probed paths are all clean", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({ url: `${SITE}/a` }),
       probe({ url: `${SITE}/b`, reason: "recent-lastmod" }),
-    ]));
+    ]);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
     expect(checks[0]!.message).toContain("2 suspicious path");
   });
 
   test("reports both fail and warn when distinct pages diverge differently", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({ url: `${SITE}/cloaked`, uaCloaking: true }),
       probe({ url: `${SITE}/gated`, tokenGated: true }),
-    ]));
+    ]);
     expect(checks.find((c) => c.status === "fail")).toBeDefined();
     expect(checks.find((c) => c.status === "warn")).toBeDefined();
   });

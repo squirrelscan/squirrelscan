@@ -3,17 +3,24 @@
 // says. Site-wide rules skip with `targeted-run`, robots.txt is still judged, the other 17 pages get no
 // finding, and the report's coverage accounts for every URL given.
 
+import type { Config } from "@squirrelscan/config";
+
+import {
+  TARGETED_RUN_SKIP_REASON,
+  type CheckResult,
+} from "@squirrelscan/core-contracts";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import { TARGETED_RUN_SKIP_REASON, type CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
-import { runStreamingPreRules } from "../src/streaming-pre-rules";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { isRedirectSourcePage } from "../src/redirect-source";
 import { targetedCoverageFor } from "../src/report-stream";
+import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
 afterEach(() => {
@@ -24,7 +31,10 @@ const PAGE_COUNT = 20;
 
 function serve(): { origin: string; hits: string[] } {
   const hits: string[] = [];
-  const links = Array.from({ length: PAGE_COUNT }, (_, i) => `<a href="/p/${i}">p${i}</a>`).join(" ");
+  const links = Array.from(
+    { length: PAGE_COUNT },
+    (_, i) => `<a href="/p/${i}">p${i}</a>`
+  ).join(" ");
   const server: ReturnType<typeof Bun.serve> = Bun.serve({
     port: 0,
     fetch(req) {
@@ -35,17 +45,24 @@ function serve(): { origin: string; hits: string[] } {
           headers: { "content-type": "text/plain" },
         });
       }
-      if (pathname === "/sitemap.xml") return new Response("<urlset/>", { status: 200 });
+      if (pathname === "/sitemap.xml")
+        return new Response("<urlset/>", { status: 200 });
       if (pathname === "/old") {
-        return new Response(null, { status: 301, headers: { location: "/p/9" } });
+        return new Response(null, {
+          status: 301,
+          headers: { location: "/p/9" },
+        });
       }
       // No <title> on odd pages: core/meta-title has a finding to give on them.
-      const title = Number(pathname.split("/").pop()) % 2 === 0 ? "<title>A page</title>" : "";
+      const title =
+        Number(pathname.split("/").pop()) % 2 === 0
+          ? "<title>A page</title>"
+          : "";
       // A canonical to the page without its query: `?ref=` variants are one page.
       const canonical = `<link rel="canonical" href="http://localhost:${server.port}${pathname}">`;
       return new Response(
         `<!doctype html><html lang="en"><head>${title}${canonical}</head><body><h1>Page</h1>${links}</body></html>`,
-        { headers: { "content-type": "text/html; charset=utf-8" } },
+        { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     },
   });
@@ -54,11 +71,19 @@ function serve(): { origin: string; hits: string[] } {
 }
 
 import type { FrontierRecord } from "@squirrelscan/core-contracts/storage";
+
 import { targetedCoverage } from "../src/report-stream";
 
 const CONFIG = {
   rule_options: {},
-  rules: { enable: ["core/meta-title", "links/click-depth", "crawl/robots-txt", "crawl/sitemap-exists"] },
+  rules: {
+    enable: [
+      "core/meta-title",
+      "links/click-depth",
+      "crawl/robots-txt",
+      "crawl/sitemap-exists",
+    ],
+  },
   crawler: { max_pages: 50, exclude: [] },
   external_links: { enabled: false },
   internal_links: { enabled: false },
@@ -68,7 +93,7 @@ async function audit(
   engine: "v1" | "v2",
   targets: (origin: string) => string[],
   maxPages = 50,
-  crawlerExtra: Record<string, unknown> = {},
+  crawlerExtra: Record<string, unknown> = {}
 ) {
   const { origin, hits } = serve();
   const crawler = await Effect.runPromise(
@@ -87,9 +112,11 @@ async function audit(
         targetUrls: targets(origin),
         ...crawlerExtra,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
@@ -97,47 +124,88 @@ async function audit(
       const pre = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
       if (engine === "v1") {
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          pre.assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (id: string) => (ran.ruleResultsMap.get(id)?.checks ?? []) as CheckResult[];
+  const checks = (id: string) =>
+    (ran.ruleResultsMap.get(id)?.checks ?? []) as CheckResult[];
   // The audited pages are the report's: a redirect row is recorded, not a page (#1762).
   const auditedPages = stored.filter((p) => !isRedirectSourcePage(p));
-  const coverage = await Effect.runPromise(targetedCoverageFor(storage, crawlId));
+  const coverage = await Effect.runPromise(
+    targetedCoverageFor(storage, crawlId)
+  );
   return { origin, hits, checks, coverage, stored: auditedPages };
 }
 
 for (const engine of ["v1", "v2"] as const) {
   describe(`a targeted run on a 20 page site (${engine})`, () => {
     test("the site sees exactly 3 pages and robots.txt; whole-site rules skip with the reason; no finding for the other pages", async () => {
-      const r = await audit(engine, (o) => [`${o}/p/1`, `${o}/p/3`, `${o}/p/4`]);
+      const r = await audit(engine, (o) => [
+        `${o}/p/1`,
+        `${o}/p/3`,
+        `${o}/p/4`,
+      ]);
 
       // What the SITE saw: robots.txt and the three pages. No sitemap, no probe, no link followed.
-      expect([...r.hits].sort()).toEqual(["/p/1", "/p/3", "/p/4", "/robots.txt"]);
-      expect(r.stored.map((p) => new URL(p.url).pathname).sort()).toEqual(["/p/1", "/p/3", "/p/4"]);
+      expect([...r.hits].sort()).toEqual([
+        "/p/1",
+        "/p/3",
+        "/p/4",
+        "/robots.txt",
+      ]);
+      expect(r.stored.map((p) => new URL(p.url).pathname).sort()).toEqual([
+        "/p/1",
+        "/p/3",
+        "/p/4",
+      ]);
 
       // Site-wide rules: skipped with the reason, never a pass or a finding.
       for (const id of ["links/click-depth", "crawl/sitemap-exists"]) {
         const c = r.checks(id);
         expect(c.length, id).toBeGreaterThan(0);
-        expect(c.every((x) => x.status === "skipped" && x.skipReason === TARGETED_RUN_SKIP_REASON), id).toBe(true);
+        expect(
+          c.every(
+            (x) =>
+              x.status === "skipped" &&
+              x.skipReason === TARGETED_RUN_SKIP_REASON
+          ),
+          id
+        ).toBe(true);
       }
       // robots.txt is fetched whatever is given, so its rule still runs.
-      expect(r.checks("crawl/robots-txt").some((x) => x.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(false);
+      expect(
+        r
+          .checks("crawl/robots-txt")
+          .some((x) => x.skipReason === TARGETED_RUN_SKIP_REASON)
+      ).toBe(false);
 
       // Page rules ran on the targets only: /p/1 and /p/3 have no title, /p/4 has one.
       const metaTitle = r.checks("core/meta-title");
       const failingPaths = [
         ...new Set(
-          metaTitle.filter((x) => x.status === "fail").map((x) => new URL(x.pageUrl ?? "").pathname),
+          metaTitle
+            .filter((x) => x.status === "fail")
+            .map((x) => new URL(x.pageUrl ?? "").pathname)
         ),
       ].sort();
       expect(failingPaths).toEqual(["/p/1", "/p/3"]);
       // Nothing at all was said about a page that was not given.
       expect(
-        metaTitle.every((x) => ["/p/1", "/p/3", "/p/4"].includes(new URL(x.pageUrl ?? "").pathname)),
+        metaTitle.every((x) =>
+          ["/p/1", "/p/3", "/p/4"].includes(new URL(x.pageUrl ?? "").pathname)
+        )
       ).toBe(true);
 
       expect(r.coverage).toEqual({ requested: 3, audited: 3, unaudited: [] });
@@ -149,7 +217,7 @@ for (const engine of ["v1", "v2"] as const) {
         engine,
         (o) => [`${o}/p/1?ref=a`, `${o}/p/1?ref=b`, `${o}/p/3`],
         50,
-        { allowQueryParams: ["ref"] },
+        { allowQueryParams: ["ref"] }
       );
       expect(r.coverage.requested).toBe(3);
       expect(r.coverage.audited).toBe(3);
@@ -159,11 +227,17 @@ for (const engine of ["v1", "v2"] as const) {
     test("every URL given is accounted for: refused, over the cap, redirected", async () => {
       const r = await audit(
         engine,
-        (o) => [`${o}/p/1`, `${o}/private/x`, `${o}/old`, `${o}/p/2`, `${o}/p/3`],
-        3,
+        (o) => [
+          `${o}/p/1`,
+          `${o}/private/x`,
+          `${o}/old`,
+          `${o}/p/2`,
+          `${o}/p/3`,
+        ],
+        3
       );
       const byUrl = Object.fromEntries(
-        r.coverage.unaudited.map((u) => [new URL(u.url).pathname, u]),
+        r.coverage.unaudited.map((u) => [new URL(u.url).pathname, u])
       );
       expect(byUrl["/private/x"]?.reason).toBe("robots_disallowed");
       // /old redirects to /p/9, which was not listed: not followed, named as the destination.
@@ -171,7 +245,9 @@ for (const engine of ["v1", "v2"] as const) {
       expect(new URL(byUrl["/old"]!.destination!).pathname).toBe("/p/9");
       // The request for /old follows its own redirect to record the chain (the site sees /p/9 once), but the
       // destination is not queued or audited as a page.
-      expect(r.stored.map((p) => new URL(p.url).pathname)).not.toContain("/p/9");
+      expect(r.stored.map((p) => new URL(p.url).pathname)).not.toContain(
+        "/p/9"
+      );
       // maxPages 3 caps the list: /p/1 and /p/2 are audited (the redirect and the refused URL are no pages),
       // the rest is listed as not audited.
       expect(r.coverage.requested).toBe(5);
@@ -181,7 +257,11 @@ for (const engine of ["v1", "v2"] as const) {
 }
 
 describe("targetedCoverage (pure)", () => {
-  const row = (url: string, status: FrontierRecord["status"], extra: Partial<FrontierRecord> = {}): FrontierRecord => ({
+  const row = (
+    url: string,
+    status: FrontierRecord["status"],
+    extra: Partial<FrontierRecord> = {}
+  ): FrontierRecord => ({
     normalizedUrl: url,
     rawUrl: url,
     depth: 0,
@@ -195,8 +275,12 @@ describe("targetedCoverage (pure)", () => {
 
   test("a done row is audited unless its stored row is a redirect", () => {
     const c = targetedCoverage(
-      [row("https://e.test/a", "done"), row("https://e.test/old", "done"), row("https://e.test/b?ref=1", "done")],
-      ["https://e.test/old"],
+      [
+        row("https://e.test/a", "done"),
+        row("https://e.test/old", "done"),
+        row("https://e.test/b?ref=1", "done"),
+      ],
+      ["https://e.test/old"]
     );
     expect(c).toEqual({
       requested: 3,
@@ -271,8 +355,15 @@ describe("targetedCoverageFor reads the pages in batches (#1777 review)", () => 
           status: "completed",
           config: {} as never,
           stats: {
-            pagesTotal: 0, pagesFetched: 0, pagesFailed: 0, pagesSkipped: 0, pagesUnchanged: 0,
-            linksTotal: 0, imagesTotal: 0, bytesTotal: 0, avgLoadTimeMs: 0,
+            pagesTotal: 0,
+            pagesFetched: 0,
+            pagesFailed: 0,
+            pagesSkipped: 0,
+            pagesUnchanged: 0,
+            linksTotal: 0,
+            imagesTotal: 0,
+            bytesTotal: 0,
+            avgLoadTimeMs: 0,
           },
         } as never);
         // 130 audited pages (three batches of 50) and one redirect that sorts last.
@@ -285,9 +376,13 @@ describe("targetedCoverageFor reads the pages in batches (#1777 review)", () => 
         yield* storage.upsertFrontier(crawlId, frontier(old));
         yield* storage.upsertPage(crawlId, page(old, `${base}/a/000`));
         return yield* targetedCoverageFor(storage, crawlId);
-      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))) as unknown as ReturnType<typeof targetedCoverageFor>,
+      }).pipe(
+        Effect.ensuring(storage.close().pipe(Effect.orDie))
+      ) as unknown as ReturnType<typeof targetedCoverageFor>
     );
     expect(coverage).toMatchObject({ requested: 131, audited: 130 });
-    expect(coverage.unaudited).toEqual([{ url: `${base}/z-old`, reason: "redirected" }]);
+    expect(coverage.unaudited).toEqual([
+      { url: `${base}/z-old`, reason: "redirected" },
+    ]);
   });
 });

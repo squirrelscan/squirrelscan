@@ -11,11 +11,11 @@ import {
   type SourceSpan,
   type DetectedTechnology,
 } from "@squirrelscan/tech-detect";
+import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
 import { recordToHeaders } from "@squirrelscan/utils/headers";
+import { detectWaf, getWafProviderName } from "@squirrelscan/waf-detect";
 
 import { SCRIPT_TOO_LARGE_ERROR } from "./script-fetcher";
-import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
-import { detectWaf, getWafProviderName } from "@squirrelscan/waf-detect";
 
 /** Cross-scan diff returned by the cloud tech-detect gate (absent for local). */
 export interface TechScanDiff {
@@ -27,7 +27,7 @@ export interface TechScanDiff {
 
 export function buildReportTechnologies(
   technologies: DetectedTechnology[],
-  diff?: TechScanDiff,
+  diff?: TechScanDiff
 ): ReportTechnologies {
   return {
     items: technologies.map((technology) => ({
@@ -56,13 +56,17 @@ const WAF_FINGERPRINT_IDS: Readonly<Record<string, string>> = {
 export function withWafTech(
   technologies: DetectedTechnology[],
   headers: Record<string, string>,
-  html: string,
+  html: string
 ): DetectedTechnology[] {
   const waf = detectWaf(recordToHeaders(headers), html);
   if (!waf.detected || !waf.provider) return technologies;
   const id = `waf-${waf.provider}`;
   const twin = WAF_FINGERPRINT_IDS[waf.provider];
-  if (technologies.some((technology) => technology.id === id || technology.id === twin)) {
+  if (
+    technologies.some(
+      (technology) => technology.id === id || technology.id === twin
+    )
+  ) {
     return technologies;
   }
   return [
@@ -88,12 +92,14 @@ const BOTID_ID = "vercel-botid";
  */
 export function withVercelBotId(
   technologies: DetectedTechnology[],
-  pageHeaders: ReadonlyArray<Record<string, string>>,
+  pageHeaders: ReadonlyArray<Record<string, string>>
 ): DetectedTechnology[] {
-  const kasada = technologies.find((t) => t.id === "kasada" || t.id === "waf-kasada");
+  const kasada = technologies.find(
+    (t) => t.id === "kasada" || t.id === "waf-kasada"
+  );
   if (!kasada) return technologies;
   const onVercel = pageHeaders.some((headers) =>
-    Object.keys(headers).some((name) => name.toLowerCase() === "x-vercel-id"),
+    Object.keys(headers).some((name) => name.toLowerCase() === "x-vercel-id")
   );
   if (!onVercel) return technologies;
   return [
@@ -122,7 +128,9 @@ export interface LocalTechInput {
   truncation?: { reasons: TechTruncationReason[]; scripts: number };
 }
 
-export type TechTruncationReason = NonNullable<ReportTechnologies["truncated"]>["reasons"][number];
+export type TechTruncationReason = NonNullable<
+  ReportTechnologies["truncated"]
+>["reasons"][number];
 
 const TECH_CONFIDENCE_RANK = { high: 3, medium: 2, low: 1 } as const;
 
@@ -151,7 +159,7 @@ export const LOCAL_TECH_DETECT_OPTIONS: Required<DetectReportOptions> = {
  */
 export function techInputTruncation(
   inputs: readonly LocalTechInput[],
-  extraReasons: Iterable<TechTruncationReason> = [],
+  extraReasons: Iterable<TechTruncationReason> = []
 ): ReportTechnologies["truncated"] {
   const reasons = new Set<TechTruncationReason>(extraReasons);
   let scripts = 0;
@@ -166,14 +174,18 @@ export function techInputTruncation(
 export function detectReportTechnologiesMulti(
   pages: LocalTechInput[],
   diff?: TechScanDiff,
-  options: DetectReportOptions = {},
+  options: DetectReportOptions = {}
 ): ReportTechnologies {
   const byId = new Map<string, DetectedTechnology>();
   const reasons = new Set<TechTruncationReason>();
   for (const page of pages) {
     const detected = detectTechnologies(page, undefined, {
-      ...(options.pageBudgetMs !== undefined ? { budgetMs: options.pageBudgetMs } : {}),
-      ...(options.maxScriptChars !== undefined ? { maxScriptChars: options.maxScriptChars } : {}),
+      ...(options.pageBudgetMs !== undefined
+        ? { budgetMs: options.pageBudgetMs }
+        : {}),
+      ...(options.maxScriptChars !== undefined
+        ? { maxScriptChars: options.maxScriptChars }
+        : {}),
       onBudgetExceeded: () => reasons.add("time-budget"),
     });
     for (const technology of detected) {
@@ -182,7 +194,8 @@ export function detectReportTechnologiesMulti(
         !previous ||
         (!previous.version && !!technology.version) ||
         (!!previous.version === !!technology.version &&
-          TECH_CONFIDENCE_RANK[technology.confidence] > TECH_CONFIDENCE_RANK[previous.confidence]);
+          TECH_CONFIDENCE_RANK[technology.confidence] >
+            TECH_CONFIDENCE_RANK[previous.confidence]);
       if (better) byId.set(technology.id, technology);
     }
   }
@@ -190,7 +203,7 @@ export function detectReportTechnologiesMulti(
   const technologies = home
     ? withVercelBotId(
         withWafTech([...byId.values()], home.headers, home.html),
-        pages.map((page) => page.headers),
+        pages.map((page) => page.headers)
       )
     : [...byId.values()];
   const section = buildReportTechnologies(technologies, diff);
@@ -200,7 +213,7 @@ export function detectReportTechnologiesMulti(
 
 export function detectReportTechnologies(
   input: LocalTechInput,
-  diff?: TechScanDiff,
+  diff?: TechScanDiff
 ): ReportTechnologies {
   return detectReportTechnologiesMulti([input], diff);
 }
@@ -240,9 +253,11 @@ const MIN_WINDOW_SCAN_CHARS = 64 * 1024;
 export function windowScanAllowances(
   lengths: readonly number[],
   cap = MAX_WINDOW_SCAN_CHARS_PER_PAGE,
-  floor = MIN_WINDOW_SCAN_CHARS,
+  floor = MIN_WINDOW_SCAN_CHARS
 ): number[] {
-  const order = lengths.map((length, i) => ({ length, i })).sort((x, y) => x.length - y.length);
+  const order = lengths
+    .map((length, i) => ({ length, i }))
+    .sort((x, y) => x.length - y.length);
   const out = new Array<number>(lengths.length).fill(0);
   let remaining = cap;
   order.forEach(({ length, i }, k) => {
@@ -293,7 +308,7 @@ function topUpBundle(
   content: string,
   headChars: number,
   spans: readonly SourceSpan[],
-  spare: number,
+  spare: number
 ): { head: string; extras: string } | null {
   const joined: SourceSpan[] = [{ start: 0, end: headChars, opener: "" }];
   let left = Math.max(0, spare);
@@ -305,7 +320,9 @@ function topUpBundle(
     const limit = next?.start ?? content.length;
     if (piece.end < limit) {
       // Closing the gap to the next span also drops its separator and its opener from the join.
-      const saved = next ? SEGMENT_SEPARATOR.length + byteLength(next.opener) : 0;
+      const saved = next
+        ? SEGMENT_SEPARATOR.length + byteLength(next.opener)
+        : 0;
       const gap = content.slice(piece.end, limit);
       const add =
         gap.length <= left + saved && byteLength(gap) <= left + saved
@@ -346,13 +363,15 @@ function spreadBundleExtras(
   plan: readonly ExtrasItem[],
   bundleBytes: number,
   room: () => number,
-  charge: (n: number) => void,
+  charge: (n: number) => void
 ): void {
   // A script the floor pass left no head (its budget ran out) is open too, and first: it has nothing else (#1510).
   const open = plan
     .filter((item) => item.head.length < item.content.length)
     .sort((a, b) => Number(a.head !== "") - Number(b.head !== ""));
-  const allowances = windowScanAllowances(open.map((item) => item.content.length));
+  const allowances = windowScanAllowances(
+    open.map((item) => item.content.length)
+  );
   const samplers = new Map<ExtrasItem, BundleSampler>();
   const steps = [
     { cap: 2 * 1024, windowsOnly: true },
@@ -366,13 +385,17 @@ function spreadBundleExtras(
       let r = Math.min(
         cap,
         bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
-        room() + held - SEGMENT_SEPARATOR.length,
+        room() + held - SEGMENT_SEPARATOR.length
       );
       // Windows need room for at least one (about 420 bytes); the last step takes any room for the tail.
       if (r < (windowsOnly ? MIN_WINDOW_BYTES : MIN_TAIL_BYTES)) return;
       let sampler = samplers.get(item);
       if (!sampler) {
-        sampler = createBundleSampler(item.content, item.head.length, allowances[k]);
+        sampler = createBundleSampler(
+          item.content,
+          item.head.length,
+          allowances[k]
+        );
         samplers.set(item, sampler);
       }
       let extras = truncateToBytes(sampler.sample(r, windowsOnly), r);
@@ -391,11 +414,14 @@ function spreadBundleExtras(
         const expanded = Math.min(
           cap,
           bundleBytes - item.headBytes - SEGMENT_SEPARATOR.length,
-          room() + held - SEGMENT_SEPARATOR.length,
+          room() + held - SEGMENT_SEPARATOR.length
         );
         if (expanded <= r) break;
         r = expanded;
-        const expandedExtras = truncateToBytes(sampler.sample(r, windowsOnly), r);
+        const expandedExtras = truncateToBytes(
+          sampler.sample(r, windowsOnly),
+          r
+        );
         // Keep the already-valid sample if a defensive resample ever comes back
         // empty; the shortened head still has a disjoint replacement beside it.
         if (!expandedExtras) break;
@@ -487,7 +513,7 @@ const LINK_REL_WORDS = new Set(["stylesheet", "preload", "modulepreload"]);
 function attributeValue(attrs: string, name: string): string | undefined {
   const match = new RegExp(
     `(?:^|\\s)${name}\\s*=\\s*(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\\s"'>]{1,2000}))`,
-    "i",
+    "i"
   ).exec(attrs);
   return match?.[1] ?? match?.[2] ?? match?.[3];
 }
@@ -557,18 +583,21 @@ export function buildTechInputs(
   pages: TechPageSource[],
   scripts: readonly TechFetchedScript[],
   limits: TechBundleLimits = DEFAULT_TECH_BUNDLE_LIMITS,
-  gaps: TechScriptGaps = {},
+  gaps: TechScriptGaps = {}
 ): LocalTechInput[] {
   const attached = new Set<string>();
   // Scripts the crawl dropped for their size, counted once however many pages reference them.
   const counted = new Set<string>();
   let auditBytes = 0;
   return pages.map((page, index) => {
-    const own = new Set([page.url, ...(page.requestedUrl ? [page.requestedUrl] : [])]);
+    const own = new Set([
+      page.url,
+      ...(page.requestedUrl ? [page.requestedUrl] : []),
+    ]);
     const owned = scripts.filter((script) =>
       script.sourcePages?.length
         ? script.sourcePages.some((source) => own.has(source))
-        : index === 0,
+        : index === 0
     );
 
     // Three passes over the page's bundles, so a page with many scripts gives every
@@ -612,9 +641,16 @@ export function buildTechInputs(
     }
     const floor = Math.min(TECH_BUNDLE_FLOOR_BYTES, limits.bundleBytes);
     // Held back only when the floors would not fit the room: a page whose scripts all get their head keeps it (#1510).
-    const floorDemand = plan.reduce((sum, item) => sum + Math.min(floor, item.bytes), 0);
+    const floorDemand = plan.reduce(
+      (sum, item) => sum + Math.min(floor, item.bytes),
+      0
+    );
     const windowReserve =
-      !allWhole && floorDemand > room() && room() >= 4 * TECH_WINDOW_RESERVE_BYTES ? TECH_WINDOW_RESERVE_BYTES : 0;
+      !allWhole &&
+      floorDemand > room() &&
+      room() >= 4 * TECH_WINDOW_RESERVE_BYTES
+        ? TECH_WINDOW_RESERVE_BYTES
+        : 0;
     for (const item of allWhole ? [] : plan) {
       const r = Math.min(floor, room() - windowReserve);
       if (r <= 0) break;
@@ -627,11 +663,21 @@ export function buildTechInputs(
       // Pass 2 chose stretches of the text after this head. The rest of the bundle's allowance goes on the text
       // between them, from the front, and stretches that touch become one (#1534).
       if (!item.head || item.head.length >= item.content.length) continue;
-      const spare = Math.min(limits.bundleBytes - item.headBytes - item.extrasBytes, room());
-      const top = topUpBundle(item.content, item.head.length, item.spans, spare);
+      const spare = Math.min(
+        limits.bundleBytes - item.headBytes - item.extrasBytes,
+        room()
+      );
+      const top = topUpBundle(
+        item.content,
+        item.head.length,
+        item.spans,
+        spare
+      );
       if (!top) continue;
       const headBytes = byteLength(top.head);
-      const extrasBytes = top.extras ? byteLength(top.extras) + SEGMENT_SEPARATOR.length : 0;
+      const extrasBytes = top.extras
+        ? byteLength(top.extras) + SEGMENT_SEPARATOR.length
+        : 0;
       charge(headBytes + extrasBytes - item.headBytes - item.extrasBytes);
       item.head = top.head;
       item.headBytes = headBytes;
@@ -651,29 +697,43 @@ export function buildTechInputs(
           ? "bundle-bytes"
           : limits.pageBytes - pageBytes <= 0
             ? "page-bytes"
-            : "audit-bytes",
+            : "audit-bytes"
       );
     }
     // A script the crawl dropped for its size has no body at all: detection never saw it (#1408).
     for (const script of limits.bundleBytes > 0 ? owned : []) {
-      if (script.content || script.error !== SCRIPT_TOO_LARGE_ERROR || counted.has(script.url)) continue;
+      if (
+        script.content ||
+        script.error !== SCRIPT_TOO_LARGE_ERROR ||
+        counted.has(script.url)
+      )
+        continue;
       counted.add(script.url);
       cut++;
       reasons.add("script-too-large");
     }
     // The audit's script limit left some scripts unread; said once, on the home page's input.
-    if (index === 0 && limits.bundleBytes > 0 && (gaps.scriptsNotRead ?? 0) > 0) {
+    if (
+      index === 0 &&
+      limits.bundleBytes > 0 &&
+      (gaps.scriptsNotRead ?? 0) > 0
+    ) {
       cut += gaps.scriptsNotRead ?? 0;
       reasons.add("script-limit");
     }
-    const truncation = cut > 0 ? { reasons: [...reasons], scripts: cut } : undefined;
+    const truncation =
+      cut > 0 ? { reasons: [...reasons], scripts: cut } : undefined;
     const withBody: { url: string; content: string }[] = [];
     for (const item of plan) {
       if (!item.head && !item.extras) continue;
       attached.add(item.url);
       withBody.push({
         url: item.url,
-        content: item.extras ? (item.head ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}` : item.extras) : item.head,
+        content: item.extras
+          ? item.head
+            ? `${item.head}${SEGMENT_SEPARATOR}${item.extras}`
+            : item.extras
+          : item.head,
       });
     }
 
@@ -691,10 +751,15 @@ export function buildTechInputs(
     const urls = new Set<string>(withBody.map((script) => script.url));
     for (const src of srcs) urls.add(src);
     if (index === 0) for (const script of scripts) urls.add(script.url);
-    const bodies = new Map(withBody.map((script) => [script.url, script.content]));
+    const bodies = new Map(
+      withBody.map((script) => [script.url, script.content])
+    );
     // Stylesheet and preload URLs come last under a cap of their own (#1263): a page with
     // dozens of them cannot push a real script out of the per-page script limit.
-    const listed = [...urls].slice(0, SERVICE_LIMITS.techDetectMaxScriptsPerPage);
+    const listed = [...urls].slice(
+      0,
+      SERVICE_LIMITS.techDetectMaxScriptsPerPage
+    );
     const seen = new Set(listed);
     let linksAdded = 0;
     for (const href of prioritiseLinkHrefs(linkHrefs)) {

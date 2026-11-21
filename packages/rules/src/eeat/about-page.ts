@@ -1,20 +1,27 @@
 // eeat/about-page - About/company page presence
 
+import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
-import { getPathname } from "@squirrelscan/utils";
-
+import {
+  eeatPathsSchema,
+  matchesConfiguredPaths,
+  probedConfiguredPages,
+  probedNote,
+} from "../shared/eeat-paths";
 import {
   INPAGE_SECTIONS_UNMEASURED_MESSAGE,
   describeSectionPage,
   findInPageSection,
   inPageSectionsUnmeasured,
 } from "../shared/inpage-section";
-import { eeatPathsSchema, matchesConfiguredPaths, probedConfiguredPages, probedNote } from "../shared/eeat-paths";
-import { findLinkedUncrawledPage, linkedUncrawledCheck } from "../shared/linked-uncrawled-page";
+import {
+  findLinkedUncrawledPage,
+  linkedUncrawledCheck,
+} from "../shared/linked-uncrawled-page";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
@@ -102,7 +109,7 @@ export const aboutPageRule: Rule = {
               status: "info",
               message: `About section exists on ${where} but has limited content`,
               value: `${section.wordCount} words - consider expanding`,
-            },
+            }
       );
     } else if (pages.length === 1 && inPageSectionsUnmeasured(ctx)) {
       // A one-page site's About may be a section, and this cached snapshot never recorded them.
@@ -116,7 +123,11 @@ export const aboutPageRule: Rule = {
       // (an excluded path, or past the page budget) is unverified, not missing.
       const probed = probedConfiguredPages(ctx.site, paths);
       const probedFound = probed.find((p) => p.outcome === "found");
-      const linked = ctx.site ? findLinkedUncrawledPage(ctx.site, { href: (url) => isAboutPath(url, paths) }) : null;
+      const linked = ctx.site
+        ? findLinkedUncrawledPage(ctx.site, {
+            href: (url) => isAboutPath(url, paths),
+          })
+        : null;
       if (probedFound) {
         // #1428: the crawl did not reach it, the probe did.
         const words = probedFound.wordCount;
@@ -127,15 +138,23 @@ export const aboutPageRule: Rule = {
                 status: "info",
                 message: `About page exists but has limited content (found by probing ${probedFound.path}, not reached by the crawl)`,
                 value: `${words} words - consider expanding`,
-                details: { probed: true, path: probedFound.path, status: probedFound.status },
+                details: {
+                  probed: true,
+                  path: probedFound.path,
+                  status: probedFound.status,
+                },
               }
             : {
                 name: "about-page",
                 status: "pass",
                 message: `About page exists (found by probing ${probedFound.path}, not reached by the crawl)`,
                 value: probedFound.url,
-                details: { probed: true, path: probedFound.path, status: probedFound.status },
-              },
+                details: {
+                  probed: true,
+                  path: probedFound.path,
+                  status: probedFound.status,
+                },
+              }
         );
       } else {
         checks.push(
@@ -144,10 +163,20 @@ export const aboutPageRule: Rule = {
             : {
                 name: "about-page",
                 status: "warn",
-                message: probed.length > 0 ? `No About page found ${probedNote(probed)}` : "No About page found",
+                message:
+                  probed.length > 0
+                    ? `No About page found ${probedNote(probed)}`
+                    : "No About page found",
                 value: "Create /about or /about-us page",
-                ...(probed.length > 0 ? { details: { probed: true, paths: probed.map((p) => p.path) } } : {}),
-              },
+                ...(probed.length > 0
+                  ? {
+                      details: {
+                        probed: true,
+                        paths: probed.map((p) => p.path),
+                      },
+                    }
+                  : {}),
+              }
         );
       }
     }

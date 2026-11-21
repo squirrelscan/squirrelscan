@@ -12,6 +12,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderMarkdown } from "../src/output/markdown";
 
 /** A `>` opens a quote only up to 3 leading spaces; 4 is an indented code block. */
@@ -69,7 +70,8 @@ function metadataBlock(markdown: string): string[] {
 }
 
 const HINT_PREFIX = "Partial scan:";
-const FALLBACK_NOTE = "3 pages recovered via direct fetch after a render block.";
+const FALLBACK_NOTE =
+  "3 pages recovered via direct fetch after a render block.";
 const RULE_DESCRIPTION = "Every page needs a title element.";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -103,7 +105,12 @@ function partialScanReport(): AuditReport {
   return baseReport({
     generatorVersion: "1.2.3",
     failed: 1,
-    scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 100, capped: true },
+    scanScope: {
+      origin: "cli",
+      maxPages: 100,
+      pagesCrawled: 100,
+      capped: true,
+    },
     coverage: { auditedPages: 100, knownPages: 505, carriedFindings: 12 },
     fetchFallbacks: { recovered: 3 },
     ruleResults: { "seo/title": titleRule },
@@ -123,7 +130,9 @@ describe("full-scan hint block boundary (#190)", () => {
 
     // It is a plain list item in Report detail, at the end of the report.
     expect(out).toContain(`- ${HINT_PREFIX}`);
-    expect(out.indexOf("## Report detail")).toBeLessThan(out.indexOf(HINT_PREFIX));
+    expect(out.indexOf("## Report detail")).toBeLessThan(
+      out.indexOf(HINT_PREFIX)
+    );
 
     // ...and none of the metadata below it is inside a quote.
     expect(quoted).not.toContain(FALLBACK_NOTE);
@@ -152,9 +161,14 @@ describe("full-scan hint block boundary (#190)", () => {
     const out = renderMarkdown(
       baseReport({
         generatorVersion: "1.2.3",
-        scanScope: { origin: "cli", maxPages: 100, pagesCrawled: 4, capped: false },
+        scanScope: {
+          origin: "cli",
+          maxPages: 100,
+          pagesCrawled: 4,
+          capped: false,
+        },
       }),
-      { version: "1.2.3" },
+      { version: "1.2.3" }
     );
     expect(out).not.toContain(HINT_PREFIX);
     expect(out).toContain("**Version:** 1.2.3");

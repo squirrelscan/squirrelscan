@@ -22,15 +22,28 @@ describe("[storage] store_scripts (#1255)", () => {
   });
 
   test("a bad size is an error that names the key", () => {
-    const result = StorageConfigSchema.safeParse({ store_scripts_max_bytes: "lots" });
+    const result = StorageConfigSchema.safeParse({
+      store_scripts_max_bytes: "lots",
+    });
     expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error?.issues)).toContain("store_scripts_max_bytes");
+    expect(JSON.stringify(result.error?.issues)).toContain(
+      "store_scripts_max_bytes"
+    );
   });
 
   test("store_scripts_max_scripts is a whole number from 1 to 500", () => {
-    expect(StorageConfigSchema.parse({ store_scripts_max_scripts: 200 }).store_scripts_max_scripts).toBe(200);
-    expect(StorageConfigSchema.safeParse({ store_scripts_max_scripts: 0 }).success).toBe(false);
-    expect(StorageConfigSchema.safeParse({ store_scripts_max_scripts: 501 }).success).toBe(false);
-    expect(StorageConfigSchema.safeParse({ store_scripts_max_scripts: 1.5 }).success).toBe(false);
+    expect(
+      StorageConfigSchema.parse({ store_scripts_max_scripts: 200 })
+        .store_scripts_max_scripts
+    ).toBe(200);
+    expect(
+      StorageConfigSchema.safeParse({ store_scripts_max_scripts: 0 }).success
+    ).toBe(false);
+    expect(
+      StorageConfigSchema.safeParse({ store_scripts_max_scripts: 501 }).success
+    ).toBe(false);
+    expect(
+      StorageConfigSchema.safeParse({ store_scripts_max_scripts: 1.5 }).success
+    ).toBe(false);
   });
 });

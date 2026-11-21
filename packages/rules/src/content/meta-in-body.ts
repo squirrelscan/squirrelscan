@@ -32,7 +32,7 @@ export const metaInBodyRule: Rule = {
           !meta.hasAttribute("name") &&
           !meta.hasAttribute("http-equiv") &&
           !meta.hasAttribute("charset")
-        ),
+        )
     );
 
     if (bodyMetas.length === 0) {

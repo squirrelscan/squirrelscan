@@ -1,10 +1,16 @@
 // a11y/aria-hidden-focus - Aria-hidden not on focusable elements
 
-import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { UNCONFIRMED_CHECK_SUFFIX } from "@squirrelscan/core-contracts/resolution";
+import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
+
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import {
   createStaticVisibility,
@@ -50,7 +56,8 @@ function parseTabindex(el: Element): number | null {
 function isFocusable(el: Element): boolean {
   const tag = el.tagName.toLowerCase();
   if (DISABLEABLE_TAGS.has(tag) && hasAttrCI(el, "disabled")) return false;
-  if (tag === "input" && getAttrCI(el, "type")?.toLowerCase() === "hidden") return false;
+  if (tag === "input" && getAttrCI(el, "type")?.toLowerCase() === "hidden")
+    return false;
   const tabindex = parseTabindex(el);
   if (tabindex !== null) return tabindex >= 0;
   return el.matches(nativeFocusableSelectors);
@@ -63,7 +70,11 @@ function isFocusable(el: Element): boolean {
  * the tab order, so nothing under it can be reached with Tab (#456).
  */
 function isOutOfFocusTree(el: Element, stop: Element | null): boolean {
-  for (let node: Element | null = el; node && node !== stop; node = node.parentElement) {
+  for (
+    let node: Element | null = el;
+    node && node !== stop;
+    node = node.parentElement
+  ) {
     if (hasAttrCI(node, "inert")) return true;
     const hidden = getAttrCI(node, "hidden");
     if (hidden !== null && hidden.toLowerCase() !== "until-found") return true;
@@ -128,7 +139,8 @@ export const ariaHiddenFocusRule: Rule = {
   meta: {
     id: "a11y/aria-hidden-focus",
     name: "ARIA Hidden Focus",
-    description: "Ensures aria-hidden elements do not contain focusable content",
+    description:
+      "Ensures aria-hidden elements do not contain focusable content",
     solution:
       "Elements with aria-hidden='true' should not contain focusable content. When an element is hidden from assistive technology but still focusable, keyboard users can tab to it but screen reader users won't know what they're interacting with. Either remove aria-hidden, add the inert attribute to the hidden container (which takes its whole subtree out of focus), or make each focusable child non-focusable with tabindex='-1'. A control hidden by the hidden attribute, a closed dialog or an inline style='display:none' or 'visibility:hidden' is not focusable and is not reported. A <style> rule squirrel can decide (a plain selector, no media query) counts too. Vendor-prefixed display values (-webkit-box, -webkit-flex, -ms-flexbox) are read as shown, including the old fallback chain that ends in display: flex. An attribute selector with an operator ([id$=x], [href^=x], [data-a*=x], [class~=x], [lang|=en]) reaches only elements that have the attribute and a value that could satisfy it. A control carrying a no-js class (itself or an ancestor other than <html>) on a page with an external stylesheet or @import is reported as unconfirmed, because the theme may hide it when JavaScript runs. A control a style may hide but squirrel cannot settle (a pseudo-class, a media query, a page that also loads an external stylesheet) is reported as unconfirmed. External stylesheets are not read, so a control hidden only by one is still reported.",
     category: "a11y",
@@ -153,12 +165,17 @@ export const ariaHiddenFocusRule: Rule = {
     const visibility = createStaticVisibility({ ariaHidden: false });
 
     /** What a focusable element would be filed as, or null when CSS or markup hides it. */
-    const findingOf = (el: Element): { finding: Finding; seen: StaticVisibility } | null => {
+    const findingOf = (
+      el: Element
+    ): { finding: Finding; seen: StaticVisibility } | null => {
       const seen = visibility.visibility(el);
       // Hidden by markup or a plain inline style: not focusable.
       if (seen.state === "hidden") return null;
       if (isHoneypotCandidate(el)) return { finding: "honeypot", seen };
-      return { finding: seen.state === "unknown" ? "unconfirmed" : "focusable", seen };
+      return {
+        finding: seen.state === "unknown" ? "unconfirmed" : "focusable",
+        seen,
+      };
     };
 
     // squirrelscan/repo#3066: one pre-order walk of the document instead of a
@@ -183,12 +200,16 @@ export const ariaHiddenFocusRule: Rule = {
     const containers: Array<{ el: Element; entry: number; exit: number }> = [];
     let pos = 0;
     {
-      type Frame = { el: Element; covered: boolean; inHidden: boolean } | { leave: number };
+      type Frame =
+        | { el: Element; covered: boolean; inHidden: boolean }
+        | { leave: number };
       // Every top-level element, not just documentElement: a page without an
       // <html> tag, or with a warning printed ahead of it, has several, and the
       // old document-wide query reached them all.
       const tops = Array.from(doc.children as ArrayLike<Element>);
-      const stack: Frame[] = tops.reverse().map((el) => ({ el, covered: false, inHidden: false }));
+      const stack: Frame[] = tops
+        .reverse()
+        .map((el) => ({ el, covered: false, inHidden: false }));
       while (stack.length > 0) {
         const frame = stack.pop()!;
         if ("leave" in frame) {
@@ -227,13 +248,20 @@ export const ariaHiddenFocusRule: Rule = {
       honeypot: { total: 0, first: [], allWidth: true },
       unconfirmed: { total: 0, first: [], allWidth: true },
     };
-    const isWidthOnly = (seen: StaticVisibility) => seen.state === "unknown" && seen.reason === "width";
-    const itemFor = (finding: Finding, label: string, seen: StaticVisibility): CheckItem =>
+    const isWidthOnly = (seen: StaticVisibility) =>
+      seen.state === "unknown" && seen.reason === "width";
+    const itemFor = (
+      finding: Finding,
+      label: string,
+      seen: StaticVisibility
+    ): CheckItem =>
       finding === "unconfirmed" ? unconfirmedItem(label, seen) : { id: label };
     // Unconfirmed reportables that are not width-only, counted up to each index.
     const notWidthBefore = [0];
     for (const item of reportables.unconfirmed) {
-      notWidthBefore.push(notWidthBefore.at(-1)! + (isWidthOnly(item.seen) ? 0 : 1));
+      notWidthBefore.push(
+        notWidthBefore.at(-1)! + (isWidthOnly(item.seen) ? 0 : 1)
+      );
     }
 
     for (const { el: hidden, entry, exit } of containers) {
@@ -246,7 +274,8 @@ export const ariaHiddenFocusRule: Rule = {
         if (self) {
           const into = findings[self.finding];
           into.total++;
-          if (self.finding === "unconfirmed" && !isWidthOnly(self.seen)) into.allWidth = false;
+          if (self.finding === "unconfirmed" && !isWidthOnly(self.seen))
+            into.allWidth = false;
           if (into.first.length < 10) {
             into.first.push(
               itemFor(
@@ -254,8 +283,8 @@ export const ariaHiddenFocusRule: Rule = {
                 self.finding === "honeypot"
                   ? labelFor(hidden)
                   : `${hidden.tagName.toLowerCase()} (self is focusable)`,
-                self.seen,
-              ),
+                self.seen
+              )
             );
           }
           continue;
@@ -268,7 +297,10 @@ export const ariaHiddenFocusRule: Rule = {
         if (to === from) continue;
         const into = findings[finding];
         into.total += to - from;
-        if (finding === "unconfirmed" && notWidthBefore[to]! - notWidthBefore[from]! > 0) {
+        if (
+          finding === "unconfirmed" &&
+          notWidthBefore[to]! - notWidthBefore[from]! > 0
+        ) {
           into.allWidth = false;
         }
         for (let i = from; i < to && into.first.length < 10; i++) {
@@ -289,7 +321,9 @@ export const ariaHiddenFocusRule: Rule = {
         message: `${focusableInHidden.total} focusable element(s) inside aria-hidden`,
         items: focusableInHidden.first,
         details:
-          focusableInHidden.total > 10 ? { additional: focusableInHidden.total - 10 } : undefined,
+          focusableInHidden.total > 10
+            ? { additional: focusableInHidden.total - 10 }
+            : undefined,
       });
     }
 
@@ -302,7 +336,9 @@ export const ariaHiddenFocusRule: Rule = {
         value:
           'Add tabindex="-1" (and autocomplete="off") to remove the honeypot from the tab order',
         details:
-          honeypotInHidden.total > 10 ? { additional: honeypotInHidden.total - 10 } : undefined,
+          honeypotInHidden.total > 10
+            ? { additional: honeypotInHidden.total - 10 }
+            : undefined,
       });
     }
 
@@ -313,10 +349,13 @@ export const ariaHiddenFocusRule: Rule = {
         message: unconfirmedMessageFor(
           "focusable element(s) inside aria-hidden",
           unconfirmed.total,
-          unconfirmed.allWidth,
+          unconfirmed.allWidth
         ),
         items: unconfirmed.first,
-        details: unconfirmed.total > 10 ? { additional: unconfirmed.total - 10 } : undefined,
+        details:
+          unconfirmed.total > 10
+            ? { additional: unconfirmed.total - 10 }
+            : undefined,
       });
     }
 

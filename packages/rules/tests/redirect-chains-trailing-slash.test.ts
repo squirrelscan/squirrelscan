@@ -5,9 +5,10 @@
 // never observed the responses in between. These tests pin the rule to real
 // redirect evidence, and pin the label to hops whose status was actually seen.
 
+import type { RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { RedirectChain, RedirectHop } from "@squirrelscan/core-contracts";
 import type { RuleContext } from "../src/types";
 
 import { redirectChainsRule } from "../src/links/redirect-chains";
@@ -19,11 +20,19 @@ interface PageInput {
   links?: string[];
 }
 
-function hop(url: string, statusCode: number, type: RedirectHop["type"] = "http"): RedirectHop {
+function hop(
+  url: string,
+  statusCode: number,
+  type: RedirectHop["type"] = "http"
+): RedirectHop {
   return { url, statusCode, type };
 }
 
-function chain(sourceUrl: string, finalUrl: string, hops: RedirectHop[]): RedirectChain {
+function chain(
+  sourceUrl: string,
+  finalUrl: string,
+  hops: RedirectHop[]
+): RedirectChain {
   return {
     sourceUrl,
     finalUrl,
@@ -38,7 +47,11 @@ function chain(sourceUrl: string, finalUrl: string, hops: RedirectHop[]): Redire
 
 function ctx(pages: PageInput[]): RuleContext {
   return {
-    page: { url: pages[0]?.url ?? "https://example.com/", html: "", statusCode: 200 },
+    page: {
+      url: pages[0]?.url ?? "https://example.com/",
+      html: "",
+      statusCode: 200,
+    },
     parsed: {},
     site: {
       baseUrl: "https://example.com",
@@ -58,7 +71,9 @@ function ctx(pages: PageInput[]): RuleContext {
 }
 
 const check = async (pages: PageInput[], name: string) =>
-  (await redirectChainsRule.run(ctx(pages))).checks.find((c) => c.name === name);
+  (await redirectChainsRule.run(ctx(pages))).checks.find(
+    (c) => c.name === name
+  );
 
 describe("links/redirect-chains — trailing-slash false positives", () => {
   test("the exact reported shape (200 → 200) is not a redirect", async () => {
@@ -68,14 +83,18 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       {
         url: "https://example.com/o-mnie",
         finalUrl: "https://example.com/o-mnie/",
-        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
-          hop("https://example.com/o-mnie", 200),
-          hop("https://example.com/o-mnie/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/o-mnie",
+          "https://example.com/o-mnie/",
+          [
+            hop("https://example.com/o-mnie", 200),
+            hop("https://example.com/o-mnie/", 200),
+          ]
+        ),
       },
     ];
 
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const { checks } = await redirectChainsRule.run(ctx(pages));
 
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("pass");
@@ -96,7 +115,7 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       links: ["https://example.com/o-mnie/", "https://example.com/blog/"],
     }));
 
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
+    const { checks } = await redirectChainsRule.run(ctx(pages));
 
     expect(checks.map((c) => c.status)).toEqual(["pass"]);
   });
@@ -108,10 +127,14 @@ describe("links/redirect-chains — trailing-slash false positives", () => {
       {
         url: "https://example.com/o-mnie",
         finalUrl: "https://example.com/o-mnie/",
-        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
-          hop("https://example.com/o-mnie", 200),
-          hop("https://example.com/o-mnie/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/o-mnie",
+          "https://example.com/o-mnie/",
+          [
+            hop("https://example.com/o-mnie", 200),
+            hop("https://example.com/o-mnie/", 200),
+          ]
+        ),
       },
       ...Array.from({ length: 20 }, (_, i) => ({
         url: `https://example.com/p${i}/`,
@@ -136,16 +159,16 @@ describe("links/redirect-chains — genuine redirects still report", () => {
           [
             hop("https://example.com/przemyslenia", 301),
             hop("https://example.com/przemyslenia-artykuly/", 200),
-          ],
+          ]
         ),
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items).toHaveLength(1);
     expect(redirectPages?.items?.[0]?.label).toBe(
-      "https://example.com/przemyslenia (301) → https://example.com/przemyslenia-artykuly/ (200)",
+      "https://example.com/przemyslenia (301) → https://example.com/przemyslenia-artykuly/ (200)"
     );
   });
 
@@ -156,10 +179,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/o-mnie",
         finalUrl: "https://example.com/o-mnie/",
-        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
-          hop("https://example.com/o-mnie", 301),
-          hop("https://example.com/o-mnie/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/o-mnie",
+          "https://example.com/o-mnie/",
+          [
+            hop("https://example.com/o-mnie", 301),
+            hop("https://example.com/o-mnie/", 200),
+          ]
+        ),
       },
     ];
 
@@ -171,16 +198,20 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "http://example.com/old",
         finalUrl: "https://example.com/new/",
-        redirectChain: chain("http://example.com/old", "https://example.com/new/", [
-          hop("http://example.com/old", 301),
-          hop("https://example.com/old", 302),
-          hop("https://example.com/new/", 200),
-        ]),
+        redirectChain: chain(
+          "http://example.com/old",
+          "https://example.com/new/",
+          [
+            hop("http://example.com/old", 301),
+            hop("https://example.com/old", 302),
+            hop("https://example.com/new/", 200),
+          ]
+        ),
       },
     ];
 
     expect((await check(pages, "redirect-pages"))?.items?.[0]?.label).toBe(
-      "2 hops: http://example.com/old (301) → https://example.com/old (302) → https://example.com/new/ (200)",
+      "2 hops: http://example.com/old (301) → https://example.com/old (302) → https://example.com/new/ (200)"
     );
   });
 
@@ -199,14 +230,18 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
       { url: `${b}/`, finalUrl: `${b}/`, links: [`${b}/_fault/r1`] },
     ];
-    const { checks } = (await redirectChainsRule.run(ctx(pages)));
-    const label = (await check(pages, "redirect-pages"))?.items?.[0]?.label ?? "";
+    const { checks } = await redirectChainsRule.run(ctx(pages));
+    const label =
+      (await check(pages, "redirect-pages"))?.items?.[0]?.label ?? "";
     expect(label.startsWith("3 hops: ")).toBe(true);
-    for (const part of ["r1", "r2", "r3", "gift-boxes"]) expect(label).toContain(part);
+    for (const part of ["r1", "r2", "r3", "gift-boxes"])
+      expect(label).toContain(part);
     const multi = checks.find((c) => c.name === "redirect-chain-multi-hop");
     expect(multi?.status).toBe("warn");
     expect(multi?.details).toMatchObject({ longestHops: 3 });
-    expect((await check(pages, "links-to-redirect"))?.items?.[0]?.label).toContain("3 hops");
+    expect(
+      (await check(pages, "links-to-redirect"))?.items?.[0]?.label
+    ).toContain("3 hops");
   });
 
   test("a single redirect has no multi-hop check", async () => {
@@ -232,17 +267,21 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/o-mnie",
         finalUrl: "https://example.com/o-mnie/",
-        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
-          hop("https://example.com/o-mnie", 0),
-          hop("https://example.com/o-mnie/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/o-mnie",
+          "https://example.com/o-mnie/",
+          [
+            hop("https://example.com/o-mnie", 0),
+            hop("https://example.com/o-mnie/", 200),
+          ]
+        ),
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     expect(redirectPages?.items?.[0]?.label).toBe(
-      "https://example.com/o-mnie → https://example.com/o-mnie/ (200)",
+      "https://example.com/o-mnie → https://example.com/o-mnie/ (200)"
     );
   });
 
@@ -253,18 +292,22 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/old-post/",
         finalUrl: "https://example.com/new-post/",
-        redirectChain: chain("https://example.com/old-post/", "https://example.com/new-post/", [
-          hop("https://example.com/old-post/", 0),
-          hop("https://example.com/new-post/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/old-post/",
+          "https://example.com/new-post/",
+          [
+            hop("https://example.com/old-post/", 0),
+            hop("https://example.com/new-post/", 200),
+          ]
+        ),
       },
     ];
 
-    const redirectPages = (await check(pages, "redirect-pages"));
+    const redirectPages = await check(pages, "redirect-pages");
     expect(redirectPages?.status).toBe("warn");
     // An unobserved status is omitted rather than printed as "(0)".
     expect(redirectPages?.items?.[0]?.label).toBe(
-      "https://example.com/old-post/ → https://example.com/new-post/ (200)",
+      "https://example.com/old-post/ → https://example.com/new-post/ (200)"
     );
   });
 
@@ -276,10 +319,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/o-mnie",
         finalUrl: "https://example.com/o-mnie/",
-        redirectChain: chain("https://example.com/o-mnie", "https://example.com/o-mnie/", [
-          hop("https://example.com/o-mnie", 301),
-          hop("https://example.com/o-mnie/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/o-mnie",
+          "https://example.com/o-mnie/",
+          [
+            hop("https://example.com/o-mnie", 301),
+            hop("https://example.com/o-mnie/", 200),
+          ]
+        ),
       },
       {
         url: "https://example.com/guilty/",
@@ -293,8 +340,10 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       })),
     ];
 
-    const linksToRedirect = (await check(pages, "links-to-redirect"));
-    expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/guilty/"]);
+    const linksToRedirect = await check(pages, "links-to-redirect");
+    expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual([
+      "https://example.com/guilty/",
+    ]);
   });
 
   test.each([["javascript"], ["meta-refresh"]] as const)(
@@ -307,15 +356,19 @@ describe("links/redirect-chains — genuine redirects still report", () => {
         {
           url: "https://example.com/old/",
           finalUrl: "https://example.com/new/",
-          redirectChain: chain("https://example.com/old/", "https://example.com/new/", [
-            hop("https://example.com/old/", 200, type),
-            hop("https://example.com/new/", 200),
-          ]),
+          redirectChain: chain(
+            "https://example.com/old/",
+            "https://example.com/new/",
+            [
+              hop("https://example.com/old/", 200, type),
+              hop("https://example.com/new/", 200),
+            ]
+          ),
         },
       ];
 
       expect((await check(pages, "redirect-pages"))?.status).toBe("warn");
-    },
+    }
   );
 
   test("a client-side redirect back to the SAME url is still reported", async () => {
@@ -324,10 +377,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/loop/",
         finalUrl: "https://example.com/loop/",
-        redirectChain: chain("https://example.com/loop/", "https://example.com/loop/", [
-          hop("https://example.com/loop/", 200, "meta-refresh"),
-          hop("https://example.com/loop/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/loop/",
+          "https://example.com/loop/",
+          [
+            hop("https://example.com/loop/", 200, "meta-refresh"),
+            hop("https://example.com/loop/", 200),
+          ]
+        ),
       },
     ];
 
@@ -339,10 +396,14 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       {
         url: "https://example.com/old",
         finalUrl: "https://example.com/new/",
-        redirectChain: chain("https://example.com/old", "https://example.com/new/", [
-          hop("https://example.com/old", 301),
-          hop("https://example.com/new/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/old",
+          "https://example.com/new/",
+          [
+            hop("https://example.com/old", 301),
+            hop("https://example.com/new/", 200),
+          ]
+        ),
       },
       {
         url: "https://example.com/",
@@ -351,25 +412,34 @@ describe("links/redirect-chains — genuine redirects still report", () => {
       },
     ];
 
-    const linksToRedirect = (await check(pages, "links-to-redirect"));
+    const linksToRedirect = await check(pages, "links-to-redirect");
     expect(linksToRedirect?.status).toBe("warn");
-    expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual(["https://example.com/"]);
+    expect(linksToRedirect?.items?.[0]?.sourcePages).toEqual([
+      "https://example.com/",
+    ]);
   });
 });
 
 describe("links/redirect-chains — a chain can never claim a 200 first hop", () => {
   test.each([
-    ["all-2xx two-hop chain", [hop("https://example.com/a", 200), hop("https://example.com/a/", 200)]],
-    ["2xx then 3xx (the redirect is the LAST hop, so it led nowhere)", [
-      hop("https://example.com/a", 200),
-      hop("https://example.com/a/", 301),
-    ]],
+    [
+      "all-2xx two-hop chain",
+      [hop("https://example.com/a", 200), hop("https://example.com/a/", 200)],
+    ],
+    [
+      "2xx then 3xx (the redirect is the LAST hop, so it led nowhere)",
+      [hop("https://example.com/a", 200), hop("https://example.com/a/", 301)],
+    ],
   ])("%s produces no warning", async (_name, hops) => {
     const pages: PageInput[] = [
       {
         url: "https://example.com/a",
         finalUrl: "https://example.com/a/",
-        redirectChain: chain("https://example.com/a", "https://example.com/a/", hops),
+        redirectChain: chain(
+          "https://example.com/a",
+          "https://example.com/a/",
+          hops
+        ),
       },
     ];
 
@@ -383,25 +453,34 @@ describe("links/redirect-chains — a chain can never claim a 200 first hop", ()
       {
         url: "https://example.com/phantom",
         finalUrl: "https://example.com/phantom/",
-        redirectChain: chain("https://example.com/phantom", "https://example.com/phantom/", [
-          hop("https://example.com/phantom", 200),
-          hop("https://example.com/phantom/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/phantom",
+          "https://example.com/phantom/",
+          [
+            hop("https://example.com/phantom", 200),
+            hop("https://example.com/phantom/", 200),
+          ]
+        ),
       },
       {
         url: "https://example.com/real",
         finalUrl: "https://example.com/real-target/",
-        redirectChain: chain("https://example.com/real", "https://example.com/real-target/", [
-          hop("https://example.com/real", 308),
-          hop("https://example.com/real-target/", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/real",
+          "https://example.com/real-target/",
+          [
+            hop("https://example.com/real", 308),
+            hop("https://example.com/real-target/", 200),
+          ]
+        ),
       },
     ];
 
     const items = (await check(pages, "redirect-pages"))?.items ?? [];
     expect(items).toHaveLength(1);
     for (const item of items) {
-      const emitted = (item.meta as { chain?: RedirectChain } | undefined)?.chain;
+      const emitted = (item.meta as { chain?: RedirectChain } | undefined)
+        ?.chain;
       for (const h of emitted?.hops.slice(0, -1) ?? []) {
         const is2xx = h.statusCode >= 200 && h.statusCode < 300;
         expect(is2xx).toBe(false);
@@ -417,21 +496,37 @@ describe("links/redirect-chains — link sections", () => {
       {
         url: "https://example.com/old",
         finalUrl: "https://example.com/new",
-        redirectChain: chain("https://example.com/old", "https://example.com/new", [
-          hop("https://example.com/old", 301),
-          hop("https://example.com/new", 200),
-        ]),
+        redirectChain: chain(
+          "https://example.com/old",
+          "https://example.com/new",
+          [
+            hop("https://example.com/old", 301),
+            hop("https://example.com/new", 200),
+          ]
+        ),
       },
       { url: "https://example.com/a", finalUrl: "https://example.com/a" },
       { url: "https://example.com/b", finalUrl: "https://example.com/b" },
     ]);
     for (const [i, path] of ["/a", "/b"].entries()) {
-      const page = c.site!.pages.find((p) => p.url === `https://example.com${path}`)!;
+      const page = c.site!.pages.find(
+        (p) => p.url === `https://example.com${path}`
+      )!;
       page.parsed = {
         links: [
-          { url: "https://example.com/old", isInternal: true, ...(section ? { section } : {}) },
+          {
+            url: "https://example.com/old",
+            isInternal: true,
+            ...(section ? { section } : {}),
+          },
           ...(i === 0
-            ? [{ url: "https://example.com/old", isInternal: true, section: "content" as const }]
+            ? [
+                {
+                  url: "https://example.com/old",
+                  isInternal: true,
+                  section: "content" as const,
+                },
+              ]
             : []),
         ],
       } as never;
@@ -440,27 +535,36 @@ describe("links/redirect-chains — link sections", () => {
   }
 
   test("links-to-redirect items say where the links sit and carry meta.sections", async () => {
-    const item = (await redirectChainsRule
-      .run(sectionedCtx("footer")))
-      .checks.find((c) => c.name === "links-to-redirect")!.items![0]!;
+    const item = (
+      await redirectChainsRule.run(sectionedCtx("footer"))
+    ).checks.find((c) => c.name === "links-to-redirect")!.items![0]!;
 
     expect(item.label).toBe(
       "https://example.com/old (301) → https://example.com/new (200), linked in the footer and the page content"
     );
-    expect((item.meta as { sections?: unknown }).sections).toEqual({ footer: 2, content: 1 });
-    expect(item.sourcePages).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect((item.meta as { sections?: unknown }).sections).toEqual({
+      footer: 2,
+      content: 1,
+    });
+    expect(item.sourcePages).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
   });
 
   test("without section data the item is as it was", async () => {
     const c = sectionedCtx(undefined);
     for (const page of c.site!.pages) {
-      for (const link of page.parsed?.links ?? []) delete (link as { section?: string }).section;
+      for (const link of page.parsed?.links ?? [])
+        delete (link as { section?: string }).section;
     }
-    const item = (await redirectChainsRule
-      .run(c))
-      .checks.find((x) => x.name === "links-to-redirect")!.items![0]!;
+    const item = (await redirectChainsRule.run(c)).checks.find(
+      (x) => x.name === "links-to-redirect"
+    )!.items![0]!;
 
-    expect(item.label).toBe("https://example.com/old (301) → https://example.com/new (200)");
+    expect(item.label).toBe(
+      "https://example.com/old (301) → https://example.com/new (200)"
+    );
     expect("sections" in (item.meta as object)).toBe(false);
   });
 });

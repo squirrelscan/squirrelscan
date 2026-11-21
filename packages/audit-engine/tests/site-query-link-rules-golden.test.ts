@@ -11,19 +11,24 @@
 // exclusion, self-links, query-string collapse, external + non-crawled targets,
 // and homepage skipping.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { loadAllRules } from "@squirrelscan/rules";
-import { normalizeUrl } from "@squirrelscan/utils";
-import type { CheckResult, ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 import type {
   LinkData,
   LinkSection,
   PageFeatureRow,
   PageRecord,
 } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  ParsedPage,
+  Rule,
+  RuleContext,
+} from "@squirrelscan/rules";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import { loadAllRules } from "@squirrelscan/rules";
+import { normalizeUrl } from "@squirrelscan/utils";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { createSiteQuery } from "../src/site-query";
 
@@ -54,7 +59,13 @@ function link(url: string): LinkData {
   return { url, text: "link", isInternal: true };
 }
 function nofollow(url: string): LinkData {
-  return { url, text: "nf", isInternal: true, isNofollow: true, rel: ["nofollow"] };
+  return {
+    url,
+    text: "nf",
+    isInternal: true,
+    isNofollow: true,
+    rel: ["nofollow"],
+  };
 }
 function external(url: string): LinkData {
   return { url, text: "ext", isInternal: false };
@@ -166,7 +177,10 @@ async function runBothWays(
     url: p.normalizedUrl,
     finalUrl: p.finalUrl,
     statusCode: p.status,
-    headers: (p.contentType ? { "content-type": p.contentType } : {}) as Record<string, string>,
+    headers: (p.contentType ? { "content-type": p.contentType } : {}) as Record<
+      string,
+      string
+    >,
     parsed: {
       links: parseLinks(p.parsedData),
       ...parseHeadInfo(p.parsedData),
@@ -235,7 +249,8 @@ describe("SiteQuery dual-path — links/orphan-pages", () => {
         observation: {
           mode: "crawl",
           applicability: "applicable",
-          uncertainty: "Inbound links are counted only in the observed crawl graph.",
+          uncertainty:
+            "Inbound links are counted only in the observed crawl graph.",
         },
         value: "/lonely\n/nofollowed\n/orphan\n/selfish",
       },
@@ -311,7 +326,11 @@ describe("SiteQuery dual-path — links/weak-internal-links", () => {
 // weak-internal-links cannot see. /deep is linked once, from body copy.
 const CHROME_FIXTURE: PageRecord[] = [
   pageRow(BASE, [link("/a"), link("/b"), chrome("/pricing")]),
-  pageRow("https://example.com/a", [link("/b"), link("/deep"), chrome("/pricing")]),
+  pageRow("https://example.com/a", [
+    link("/b"),
+    link("/deep"),
+    chrome("/pricing"),
+  ]),
   pageRow("https://example.com/b", [link("/a"), chrome("/pricing")]),
   pageRow("https://example.com/deep", [link("/a")]),
   pageRow("https://example.com/pricing", [chrome("/pricing")]),
@@ -343,9 +362,17 @@ function legacyCounts(pages: PageRecord[]): {
   }
   // Project back onto each page's stored identity URL, in crawl order.
   return {
-    all: new Map(pages.map((p) => [p.normalizedUrl, all.get(normalizeUrl(p.normalizedUrl))!])),
+    all: new Map(
+      pages.map((p) => [
+        p.normalizedUrl,
+        all.get(normalizeUrl(p.normalizedUrl))!,
+      ])
+    ),
     contextual: new Map(
-      pages.map((p) => [p.normalizedUrl, contextual.get(normalizeUrl(p.normalizedUrl))!])
+      pages.map((p) => [
+        p.normalizedUrl,
+        contextual.get(normalizeUrl(p.normalizedUrl))!,
+      ])
     ),
   };
 }
@@ -384,7 +411,9 @@ describe("SiteQuery — contextual inbound link counts (#109)", () => {
     const legacy = legacyCounts(await run(store.getPages(CRAWL)));
 
     expect([...sq.incomingLinkCounts()]).toEqual([...legacy.all]);
-    expect([...sq.contextualIncomingLinkCounts()]).toEqual([...legacy.contextual]);
+    expect([...sq.contextualIncomingLinkCounts()]).toEqual([
+      ...legacy.contextual,
+    ]);
 
     await run(store.close());
   });
@@ -411,7 +440,8 @@ describe("SiteQuery dual-path — links/no-contextual-inbound", () => {
         observation: {
           mode: "crawl",
           applicability: "applicable",
-          uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+          uncertainty:
+            "Contextual inbound links are counted only in the observed crawl graph.",
         },
         value: "/pricing",
       },
@@ -477,7 +507,11 @@ function placed(url: string, section: LinkSection): LinkData {
 // linked once, from body copy, which carries no section here.
 const SECTIONED_FIXTURE: PageRecord[] = [
   pageRow(BASE, [link("/a"), link("/b"), placed("/pricing", "footer")]),
-  pageRow("https://example.com/a", [link("/b"), link("/deep"), placed("/pricing", "navigation")]),
+  pageRow("https://example.com/a", [
+    link("/b"),
+    link("/deep"),
+    placed("/pricing", "navigation"),
+  ]),
   pageRow("https://example.com/b", [link("/a"), placed("/pricing", "footer")]),
   pageRow("https://example.com/deep", [link("/a")]),
   pageRow("https://example.com/pricing", [placed("/pricing", "footer")]),
@@ -492,7 +526,10 @@ describe("SiteQuery — inbound link sections (#2307)", () => {
     const sections = sq.inboundSectionCounts!();
     const all = sq.incomingLinkCounts();
 
-    expect(sections.get("https://example.com/pricing")).toEqual({ footer: 3, navigation: 1 });
+    expect(sections.get("https://example.com/pricing")).toEqual({
+      footer: 3,
+      navigation: 1,
+    });
     // Body links carry no section, so those pages get no entry at all.
     expect(sections.has("https://example.com/deep")).toBe(false);
     expect(sections.has("https://example.com/a")).toBe(false);
@@ -518,7 +555,8 @@ describe("SiteQuery — inbound link sections (#2307)", () => {
     expect(legacy[0]!.items).toEqual([
       {
         id: "https://example.com/pricing",
-        label: "https://example.com/pricing, linked only from the footer and the navigation",
+        label:
+          "https://example.com/pricing, linked only from the footer and the navigation",
         meta: { sections: { footer: 3, navigation: 1 } },
       },
     ]);
@@ -537,9 +575,12 @@ const WEAK_SECTIONED_FIXTURE: PageRecord[] = [
 describe("SiteQuery dual-path — links/weak-internal-links names the section (#2307)", () => {
   test("streaming path is deep-equal to legacy and says where the one link sits", async () => {
     const store = await freshStore();
-    for (const p of WEAK_SECTIONED_FIXTURE) await run(store.upsertPage(CRAWL, p));
+    for (const p of WEAK_SECTIONED_FIXTURE)
+      await run(store.upsertPage(CRAWL, p));
 
-    const { legacy, streamed } = await runBothWays(store, weakRule, { excludePatterns: [] });
+    const { legacy, streamed } = await runBothWays(store, weakRule, {
+      excludePatterns: [],
+    });
 
     expect(streamed).toEqual(legacy);
     expect(legacy[0]!.items).toEqual([
@@ -627,8 +668,12 @@ describe("SiteQuery dual-path — edge cases parity", () => {
     const store = await freshStore();
     // Every non-home page has >=2 incoming links.
     await run(store.upsertPage(CRAWL, pageRow(BASE, [link("/x"), link("/y")])));
-    await run(store.upsertPage(CRAWL, pageRow("https://example.com/x", [link("/y")])));
-    await run(store.upsertPage(CRAWL, pageRow("https://example.com/y", [link("/x")])));
+    await run(
+      store.upsertPage(CRAWL, pageRow("https://example.com/x", [link("/y")]))
+    );
+    await run(
+      store.upsertPage(CRAWL, pageRow("https://example.com/y", [link("/x")]))
+    );
 
     const { legacy, streamed } = await runBothWays(store, orphanRule, {
       minInboundLinks: 2,
@@ -684,9 +729,31 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
     const store = await freshStore();
     await run(
       store.upsertPageFeaturesBatch(CRAWL, [
-        feat({ normalizedUrl: "https://example.com/1", depth: 0, titleHash: "dup", pageType: "product", transferBytes: 100, secretHits: 1, templateFp: "T" }),
-        feat({ normalizedUrl: "https://example.com/2", titleHash: "dup", pageType: "product", transferBytes: 200, secretHits: 2, templateFp: "T" }),
-        feat({ normalizedUrl: "https://example.com/3", titleHash: "uniq", pageType: "article", transferBytes: 50, secretHits: 0, templateFp: "solo" }),
+        feat({
+          normalizedUrl: "https://example.com/1",
+          depth: 0,
+          titleHash: "dup",
+          pageType: "product",
+          transferBytes: 100,
+          secretHits: 1,
+          templateFp: "T",
+        }),
+        feat({
+          normalizedUrl: "https://example.com/2",
+          titleHash: "dup",
+          pageType: "product",
+          transferBytes: 200,
+          secretHits: 2,
+          templateFp: "T",
+        }),
+        feat({
+          normalizedUrl: "https://example.com/3",
+          titleHash: "uniq",
+          pageType: "article",
+          transferBytes: 50,
+          secretHits: 0,
+          templateFp: "solo",
+        }),
       ])
     );
 
@@ -704,10 +771,19 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
 
     const dup = sq.duplicateGroups("title");
     expect(dup).toEqual([
-      { hash: "dup", sample: "T", urls: ["https://example.com/1", "https://example.com/2"], count: 2 },
+      {
+        hash: "dup",
+        sample: "T",
+        urls: ["https://example.com/1", "https://example.com/2"],
+        count: 2,
+      },
     ]);
     expect(sq.templateClusters()).toEqual([
-      { fp: "T", urls: ["https://example.com/1", "https://example.com/2"], count: 2 },
+      {
+        fp: "T",
+        urls: ["https://example.com/1", "https://example.com/2"],
+        count: 2,
+      },
     ]);
 
     const seen: string[] = [];
@@ -740,7 +816,11 @@ describe("createSiteQuery — page_features-backed aggregates", () => {
 describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
   function titled(url: string, title: string, links: LinkData[]): PageRecord {
     const row = pageRow(url, links);
-    row.parsedData = JSON.stringify({ links, meta: { title }, h1: { count: 0, texts: [] } });
+    row.parsedData = JSON.stringify({
+      links,
+      meta: { title },
+      h1: { count: 0, texts: [] },
+    });
     return row;
   }
   const text = (url: string, anchor: string, chromeLink = false): LinkData => ({
@@ -769,7 +849,11 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     ];
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
 
-    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorMismatchRule,
+      {}
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("warn");
     expect(legacy[0]?.items?.map((i) => i.id)).toEqual([
@@ -783,7 +867,9 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
   test("the anchor graph is not built when the rule is disabled for the run", async () => {
     const store = await freshStore();
     await seedFixture(store);
-    const off = await run(createSiteQuery(store, CRAWL, { anchorGraph: false }));
+    const off = await run(
+      createSiteQuery(store, CRAWL, { anchorGraph: false })
+    );
     expect(off.anchorGraph).toBeUndefined();
     const on = await run(createSiteQuery(store, CRAWL));
     expect(on.anchorGraph?.().pages.size).toBeGreaterThan(1);
@@ -795,15 +881,24 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     const gone = titled("https://example.com/gone", "404 Not Found", []);
     gone.status = 404;
     const pages = [
-      titled(BASE, "Home", [text("/gone", "click here"), text("/fridge", "Fridge")]),
+      titled(BASE, "Home", [
+        text("/gone", "click here"),
+        text("/fridge", "Fridge"),
+      ]),
       gone,
       titled("https://example.com/fridge", "Fridge repairs", []),
     ];
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
-    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorMismatchRule,
+      {}
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("pass");
-    expect((legacy[0]?.details as { judged: number; notJudged: number })).toMatchObject({
+    expect(
+      legacy[0]?.details as { judged: number; notJudged: number }
+    ).toMatchObject({
       judged: 1,
       notJudged: 1,
     });
@@ -813,12 +908,19 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
   test("pages that differ only by query are separate targets, identically on both paths", async () => {
     const store = await freshStore();
     const pages = [
-      titled(BASE, "Home", [text("/p?id=1", "Red apple"), text("/p?id=2", "Blue car")]),
+      titled(BASE, "Home", [
+        text("/p?id=1", "Red apple"),
+        text("/p?id=2", "Blue car"),
+      ]),
       titled("https://example.com/p?id=1", "Red apple", []),
       titled("https://example.com/p?id=2", "Blue car", []),
     ];
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
-    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorMismatchRule,
+      {}
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("pass");
     expect((legacy[0]?.details as { judged: number }).judged).toBe(2);
@@ -839,9 +941,14 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
     // The varying letters lead: words sharing a 5+ character prefix would now match as inflections (#2092).
     const words = Array.from(
       { length: 70 },
-      (_, i) => `${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}topic`,
+      (_, i) =>
+        `${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}topic`
     );
-    const pdf = titled("https://example.com/guide.pdf", "Totally unrelated", []);
+    const pdf = titled(
+      "https://example.com/guide.pdf",
+      "Totally unrelated",
+      []
+    );
     pdf.contentType = "application/pdf";
     const pages = [
       titled(BASE, "Home", [
@@ -856,10 +963,16 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
       titled("https://example.com/fridge", "Fridge repairs", []),
     ];
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
-    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorMismatchRule,
+      {}
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("pass");
-    expect(legacy[0]?.details as { judged: number; notJudged: number }).toMatchObject({
+    expect(
+      legacy[0]?.details as { judged: number; notJudged: number }
+    ).toMatchObject({
       judged: 1,
       notJudged: 3,
     });
@@ -869,12 +982,19 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
   test("a query-string target on the front door path is judged, identically on both paths (#110)", async () => {
     const store = await freshStore();
     const pages = [
-      titled(BASE, "Home", [text("/?p=123", "click here"), text("/fridge", "Fridge")]),
+      titled(BASE, "Home", [
+        text("/?p=123", "click here"),
+        text("/fridge", "Fridge"),
+      ]),
       titled("https://example.com/?p=123", "Freezer repairs", []),
       titled("https://example.com/fridge", "Fridge repairs", []),
     ];
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
-    const { legacy, streamed } = await runBothWays(store, anchorMismatchRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorMismatchRule,
+      {}
+    );
     expect(streamed).toEqual(legacy);
     expect(legacy[0]?.status).toBe("warn");
     expect(legacy[0]?.items?.map((i) => i.id)).toEqual([
@@ -891,7 +1011,9 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
   const universe = CHROME_FIXTURE.map((p) => p.normalizedUrl);
   const opts = { minInboundLinks: 2, excludePatterns: [] };
 
-  async function seedWithOutOfUniversePage(store: SQLiteStorage): Promise<void> {
+  async function seedWithOutOfUniversePage(
+    store: SQLiteStorage
+  ): Promise<void> {
     await seedChromeFixture(store);
     // A page the audit universe does not contain, carrying a BODY link to /pricing.
     await run(store.upsertPage(CRAWL, pageRow(WAF, [link("/pricing")])));
@@ -916,8 +1038,12 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
     await seedWithOutOfUniversePage(store);
 
     const sq = await run(createSiteQuery(store, CRAWL, { universe }));
-    expect([...sq.contextualIncomingLinkCounts().keys()]).toEqual([...sq.incomingLinkCounts().keys()]);
-    expect(sq.contextualIncomingLinkCounts().get("https://example.com/pricing")).toBe(0);
+    expect([...sq.contextualIncomingLinkCounts().keys()]).toEqual([
+      ...sq.incomingLinkCounts().keys(),
+    ]);
+    expect(
+      sq.contextualIncomingLinkCounts().get("https://example.com/pricing")
+    ).toBe(0);
 
     const checks = await runWith(store, sq);
     expect(checks[0]!.status).toBe("warn");
@@ -925,7 +1051,9 @@ describe("SiteQuery universe path - links/no-contextual-inbound (repo#1669)", ()
 
     // Control: without the universe the WAF page's link leaks in and the rule goes silent.
     const leaky = await run(createSiteQuery(store, CRAWL));
-    expect(leaky.contextualIncomingLinkCounts().get("https://example.com/pricing")).toBe(1);
+    expect(
+      leaky.contextualIncomingLinkCounts().get("https://example.com/pricing")
+    ).toBe(1);
     expect((await runWith(store, leaky))[0]!.status).toBe("pass");
 
     await run(store.close());
@@ -941,7 +1069,11 @@ describe("SiteQuery dual-path: links/anchor-target-conflict (#1372)", () => {
   });
   function page(url: string, links: LinkData[]): PageRecord {
     const row = pageRow(url, links);
-    row.parsedData = JSON.stringify({ links, meta: { title: url }, h1: { count: 0, texts: [] } });
+    row.parsedData = JSON.stringify({
+      links,
+      meta: { title: url },
+      h1: { count: 0, texts: [] },
+    });
     return row;
   }
 
@@ -958,12 +1090,16 @@ describe("SiteQuery dual-path: links/anchor-target-conflict (#1372)", () => {
           text(i < 9 ? "/pricing" : "/plans", "Pricing"),
           text("/pricing", "Read more"),
           text("/plans", "Read more"),
-        ]),
+        ])
       );
     }
     for (const p of pages) await run(store.upsertPage(CRAWL, p));
 
-    const { legacy, streamed } = await runBothWays(store, anchorConflictRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorConflictRule,
+      {}
+    );
     expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
     expect(legacy[0]?.status).toBe("warn");
     expect(legacy[0]?.items?.map((i) => i.id)).toEqual(["anchor: Pricing"]);
@@ -972,10 +1108,17 @@ describe("SiteQuery dual-path: links/anchor-target-conflict (#1372)", () => {
 
   test("a site under the page floor skips on both paths", async () => {
     const store = await freshStore();
-    for (const p of [page(BASE, [text("/a", "Pricing")]), page("https://example.com/a", [])]) {
+    for (const p of [
+      page(BASE, [text("/a", "Pricing")]),
+      page("https://example.com/a", []),
+    ]) {
       await run(store.upsertPage(CRAWL, p));
     }
-    const { legacy, streamed } = await runBothWays(store, anchorConflictRule, {});
+    const { legacy, streamed } = await runBothWays(
+      store,
+      anchorConflictRule,
+      {}
+    );
     expect(JSON.stringify(streamed)).toBe(JSON.stringify(legacy));
     expect(legacy[0]?.status).toBe("skipped");
     await run(store.close());
@@ -985,11 +1128,27 @@ describe("SiteQuery dual-path: links/anchor-target-conflict (#1372)", () => {
 describe("SiteQuery dual-path - links/generic-anchor-density (repo#1387)", () => {
   test("streaming path is deep-equal to legacy and reports the ratio", async () => {
     const store = await freshStore();
-    const generic = (text: string): LinkData => ({ url: "/a", text, isInternal: true });
+    const generic = (text: string): LinkData => ({
+      url: "/a",
+      text,
+      isInternal: true,
+    });
     const rows = [
-      pageRow(BASE, [generic("click here"), generic("Read more"), generic("Pricing"), chrome("/a")]),
-      pageRow("https://example.com/a", [generic("Read more"), generic("Read more"), nofollow("/b")]),
-      pageRow("https://example.com/b", [generic("Guide"), external("https://x.com/")]),
+      pageRow(BASE, [
+        generic("click here"),
+        generic("Read more"),
+        generic("Pricing"),
+        chrome("/a"),
+      ]),
+      pageRow("https://example.com/a", [
+        generic("Read more"),
+        generic("Read more"),
+        nofollow("/b"),
+      ]),
+      pageRow("https://example.com/b", [
+        generic("Guide"),
+        external("https://x.com/"),
+      ]),
     ];
     for (const r of rows) await run(store.upsertPage(CRAWL, r));
 
@@ -1000,7 +1159,10 @@ describe("SiteQuery dual-path - links/generic-anchor-density (repo#1387)", () =>
     });
     expect(streamed).toEqual(legacy);
     expect(legacy[0]!.status).toBe("fail");
-    expect(legacy[0]!.details).toMatchObject({ genericAnchors: 4, totalAnchors: 6 });
+    expect(legacy[0]!.details).toMatchObject({
+      genericAnchors: 4,
+      totalAnchors: 6,
+    });
 
     const skipped = await runBothWays(store, genericAnchorRule, {
       minAnchors: 30,

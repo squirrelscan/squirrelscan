@@ -1,10 +1,14 @@
+import type { CWVHints } from "@squirrelscan/core-contracts";
 // Core Web Vitals static hints checker
 // Analyzes HTML for performance indicators without runtime measurement
 import type { Document, Element } from "linkedom";
 
 import { parseHTML } from "@squirrelscan/parser/dom";
-
-import type { CWVHints } from "@squirrelscan/core-contracts";
+import {
+  getHostname,
+  querySelectorAllOutsideNoscript,
+  stripNoscriptMarkup,
+} from "@squirrelscan/utils";
 
 import {
   collectImagePreloadKeys,
@@ -12,12 +16,6 @@ import {
   findLcpCandidates,
   isImagePreloaded,
 } from "../shared/lcp-candidate";
-
-import {
-  getHostname,
-  querySelectorAllOutsideNoscript,
-  stripNoscriptMarkup,
-} from "@squirrelscan/utils";
 
 // perf/lcp-hints counts at most this many eligible LCP candidates.
 const MAX_LCP_CANDIDATES = 3;
@@ -162,25 +160,37 @@ function analyzeCWVHints(
   // never loads what sits in it (#434).
 
   // Collect resource hints
-  const preloadLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="preload"]');
+  const preloadLinks = querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel="preload"]'
+  );
   for (const link of preloadLinks) {
     const href = link.getAttribute("href");
     if (href) hints.preloadTags.push(href);
   }
 
-  const prefetchLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="prefetch"]');
+  const prefetchLinks = querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel="prefetch"]'
+  );
   for (const link of prefetchLinks) {
     const href = link.getAttribute("href");
     if (href) hints.prefetchTags.push(href);
   }
 
-  const preconnectLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="preconnect"]');
+  const preconnectLinks = querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel="preconnect"]'
+  );
   for (const link of preconnectLinks) {
     const href = link.getAttribute("href");
     if (href) hints.preconnectTags.push(href);
   }
 
-  const dnsPrefetchLinks = querySelectorAllOutsideNoscript(doc, 'link[rel="dns-prefetch"]');
+  const dnsPrefetchLinks = querySelectorAllOutsideNoscript(
+    doc,
+    'link[rel="dns-prefetch"]'
+  );
   for (const link of dnsPrefetchLinks) {
     const href = link.getAttribute("href");
     if (href) hints.dnsPrefetchTags.push(href);
@@ -251,7 +261,8 @@ function analyzeCWVHints(
   }
 
   // Check for fonts without font-display: swap
-  const fontFaces = stripNoscriptMarkup(html).match(/@font-face\s*\{[^}]+\}/g) || [];
+  const fontFaces =
+    stripNoscriptMarkup(html).match(/@font-face\s*\{[^}]+\}/g) || [];
   for (const fontFace of fontFaces) {
     if (!fontFace.includes("font-display")) {
       // Extract font family name
@@ -332,7 +343,9 @@ function analyzeCWVHints(
   const preloadKeys = collectImagePreloadKeys(doc, pageUrl);
   const candidates = findLcpCandidates(doc, MAX_LCP_CANDIDATES);
   const first = candidates[0];
-  const anyPreloaded = candidates.some((img) => isImagePreloaded(img, preloadKeys, pageUrl));
+  const anyPreloaded = candidates.some((img) =>
+    isImagePreloaded(img, preloadKeys, pageUrl)
+  );
   if (first && !anyPreloaded) {
     // Candidates always have a src (findLcpCandidates skips images without one).
     hints.largeImagesWithoutPreload.push(first.getAttribute("src") as string);
@@ -370,7 +383,9 @@ function getNullDocHints(html: string, pageUrl: string): CWVHints {
   const key = `${pageUrl} ${html}`;
   const cached = nullDocHintsCache.get(key);
   if (cached) return cached;
-  const hints = freezeHints(analyzeCWVHints(parseHTML(html).document, html, pageUrl));
+  const hints = freezeHints(
+    analyzeCWVHints(parseHTML(html).document, html, pageUrl)
+  );
   if (nullDocHintsCache.size >= NULL_DOC_HINTS_CACHE_MAX) {
     const oldest = nullDocHintsCache.keys().next().value; // FIFO eviction
     if (oldest !== undefined) nullDocHintsCache.delete(oldest);

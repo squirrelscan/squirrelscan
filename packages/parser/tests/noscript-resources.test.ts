@@ -6,11 +6,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { extractImages as extractParsedImages, parsePage } from "../src/html";
 import { parseHTML } from "../src/dom";
 import { extractImages } from "../src/extractors/images";
 import { extractScripts } from "../src/extractors/scripts";
 import { extractStylesheets } from "../src/extractors/stylesheets";
+import { extractImages as extractParsedImages, parsePage } from "../src/html";
 
 const URL = "https://example.com/";
 
@@ -30,18 +30,24 @@ describe("resource extractors skip <noscript> content (#434)", () => {
   const { document } = parseHTML(HTML);
 
   test("parsePage images (the crawl-time ParsedPage)", () => {
-    expect(parsePage(HTML, URL).images.map((i) => i.src)).toEqual(["https://example.com/live.jpg"]);
+    expect(parsePage(HTML, URL).images.map((i) => i.src)).toEqual([
+      "https://example.com/live.jpg",
+    ]);
     expect(extractParsedImages(document, URL).map((i) => i.src)).toEqual([
       "https://example.com/live.jpg",
     ]);
   });
 
   test("extractors/images (the rule-input ParsedPage), including picture sources", () => {
-    expect(extractImages(document, URL).map((i) => i.src)).toEqual(["https://example.com/live.jpg"]);
+    expect(extractImages(document, URL).map((i) => i.src)).toEqual([
+      "https://example.com/live.jpg",
+    ]);
   });
 
   test("extractScripts", () => {
-    expect(extractScripts(document, URL).map((s) => s.src)).toEqual(["https://example.com/live.js"]);
+    expect(extractScripts(document, URL).map((s) => s.src)).toEqual([
+      "https://example.com/live.js",
+    ]);
   });
 
   test("extractStylesheets", () => {
@@ -51,6 +57,8 @@ describe("resource extractors skip <noscript> content (#434)", () => {
   });
 
   test("links inside <noscript> are still extracted", () => {
-    expect(parsePage(HTML, URL).links.map((l) => l.url)).toContain("https://example.com/no-js");
+    expect(parsePage(HTML, URL).links.map((l) => l.url)).toContain(
+      "https://example.com/no-js"
+    );
   });
 });

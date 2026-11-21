@@ -2,10 +2,16 @@
 // Pages are real parsed HTML, so the legacy path derives each set with the function the streaming
 // engine stores; the streaming ctx is fed rows carrying those stored sets.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+
+import type { RuleContext } from "../src/types";
 
 import {
   navSetDivergenceRule,
@@ -13,7 +19,6 @@ import {
   NAV_MIN_PAGES,
   NAV_SET_MAX_HREFS,
 } from "../src/links/nav-set-divergence";
-import type { RuleContext } from "../src/types";
 
 const u = (path: string) => `https://example.com${path}`;
 
@@ -55,8 +60,9 @@ function normal(path: string, pageType?: string): Spec {
 
 function normals(n: number): Spec[] {
   const targets = SITE_NAV.slice(1, 6).map((p) => normal(p));
-  const filler = Array.from({ length: Math.max(0, n - targets.length - 1) }, (_, i) =>
-    normal(`/p${i}`),
+  const filler = Array.from(
+    { length: Math.max(0, n - targets.length - 1) },
+    (_, i) => normal(`/p${i}`)
   );
   return [normal("/"), ...targets, ...filler].slice(0, n);
 }
@@ -71,7 +77,12 @@ function legacyCtx(specs: Spec[]): RuleContext {
       pages: specs.map((s) => {
         const parsed = parsePage(s.html, u(s.path));
         if (s.pageType) parsed.pageType = s.pageType as typeof parsed.pageType;
-        return { url: u(s.path), statusCode: s.status ?? 200, parsed, headers: {} };
+        return {
+          url: u(s.path),
+          statusCode: s.status ?? 200,
+          parsed,
+          headers: {},
+        };
       }),
       robotsTxt: null,
       sitemaps: null,
@@ -113,7 +124,13 @@ function streamCtx(specs: Spec[]): RuleContext {
     page: { url: u("/"), html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {},
     options: {},
-    site: { baseUrl: u("/"), pages: [], robotsTxt: null, sitemaps: null, siteIndexable: true },
+    site: {
+      baseUrl: u("/"),
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      siteIndexable: true,
+    },
     siteQuery,
   } as unknown as RuleContext;
 }
@@ -147,11 +164,23 @@ describe("pageNavLinkSet", () => {
           { url: u("/b"), text: "b", isInternal: true, isChrome: true },
           { url: u("/a"), text: "a", isInternal: true, isChrome: true },
           { url: u("/c"), text: "c", isInternal: true },
-          { url: u("/d"), text: "d", isInternal: true, isChrome: true, error: "boom" },
-          { url: u("/e"), text: "e", isInternal: true, isChrome: true, section: "content" },
+          {
+            url: u("/d"),
+            text: "d",
+            isInternal: true,
+            isChrome: true,
+            error: "boom",
+          },
+          {
+            url: u("/e"),
+            text: "e",
+            isInternal: true,
+            isChrome: true,
+            section: "content",
+          },
         ],
       },
-      u("/x"),
+      u("/x")
     );
     expect(set?.hrefs).toEqual([u("/a"), u("/b")]);
   });
@@ -160,7 +189,10 @@ describe("pageNavLinkSet", () => {
     expect(pageNavLinkSet({}, u("/x"))).toBeNull();
     expect(pageNavLinkSet(undefined, u("/x"))).toBeNull();
     expect(
-      pageNavLinkSet({ links: [{ url: u("/c"), text: "c", isInternal: true }] }, u("/x")),
+      pageNavLinkSet(
+        { links: [{ url: u("/c"), text: "c", isInternal: true }] },
+        u("/x")
+      )
     ).toBeNull();
     const big = Array.from({ length: NAV_SET_MAX_HREFS + 1 }, (_, i) => ({
       url: u(`/n${i}`),
@@ -178,7 +210,11 @@ describe("links/nav-set-divergence", () => {
   test("pass: a uniform site, including nav targets whose own link is absent", async () => {
     const check = await bothPaths(normals(12));
     expect(check.status).toBe("pass");
-    expect(check.details).toMatchObject({ judgedPages: 12, flaggedPages: 0, oversizedPages: 0 });
+    expect(check.details).toMatchObject({
+      judgedPages: 12,
+      flaggedPages: 0,
+      oversizedPages: 0,
+    });
   });
 
   test("warn: a page missing two navigation links lists exactly those hrefs", async () => {
@@ -201,17 +237,26 @@ describe("links/nav-set-divergence", () => {
   });
 
   test("fail: a page that lost most of the navigation", async () => {
-    const odd: Spec = { path: "/stripped", html: pageHtml(["/", "/pricing", "/about", "/blog"]) };
+    const odd: Spec = {
+      path: "/stripped",
+      html: pageHtml(["/", "/pricing", "/about", "/blog"]),
+    };
     const check = await bothPaths([...normals(11), odd]);
     expect(check.status).toBe("fail");
     expect(check.items?.[0]?.meta).toMatchObject({ missingCount: 6 });
   });
 
   test("a page with no navigation at all is counted, not compared", async () => {
-    const bare: Spec = { path: "/bare", html: "<html><body><main><p>hi</p></main></body></html>" };
+    const bare: Spec = {
+      path: "/bare",
+      html: "<html><body><main><p>hi</p></main></body></html>",
+    };
     const check = await bothPaths([...normals(12), bare]);
     expect(check.status).toBe("pass");
-    expect(check.details).toMatchObject({ pagesWithoutNav: 1, judgedPages: 12 });
+    expect(check.details).toMatchObject({
+      pagesWithoutNav: 1,
+      judgedPages: 12,
+    });
   });
 
   test("skipped: below the page floor", async () => {
@@ -259,7 +304,11 @@ describe("links/nav-set-divergence", () => {
     }));
     const check = await bothPaths([...marketing, ...docs]);
     expect(check.status).toBe("pass");
-    expect(check.details).toMatchObject({ judgedPages: 14, flaggedPages: 0, unjudgedPages: 0 });
+    expect(check.details).toMatchObject({
+      judgedPages: 14,
+      flaggedPages: 0,
+      unjudgedPages: 0,
+    });
   });
 
   test("a docs page missing its own sidebar link is flagged within the docs type", async () => {
@@ -276,7 +325,9 @@ describe("links/nav-set-divergence", () => {
     const marketing = normals(8).map((s) => ({ ...s, pageType: "landing" }));
     const docs: Spec[] = Array.from({ length: 6 }, (_, i) => ({
       path: `/docs/g${i}`,
-      html: pageHtml(i === 0 ? DOCS_NAV.filter((p) => p !== "/docs/api") : DOCS_NAV),
+      html: pageHtml(
+        i === 0 ? DOCS_NAV.filter((p) => p !== "/docs/api") : DOCS_NAV
+      ),
       pageType: "docs",
     }));
     const check = await bothPaths([...marketing, ...docs]);
@@ -325,13 +376,17 @@ describe("links/nav-set-divergence", () => {
     test("French pages with a French nav are not held to the English nav", async () => {
       const check = await bothPaths([...normals(12), ...french()]);
       expect(check.status).toBe("pass");
-      expect(check.details).toMatchObject({ judgedPages: 17, flaggedPages: 0, unjudgedPages: 0 });
+      expect(check.details).toMatchObject({
+        judgedPages: 17,
+        flaggedPages: 0,
+        unjudgedPages: 0,
+      });
     });
 
     test("a French page missing a French nav link is flagged within its locale", async () => {
       const odd = frPage(
         "/fr/odd",
-        FR_NAV.filter((p) => p !== "/fr/aide"),
+        FR_NAV.filter((p) => p !== "/fr/aide")
       );
       const check = await bothPaths([...normals(12), ...french(), odd]);
       expect(check.status).toBe("warn");
@@ -344,16 +399,28 @@ describe("links/nav-set-divergence", () => {
     });
 
     test("a locale partition under the group floor is unjudged, not flagged", async () => {
-      const de = ["/de/a", "/de/b", "/de/c"].map((path) => ({ path, html: pageHtml(["/de/x"]) }));
+      const de = ["/de/a", "/de/b", "/de/c"].map((path) => ({
+        path,
+        html: pageHtml(["/de/x"]),
+      }));
       const check = await bothPaths([...normals(12), ...de]);
       expect(check.status).toBe("pass");
-      expect(check.details).toMatchObject({ judgedPages: 12, unjudgedPages: 3 });
+      expect(check.details).toMatchObject({
+        judgedPages: 12,
+        unjudgedPages: 3,
+      });
     });
   });
 
   test("an oversized navigation is counted and not compared", async () => {
-    const huge = Array.from({ length: NAV_SET_MAX_HREFS + 20 }, (_, i) => `/mega${i}`);
-    const check = await bothPaths([...normals(12), { path: "/mega", html: pageHtml(huge) }]);
+    const huge = Array.from(
+      { length: NAV_SET_MAX_HREFS + 20 },
+      (_, i) => `/mega${i}`
+    );
+    const check = await bothPaths([
+      ...normals(12),
+      { path: "/mega", html: pageHtml(huge) },
+    ]);
     expect(check.status).toBe("pass");
     expect(check.details).toMatchObject({ oversizedPages: 1, judgedPages: 12 });
   });
@@ -367,7 +434,9 @@ describe("links/nav-set-divergence", () => {
 
   test("a row stored without a navigation set is not compared, and legacy with no pages skips", async () => {
     const ctx = streamCtx(normals(12));
-    const rows = ctx.siteQuery as unknown as { pagesMatching: SiteQuery["pagesMatching"] };
+    const rows = ctx.siteQuery as unknown as {
+      pagesMatching: SiteQuery["pagesMatching"];
+    };
     const first = rows.pagesMatching;
     rows.pagesMatching = async function* (pred) {
       for await (const r of first(pred)) {
@@ -380,7 +449,10 @@ describe("links/nav-set-divergence", () => {
   });
 
   test("output order does not depend on page order", async () => {
-    const odd: Spec = { path: "/odd", html: pageHtml(SITE_NAV.filter((p) => p !== "/help")) };
+    const odd: Spec = {
+      path: "/odd",
+      html: pageHtml(SITE_NAV.filter((p) => p !== "/help")),
+    };
     const specs = [...normals(11), odd];
     const a = await run(streamCtx(specs));
     const b = await run(streamCtx([...specs].reverse()));

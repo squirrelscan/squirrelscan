@@ -1,8 +1,8 @@
 // schema/entity-publisher-mismatch — articles that disagree about who published them.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { publisherWeights } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,

@@ -10,15 +10,15 @@
 // seeded random pages; (2) the nested-table verdicts, now per table; and (3) a
 // time budget on the deeply nested shapes.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { linkInTextBlockRule } from "../src/a11y/link-in-text-block";
 import { tableHeadersRule } from "../src/a11y/table-headers";
 import { tdHeadersAttrRule } from "../src/a11y/td-headers-attr";
 import { thHasDataCellsRule } from "../src/a11y/th-has-data-cells";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 import { referenceLinkInTextBlockRule } from "./fixtures/reference-3355/link-in-text-block";
 import { referenceTableHeadersRule } from "./fixtures/reference-3355/table-headers";
 import { referenceTdHeadersAttrRule } from "./fixtures/reference-3355/td-headers-attr";
@@ -49,7 +49,8 @@ function rng(seed: number): () => number {
   };
 }
 
-const pick = <T>(r: () => number, items: readonly T[]): T => items[Math.floor(r() * items.length)]!;
+const pick = <T>(r: () => number, items: readonly T[]): T =>
+  items[Math.floor(r() * items.length)]!;
 
 const LINKS = [
   '<a href="/a">plain link</a>',
@@ -66,11 +67,31 @@ const ID_POOL = ["h1", "h2", "h3", "x", "missing"];
 
 /** One table cell's content: text, a link, a block, or nothing. */
 function cellContent(r: () => number): string {
-  return pick(r, ["", "text", pick(r, LINKS), `<p>${pick(r, LINKS)}</p>`, "<div>d</div>"]);
+  return pick(r, [
+    "",
+    "text",
+    pick(r, LINKS),
+    `<p>${pick(r, LINKS)}</p>`,
+    "<div>d</div>",
+  ]);
 }
 
 /** Span values, junk included, that the previous rule read the same way. */
-const SPANS = ["2", "3", "2", "1.5", "2.7", "0.5", "0", "-1", "abc", "2px", " 2 ", "1e1", ""];
+const SPANS = [
+  "2",
+  "3",
+  "2",
+  "1.5",
+  "2.7",
+  "0.5",
+  "0",
+  "-1",
+  "abc",
+  "2px",
+  " 2 ",
+  "1e1",
+  "",
+];
 
 /** One cell: a th or td with optional id, headers, colspan and rowspan. */
 function cell(r: () => number): string {
@@ -78,7 +99,9 @@ function cell(r: () => number): string {
   const attrs: string[] = [];
   if (tag === "th" && r() < 0.5) attrs.push(`id="${pick(r, ID_POOL)}"`);
   if (tag === "td" && r() < 0.4) {
-    const ids = Array.from({ length: 1 + Math.floor(r() * 2) }, () => pick(r, ID_POOL));
+    const ids = Array.from({ length: 1 + Math.floor(r() * 2) }, () =>
+      pick(r, ID_POOL)
+    );
     attrs.push(`headers="${ids.join(" ")}"`);
   }
   if (r() < 0.15) attrs.push(`colspan="${pick(r, SPANS)}"`);
@@ -88,11 +111,23 @@ function cell(r: () => number): string {
 
 /** A table with no table nested in it. */
 function flatTable(r: () => number): string {
-  const role = pick(r, ["", "", "", ' role="presentation"', ' role="none"', ' role="grid"']);
-  const rows = Array.from({ length: Math.floor(r() * 4) + (r() < 0.1 ? 0 : 1) }, () => {
-    const cells = Array.from({ length: Math.floor(r() * 4) }, () => cell(r)).join("");
-    return `<tr>${cells}</tr>`;
-  });
+  const role = pick(r, [
+    "",
+    "",
+    "",
+    ' role="presentation"',
+    ' role="none"',
+    ' role="grid"',
+  ]);
+  const rows = Array.from(
+    { length: Math.floor(r() * 4) + (r() < 0.1 ? 0 : 1) },
+    () => {
+      const cells = Array.from({ length: Math.floor(r() * 4) }, () =>
+        cell(r)
+      ).join("");
+      return `<tr>${cells}</tr>`;
+    }
+  );
   const body = pick(r, [
     rows.join(""),
     `<tbody>${rows.join("")}</tbody>`,
@@ -113,7 +148,8 @@ function flatTablePage(r: () => number): string {
     const inner = r() < 0.3 ? `${table}<p>${pick(r, LINKS)}</p>` : table;
     return wrap ? `<${wrap}>${inner}</${wrap}>` : inner;
   });
-  const stray = r() < 0.2 ? `<div><td headers="${pick(r, ID_POOL)}">stray</td></div>` : "";
+  const stray =
+    r() < 0.2 ? `<div><td headers="${pick(r, ID_POOL)}">stray</td></div>` : "";
   return `<!doctype html><html><body>${parts.join("")}${stray}</body></html>`;
 }
 
@@ -122,7 +158,10 @@ function nestedTable(r: () => number, depth: number): string {
   const table = flatTable(r);
   if (depth === 0 || r() < 0.3) return table;
   const inner = nestedTable(r, depth - 1);
-  const at = table.lastIndexOf("</td>") >= 0 ? table.lastIndexOf("</td>") : table.lastIndexOf("</th>");
+  const at =
+    table.lastIndexOf("</td>") >= 0
+      ? table.lastIndexOf("</td>")
+      : table.lastIndexOf("</th>");
   if (at < 0) return `${table}${inner}`;
   return `${table.slice(0, at)}${inner}${table.slice(at)}`;
 }
@@ -130,15 +169,35 @@ function nestedTable(r: () => number, depth: number): string {
 /** Text blocks nested in each other and in other containers, with links. */
 function blockTree(r: () => number, depth: number): string {
   if (depth === 0 || r() < 0.3) return pick(r, LINKS);
-  const tag = pick(r, ["p", "li", "dd", "blockquote", "figcaption", "div", "span", "section"]);
-  const kids = Array.from({ length: 1 + Math.floor(r() * 3) }, () => blockTree(r, depth - 1));
-  if (tag === "li") return `<li>${kids.join("")}<ul>${kids.slice(0, 1).map((k) => `<li>${k}</li>`).join("")}</ul></li>`;
+  const tag = pick(r, [
+    "p",
+    "li",
+    "dd",
+    "blockquote",
+    "figcaption",
+    "div",
+    "span",
+    "section",
+  ]);
+  const kids = Array.from({ length: 1 + Math.floor(r() * 3) }, () =>
+    blockTree(r, depth - 1)
+  );
+  if (tag === "li")
+    return `<li>${kids.join("")}<ul>${kids
+      .slice(0, 1)
+      .map((k) => `<li>${k}</li>`)
+      .join("")}</ul></li>`;
   return `<${tag}>${kids.join("")}</${tag}>`;
 }
 
 function blockPage(r: () => number): string {
-  const body = Array.from({ length: 1 + Math.floor(r() * 3) }, () => blockTree(r, 5)).join("");
-  const table = r() < 0.3 ? `<table><tr><td>${blockTree(r, 3)}</td><th>${pick(r, LINKS)}</th></tr></table>` : "";
+  const body = Array.from({ length: 1 + Math.floor(r() * 3) }, () =>
+    blockTree(r, 5)
+  ).join("");
+  const table =
+    r() < 0.3
+      ? `<table><tr><td>${blockTree(r, 3)}</td><th>${pick(r, LINKS)}</th></tr></table>`
+      : "";
   return `<!doctype html><html><body>${body}${table}<template><p>${LINKS[1]}</p></template></body></html>`;
 }
 
@@ -149,34 +208,51 @@ const TABLE_RULES = [
 ] as const;
 
 describe("the rewrites report what the previous implementations did (#3355)", () => {
-  test("table rules: identical results on 600 seeded random pages without nested tables", async () => {
-    for (let seed = 1; seed <= 600; seed++) {
-      const html = flatTablePage(rng(seed));
-      const parsed = parse(html);
-      for (const [rule, reference] of TABLE_RULES) {
-        expect(await run(rule, parsed), `${rule.meta.id} seed ${seed}`).toEqual(await run(reference, parsed));
+  test(
+    "table rules: identical results on 600 seeded random pages without nested tables",
+    async () => {
+      for (let seed = 1; seed <= 600; seed++) {
+        const html = flatTablePage(rng(seed));
+        const parsed = parse(html);
+        for (const [rule, reference] of TABLE_RULES) {
+          expect(
+            await run(rule, parsed),
+            `${rule.meta.id} seed ${seed}`
+          ).toEqual(await run(reference, parsed));
+        }
       }
-    }
-  }, { timeout: 30_000 });
+    },
+    { timeout: 30_000 }
+  );
 
-  test("table-headers: identical results on 600 seeded random pages of nested tables", async () => {
-    // A table counts the headers of the tables nested in it, as before.
-    for (let seed = 1; seed <= 600; seed++) {
-      const r = rng(seed);
-      const html = `<!doctype html><html><body>${nestedTable(r, 4)}${nestedTable(r, 2)}</body></html>`;
-      const parsed = parse(html);
-      expect(await run(tableHeadersRule, parsed), `seed ${seed}`).toEqual(await run(referenceTableHeadersRule, parsed));
-    }
-  }, { timeout: 30_000 });
+  test(
+    "table-headers: identical results on 600 seeded random pages of nested tables",
+    async () => {
+      // A table counts the headers of the tables nested in it, as before.
+      for (let seed = 1; seed <= 600; seed++) {
+        const r = rng(seed);
+        const html = `<!doctype html><html><body>${nestedTable(r, 4)}${nestedTable(r, 2)}</body></html>`;
+        const parsed = parse(html);
+        expect(await run(tableHeadersRule, parsed), `seed ${seed}`).toEqual(
+          await run(referenceTableHeadersRule, parsed)
+        );
+      }
+    },
+    { timeout: 30_000 }
+  );
 
-  test("link-in-text-block: identical results on 600 seeded random pages of nested blocks, each link once", async () => {
-    for (let seed = 1; seed <= 600; seed++) {
-      const parsed = parse(blockPage(rng(seed)));
-      expect(await run(linkInTextBlockRule, parsed), `seed ${seed}`).toEqual(
-        (await run(referenceLinkInTextBlockRule, parsed)),
-      );
-    }
-  }, { timeout: 30_000 });
+  test(
+    "link-in-text-block: identical results on 600 seeded random pages of nested blocks, each link once",
+    async () => {
+      for (let seed = 1; seed <= 600; seed++) {
+        const parsed = parse(blockPage(rng(seed)));
+        expect(await run(linkInTextBlockRule, parsed), `seed ${seed}`).toEqual(
+          await run(referenceLinkInTextBlockRule, parsed)
+        );
+      }
+    },
+    { timeout: 30_000 }
+  );
 });
 
 describe("a nested table is judged as its own table (#3355)", () => {
@@ -188,19 +264,26 @@ describe("a nested table is judged as its own table (#3355)", () => {
     // A header's label is its text, the nested table's included.
     expect(check!.items!.map((i) => i.id)).toEqual(["Outer", "Sideinner data"]);
     // The previous rule read the nested td into the outer grid and passed it.
-    expect((await run(referenceThHasDataCellsRule, parse(html))).checks[0]!.status).toBe("pass");
+    expect(
+      (await run(referenceThHasDataCellsRule, parse(html))).checks[0]!.status
+    ).toBe("pass");
     // Nor from a nested table whose cell sits in no row of its own.
     const rowless =
       "<table><tr><th>Outer</th></tr><tr><th>Side<table><td>inner data</td></table></th></tr></table>";
-    expect((await run(thHasDataCellsRule, parse(rowless))).checks[0]!.items).toHaveLength(2);
+    expect(
+      (await run(thHasDataCellsRule, parse(rowless))).checks[0]!.items
+    ).toHaveLength(2);
   });
 
   test("th-has-data-cells: a row inside a cell is a row of its own, as a browser builds it", async () => {
     // The previous rule read the inner row's td into the outer row and passed.
-    const html = "<table><tr><th>A</th><th>B<div><tr><td>x</td></tr></div></th></tr></table>";
+    const html =
+      "<table><tr><th>A</th><th>B<div><tr><td>x</td></tr></div></th></tr></table>";
     const [check] = (await run(thHasDataCellsRule, parse(html))).checks;
     expect(check!.items!.map((i) => i.id)).toEqual(["Bx"]);
-    expect((await run(referenceThHasDataCellsRule, parse(html))).checks[0]!.status).toBe("pass");
+    expect(
+      (await run(referenceThHasDataCellsRule, parse(html))).checks[0]!.status
+    ).toBe("pass");
   });
 
   test("th-has-data-cells: a nested table's own orphaned header is still reported, once", async () => {
@@ -216,7 +299,9 @@ describe("a nested table is judged as its own table (#3355)", () => {
     const [check] = (await run(tdHeadersAttrRule, parse(html))).checks;
     expect(check!.status).toBe("fail");
     expect(check!.items).toHaveLength(1);
-    expect((await run(referenceTdHeadersAttrRule, parse(html))).checks[0]!.items).toHaveLength(2);
+    expect(
+      (await run(referenceTdHeadersAttrRule, parse(html))).checks[0]!.items
+    ).toHaveLength(2);
   });
 
   test("td-headers-attr: a cell may only reference the header cells of its own table", async () => {
@@ -266,7 +351,10 @@ const nested = (depth: number, open: (i: number) => string, close: string) =>
 async function elementQueries(rule: Rule, parsed: ParsedPage): Promise<number> {
   const doc = parsed.document as unknown as Document;
   let proto = Object.getPrototypeOf(doc.querySelector("body"));
-  while (proto && !Object.prototype.hasOwnProperty.call(proto, "querySelectorAll")) {
+  while (
+    proto &&
+    !Object.prototype.hasOwnProperty.call(proto, "querySelectorAll")
+  ) {
     proto = Object.getPrototypeOf(proto);
   }
   const original = proto.querySelectorAll;
@@ -285,39 +373,63 @@ async function elementQueries(rule: Rule, parsed: ParsedPage): Promise<number> {
 }
 
 describe("nested markup costs a walk, not a walk per element (#3355)", () => {
-  test("th-has-data-cells: 20,000 nested tables in under 1 s", async () => {
-    const html = nested(20_000, () => "<table><tr><th>h</th><td>", "</td></tr></table>");
-    expect(await ruleMs(thHasDataCellsRule, html)).toBeLessThan(1_000);
-  }, { timeout: 60_000 });
+  test(
+    "th-has-data-cells: 20,000 nested tables in under 1 s",
+    async () => {
+      const html = nested(
+        20_000,
+        () => "<table><tr><th>h</th><td>",
+        "</td></tr></table>"
+      );
+      expect(await ruleMs(thHasDataCellsRule, html)).toBeLessThan(1_000);
+    },
+    { timeout: 60_000 }
+  );
 
-  test("td-headers-attr and table-headers: 20,000 nested tables in under 1 s each", async () => {
-    const html = nested(
-      20_000,
-      (i) => `<table><tr><th id="h${i}">h</th><td headers="h${i}">`,
-      "</td></tr></table>",
-    );
-    expect(await ruleMs(tdHeadersAttrRule, html)).toBeLessThan(1_000);
-    expect(await ruleMs(tableHeadersRule, html)).toBeLessThan(1_000);
-  }, { timeout: 60_000 });
+  test(
+    "td-headers-attr and table-headers: 20,000 nested tables in under 1 s each",
+    async () => {
+      const html = nested(
+        20_000,
+        (i) => `<table><tr><th id="h${i}">h</th><td headers="h${i}">`,
+        "</td></tr></table>"
+      );
+      expect(await ruleMs(tdHeadersAttrRule, html)).toBeLessThan(1_000);
+      expect(await ruleMs(tableHeadersRule, html)).toBeLessThan(1_000);
+    },
+    { timeout: 60_000 }
+  );
 
-  test("link-in-text-block: 5,000 nested blocks run far faster than the per-block reference", async () => {
-    const html = nested(
-      5_000,
-      () => '<blockquote><a href="/x" style="text-decoration:none">l</a>',
-      "</blockquote>",
-    );
-    // A ratio on the same input, not an absolute limit: CI load slows both
-    // runs alike. The reference re-walks a subtree per block (quadratic) and
-    // measures ~10x slower here; a regression to that shape closes the gap.
-    await ruleMs(linkInTextBlockRule, html); // warm up
-    const fast = Math.min(await ruleMs(linkInTextBlockRule, html), await ruleMs(linkInTextBlockRule, html));
-    const reference = await ruleMs(referenceLinkInTextBlockRule, html);
-    expect(reference / Math.max(fast, 0.5)).toBeGreaterThan(3);
-  }, { timeout: 60_000 });
+  test(
+    "link-in-text-block: 5,000 nested blocks run far faster than the per-block reference",
+    async () => {
+      const html = nested(
+        5_000,
+        () => '<blockquote><a href="/x" style="text-decoration:none">l</a>',
+        "</blockquote>"
+      );
+      // A ratio on the same input, not an absolute limit: CI load slows both
+      // runs alike. The reference re-walks a subtree per block (quadratic) and
+      // measures ~10x slower here; a regression to that shape closes the gap.
+      await ruleMs(linkInTextBlockRule, html); // warm up
+      const fast = Math.min(
+        await ruleMs(linkInTextBlockRule, html),
+        await ruleMs(linkInTextBlockRule, html)
+      );
+      const reference = await ruleMs(referenceLinkInTextBlockRule, html);
+      expect(reference / Math.max(fast, 0.5)).toBeGreaterThan(3);
+    },
+    { timeout: 60_000 }
+  );
 
   test("none of the four queries a subtree per table or block", async () => {
     const tables = parse(
-      nested(50, (i) => `<table><tr><th id="h${i}">h</th><td headers="h${i}"><p><a href="/x">l</a>`, "</p></td></tr></table>"),
+      nested(
+        50,
+        (i) =>
+          `<table><tr><th id="h${i}">h</th><td headers="h${i}"><p><a href="/x">l</a>`,
+        "</p></td></tr></table>"
+      )
     );
     for (const [rule, reference] of [
       ...TABLE_RULES,
@@ -325,78 +437,129 @@ describe("nested markup costs a walk, not a walk per element (#3355)", () => {
     ]) {
       expect(await elementQueries(rule, tables), rule.meta.id).toBe(0);
       // The spy sees the previous rule's per-table and per-block queries.
-      expect(await elementQueries(reference, tables), rule.meta.id).toBeGreaterThan(0);
+      expect(
+        await elementQueries(reference, tables),
+        rule.meta.id
+      ).toBeGreaterThan(0);
     }
   });
 });
 
 describe("spans a browser would not read (#3355)", () => {
   const judge = async (colspan: string, rowspan = "1") =>
-    (await run(
-      thHasDataCellsRule,
-      parse(
-        `<table><tr><th colspan="${colspan}" rowspan="${rowspan}">h</th><td>d</td></tr>` +
-          "<tr><th>lonely</th></tr></table>",
-      ),
-    )).checks[0]!;
+    (
+      await run(
+        thHasDataCellsRule,
+        parse(
+          `<table><tr><th colspan="${colspan}" rowspan="${rowspan}">h</th><td>d</td></tr>` +
+            "<tr><th>lonely</th></tr></table>"
+        )
+      )
+    ).checks[0]!;
 
-  test("an infinite, unparseable, zero, negative or fractional span reads as before or as 1", async () => {
-    // Infinity and 1e999 used to fill slots until the process ran out of memory.
-    const asOne = (await judge("1"));
-    for (const value of ["Infinity", "1e999", "-Infinity", "NaN", "abc", "0", "-1", "0.5"]) {
-      expect(await judge(value), `colspan ${value}`).toEqual(asOne);
-      expect(await judge("1", value), `rowspan ${value}`).toEqual(asOne);
-    }
-    expect(await judge("1.5")).toEqual((await run(referenceThHasDataCellsRule, parse(
-      '<table><tr><th colspan="1.5" rowspan="1">h</th><td>d</td></tr><tr><th>lonely</th></tr></table>',
-    ))).checks[0]!);
-  }, { timeout: 10_000 });
+  test(
+    "an infinite, unparseable, zero, negative or fractional span reads as before or as 1",
+    async () => {
+      // Infinity and 1e999 used to fill slots until the process ran out of memory.
+      const asOne = await judge("1");
+      for (const value of [
+        "Infinity",
+        "1e999",
+        "-Infinity",
+        "NaN",
+        "abc",
+        "0",
+        "-1",
+        "0.5",
+      ]) {
+        expect(await judge(value), `colspan ${value}`).toEqual(asOne);
+        expect(await judge("1", value), `rowspan ${value}`).toEqual(asOne);
+      }
+      expect(await judge("1.5")).toEqual(
+        (
+          await run(
+            referenceThHasDataCellsRule,
+            parse(
+              '<table><tr><th colspan="1.5" rowspan="1">h</th><td>d</td></tr><tr><th>lonely</th></tr></table>'
+            )
+          )
+        ).checks[0]!
+      );
+    },
+    { timeout: 10_000 }
+  );
 
-  test("a span past the spec's limit reads as the limit, and a grid stops at its slot cap", async () => {
-    // 1,000 columns: the second row's td sits under the header's 1,000th column.
-    const wide = parse(
-      '<table><tr><th colspan="100000">h</th></tr><tr><td colspan="999"></td><td>d</td></tr></table>',
-    );
-    expect((await run(thHasDataCellsRule, wide)).checks[0]!.status).toBe("pass");
-    // 1,001 rows of a 1,000-column cell: the cap lands on the last row's cell.
-    const start = performance.now();
-    const rows = '<tr><td colspan="1000">x</td></tr>'.repeat(1000);
-    const huge = (await run(
-      thHasDataCellsRule,
-      parse(`<table><tr><th>first</th></tr>${rows}<tr><td colspan="1000" rowspan="65534">x</td><th>after</th></tr></table>`),
-    )).checks[0]!;
-    expect(performance.now() - start).toBeLessThan(1_000);
-    // The cells past the cap are not placed: the table is judged on what came before.
-    expect(huge.status).toBe("pass");
-  }, { timeout: 10_000 });
+  test(
+    "a span past the spec's limit reads as the limit, and a grid stops at its slot cap",
+    async () => {
+      // 1,000 columns: the second row's td sits under the header's 1,000th column.
+      const wide = parse(
+        '<table><tr><th colspan="100000">h</th></tr><tr><td colspan="999"></td><td>d</td></tr></table>'
+      );
+      expect((await run(thHasDataCellsRule, wide)).checks[0]!.status).toBe(
+        "pass"
+      );
+      // 1,001 rows of a 1,000-column cell: the cap lands on the last row's cell.
+      const start = performance.now();
+      const rows = '<tr><td colspan="1000">x</td></tr>'.repeat(1000);
+      const huge = (
+        await run(
+          thHasDataCellsRule,
+          parse(
+            `<table><tr><th>first</th></tr>${rows}<tr><td colspan="1000" rowspan="65534">x</td><th>after</th></tr></table>`
+          )
+        )
+      ).checks[0]!;
+      expect(performance.now() - start).toBeLessThan(1_000);
+      // The cells past the cap are not placed: the table is judged on what came before.
+      expect(huge.status).toBe("pass");
+    },
+    { timeout: 10_000 }
+  );
 
-  test("a row span stops at the end of its row group, so the grid has no rows past the table's (#3383)", async () => {
-    // The th in thead spans into tbody in a naive grid; browsers cut it at thead's end.
-    const grouped = (await run(
-      thHasDataCellsRule,
-      parse('<table><thead><tr><th rowspan="2">h</th></tr></thead><tbody><tr><th>x</th><td>d</td></tr></tbody></table>'),
-    )).checks[0]!;
-    expect(grouped.status).toBe("warn");
-    expect(grouped.items).toEqual([{ id: "h" }]);
-    // A td spanning past the last row of a table adds no grid row (and no column td for later rows).
-    const plain = (await run(
-      thHasDataCellsRule,
-      parse('<table><tr><th>a</th><td rowspan="65534">d</td></tr></table>'),
-    )).checks[0]!;
-    expect(plain.status).toBe("pass");
-    // A huge rowspan costs no more than the rows there are.
-    const start = performance.now();
-    await run(
-      thHasDataCellsRule,
-      parse('<table><tr><th rowspan="65534" colspan="1000">h</th></tr></table>'),
-    );
-    expect(performance.now() - start).toBeLessThan(1_000);
-  }, { timeout: 10_000 });
+  test(
+    "a row span stops at the end of its row group, so the grid has no rows past the table's (#3383)",
+    async () => {
+      // The th in thead spans into tbody in a naive grid; browsers cut it at thead's end.
+      const grouped = (
+        await run(
+          thHasDataCellsRule,
+          parse(
+            '<table><thead><tr><th rowspan="2">h</th></tr></thead><tbody><tr><th>x</th><td>d</td></tr></tbody></table>'
+          )
+        )
+      ).checks[0]!;
+      expect(grouped.status).toBe("warn");
+      expect(grouped.items).toEqual([{ id: "h" }]);
+      // A td spanning past the last row of a table adds no grid row (and no column td for later rows).
+      const plain = (
+        await run(
+          thHasDataCellsRule,
+          parse('<table><tr><th>a</th><td rowspan="65534">d</td></tr></table>')
+        )
+      ).checks[0]!;
+      expect(plain.status).toBe("pass");
+      // A huge rowspan costs no more than the rows there are.
+      const start = performance.now();
+      await run(
+        thHasDataCellsRule,
+        parse(
+          '<table><tr><th rowspan="65534" colspan="1000">h</th></tr></table>'
+        )
+      );
+      expect(performance.now() - start).toBeLessThan(1_000);
+    },
+    { timeout: 10_000 }
+  );
 
-  test("wide rows cost a walk of the row, not one per cell", async () => {
-    const headers = `<table><tr>${"<th>h</th>".repeat(20_000)}</tr></table>`;
-    expect(await ruleMs(thHasDataCellsRule, headers)).toBeLessThan(1_000);
-    const spans = `<table><tr>${'<td colspan="1000">x</td>'.repeat(500)}<th>h</th></tr></table>`;
-    expect(await ruleMs(thHasDataCellsRule, spans)).toBeLessThan(1_000);
-  }, { timeout: 60_000 });
+  test(
+    "wide rows cost a walk of the row, not one per cell",
+    async () => {
+      const headers = `<table><tr>${"<th>h</th>".repeat(20_000)}</tr></table>`;
+      expect(await ruleMs(thHasDataCellsRule, headers)).toBeLessThan(1_000);
+      const spans = `<table><tr>${'<td colspan="1000">x</td>'.repeat(500)}<th>h</th></tr></table>`;
+      expect(await ruleMs(thHasDataCellsRule, spans)).toBeLessThan(1_000);
+    },
+    { timeout: 60_000 }
+  );
 });

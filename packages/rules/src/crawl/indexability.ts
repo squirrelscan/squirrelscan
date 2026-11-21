@@ -1,6 +1,6 @@
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { isPageIndexable } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 export const indexabilityCheck: Rule = {
   meta: {

@@ -4,18 +4,11 @@
 // the real-artifact blocks when it is absent. Parity against the training-side reference
 // implementation is checked where the model is trained, not here.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import {
-  ArtifactError,
-  loadModel,
-  scoreRow,
-  scoreRows,
-  softmax,
-  thresholdsFor,
-} from "../src/model-format";
 import {
   featurizeDocument,
   FEATURIZER_VERSION,
@@ -25,6 +18,14 @@ import {
   tokenBucket,
 } from "../src/featurize";
 import {
+  ArtifactError,
+  loadModel,
+  scoreRow,
+  scoreRows,
+  softmax,
+  thresholdsFor,
+} from "../src/model-format";
+import {
   classifyPage,
   selectPageType,
   toVector,
@@ -32,7 +33,6 @@ import {
   withExtraBlock,
 } from "../src/predict";
 import { isRootPath } from "../src/rules-fallback";
-import { parseHTML } from "@squirrelscan/parser/dom";
 
 const ARTIFACT = join(import.meta.dir, "../assets/classifier-v2.json");
 const HAS_ARTIFACT = existsSync(ARTIFACT);
@@ -56,7 +56,11 @@ describe("the rules path, with no model at all", () => {
   test("produces the full contract and says why it degraded", () => {
     const out = classifyPage(PAGE, URL);
     expect(out.degraded).toBe("no model artifact");
-    expect(out.pageType).toEqual({ label: "article", confidence: 1, source: "rules" });
+    expect(out.pageType).toEqual({
+      label: "article",
+      confidence: 1,
+      source: "rules",
+    });
     expect(out.nodes.length).toBeGreaterThan(4);
     for (const node of out.nodes) {
       expect(node.source).toBe("rules");
@@ -69,8 +73,9 @@ describe("the rules path, with no model at all", () => {
   test("reads the landmarks, including the nested article header", () => {
     const out = classifyPage(PAGE, URL);
     const at = (tag: string, elementId: string) =>
-      out.nodes.find((n) => n.nodeRef.tag === tag && n.nodeRef.elementId === elementId) ??
-      out.nodes.find((n) => n.nodeRef.tag === tag);
+      out.nodes.find(
+        (n) => n.nodeRef.tag === tag && n.nodeRef.elementId === elementId
+      ) ?? out.nodes.find((n) => n.nodeRef.tag === tag);
     expect(at("header", "")!.label).toBe("site_header");
     expect(at("footer", "")!.label).toBe("footer");
     expect(at("nav", "")!.label).toBe("navigation");
@@ -78,7 +83,10 @@ describe("the rules path, with no model at all", () => {
     expect(at("main", "")!.label).toBe("main_content");
     // The <header> inside <article> is the article's own chrome.
     const headers = out.nodes.filter((n) => n.nodeRef.tag === "header");
-    expect(headers.map((h) => h.label).sort()).toEqual(["article_chrome", "site_header"]);
+    expect(headers.map((h) => h.label).sort()).toEqual([
+      "article_chrome",
+      "site_header",
+    ]);
   });
 
   test("homepage is a URL rule, and only a rule", () => {
@@ -115,7 +123,9 @@ describe("the rules path, with no model at all", () => {
     const html =
       "<html><head><title>t</title></head><body><main><h1>Post</h1><p>body</p></main></body></html>";
     for (const path of ["/?p=123", "/?s=shoes"]) {
-      expect(classifyPage(html, `https://example.com${path}`).pageType.label).not.toBe("homepage");
+      expect(
+        classifyPage(html, `https://example.com${path}`).pageType.label
+      ).not.toBe("homepage");
     }
     const plain = classifyPage(html, "https://example.com/").pageType;
     expect(plain.label).toBe("homepage");
@@ -158,7 +168,7 @@ const WITH_COMMENTS = PAGE.replace(
     <li id="comment-4" class="comment"><article id="div-comment-4" class="comment-body">
       <div class="comment-author"><a rel="external nofollow ugc" href="https://spam.example.org/">Pills</a></div>
       <div class="comment-content"><p>Great post, thanks for sharing it with us.</p></div>
-    </article></li></ol></div></main>`,
+    </article></li></ol></div></main>`
 );
 
 describe("the comments rule in the output ", () => {
@@ -170,12 +180,19 @@ describe("the comments rule in the output ", () => {
     ]);
     const thread = elements[out.commentSections[0]!.nodeId] as Element;
     expect(thread.getAttribute("id")).toBe("comments");
-    const inside = out.nodes.filter((n) => thread.contains(elements[n.nodeRef.nodeId] as Element));
+    const inside = out.nodes.filter((n) =>
+      thread.contains(elements[n.nodeRef.nodeId] as Element)
+    );
     expect(inside.length).toBeGreaterThan(0);
     for (const node of inside) {
-      expect(node.section).toMatchObject({ label: "comments", confidence: 1, source: "rules" });
+      expect(node.section).toMatchObject({
+        label: "comments",
+        confidence: 1,
+        source: "rules",
+      });
     }
-    for (const node of out.nodes) if (!inside.includes(node)) expect(node.section).toBeUndefined();
+    for (const node of out.nodes)
+      if (!inside.includes(node)) expect(node.section).toBeUndefined();
   });
 
   test("a page without a thread lists none", () => {
@@ -186,12 +203,17 @@ describe("the comments rule in the output ", () => {
 describe("artifact validation", () => {
   test("a non-artifact is refused without throwing", () => {
     expect(tryLoadModel({ hello: "world" }).model).toBeNull();
-    expect(tryLoadModel({ hello: "world" }).reason).toContain("not a squirrel-dom-classifier");
+    expect(tryLoadModel({ hello: "world" }).reason).toContain(
+      "not a squirrel-dom-classifier"
+    );
     expect(tryLoadModel(null).model).toBeNull();
   });
 
   test("a future artifact version is refused", () => {
-    const out = tryLoadModel({ format: "squirrel-dom-classifier", artifactVersion: 99 });
+    const out = tryLoadModel({
+      format: "squirrel-dom-classifier",
+      artifactVersion: 99,
+    });
     expect(out.model).toBeNull();
     expect(out.reason).toContain("unsupported artifact version");
   });
@@ -207,10 +229,15 @@ describe("artifact validation", () => {
  * feature 0 <= 0.5 goes to leaf 10, otherwise leaf 20. `flags` = null writes a
  * version-1 block; a number writes version 2 with that per-node flag byte.
  */
-function oneSplitHead(flags: number | null, dropFlags = false): Record<string, unknown> {
+function oneSplitHead(
+  flags: number | null,
+  dropFlags = false
+): Record<string, unknown> {
   const bytes: number[] = [];
-  const u32 = (v: number) => bytes.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, v >>> 24);
-  const f32 = (v: number) => bytes.push(...new Uint8Array(new Float32Array([v]).buffer));
+  const u32 = (v: number) =>
+    bytes.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, v >>> 24);
+  const f32 = (v: number) =>
+    bytes.push(...new Uint8Array(new Float32Array([v]).buffer));
   const i32 = (v: number) => u32(v >>> 0);
   bytes.push(0x53, 0x51, 0x44, 0x43); // "SQDC"
   u32(flags === null ? 1 : 2);
@@ -288,7 +315,9 @@ describe("missing-value splits (tree-block version 2, #2307)", () => {
   test("a version-2 block without its flags is truncated, and version 3 is refused", () => {
     expect(() => oneSplitModel(2, true)).toThrow(ArtifactError);
     const head = oneSplitHead(null);
-    const bytes = Uint8Array.from(atob(head.trees as string), (c) => c.charCodeAt(0));
+    const bytes = Uint8Array.from(atob(head.trees as string), (c) =>
+      c.charCodeAt(0)
+    );
     bytes[4] = 3;
     head.trees = btoa(String.fromCharCode(...bytes));
     expect(() =>
@@ -297,7 +326,7 @@ describe("missing-value splits (tree-block version 2, #2307)", () => {
         artifactVersion: 1,
         region: head,
         pageType: head,
-      }),
+      })
     ).toThrow(ArtifactError);
   });
 
@@ -321,11 +350,13 @@ function columnHead(
   column: number,
   classes: [string, string],
   streams?: string[],
-  thresholds: [number, number] = [1.01, 0.5],
+  thresholds: [number, number] = [1.01, 0.5]
 ): Record<string, unknown> {
   const bytes: number[] = [];
-  const u32 = (v: number) => bytes.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, v >>> 24);
-  const f32 = (v: number) => bytes.push(...new Uint8Array(new Float32Array([v]).buffer));
+  const u32 = (v: number) =>
+    bytes.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, v >>> 24);
+  const f32 = (v: number) =>
+    bytes.push(...new Uint8Array(new Float32Array([v]).buffer));
   const i32 = (v: number) => u32(v >>> 0);
   bytes.push(0x53, 0x51, 0x44, 0x43); // "SQDC"
   u32(1); // version 1 block
@@ -365,7 +396,7 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
   const COLUMN = NODE_FEATURE_NAMES.length + tokenBucket("t:subscribe");
   const modelWith = (
     section: Record<string, unknown>,
-    region: Record<string, unknown> = oneSplitHead(null),
+    region: Record<string, unknown> = oneSplitHead(null)
   ) =>
     loadModel({
       format: "squirrel-dom-classifier",
@@ -387,8 +418,10 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
   for (const batch of [1, 32]) {
     test(`scoringBatch ${batch}: a section head declaring the text stream is scored on the union`, () => {
       const out = run(
-        modelWith(columnHead(COLUMN, ["none", "newsletter_signup"], ["classid", "text"])),
-        batch,
+        modelWith(
+          columnHead(COLUMN, ["none", "newsletter_signup"], ["classid", "text"])
+        ),
+        batch
       );
       expect(out.degraded).toBe("");
       const fired = out.nodes.filter((n) => n.section?.source === "model");
@@ -398,16 +431,25 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
     });
 
     test(`scoringBatch ${batch}: a head that declares nothing never sees the text stream`, () => {
-      const out = run(modelWith(columnHead(COLUMN, ["none", "newsletter_signup"])), batch);
-      expect(out.nodes.filter((n) => n.section?.source === "model").length).toBe(0);
+      const out = run(
+        modelWith(columnHead(COLUMN, ["none", "newsletter_signup"])),
+        batch
+      );
+      expect(
+        out.nodes.filter((n) => n.section?.source === "model").length
+      ).toBe(0);
     });
 
     test(`scoringBatch ${batch}: the region head follows its own declaration too`, () => {
       const region = (streams?: string[]) =>
         columnHead(COLUMN, ["footer", "main_content"], streams, [0.5, 0.5]);
       const plain = run(modelWith(oneSplitHead(null), region()), batch);
-      const text = run(modelWith(oneSplitHead(null), region(["classid", "text"])), batch);
-      const box = (out: typeof plain) => out.nodes.find((n) => n.nodeRef.tag === "div")!;
+      const text = run(
+        modelWith(oneSplitHead(null), region(["classid", "text"])),
+        batch
+      );
+      const box = (out: typeof plain) =>
+        out.nodes.find((n) => n.nodeRef.tag === "div")!;
       expect(box(plain).label).toBe("footer"); // the column is never set on the class/id stream
       expect(box(text).label).toBe("main_content");
     });
@@ -419,14 +461,17 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
     expect(bad(["nope"])).toThrow(ArtifactError);
     expect(bad(["text"])).toThrow(ArtifactError);
     expect(bad([])).toThrow(ArtifactError);
-    expect(() => modelWith(columnHead(COLUMN, ["a", "b"], ["classid"]))).not.toThrow();
+    expect(() =>
+      modelWith(columnHead(COLUMN, ["a", "b"], ["classid"]))
+    ).not.toThrow();
   });
 
   test("a head with no declaration reads the class/id stream only", () => {
     expect(modelWith(oneSplitHead(null)).section!.readsText).toBe(false);
-    expect(modelWith(columnHead(COLUMN, ["a", "b"], ["classid", "text"])).section!.readsText).toBe(
-      true,
-    );
+    expect(
+      modelWith(columnHead(COLUMN, ["a", "b"], ["classid", "text"])).section!
+        .readsText
+    ).toBe(true);
   });
 
   test("a page-type head cannot declare the text stream", () => {
@@ -440,7 +485,7 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
         tokenBuckets: TOKEN_BUCKETS,
         region: oneSplitHead(null),
         pageType: { ...oneSplitHead(null), tokenStreams: ["classid", "text"] },
-      }),
+      })
     ).toThrow(ArtifactError);
   });
 
@@ -455,9 +500,16 @@ describe("heads declare the node token streams they read (v2.3.0)", () => {
         tokenBuckets: TOKEN_BUCKETS,
         region: oneSplitHead(null),
         pageType: oneSplitHead(null),
-        section: columnHead(COLUMN, ["none", "newsletter_signup"], ["classid", "text"]),
+        section: columnHead(
+          COLUMN,
+          ["none", "newsletter_signup"],
+          ["classid", "text"]
+        ),
       };
-      const out = classifyPage(html, URL, { model: tryLoadModel(stale).model, budgetMs: 1e9 });
+      const out = classifyPage(html, URL, {
+        model: tryLoadModel(stale).model,
+        budgetMs: 1e9,
+      });
       expect(out.degraded).toContain(version);
       expect(out.nodes.every((n) => n.source === "rules")).toBe(true);
       expect(out.nodes.some((n) => n.section?.source === "model")).toBe(false);
@@ -508,7 +560,9 @@ describe.if(HAS_ARTIFACT)("with the real artifact", () => {
     expect(model!.region.numClass).toBe(10);
     // At least 11 page-type classes: legal and pricing are model-only classes.
     expect(model!.pageType.numClass).toBeGreaterThanOrEqual(11);
-    expect(model!.pageType.classThresholds.length).toBe(model!.pageType.numClass);
+    expect(model!.pageType.classThresholds.length).toBe(
+      model!.pageType.numClass
+    );
   });
 
   test("it loads (JSON parse + init) within 100 ms", () => {
@@ -562,7 +616,7 @@ describe.if(HAS_ARTIFACT)("with the real artifact", () => {
     const soup = `<!doctype html><html><head><title>T</title></head><body>${Array.from(
       { length: 40 },
       (_, i) =>
-        `<div class="row r${i}"><p>Block ${i} with enough text to be a candidate.</p></div>`,
+        `<div class="row r${i}"><p>Block ${i} with enough text to be a candidate.</p></div>`
     ).join("")}</body></html>`;
     const { model } = tryLoadModel(artifactJson());
     // The precondition is that the model PATH is reachable, not that the model
@@ -591,70 +645,94 @@ describe.if(HAS_ARTIFACT)("with the real artifact", () => {
   });
 });
 
-describe.if(HAS_ARTIFACT)("batched scoring is the row-at-a-time walk, bit for bit", () => {
-  // Synthetic rows (a fixed pseudo-random stream, no page data): numeric slots hold small
-  // integers and fractions, token slots are one-hot. Scores must be bit-identical whatever the
-  // batch size, or the speed-up would be changing answers.
-  test("scoreRows equals scoreRow on every row, in batches of 1, 7, 32 and all", () => {
-    const model = loadModel(artifactJson());
-    let seed = 12345;
-    const next = (): number => {
-      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    for (const head of [model.region, model.section!]) {
-      const width = model.nodeFeatureCount + model.tokenBuckets;
-      const rows = 300;
-      const matrix = new Float32Array(rows * width);
-      for (let row = 0; row < rows; row++) {
-        for (let i = 0; i < model.nodeFeatureCount; i++) {
-          const r = next();
-          matrix[row * width + i] = r < 0.5 ? 0 : r < 0.8 ? Math.floor(next() * 20) : next();
+describe.if(HAS_ARTIFACT)(
+  "batched scoring is the row-at-a-time walk, bit for bit",
+  () => {
+    // Synthetic rows (a fixed pseudo-random stream, no page data): numeric slots hold small
+    // integers and fractions, token slots are one-hot. Scores must be bit-identical whatever the
+    // batch size, or the speed-up would be changing answers.
+    test("scoreRows equals scoreRow on every row, in batches of 1, 7, 32 and all", () => {
+      const model = loadModel(artifactJson());
+      let seed = 12345;
+      const next = (): number => {
+        seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      };
+      for (const head of [model.region, model.section!]) {
+        const width = model.nodeFeatureCount + model.tokenBuckets;
+        const rows = 300;
+        const matrix = new Float32Array(rows * width);
+        for (let row = 0; row < rows; row++) {
+          for (let i = 0; i < model.nodeFeatureCount; i++) {
+            const r = next();
+            matrix[row * width + i] =
+              r < 0.5 ? 0 : r < 0.8 ? Math.floor(next() * 20) : next();
+          }
+          for (let k = 0; k < 8; k++)
+            matrix[
+              row * width +
+                model.nodeFeatureCount +
+                Math.floor(next() * model.tokenBuckets)
+            ] = 1;
         }
-        for (let k = 0; k < 8; k++)
-          matrix[row * width + model.nodeFeatureCount + Math.floor(next() * model.tokenBuckets)] =
-            1;
-      }
-      const expected = new Float32Array(rows * head.numClass);
-      const scores = new Float32Array(head.numClass);
-      for (let row = 0; row < rows; row++) {
-        scoreRow(head, matrix.subarray(row * width, (row + 1) * width), scores);
-        expected.set(scores, row * head.numClass);
-      }
-      for (const size of [1, 7, 32, rows]) {
-        const out = new Float32Array(rows * head.numClass);
-        for (let start = 0; start < rows; start += size) {
-          const n = Math.min(size, rows - start);
-          scoreRows(
+        const expected = new Float32Array(rows * head.numClass);
+        const scores = new Float32Array(head.numClass);
+        for (let row = 0; row < rows; row++) {
+          scoreRow(
             head,
-            matrix.subarray(start * width, (start + n) * width),
-            width,
-            n,
-            out.subarray(start * head.numClass, (start + n) * head.numClass),
+            matrix.subarray(row * width, (row + 1) * width),
+            scores
           );
+          expected.set(scores, row * head.numClass);
         }
-        expect(Buffer.from(out.buffer).equals(Buffer.from(expected.buffer))).toBe(true);
+        for (const size of [1, 7, 32, rows]) {
+          const out = new Float32Array(rows * head.numClass);
+          for (let start = 0; start < rows; start += size) {
+            const n = Math.min(size, rows - start);
+            scoreRows(
+              head,
+              matrix.subarray(start * width, (start + n) * width),
+              width,
+              n,
+              out.subarray(start * head.numClass, (start + n) * head.numClass)
+            );
+          }
+          expect(
+            Buffer.from(out.buffer).equals(Buffer.from(expected.buffer))
+          ).toBe(true);
+        }
       }
-    }
-  });
+    });
 
-  test("classifyPage answers the same with any scoringBatch", () => {
-    const { model } = tryLoadModel(artifactJson());
-    // 120 candidate blocks, so a batch of 32 spans several chunks.
-    const blocks = Array.from(
-      { length: 120 },
-      (_, i) =>
-        `<section class="block-${i % 7}"><h2>Part ${i}</h2><p>Text ${i} about crawling.</p><a href="https://other${i}.example/">x</a></section>`,
-    ).join("");
-    for (const html of [PAGE, `<!doctype html><html><body><main>${blocks}</main></body></html>`]) {
-      const base = classifyPage(html, URL, { model, budgetMs: 1e9, scoringBatch: 1 });
-      for (const batch of [7, 32, 400]) {
-        const batched = classifyPage(html, URL, { model, budgetMs: 1e9, scoringBatch: batch });
-        expect(batched).toEqual(base);
+    test("classifyPage answers the same with any scoringBatch", () => {
+      const { model } = tryLoadModel(artifactJson());
+      // 120 candidate blocks, so a batch of 32 spans several chunks.
+      const blocks = Array.from(
+        { length: 120 },
+        (_, i) =>
+          `<section class="block-${i % 7}"><h2>Part ${i}</h2><p>Text ${i} about crawling.</p><a href="https://other${i}.example/">x</a></section>`
+      ).join("");
+      for (const html of [
+        PAGE,
+        `<!doctype html><html><body><main>${blocks}</main></body></html>`,
+      ]) {
+        const base = classifyPage(html, URL, {
+          model,
+          budgetMs: 1e9,
+          scoringBatch: 1,
+        });
+        for (const batch of [7, 32, 400]) {
+          const batched = classifyPage(html, URL, {
+            model,
+            budgetMs: 1e9,
+            scoringBatch: batch,
+          });
+          expect(batched).toEqual(base);
+        }
       }
-    }
-  });
-});
+    });
+  }
+);
 
 describe.if(HAS_ARTIFACT)("section head (the artifact has one)", () => {
   test("a node carries a section only when a class clears its threshold, never `none`", () => {
@@ -666,7 +744,7 @@ describe.if(HAS_ARTIFACT)("section head (the artifact has one)", () => {
       expect(node.section.label).not.toBe("none");
       const index = model!.section!.classes.indexOf(node.section.label);
       expect(node.section.confidence).toBeGreaterThanOrEqual(
-        model!.section!.classThresholds[index]!,
+        model!.section!.classThresholds[index]!
       );
     }
   });
@@ -674,9 +752,14 @@ describe.if(HAS_ARTIFACT)("section head (the artifact has one)", () => {
   test("the comments rule wins over the head inside a thread", () => {
     const { model } = tryLoadModel(artifactJson());
     const elements: unknown[] = [];
-    const out = classifyPage(WITH_COMMENTS, URL, { model, elementsOut: elements });
+    const out = classifyPage(WITH_COMMENTS, URL, {
+      model,
+      elementsOut: elements,
+    });
     const thread = elements[out.commentSections[0]!.nodeId] as Element;
-    const inside = out.nodes.filter((n) => thread.contains(elements[n.nodeRef.nodeId] as Element));
+    const inside = out.nodes.filter((n) =>
+      thread.contains(elements[n.nodeRef.nodeId] as Element)
+    );
     expect(inside.length).toBeGreaterThan(0);
     for (const node of inside) expect(node.section?.source).toBe("rules");
   });
@@ -688,7 +771,10 @@ describe.if(HAS_ARTIFACT)("page-type head and the link graph", () => {
     const none = classifyPage(PAGE, URL, { model });
     const graph = classifyPage(PAGE, URL, {
       model,
-      siteFeatures: Array.from({ length: model!.pageType.extraFeatureCount }, () => 0),
+      siteFeatures: Array.from(
+        { length: model!.pageType.extraFeatureCount },
+        () => 0
+      ),
     });
     for (const out of [none, graph]) {
       expect(out.degraded).toBe("");
@@ -715,7 +801,9 @@ describe.if(HAS_ARTIFACT)("platform guard applied by classifyPage ", () => {
       if (node.source === "model") expect(node.label).toBe("unknown");
     const other = classifyPage(PAGE, URL, { model, platform: "wix" });
     expect(other.platform).toBe("wix");
-    expect(other.nodes.some((n) => n.source === "model" && n.label !== "unknown")).toBe(true);
+    expect(
+      other.nodes.some((n) => n.source === "model" && n.label !== "unknown")
+    ).toBe(true);
   });
 });
 
@@ -729,22 +817,28 @@ describe("page-type rules", () => {
   };
 
   test("reads @graph, arrays and nested mainEntity", () => {
-    expect(label(withJson('{"@graph":[{"@type":"WebPage"},{"@type":"BlogPosting"}]}'))).toBe(
-      "article",
+    expect(
+      label(
+        withJson('{"@graph":[{"@type":"WebPage"},{"@type":"BlogPosting"}]}')
+      )
+    ).toBe("article");
+    expect(label(withJson('[{"@type":["Product","Thing"]}]'))).toBe(
+      "product_detail"
     );
-    expect(label(withJson('[{"@type":["Product","Thing"]}]'))).toBe("product_detail");
-    expect(label(withJson('{"@type":"WebPage","mainEntity":{"@type":"TechArticle"}}'))).toBe(
-      "docs",
-    );
+    expect(
+      label(
+        withJson('{"@type":"WebPage","mainEntity":{"@type":"TechArticle"}}')
+      )
+    ).toBe("docs");
   });
 
   test("a CollectionPage of Products is the listing, not an invented class", () => {
     expect(
       label(
         withJson(
-          '{"@type":"CollectionPage","mainEntity":{"@type":"ItemList","itemListElement":[{"@type":"Product"}]}}',
-        ),
-      ),
+          '{"@type":"CollectionPage","mainEntity":{"@type":"ItemList","itemListElement":[{"@type":"Product"}]}}'
+        )
+      )
     ).toBe("listing_index");
   });
 
@@ -766,12 +860,14 @@ describe.if(HAS_ARTIFACT)("per-class thresholds", () => {
     const soup = `<!doctype html><html><head><title>T</title></head><body>${Array.from(
       { length: 40 },
       (_, i) =>
-        `<div class="row r${i}"><p>Block ${i} with enough text to be a candidate.</p></div>`,
+        `<div class="row r${i}"><p>Block ${i} with enough text to be a candidate.</p></div>`
     ).join("")}</body></html>`;
     const { model } = tryLoadModel(artifactJson());
     // A threshold of 1.01 rejects everything the model says.
     const out = classifyPage(soup, URL, { model, threshold: 1.01 });
-    const rejected = out.nodes.filter((n) => n.label === "unknown" && n.source === "model");
+    const rejected = out.nodes.filter(
+      (n) => n.label === "unknown" && n.source === "model"
+    );
     expect(rejected.length).toBeGreaterThan(0);
     for (const node of rejected) {
       // Saying "rules" here would claim the deterministic path had looked.
@@ -800,7 +896,9 @@ const HEAD_CLASSES = [
   "other",
 ];
 // The shipped per-class bars, in class order.
-const HEAD_BARS = [0.3, 0.94, 0.98, 0.95, 0.74, 0.77, 0.68, 0.87, 0.56, 0.93, 0.97, 0.91];
+const HEAD_BARS = [
+  0.3, 0.94, 0.98, 0.95, 0.74, 0.77, 0.68, 0.87, 0.56, 0.93, 0.97, 0.91,
+];
 
 // A probability row from a few named classes; the rest get nothing.
 const row = (given: Record<string, number>): number[] =>
@@ -808,7 +906,12 @@ const row = (given: Record<string, number>): number[] =>
 
 describe("selectPageType: homepage is never the model's answer off the root path", () => {
   test("on the root path it is the plain argmax, homepage included", () => {
-    const pick = selectPageType(row({ homepage: 0.6, other: 0.3 }), HEAD_CLASSES, HEAD_BARS, true);
+    const pick = selectPageType(
+      row({ homepage: 0.6, other: 0.3 }),
+      HEAD_CLASSES,
+      HEAD_BARS,
+      true
+    );
     expect(pick).toEqual({ index: 0, probability: 0.6, fires: true });
   });
 
@@ -817,7 +920,7 @@ describe("selectPageType: homepage is never the model's answer off the root path
       row({ homepage: 0.6, about: 0.25, other: 0.1 }),
       HEAD_CLASSES,
       HEAD_BARS,
-      false,
+      false
     );
     expect(pick.index).toBe(HEAD_CLASSES.indexOf("about"));
     // Not renormalised: the bars were tuned on the head's own probabilities (0.25, not 0.25 / 0.4).
@@ -830,7 +933,7 @@ describe("selectPageType: homepage is never the model's answer off the root path
       row({ homepage: 0.6, about: 0.25, other: 0.1 }),
       HEAD_CLASSES,
       HEAD_BARS,
-      false,
+      false
     );
     expect(pick.fires).toBe(false);
   });
@@ -838,7 +941,12 @@ describe("selectPageType: homepage is never the model's answer off the root path
   test("the best other class fires when it clears its own bar", () => {
     // Bars lowered, as a platform override or the `threshold` option can: blog_post 0.35 >= 0.3.
     const bars = HEAD_BARS.map(() => 0.3);
-    const pick = selectPageType(row({ homepage: 0.4, blog_post: 0.35 }), HEAD_CLASSES, bars, false);
+    const pick = selectPageType(
+      row({ homepage: 0.4, blog_post: 0.35 }),
+      HEAD_CLASSES,
+      bars,
+      false
+    );
     expect(pick).toEqual({
       index: HEAD_CLASSES.indexOf("blog_post"),
       probability: 0.35,
@@ -852,7 +960,7 @@ describe("selectPageType: homepage is never the model's answer off the root path
       row({ homepage: 0.4, about: 0.35 }),
       HEAD_CLASSES,
       HEAD_BARS,
-      false,
+      false
     );
     expect(pick.index).toBe(HEAD_CLASSES.indexOf("about"));
     expect(pick.fires).toBe(false);
@@ -861,13 +969,23 @@ describe("selectPageType: homepage is never the model's answer off the root path
   test("when homepage is not the top class the veto changes nothing", () => {
     const probabilities = row({ blog_post: 0.8, homepage: 0.1, other: 0.05 });
     const open = selectPageType(probabilities, HEAD_CLASSES, HEAD_BARS, true);
-    const closed = selectPageType(probabilities, HEAD_CLASSES, HEAD_BARS, false);
+    const closed = selectPageType(
+      probabilities,
+      HEAD_CLASSES,
+      HEAD_BARS,
+      false
+    );
     expect(closed).toEqual(open);
     expect(open.fires).toBe(true);
   });
 
   test("ties go to the lower class index", () => {
-    const pick = selectPageType(row({ about: 0.4, contact: 0.4 }), HEAD_CLASSES, HEAD_BARS, false);
+    const pick = selectPageType(
+      row({ about: 0.4, contact: 0.4 }),
+      HEAD_CLASSES,
+      HEAD_BARS,
+      false
+    );
     expect(pick.index).toBe(HEAD_CLASSES.indexOf("about"));
   });
 
@@ -940,7 +1058,7 @@ describe.if(HAS_ARTIFACT)(
     const probabilitiesFor = (
       model: NonNullable<ReturnType<typeof tryLoadModel>["model"]>,
       html: string,
-      url: string,
+      url: string
     ) => {
       const { document } = parseHTML(html);
       const featurized = featurizeDocument(document as never, url, {});
@@ -950,10 +1068,10 @@ describe.if(HAS_ARTIFACT)(
           featurized.page.tokens,
           model.pageFeatureCount,
           null,
-          null,
+          null
         ),
         model.pageType.extraFeatureCount,
-        null,
+        null
       );
       const scores = new Float32Array(model.pageType.numClass);
       scoreRow(model.pageType, values, scores);
@@ -966,7 +1084,12 @@ describe.if(HAS_ARTIFACT)(
       const { model } = tryLoadModel(artifactJson());
       const probabilities = probabilitiesFor(model!, LANDING, LOCALE_ROOT);
       const bars = thresholdsFor(model!.pageType, "custom");
-      const open = selectPageType(probabilities, model!.pageType.classes, bars, true);
+      const open = selectPageType(
+        probabilities,
+        model!.pageType.classes,
+        bars,
+        true
+      );
       expect(model!.pageType.classes[open.index]).toBe("homepage");
       expect(open.fires).toBe(true);
     });
@@ -984,7 +1107,7 @@ describe.if(HAS_ARTIFACT)(
         probabilitiesFor(model!, LANDING, LOCALE_ROOT),
         model!.pageType.classes,
         thresholdsFor(model!.pageType, "custom"),
-        false,
+        false
       );
       expect(closed.fires).toBe(false);
       expect(out.pageType.confidence).toBeCloseTo(closed.probability, 6);
@@ -998,7 +1121,8 @@ describe.if(HAS_ARTIFACT)(
         "/a/b/c",
       ]) {
         expect(
-          classifyPage(LANDING, `https://example.com${path}`, { model }).pageType.label,
+          classifyPage(LANDING, `https://example.com${path}`, { model })
+            .pageType.label
         ).not.toBe("homepage");
       }
     });
@@ -1025,36 +1149,51 @@ describe.if(HAS_ARTIFACT)(
         probabilitiesFor(model!, LANDING, LOCALE_ROOT),
         model!.pageType.classes,
         new Float64Array(model!.pageType.numClass).fill(0.001),
-        false,
+        false
       );
-      const out = classifyPage(LANDING, LOCALE_ROOT, { model, threshold: 0.001 });
+      const out = classifyPage(LANDING, LOCALE_ROOT, {
+        model,
+        threshold: 0.001,
+      });
       expect(out.pageType.source).toBe("model");
-      expect<string>(out.pageType.label).toBe(model!.pageType.classes[closed.index]!);
+      expect<string>(out.pageType.label).toBe(
+        model!.pageType.classes[closed.index]!
+      );
       expect(out.pageType.label).not.toBe("homepage");
       expect(out.pageType.confidence).toBeCloseTo(closed.probability, 6);
       // A bar nothing can clear is the rules answer, and still never homepage.
-      const none = classifyPage(LANDING, LOCALE_ROOT, { model, threshold: 1.01 });
+      const none = classifyPage(LANDING, LOCALE_ROOT, {
+        model,
+        threshold: 1.01,
+      });
       expect(none.pageType.source).toBe("rules");
       expect(none.pageType.label).not.toBe("homepage");
     });
 
     test("platform thresholds still apply to the class the head picks", () => {
       const json = artifactJson() as Record<string, Record<string, unknown>>;
-      const classes = (json.pageType as unknown as { classes: string[] }).classes;
+      const classes = (json.pageType as unknown as { classes: string[] })
+        .classes;
       // wix gets bars every class clears; every other platform keeps the head's own.
       json.pageType!.platformClassThresholds = {
         wix: Object.fromEntries(classes.map((c) => [c, 0.001])),
       };
       const { model } = tryLoadModel(json);
-      const guarded = classifyPage(LANDING, LOCALE_ROOT, { model, platform: "wix" });
+      const guarded = classifyPage(LANDING, LOCALE_ROOT, {
+        model,
+        platform: "wix",
+      });
       expect(guarded.platform).toBe("wix");
       expect(guarded.pageType.source).toBe("model");
       expect(guarded.pageType.label).not.toBe("homepage");
-      const other = classifyPage(LANDING, LOCALE_ROOT, { model, platform: "shopify" });
+      const other = classifyPage(LANDING, LOCALE_ROOT, {
+        model,
+        platform: "shopify",
+      });
       expect(other.pageType.source).toBe("rules");
       expect(other.pageType.label).not.toBe("homepage");
     });
-  },
+  }
 );
 
 describe("selectPageType edge cases", () => {
@@ -1063,14 +1202,14 @@ describe("selectPageType edge cases", () => {
       [0.1, Number.NaN, 0.9],
       ["homepage", "about", "contact"],
       [0.3, 0.5, 0.5],
-      false,
+      false
     );
     expect(pick).toEqual({ index: 2, probability: 0.9, fires: true });
     const allNaN = selectPageType(
       [Number.NaN, Number.NaN],
       ["homepage", "about"],
       [0.3, 0.5],
-      false,
+      false
     );
     expect(allNaN).toEqual({ index: -1, probability: 0, fires: false });
   });
@@ -1091,8 +1230,12 @@ describe("selectPageType edge cases", () => {
 // logits never change (the split column is a token no page sets), so every page reads homepage at ~0.99995 and
 // about at ~0.0000454. The `about` bar then decides whether the best other class fires.
 describe("page-type selection through classifyPage, with a head that always says homepage", () => {
-  const NEVER_SET = PAGE_FEATURE_NAMES.length + tokenBucket("t:never-set-on-any-fixture");
-  const modelFor = (aboutBar: number, platformBars?: Record<string, Record<string, number>>) =>
+  const NEVER_SET =
+    PAGE_FEATURE_NAMES.length + tokenBucket("t:never-set-on-any-fixture");
+  const modelFor = (
+    aboutBar: number,
+    platformBars?: Record<string, Record<string, number>>
+  ) =>
     loadModel({
       format: "squirrel-dom-classifier",
       artifactVersion: 1,
@@ -1102,7 +1245,10 @@ describe("page-type selection through classifyPage, with a head that always says
       tokenBuckets: TOKEN_BUCKETS,
       region: oneSplitHead(null),
       pageType: {
-        ...columnHead(NEVER_SET, ["homepage", "about"], undefined, [0.3, aboutBar]),
+        ...columnHead(NEVER_SET, ["homepage", "about"], undefined, [
+          0.3,
+          aboutBar,
+        ]),
         ...(platformBars ? { platformClassThresholds: platformBars } : {}),
       },
     });
@@ -1140,7 +1286,9 @@ describe("page-type selection through classifyPage, with a head that always says
 
   test("the root path is unchanged: the URL rule, confidence 1, whatever the bars say", () => {
     for (const bar of [0.5, 1e-6]) {
-      expect(classifyPage(PLAIN, ROOT, { model: modelFor(bar) }).pageType).toEqual({
+      expect(
+        classifyPage(PLAIN, ROOT, { model: modelFor(bar) }).pageType
+      ).toEqual({
         label: "homepage",
         confidence: 1,
         source: "rules",
@@ -1150,31 +1298,37 @@ describe("page-type selection through classifyPage, with a head that always says
 
   test("the `threshold` option applies to the class the head picks, including 0", () => {
     expect(
-      classifyPage(PLAIN, NON_ROOT, { model: modelFor(0.5), threshold: 0 }).pageType,
+      classifyPage(PLAIN, NON_ROOT, { model: modelFor(0.5), threshold: 0 })
+        .pageType
     ).toMatchObject({
       label: "about",
       source: "model",
     });
     expect(
-      classifyPage(PLAIN, NON_ROOT, { model: modelFor(1e-6), threshold: 1.01 }).pageType.source,
+      classifyPage(PLAIN, NON_ROOT, { model: modelFor(1e-6), threshold: 1.01 })
+        .pageType.source
     ).toBe("rules");
   });
 
   test("a platform override is read at the picked class, not at homepage", () => {
     // wix: about's bar is low and homepage's is high, so about fires. Another platform keeps the head's 0.5.
     const wix = modelFor(0.5, { wix: { homepage: 0.99, about: 1e-6 } });
-    expect(classifyPage(PLAIN, NON_ROOT, { model: wix, platform: "wix" }).pageType).toMatchObject({
+    expect(
+      classifyPage(PLAIN, NON_ROOT, { model: wix, platform: "wix" }).pageType
+    ).toMatchObject({
       label: "about",
       source: "model",
     });
-    expect(classifyPage(PLAIN, NON_ROOT, { model: wix, platform: "shopify" }).pageType.source).toBe(
-      "rules",
-    );
+    expect(
+      classifyPage(PLAIN, NON_ROOT, { model: wix, platform: "shopify" })
+        .pageType.source
+    ).toBe("rules");
     // The other way round: a low homepage bar must not let about through when about's own bar is high.
     const flipped = modelFor(1e-6, { wix: { homepage: 1e-6, about: 0.5 } });
-    expect(classifyPage(PLAIN, NON_ROOT, { model: flipped, platform: "wix" }).pageType.source).toBe(
-      "rules",
-    );
+    expect(
+      classifyPage(PLAIN, NON_ROOT, { model: flipped, platform: "wix" })
+        .pageType.source
+    ).toBe("rules");
   });
 });
 
@@ -1216,7 +1370,9 @@ describe("the root document is a home page (#902)", () => {
     ]) {
       expect(isRootPath(`${ORIGIN}${path}`)).toBe(false);
     }
-    expect(classifyPage(PLAIN, `${ORIGIN}/blog/index.html`).pageType.label).not.toBe("homepage");
+    expect(
+      classifyPage(PLAIN, `${ORIGIN}/blog/index.html`).pageType.label
+    ).not.toBe("homepage");
   });
 
   test("every other index, default and home document stays out: they did not clear 0.90", () => {
@@ -1246,6 +1402,8 @@ describe("the root document is a home page (#902)", () => {
 
   test("a bare locale root stays as it is", () => {
     expect(isRootPath(`${ORIGIN}/en/`)).toBe(false);
-    expect(classifyPage(PLAIN, `${ORIGIN}/en/`).pageType.label).not.toBe("homepage");
+    expect(classifyPage(PLAIN, `${ORIGIN}/en/`).pageType.label).not.toBe(
+      "homepage"
+    );
   });
 });

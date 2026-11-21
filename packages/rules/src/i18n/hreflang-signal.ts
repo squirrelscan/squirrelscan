@@ -5,8 +5,9 @@
 
 import type { HreflangAlternate } from "@squirrelscan/core-contracts";
 
-import { noindexSource, type NoindexSource } from "../shared/noindex";
 import type { ParsedPage } from "../types";
+
+import { noindexSource, type NoindexSource } from "../shared/noindex";
 
 export interface HreflangPageSignal {
   /** The page's hreflang alternates, hrefs absolute, in document order. */
@@ -21,7 +22,7 @@ export interface HreflangPageSignal {
 export function buildHreflangSignal(
   parsed: ParsedPage | null | undefined,
   headers: Record<string, string> | undefined,
-  pageUrl: string,
+  pageUrl: string
 ): HreflangPageSignal {
   const rawCanonical = parsed?.meta?.canonical?.trim() ?? "";
   let canonical: string | null = null;

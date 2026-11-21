@@ -8,6 +8,7 @@
 // See plans/technology-version-security.md for the full build sequence.
 
 import type { SoftwareAdvisory } from "@squirrelscan/core-contracts";
+
 import type { DetectedTechnology } from "../types";
 
 export type { SoftwareAdvisory };
@@ -20,7 +21,7 @@ export type { SoftwareAdvisory };
  * `SoftwareAdvisory` records. Detections without a resolved version are skipped.
  */
 export function checkVersionAdvisories(
-  _detected: DetectedTechnology[],
+  _detected: DetectedTechnology[]
 ): SoftwareAdvisory[] {
   return [];
 }

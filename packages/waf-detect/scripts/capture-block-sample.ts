@@ -20,7 +20,10 @@ export const FETCH_TIMEOUT_MS = 15_000;
 export const USER_AGENT =
   "squirrelscan-capture/1.0 (block-sample capture; sanitised before commit)";
 
-export type FetchImpl = (input: string, init?: RequestInit) => Promise<Response>;
+export type FetchImpl = (
+  input: string,
+  init?: RequestInit
+) => Promise<Response>;
 
 export interface Redactions {
   cookies: number;
@@ -68,13 +71,15 @@ const REQUEST_ID_HEADERS = new Set([
   "x-timer",
 ]);
 
-const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const UUID =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const HEX_RUN_20 = /\b[0-9a-f]{20,}\b/gi;
 const HEX_RUN_16 = /\b[0-9a-f]{16,}\b/gi;
 const IPV4 = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 // Any *.netlify.app origin, not only the captured host: a block page can name its
 // own origin. The whole dotted name is taken so "a.netlify.app.evil.test" leaves nothing.
-const NETLIFY_ORIGIN = /(?<![\w-])(?:[a-z0-9-]+\.)+netlify\.app(?:\.[a-z0-9-]+)*(?![\w-])/gi;
+const NETLIFY_ORIGIN =
+  /(?<![\w-])(?:[a-z0-9-]+\.)+netlify\.app(?:\.[a-z0-9-]+)*(?![\w-])/gi;
 // Needs "::" or a full eight groups, and no word or colon neighbour, so times
 // (12:30:45) and CSS (a::before) are left alone.
 const IPV6 =
@@ -84,15 +89,18 @@ const TOKEN_WORDS = "(?:token|csrf|session|nonce|key)";
 // query-style and attribute pairs: token=abc, nonce="abc", data-csrf='abc'
 const TOKEN_PAIR = new RegExp(
   `(\\b[\\w-]*${TOKEN_WORDS}[\\w-]*\\s*=\\s*)(["']?)([^"'&\\s<>;]+)\\2`,
-  "gi",
+  "gi"
 );
 // <meta name="csrf-token" content="abc"> and <input name="csrf" value="abc">
 const TOKEN_NAMED_FIELD = new RegExp(
   `(name=["'][^"']*${TOKEN_WORDS}[^"']*["'][^>]*?\\b(?:content|value)=["'])([^"']+)`,
-  "gi",
+  "gi"
 );
 // "csrfToken":"abc" in inline JSON
-const TOKEN_JSON = new RegExp(`("[\\w-]*${TOKEN_WORDS}[\\w-]*"\\s*:\\s*")([^"]+)`, "gi");
+const TOKEN_JSON = new RegExp(
+  `("[\\w-]*${TOKEN_WORDS}[\\w-]*"\\s*:\\s*")([^"]+)`,
+  "gi"
+);
 
 const emptyRedactions = (): Redactions => ({
   cookies: 0,
@@ -113,7 +121,9 @@ export function parseCaptureUrl(raw: string): URL {
     throw new Error("invalid URL");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error(`unsupported protocol ${url.protocol}, only http and https are allowed`);
+    throw new Error(
+      `unsupported protocol ${url.protocol}, only http and https are allowed`
+    );
   }
   if (url.username !== "" || url.password !== "") {
     throw new Error("URL must not contain embedded credentials");
@@ -124,7 +134,8 @@ export function parseCaptureUrl(raw: string): URL {
 /** Same path and query shape on example.com, query values dropped. */
 export function sanitiseSource(url: URL): string {
   const out = new URL(`${url.protocol}//example.com${url.pathname}`);
-  for (const key of url.searchParams.keys()) out.searchParams.append(key, "REDACTED");
+  for (const key of url.searchParams.keys())
+    out.searchParams.append(key, "REDACTED");
   return out.toString();
 }
 
@@ -133,7 +144,12 @@ interface Ctx {
   counts: Redactions;
 }
 
-function sub(text: string, re: RegExp, repl: string, onHit: () => void): string {
+function sub(
+  text: string,
+  re: RegExp,
+  repl: string,
+  onHit: () => void
+): string {
   return text.replace(re, () => {
     onHit();
     return repl;
@@ -143,7 +159,8 @@ function sub(text: string, re: RegExp, repl: string, onHit: () => void): string 
 /** Host, IP and id scrubbing shared by header values and the body. */
 function scrubCommon(text: string, ctx: Ctx): string {
   let out = text;
-  if (ctx.hostRe) out = sub(out, ctx.hostRe, "example.com", () => ctx.counts.hosts++);
+  if (ctx.hostRe)
+    out = sub(out, ctx.hostRe, "example.com", () => ctx.counts.hosts++);
   out = sub(out, NETLIFY_ORIGIN, "example.com", () => ctx.counts.hosts++);
   out = sub(out, UUID, "REDACTED-ID", () => ctx.counts.requestIds++);
   out = sub(out, HEX_RUN_20, "REDACTED-ID", () => ctx.counts.requestIds++);
@@ -176,7 +193,9 @@ function makeCtx(host: string): Ctx {
   const bare = host.toLowerCase().replace(/^www\./, "");
   // Already the placeholder host: nothing to hide, and counting it would be noise.
   const hostRe =
-    bare === "example.com" ? null : new RegExp(`(?<![\\w-])(?:www\\.)?${escapeRegExp(bare)}`, "gi");
+    bare === "example.com"
+      ? null
+      : new RegExp(`(?<![\\w-])(?:www\\.)?${escapeRegExp(bare)}`, "gi");
   return { hostRe, counts: emptyRedactions() };
 }
 
@@ -195,7 +214,11 @@ function scrubLocation(value: string, ctx: Ctx): string {
     return "REDACTED-HOST";
   }
   if (url.hostname === "") return value;
-  if (url.hostname !== "example.com" || url.username !== "" || url.password !== "") {
+  if (
+    url.hostname !== "example.com" ||
+    url.username !== "" ||
+    url.password !== ""
+  ) {
     ctx.counts.hosts++;
   }
   url.hostname = "example.com";
@@ -204,7 +227,10 @@ function scrubLocation(value: string, ctx: Ctx): string {
   return url.toString();
 }
 
-export function sanitiseHeaders(headers: Headers, ctx: Ctx): Record<string, string> {
+export function sanitiseHeaders(
+  headers: Headers,
+  ctx: Ctx
+): Record<string, string> {
   const out: Record<string, string> = {};
   const setCookies = headers.getSetCookie();
   ctx.counts.cookies += setCookies.length;
@@ -271,7 +297,7 @@ export function sanitiseSample(input: SanitiseInput): CapturedSample {
 /** Read at most `cap` bytes; a bigger body is cut and the rest never downloaded. */
 export async function readCappedBody(
   res: Response,
-  cap: number,
+  cap: number
 ): Promise<{ text: string; truncated: boolean }> {
   if (!res.body) return { text: "", truncated: false };
   const reader = res.body.getReader();
@@ -308,14 +334,17 @@ export interface CaptureOptions {
   maxBytes?: number;
 }
 
-export async function captureBlockSample(opts: CaptureOptions): Promise<CapturedSample> {
+export async function captureBlockSample(
+  opts: CaptureOptions
+): Promise<CapturedSample> {
   // Validate before any network call.
   const url = parseCaptureUrl(opts.url);
   const name = opts.name ?? "";
   if (name !== "" && !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
     throw new Error("name must be a lower-case slug (a-z, 0-9, hyphen)");
   }
-  const fetchImpl: FetchImpl = opts.fetchImpl ?? ((i, init) => globalThis.fetch(i, init));
+  const fetchImpl: FetchImpl =
+    opts.fetchImpl ?? ((i, init) => globalThis.fetch(i, init));
   const now = opts.now ?? (() => new Date());
 
   const res = await fetchImpl(url.toString(), {
@@ -324,9 +353,15 @@ export async function captureBlockSample(opts: CaptureOptions): Promise<Captured
     redirect: "manual",
     credentials: "omit",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+    headers: {
+      "user-agent": USER_AGENT,
+      accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+    },
   });
-  const { text, truncated } = await readCappedBody(res, opts.maxBytes ?? MAX_BODY_BYTES);
+  const { text, truncated } = await readCappedBody(
+    res,
+    opts.maxBytes ?? MAX_BODY_BYTES
+  );
   const capturedAt = now().toISOString().slice(0, 10);
   return sanitiseSample({
     url,
@@ -343,14 +378,16 @@ export async function captureBlockSample(opts: CaptureOptions): Promise<Captured
 export async function writeSample(
   path: string,
   sample: CapturedSample,
-  force: boolean,
+  force: boolean
 ): Promise<void> {
   if (!force && existsSync(path)) {
     throw new Error(`${path} already exists, pass --force to overwrite`);
   }
   await mkdir(dirname(path), { recursive: true });
   // "wx" also closes the race between the check above and the write.
-  await writeFile(path, `${JSON.stringify(sample, null, 2)}\n`, { flag: force ? "w" : "wx" });
+  await writeFile(path, `${JSON.stringify(sample, null, 2)}\n`, {
+    flag: force ? "w" : "wx",
+  });
 }
 
 const arg = (n: string, d: string) => {
@@ -363,14 +400,19 @@ async function main(): Promise<void> {
   const out = arg("out", "");
   if (!url || !out) {
     console.error(
-      "usage: capture-block-sample.ts --url <URL> --out <FILE> [--name <slug>] [--force]",
+      "usage: capture-block-sample.ts --url <URL> --out <FILE> [--name <slug>] [--force]"
     );
     process.exit(2);
   }
   try {
-    const sample = await captureBlockSample({ url, name: arg("name", "") || undefined });
+    const sample = await captureBlockSample({
+      url,
+      name: arg("name", "") || undefined,
+    });
     await writeSample(out, sample, process.argv.includes("--force"));
-    console.log(`wrote ${out} (status ${sample.status}, truncated ${sample.truncated})`);
+    console.log(
+      `wrote ${out} (status ${sample.status}, truncated ${sample.truncated})`
+    );
     console.log(`redactions: ${JSON.stringify(sample.redactions)}`);
     console.log("review the file by hand before committing it");
   } catch (e) {

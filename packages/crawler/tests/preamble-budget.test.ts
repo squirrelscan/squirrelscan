@@ -24,6 +24,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
+import type { Crawler, CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
 import { createCrawler, preambleBudgetMs } from "../src/core/crawler";
 import { BUDGET_EXHAUSTED_ERROR } from "../src/deadline";
 import {
@@ -33,7 +35,6 @@ import {
   sitemapWalkWindowMs,
 } from "../src/sitemaps";
 import { WELL_KNOWN_PATHS } from "../src/well-known";
-import type { Crawler, CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 // Mirrors SITEMAP_FETCH_CONCURRENCY in src/sitemaps.ts (not exported).
 const SITEMAP_FETCH_CONCURRENCY = 5;
@@ -85,10 +86,12 @@ function stalledBodyResponse() {
   return new Response(
     new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode("<!doctype html><html><body>"));
+        controller.enqueue(
+          new TextEncoder().encode("<!doctype html><html><body>")
+        );
       },
     }),
-    { headers: { "content-type": "text/html" } },
+    { headers: { "content-type": "text/html" } }
   );
 }
 
@@ -137,8 +140,8 @@ async function crawl(origin: string, config = CONFIG): Promise<CrawlOutcome> {
         if (event.type === "page:fetched" && firstPageAfterMs === undefined) {
           firstPageAfterMs = Date.now() - startedAt;
         }
-      }),
-    ),
+      })
+    )
   );
 
   try {
@@ -167,7 +170,9 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     // Bounded by the root-probe budget PLUS the sitemap walk's own progress
     // window (one dead chunk, since this origin completes nothing), not by the
     // sum of every probe's deadline. Still ~50x under the ~180s that sum costs.
-    expect(out.firstPageAfterMs!).toBeLessThan((BUDGET_MS + WALK_WINDOW_MS) * 2);
+    expect(out.firstPageAfterMs!).toBeLessThan(
+      (BUDGET_MS + WALK_WINDOW_MS) * 2
+    );
   }, 30_000);
 
   test("stages after the budget is spent are skipped, not merely deadlined", async () => {
@@ -203,14 +208,15 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
     // RSL, which have no per-request marker, write no row at all, which their
     // rules read as "not checked" (#409). Storing their empty shape instead
     // made the rules report "No /llms.txt found" for a file never requested.
-    const [robots, llms, markdown, wellKnown, agentAccess, rsl] = await Promise.all([
-      read(out.crawler.storage.getRobotsTxt(out.crawlId)),
-      read(out.crawler.storage.getLlmsTxt(out.crawlId)),
-      read(out.crawler.storage.getMarkdownProbe(out.crawlId)),
-      read(out.crawler.storage.getWellKnownProbe(out.crawlId)),
-      read(out.crawler.storage.getAgentAccess(out.crawlId)),
-      read(out.crawler.storage.getRsl(out.crawlId)),
-    ]);
+    const [robots, llms, markdown, wellKnown, agentAccess, rsl] =
+      await Promise.all([
+        read(out.crawler.storage.getRobotsTxt(out.crawlId)),
+        read(out.crawler.storage.getLlmsTxt(out.crawlId)),
+        read(out.crawler.storage.getMarkdownProbe(out.crawlId)),
+        read(out.crawler.storage.getWellKnownProbe(out.crawlId)),
+        read(out.crawler.storage.getAgentAccess(out.crawlId)),
+        read(out.crawler.storage.getRsl(out.crawlId)),
+      ]);
 
     expect(robots).not.toBeNull();
     expect(robots!.exists).toBe(false);
@@ -253,13 +259,15 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
           });
         }
         if (path === "/llms.txt") {
-          return new Response("# Site\n", { headers: { "content-type": "text/plain" } });
+          return new Response("# Site\n", {
+            headers: { "content-type": "text/plain" },
+          });
         }
         if (path === "/sitemap.xml") {
           return new Response(
             `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` +
               `<url><loc>http://localhost:${server.port}/one</loc></url></urlset>`,
-            { headers: { "content-type": "application/xml" } },
+            { headers: { "content-type": "application/xml" } }
           );
         }
         if (REAL_PAGES.has(path)) return htmlResponse();
@@ -276,7 +284,9 @@ describe("crawl preamble budget (squirrelscan/repo#1733)", () => {
 
     const robots = await read(out.crawler.storage.getRobotsTxt(out.crawlId));
     const llms = await read(out.crawler.storage.getLlmsTxt(out.crawlId));
-    const wellKnown = await read(out.crawler.storage.getWellKnownProbe(out.crawlId));
+    const wellKnown = await read(
+      out.crawler.storage.getWellKnownProbe(out.crawlId)
+    );
     const sitemaps = await read(out.crawler.storage.getSitemaps(out.crawlId));
 
     expect(robots!.exists).toBe(true);
@@ -306,7 +316,8 @@ function robotsDeclaring(origin: string, count: number) {
   };
 }
 
-const EMPTY_SITEMAP = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>';
+const EMPTY_SITEMAP =
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>';
 
 describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
   test("a slow but HEALTHY walk runs to completion and loses no sitemaps", async () => {
@@ -322,7 +333,9 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       async fetch() {
         requests++;
         await Bun.sleep(RESPONSE_MS);
-        return new Response(EMPTY_SITEMAP, { headers: { "content-type": "application/xml" } });
+        return new Response(EMPTY_SITEMAP, {
+          headers: { "content-type": "application/xml" },
+        });
       },
     });
     servers.push(server);
@@ -332,7 +345,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
         maxUrls: 10_000,
         walkWindowMs: WALK_WINDOW_MS,
-      }),
+      })
     );
 
     // Every declared sitemap plus the common locations was actually fetched:
@@ -365,7 +378,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       discoverSitemaps(origin, robotsDeclaring(origin, 60), "squirrel-test", {
         maxUrls: 10_000,
         walkWindowMs: STALL_WINDOW_MS,
-      }),
+      })
     );
     const elapsed = Date.now() - startedAt;
 
@@ -380,7 +393,9 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
     expect(result.truncated).toBe(true);
     expect(result.failed.length).toBeGreaterThanOrEqual(60);
     expect(
-      result.failed.some((failure) => failure.error === SITEMAP_NOT_REACHED_ERROR),
+      result.failed.some(
+        (failure) => failure.error === SITEMAP_NOT_REACHED_ERROR
+      )
     ).toBe(true);
   }, 30_000);
 
@@ -411,7 +426,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
         walkWindowMs: STALL_WINDOW_MS,
         // Generous hard stop: the window, not the cap, is what is under test.
         walkTotalMs: STALL_WINDOW_MS * 40,
-      }),
+      })
     );
 
     // It kept going well past the first chunk. Without the fix this stops at 5.
@@ -432,7 +447,9 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
       fetch() {
         // One in five completes; the rest never finish their body.
         if (served++ % SITEMAP_FETCH_CONCURRENCY === 0) {
-          return new Response(EMPTY_SITEMAP, { headers: { "content-type": "application/xml" } });
+          return new Response(EMPTY_SITEMAP, {
+            headers: { "content-type": "application/xml" },
+          });
         }
         return stalledBodyResponse();
       },
@@ -446,7 +463,7 @@ describe("sitemap walk progress window (squirrelscan/repo#1733)", () => {
         maxUrls: 10_000,
         walkWindowMs: STALL_WINDOW_MS,
         walkTotalMs: STALL_WINDOW_MS * 3,
-      }),
+      })
     );
     const elapsed = Date.now() - startedAt;
 
@@ -468,7 +485,11 @@ describe("sitemapWalkWindowMs / walk hard stop", () => {
   test("a hard stop shorter than the window is honored, not widened to it", async () => {
     // Silently raising a configured cap to the window length is how a bound
     // stops being one. The nearer of the two wins.
-    const server: ReturnType<typeof Bun.serve> = Bun.serve({ port: 0, idleTimeout: 0, fetch: () => stalledBodyResponse() });
+    const server: ReturnType<typeof Bun.serve> = Bun.serve({
+      port: 0,
+      idleTimeout: 0,
+      fetch: () => stalledBodyResponse(),
+    });
     servers.push(server);
     const origin = `http://localhost:${server.port}`;
 
@@ -478,7 +499,7 @@ describe("sitemapWalkWindowMs / walk hard stop", () => {
         maxUrls: 10_000,
         walkWindowMs: 2_000,
         walkTotalMs: 200,
-      }),
+      })
     );
 
     expect(Date.now() - startedAt).toBeLessThan(1_500);

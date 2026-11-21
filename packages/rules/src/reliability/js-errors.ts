@@ -6,8 +6,6 @@
 // message and source file. A local or --http audit has no render, so the rule is
 // declared cloud and lands on the "cloud checks that didn't run" list there.
 
-import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import type {
   CheckItem,
   CheckResult,
@@ -16,13 +14,17 @@ import type {
   RenderRuntimeError,
 } from "@squirrelscan/core-contracts";
 
+import { RUNTIME_NOT_RECORDED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { UNREAD_PAGE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
+
 import {
   humanizeCloudSkip,
   readCloudResult,
   type CloudSkipReason,
 } from "../cloud";
 import { registrableDomain } from "../content/dev-leakage";
-import type { Rule, RuleContext, RuleResult } from "../types";
 
 /** Sample pages listed per finding; the total rides on `pageCount`. */
 const MAX_SAMPLE_PAGES = 10;
@@ -392,7 +394,9 @@ export const jsErrorsRule: Rule = {
     const unchecked = unmeasured + unrendered;
     const challengeNote = `${challenged} page(s) were a WAF or bot challenge and were left out`;
     if (unchecked > 0) {
-      const notes = [`${unchecked} page(s) had no runtime data from the renderer`];
+      const notes = [
+        `${unchecked} page(s) had no runtime data from the renderer`,
+      ];
       if (challenged > 0) notes.push(challengeNote);
       checks.push({
         name: "unchecked-pages",

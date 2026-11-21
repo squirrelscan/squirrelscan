@@ -2,9 +2,8 @@
 // when a byte cap or the time budget cut it short, and stays inside its time
 // budget on a hostile 5 MB body.
 
-import { describe, expect, test } from "bun:test";
-
 import { SERVICE_LIMITS } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
 
 import {
   buildTechInputs,
@@ -26,7 +25,10 @@ function filler(bytes: number): string {
   return unit.repeat(Math.ceil(bytes / unit.length)).slice(0, bytes);
 }
 
-function inputsFor(scripts: { url: string; content: string }[], limits: TechBundleLimits) {
+function inputsFor(
+  scripts: { url: string; content: string }[],
+  limits: TechBundleLimits
+) {
   return buildTechInputs(
     [
       {
@@ -36,7 +38,7 @@ function inputsFor(scripts: { url: string; content: string }[], limits: TechBund
       },
     ],
     scripts.map((s) => ({ ...s, sourcePages: [HOME] })),
-    limits,
+    limits
   );
 }
 
@@ -48,10 +50,10 @@ describe("#1387 the local scan reads bundles whole", () => {
     const section = detectReportTechnologiesMulti(
       inputsFor(
         [{ url: "https://example.com/a.js", content: code }],
-        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
       ),
       undefined,
-      LOCAL_TECH_DETECT_OPTIONS,
+      LOCAL_TECH_DETECT_OPTIONS
     );
     expect(section.items.map((t) => t.id)).toContain("supabase");
     expect(section.truncated).toBeUndefined();
@@ -63,10 +65,10 @@ describe("#1387 the local scan reads bundles whole", () => {
     const section = detectReportTechnologiesMulti(
       inputsFor(
         [{ url: "https://example.com/a.js", content: code }],
-        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
       ),
       undefined,
-      LOCAL_TECH_DETECT_OPTIONS,
+      LOCAL_TECH_DETECT_OPTIONS
     );
     expect(section.items.map((t) => t.id)).toContain("supabase");
     expect(section.truncated).toBeUndefined();
@@ -86,18 +88,25 @@ describe("#1387 callers that do not opt in keep the package cap", () => {
     const code = `${filler(1.5 * MB)}${CALL}`;
     const inputs = inputsFor(
       [{ url: "https://example.com/a.js", content: code }],
-      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
     );
-    expect(detectReportTechnologiesMulti(inputs).items.map((t) => t.id)).not.toContain("supabase");
     expect(
-      detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS).items.map(
-        (t) => t.id,
-      ),
+      detectReportTechnologiesMulti(inputs).items.map((t) => t.id)
+    ).not.toContain("supabase");
+    expect(
+      detectReportTechnologiesMulti(
+        inputs,
+        undefined,
+        LOCAL_TECH_DETECT_OPTIONS
+      ).items.map((t) => t.id)
     ).toContain("supabase");
   });
 
   test("the local options are the 16 MiB script limit and the 30 s page budget", () => {
-    expect(LOCAL_TECH_DETECT_OPTIONS).toEqual({ pageBudgetMs: 30_000, maxScriptChars: 16 * MB });
+    expect(LOCAL_TECH_DETECT_OPTIONS).toEqual({
+      pageBudgetMs: 30_000,
+      maxScriptChars: 16 * MB,
+    });
   });
 });
 
@@ -106,12 +115,15 @@ describe("#1387 the cloud result carries what the payload caps cut", () => {
     const code = `${filler(200 * 1024)}${CALL}${filler(100 * 1024)}`;
     const capped = inputsFor(
       [{ url: "https://example.com/a.js", content: code }],
-      DEFAULT_TECH_BUNDLE_LIMITS,
+      DEFAULT_TECH_BUNDLE_LIMITS
     );
-    expect(techInputTruncation(capped)).toEqual({ reasons: ["bundle-bytes"], scripts: 1 });
+    expect(techInputTruncation(capped)).toEqual({
+      reasons: ["bundle-bytes"],
+      scripts: 1,
+    });
     const whole = inputsFor(
       [{ url: "https://example.com/a.js", content: code }],
-      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
     );
     expect(techInputTruncation(whole)).toBeUndefined();
     expect(techInputTruncation(whole, ["time-budget"])).toEqual({
@@ -126,7 +138,10 @@ describe("#1387 the report says when detection was cut short", () => {
     // A call no vendor window picks up: plain padding between, the pair far past a 64 KB cap.
     const code = `${filler(200 * 1024)}${CALL}${filler(100 * 1024)}`;
     const section = detectReportTechnologiesMulti(
-      inputsFor([{ url: "https://example.com/a.js", content: code }], DEFAULT_TECH_BUNDLE_LIMITS),
+      inputsFor(
+        [{ url: "https://example.com/a.js", content: code }],
+        DEFAULT_TECH_BUNDLE_LIMITS
+      )
     );
     expect(section.truncated?.reasons).toContain("bundle-bytes");
     expect(section.truncated?.scripts).toBe(1);
@@ -138,7 +153,11 @@ describe("#1387 the report says when detection was cut short", () => {
       content: filler(100 * 1024),
     }));
     const section = detectReportTechnologiesMulti(
-      inputsFor(scripts, { bundleBytes: 200 * 1024, pageBytes: 250 * 1024, auditBytes: 8 * MB }),
+      inputsFor(scripts, {
+        bundleBytes: 200 * 1024,
+        pageBytes: 250 * 1024,
+        auditBytes: 8 * MB,
+      })
     );
     expect(section.truncated?.reasons).toContain("page-bytes");
     expect(section.truncated?.scripts).toBeGreaterThan(0);
@@ -150,7 +169,11 @@ describe("#1387 the report says when detection was cut short", () => {
       content: filler(100 * 1024),
     }));
     const section = detectReportTechnologiesMulti(
-      inputsFor(scripts, { bundleBytes: 200 * 1024, pageBytes: 8 * MB, auditBytes: 250 * 1024 }),
+      inputsFor(scripts, {
+        bundleBytes: 200 * 1024,
+        pageBytes: 8 * MB,
+        auditBytes: 250 * 1024,
+      })
     );
     expect(section.truncated?.reasons).toContain("audit-bytes");
   });
@@ -159,10 +182,10 @@ describe("#1387 the report says when detection was cut short", () => {
     const section = detectReportTechnologiesMulti(
       inputsFor(
         [{ url: "https://example.com/a.js", content: filler(10 * 1024) }],
-        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
       ),
       undefined,
-      { pageBudgetMs: -1 },
+      { pageBudgetMs: -1 }
     );
     expect(section.truncated?.reasons).toContain("time-budget");
   });
@@ -171,8 +194,8 @@ describe("#1387 the report says when detection was cut short", () => {
     const section = detectReportTechnologiesMulti(
       inputsFor(
         [{ url: "https://example.com/a.js", content: filler(10 * 1024) }],
-        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
-      ),
+        DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
+      )
     );
     expect(section.truncated).toBeUndefined();
   });
@@ -197,10 +220,14 @@ describe("#1387 a hostile 5 MB bundle", () => {
     expect(hostile.length).toBeGreaterThan(5 * MB);
     const inputs = inputsFor(
       [{ url: "https://example.com/a.js", content: hostile }],
-      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS,
+      DEFAULT_LOCAL_TECH_BUNDLE_LIMITS
     );
     const started = performance.now();
-    const section = detectReportTechnologiesMulti(inputs, undefined, LOCAL_TECH_DETECT_OPTIONS);
+    const section = detectReportTechnologiesMulti(
+      inputs,
+      undefined,
+      LOCAL_TECH_DETECT_OPTIONS
+    );
     const ms = performance.now() - started;
     // Linear work over 5 MB is a second or two; the page budget (30 s) is not the bound.
     expect(ms).toBeLessThan(8_000);

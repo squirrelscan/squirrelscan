@@ -3,8 +3,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { DEFAULT_RAMP_SUCCESSES } from "../src/host-backoff";
 
 const LATENCY_MS = 25;
@@ -20,14 +21,19 @@ afterEach(() => {
 
 function serve(robots: string) {
   const state = { inFlight: 0, peak: 0 };
-  const links = Array.from({ length: PAGES }, (_, i) => `<a href="/p${i}">p${i}</a>`).join("");
+  const links = Array.from(
+    { length: PAGES },
+    (_, i) => `<a href="/p${i}">p${i}</a>`
+  ).join("");
   const server = Bun.serve({
     port: 0,
     idleTimeout: 0,
     async fetch(req) {
       const path = new URL(req.url).pathname;
       if (path === "/robots.txt") {
-        return new Response(robots, { headers: { "content-type": "text/plain" } });
+        return new Response(robots, {
+          headers: { "content-type": "text/plain" },
+        });
       }
       state.inFlight += 1;
       state.peak = Math.max(state.peak, state.inFlight);
@@ -35,7 +41,7 @@ function serve(robots: string) {
       state.inFlight -= 1;
       return new Response(
         `<!doctype html><html><head><title>t</title></head><body>${path === "/" ? links : "x"}</body></html>`,
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html" } }
       );
     },
   });
@@ -73,7 +79,9 @@ describe("adaptive ramp-up in a real crawl (repo#1024)", () => {
     expect(flat.state.peak).toBe(CONFIGURED);
 
     const ramped = serve("");
-    const rampedOut = await crawl(ramped.origin, { maxPerHostConcurrency: CEILING });
+    const rampedOut = await crawl(ramped.origin, {
+      maxPerHostConcurrency: CEILING,
+    });
 
     expect(rampedOut.pages).toBe(flatOut.pages);
     expect(ramped.state.peak).toBeGreaterThan(CONFIGURED);

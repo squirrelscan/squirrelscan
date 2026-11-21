@@ -4,10 +4,8 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type {
-  CrawlMetadata,
-  ResourceSizeRecord,
-} from "../src/storage/types";
+import type { CrawlMetadata, ResourceSizeRecord } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -63,7 +61,11 @@ describe("getCachedResources", () => {
     const curId = await run(store.createCrawl(crawlMeta(3000)));
 
     await run(store.saveResourceSizes(oldId, [res({ sizeBytes: 100 })]));
-    await run(store.saveResourceSizes(newId, [res({ sizeBytes: 200, cacheControl: "max-age=60" })]));
+    await run(
+      store.saveResourceSizes(newId, [
+        res({ sizeBytes: 200, cacheControl: "max-age=60" }),
+      ])
+    );
     // The current crawl also has the resource — it must NOT be returned.
     await run(store.saveResourceSizes(curId, [res({ sizeBytes: 999 })]));
 

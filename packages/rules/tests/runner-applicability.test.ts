@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
-
 import type { SiteMetadata } from "@squirrelscan/core-contracts";
 
+import { afterEach, describe, expect, test } from "bun:test";
+
 import type { RuleNamespace } from "../src/loader";
-import { RuleRunner, type RulesConfig } from "../src/runner";
 import type { ParsedPage, Rule, SiteData } from "../src/types";
+
+import { RuleRunner, type RulesConfig } from "../src/runner";
 
 // A site-scope test rule gated to local-business sites only. Tracks whether
 // `run()` executed and what `ctx.siteMetadata` it observed.
@@ -101,7 +102,9 @@ describe("runner applicability gate (site rules)", () => {
 
     expect(ran).toBe(true);
     expect(observedMetadata?.isLocalBusiness).toBe(true);
-    expect(result.checks.some((c) => c.name === "ran" && c.status === "pass")).toBe(true);
+    expect(
+      result.checks.some((c) => c.name === "ran" && c.status === "pass")
+    ).toBe(true);
   });
 
   test("ignore_applicability forces the gated rule to run anyway", async () => {
@@ -127,7 +130,9 @@ describe("runner applicability gate (site rules)", () => {
   });
 
   test("low-confidence metadata → not gated, rule runs", async () => {
-    const runner = makeRunner(meta({ isLocalBusiness: false, confidence: "low" }));
+    const runner = makeRunner(
+      meta({ isLocalBusiness: false, confidence: "low" })
+    );
     const result = await runner.runSiteRules(makeSiteData());
 
     expect(ran).toBe(true);

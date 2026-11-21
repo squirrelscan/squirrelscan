@@ -2,7 +2,13 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-const SUPPORTED_IMAGE_EXTENSIONS = new Set(["gif", "jpeg", "jpg", "png", "webp"]);
+const SUPPORTED_IMAGE_EXTENSIONS = new Set([
+  "gif",
+  "jpeg",
+  "jpg",
+  "png",
+  "webp",
+]);
 const SUPPORTED_IMAGE_TYPES = new Set([
   "image/gif",
   "image/jpeg",
@@ -24,11 +30,13 @@ function imageFormatCheck(
   tag: "og:image" | "twitter:image",
   imageUrl: string,
   pageUrl: string,
-  declaredType?: string | null,
+  declaredType?: string | null
 ): CheckResult | null {
   const extension = imageExtension(imageUrl, pageUrl);
-  const contentType = declaredType?.split(";", 1)[0]?.trim().toLowerCase() || null;
-  const checkName = tag === "og:image" ? "og-image-format" : "twitter-image-format";
+  const contentType =
+    declaredType?.split(";", 1)[0]?.trim().toLowerCase() || null;
+  const checkName =
+    tag === "og:image" ? "og-image-format" : "twitter-image-format";
   const imageItem = [{ id: imageUrl, label: `${tag}: ${imageUrl}` }];
 
   if (extension === "svg" || contentType === "image/svg+xml") {
@@ -71,7 +79,8 @@ export const ogImageSizeRule: Rule = {
   meta: {
     id: "social/og-image-size",
     name: "OG Image Size",
-    description: "Checks social images use a supported format and recommended dimensions",
+    description:
+      "Checks social images use a supported format and recommended dimensions",
     solution:
       "Use a PNG or JPEG social image at least 1200x630 pixels for reliable display on Facebook and LinkedIn. SVG may not render, while smaller images may appear cropped or low quality. Use a 1.91:1 aspect ratio, keep the file under 8MB, and test with Facebook Sharing Debugger. Consider creating dedicated social images for key pages.",
     category: "social",
@@ -92,7 +101,7 @@ export const ogImageSizeRule: Rule = {
     const ogImageWidth = doc.querySelector('meta[property="og:image:width"]');
     const ogImageHeight = doc.querySelector('meta[property="og:image:height"]');
     const twitterImage = doc.querySelector(
-      'meta[name="twitter:image"], meta[property="twitter:image"]',
+      'meta[name="twitter:image"], meta[property="twitter:image"]'
     );
 
     if (!ogImage) {
@@ -112,7 +121,10 @@ export const ogImageSizeRule: Rule = {
 
       // Check dimensions if provided
       const width = parseInt(ogImageWidth?.getAttribute("content") || "0", 10);
-      const height = parseInt(ogImageHeight?.getAttribute("content") || "0", 10);
+      const height = parseInt(
+        ogImageHeight?.getAttribute("content") || "0",
+        10
+      );
 
       // Always include which image we're talking about — a bare page-level
       // warning leaves the user hunting for the offending file
@@ -154,7 +166,7 @@ export const ogImageSizeRule: Rule = {
           "og:image",
           imageUrl,
           ctx.page.url,
-          ogImageType?.getAttribute("content"),
+          ogImageType?.getAttribute("content")
         );
         if (format) checks.push(format);
       }
@@ -162,7 +174,11 @@ export const ogImageSizeRule: Rule = {
 
     const twitterImageUrl = twitterImage?.getAttribute("content");
     if (twitterImageUrl) {
-      const format = imageFormatCheck("twitter:image", twitterImageUrl, ctx.page.url);
+      const format = imageFormatCheck(
+        "twitter:image",
+        twitterImageUrl,
+        ctx.page.url
+      );
       if (format) checks.push(format);
     }
 

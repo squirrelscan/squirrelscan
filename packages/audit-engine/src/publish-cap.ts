@@ -54,6 +54,9 @@ import type {
   ResolutionSignal,
   RuleMetaLite,
 } from "@squirrelscan/core-contracts";
+import type { PageMap } from "@squirrelscan/core-contracts/page-map";
+import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
+
 import {
   classifyRuleOutcome,
   isCoverageGapCheck,
@@ -61,12 +64,13 @@ import {
   LINK_TARGET_SET_RULES,
   NOT_CHECKED_SKIP_REASONS,
 } from "@squirrelscan/core-contracts";
-import type { CompactResolutionSignal } from "@squirrelscan/core-contracts/resolution";
 import { clampItemString } from "@squirrelscan/core-contracts/clamp";
-import { alignItemSources } from "@squirrelscan/core-contracts/item-sources";
-import { ENTITY_MAP_PUBLISH_LIMITS, type EntityMap } from "@squirrelscan/core-contracts/entity-map";
-import type { PageMap } from "@squirrelscan/core-contracts/page-map";
+import {
+  ENTITY_MAP_PUBLISH_LIMITS,
+  type EntityMap,
+} from "@squirrelscan/core-contracts/entity-map";
 import { projectEntityMap } from "@squirrelscan/core-contracts/entity-map-project";
+import { alignItemSources } from "@squirrelscan/core-contracts/item-sources";
 import {
   PUBLISHED_REPORT_MAX_BYTES,
   PUBLISH_LIMITS,
@@ -74,6 +78,8 @@ import {
   REPORT_LIMITS,
   type ReportCapTier,
 } from "@squirrelscan/core-contracts/limits";
+import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
+import { projectPageMap } from "@squirrelscan/report/page-map-publish";
 import {
   clampCheckDetails,
   clampCheckItemIds,
@@ -86,15 +92,16 @@ import {
   stampChecksTruncated,
   unfoldAggregateCheck,
 } from "@squirrelscan/rules/fold";
-import { checkAffectedPages } from "@squirrelscan/report/affected-pages";
-import { projectPageMap } from "@squirrelscan/report/page-map-publish";
 import {
   buildPublishResolution,
   PAGE_STATUSES_KEY_BYTES,
   RESOLUTION_SIGNAL_KEY_BYTES,
 } from "@squirrelscan/rules/resolution";
 import { byteLength } from "@squirrelscan/utils/bytes";
-import { RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS } from "@squirrelscan/utils/constants";
+import {
+  RULE_ID_ROBOTS_TXT,
+  RULE_ID_SITEMAP_EXISTS,
+} from "@squirrelscan/utils/constants";
 import { encodeLinkTargetSet } from "@squirrelscan/utils/link-target-set";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
@@ -114,11 +121,17 @@ export type CappableRuleMeta = Pick<
  * `@squirrelscan/report`), so no report carries a copy of them. `solution` is
  * never set by the capper; it is on the type for the meta that join produces.
  */
-export type CappedRuleMeta = CappableRuleMeta & { description: string; solution?: string };
+export type CappedRuleMeta = CappableRuleMeta & {
+  description: string;
+  solution?: string;
+};
 
 /** What the capper reads off a report. Both producers' report types satisfy it. */
 export interface CappableReport {
-  ruleResults: Record<string, { meta: CappableRuleMeta; checks: CheckResult[] }>;
+  ruleResults: Record<
+    string,
+    { meta: CappableRuleMeta; checks: CheckResult[] }
+  >;
   siteChecks?: CheckResult[] | null;
   pages?: ReadonlyArray<{ url?: unknown; statusCode?: unknown }> | null;
   pageStatuses?: Array<{ url: string; status: number }> | null;
@@ -207,13 +220,13 @@ export class PublishedReportTooLargeError extends Error {
     readonly budgetBytes: number,
     readonly largestSections: Record<string, number>,
     readonly part: "skeleton" | "body" = "skeleton",
-    context: { tier?: number; pages?: number } = {},
+    context: { tier?: number; pages?: number } = {}
   ) {
     super(
       `Published report ${part} is ${bytes} bytes, over its ${budgetBytes}-byte budget ` +
         `(largest: ${Object.entries(largestSections)
           .map(([k, v]) => `${k} ${v}`)
-          .join(", ")})`,
+          .join(", ")})`
     );
     this.name = "PublishedReportTooLargeError";
     this.tier = context.tier ?? 0;
@@ -263,26 +276,33 @@ function listsPartially(check: CheckResult): boolean {
  * back.
  */
 function buildLinkTargetSets(
-  ruleResults: Record<string, { checks: CheckResult[] }>,
+  ruleResults: Record<string, { checks: CheckResult[] }>
 ): Record<string, LinkTargetSets> {
   const out: Record<string, LinkTargetSets> = {};
   for (const [ruleId, rows] of Object.entries(LINK_TARGET_SET_RULES)) {
     const checks = ruleResults[ruleId]?.checks;
     if (!Array.isArray(checks)) continue;
     // The broken links are in two checks (#1772): page content, and site-wide chrome.
-    const main = checks.filter((c) => c.name === rows.broken || c.name === rows.sitewide);
+    const main = checks.filter(
+      (c) => c.name === rows.broken || c.name === rows.sitewide
+    );
     const ran = main.some(
       (c) =>
         (c.status === "pass" || c.status === "fail" || c.status === "warn") &&
         c.provenance !== "carried" &&
-        c.provenance !== "unrendered",
+        c.provenance !== "unrendered"
     );
     if (!ran) continue;
-    const broken = main.filter((c) => c.status === "fail" || c.status === "warn");
+    const broken = main.filter(
+      (c) => c.status === "fail" || c.status === "warn"
+    );
     const unverified = checks.filter((c) => rows.unverified.includes(c.name));
-    const ids = (list: CheckResult[]) => list.flatMap((c) => (c.items ?? []).map((item) => item.id));
+    const ids = (list: CheckResult[]) =>
+      list.flatMap((c) => (c.items ?? []).map((item) => item.id));
     out[ruleId] = {
-      broken: encodeLinkTargetSet(ids(broken), { partial: broken.some(listsPartially) }),
+      broken: encodeLinkTargetSet(ids(broken), {
+        partial: broken.some(listsPartially),
+      }),
       unverified: encodeLinkTargetSet(ids(unverified), {
         partial: unverified.some(listsPartially),
       }),
@@ -301,7 +321,11 @@ function buildLinkTargetSets(
 function isSkipGap(check: CheckResult): boolean {
   if (check.status !== "skipped") return false;
   const outcome = classifyRuleOutcome(check);
-  return outcome === "coverage_gap" || outcome === "timed_out" || outcome === "errored";
+  return (
+    outcome === "coverage_gap" ||
+    outcome === "timed_out" ||
+    outcome === "errored"
+  );
 }
 
 /**
@@ -320,7 +344,10 @@ function isSkipGap(check: CheckResult): boolean {
  * than its `pagesTruncated`), the counts are a floor, same as a rescore of it.
  */
 export function buildCheckTallies(
-  ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
+  ruleResults: Record<
+    string,
+    { meta: { severity: string }; checks: CheckResult[] }
+  >
 ): CheckTallies {
   const out: CheckTallies = {};
   for (const ruleId of Object.keys(ruleResults).sort()) {
@@ -398,7 +425,11 @@ function rulePageCount(classes: Iterable<CheckResult[]>): number | undefined {
       // An input aggregate that was itself already sampled hides pages this
       // union cannot see: no exact count, so none is published.
       const truncated = check.details?.pagesTruncated;
-      if (typeof truncated === "number" && truncated > (check.pages?.length ?? 0)) return undefined;
+      if (
+        typeof truncated === "number" &&
+        truncated > (check.pages?.length ?? 0)
+      )
+        return undefined;
       if (check.pageUrl) pages.add(check.pageUrl);
       for (const page of check.pages ?? []) pages.add(page);
     }
@@ -428,7 +459,10 @@ export function statusRank(status: string): number {
 }
 
 /** Rules whose site checks the critical-penalty scorer reads by name. */
-const PINNED_RULES = new Set<string>([RULE_ID_ROBOTS_TXT, RULE_ID_SITEMAP_EXISTS]);
+const PINNED_RULES = new Set<string>([
+  RULE_ID_ROBOTS_TXT,
+  RULE_ID_SITEMAP_EXISTS,
+]);
 
 /** One entry of a rule's published checks, folded once, sampled per level. */
 interface ClassUnit {
@@ -449,9 +483,16 @@ function unitOf(
   check: CheckResult,
   order: number,
   affected: number = affectedPageCount(check),
-  key?: string,
+  key?: string
 ): ClassUnit {
-  return { ruleId, check, order, size: occurrencesOf(check), affected, ...(key !== undefined ? { key } : {}) };
+  return {
+    ruleId,
+    check,
+    order,
+    size: occurrencesOf(check),
+    affected,
+    ...(key !== undefined ? { key } : {}),
+  };
 }
 
 interface FoldedRule {
@@ -469,9 +510,11 @@ function occurrencesOf(check: CheckResult): number {
   const occurrences = check.details?.occurrences;
   const pages = check.details?.pagesTruncated;
   const n = Math.max(
-    typeof occurrences === "number" && Number.isFinite(occurrences) ? occurrences : 1,
+    typeof occurrences === "number" && Number.isFinite(occurrences)
+      ? occurrences
+      : 1,
     typeof pages === "number" && Number.isFinite(pages) ? pages : 1,
-    check.pages?.length ?? 1,
+    check.pages?.length ?? 1
   );
   return Math.max(1, Math.floor(n));
 }
@@ -485,12 +528,17 @@ function occurrencesOf(check: CheckResult): number {
 function isNotCheckedUnit(unit: ClassUnit): boolean {
   const { status, skipReason } = unit.check;
   if (isCoverageGapCheck(unit.check) || isSkipGap(unit.check)) return true;
-  return status === "skipped" && skipReason !== undefined && NOT_CHECKED_SKIP_REASONS.has(skipReason);
+  return (
+    status === "skipped" &&
+    skipReason !== undefined &&
+    NOT_CHECKED_SKIP_REASONS.has(skipReason)
+  );
 }
 
 /** Priority order for any cut: status, then size, then a stable identity. */
 function compareUnits(a: ClassUnit, b: ClassUnit): number {
-  const pinned = Number(PINNED_RULES.has(b.ruleId)) - Number(PINNED_RULES.has(a.ruleId));
+  const pinned =
+    Number(PINNED_RULES.has(b.ruleId)) - Number(PINNED_RULES.has(a.ruleId));
   if (pinned !== 0) return pinned;
   const notChecked = Number(isNotCheckedUnit(b)) - Number(isNotCheckedUnit(a));
   if (notChecked !== 0) return notChecked;
@@ -538,14 +586,20 @@ const CLASS_FOLD_LIMITS = {
  * outweighs another, so a class with one finding per page keeps its sorted
  * sample.
  */
-function worstPage(members: CheckResult[], pages: string[]): string | undefined {
+function worstPage(
+  members: CheckResult[],
+  pages: string[]
+): string | undefined {
   const weight = new Map<string, number>();
   const add = (page: string, n: number): void => {
     weight.set(page, (weight.get(page) ?? 0) + n);
   };
   for (const check of members) {
     if (check.pageUrl) {
-      add(check.pageUrl, Math.max(1, (check.items?.length ?? 0) + additionalOf(check)));
+      add(
+        check.pageUrl,
+        Math.max(1, (check.items?.length ?? 0) + additionalOf(check))
+      );
       continue;
     }
     for (const item of check.items ?? []) {
@@ -558,7 +612,10 @@ function worstPage(members: CheckResult[], pages: string[]): string | undefined 
   for (const page of pages) {
     const w = weight.get(page) ?? 0;
     lowest = Math.min(lowest, w);
-    if (w > bestWeight || (w === bestWeight && best !== undefined && page < best)) {
+    if (
+      w > bestWeight ||
+      (w === bestWeight && best !== undefined && page < best)
+    ) {
       best = page;
       bestWeight = w;
     }
@@ -571,7 +628,10 @@ function pinWorstPage(check: CheckResult, members: CheckResult[]): CheckResult {
   if (!check.pages || check.pages.length < 2) return check;
   const worst = worstPage(members, check.pages);
   if (worst === undefined || worst === check.pages[0]) return check;
-  return { ...check, pages: [worst, ...check.pages.filter((page) => page !== worst)] };
+  return {
+    ...check,
+    pages: [worst, ...check.pages.filter((page) => page !== worst)],
+  };
 }
 
 /**
@@ -579,7 +639,10 @@ function pinWorstPage(check: CheckResult, members: CheckResult[]): CheckResult {
  * first member's copy of a repeated item, so a larger `pageCount` on a later
  * copy (an input that was itself capped) would otherwise be lost.
  */
-function keepPriorPageCounts(check: CheckResult, members: CheckResult[]): CheckResult {
+function keepPriorPageCounts(
+  check: CheckResult,
+  members: CheckResult[]
+): CheckResult {
   if (!check.items) return check;
   let prior: Map<string, number> | undefined;
   for (const member of members) {
@@ -595,7 +658,9 @@ function keepPriorPageCounts(check: CheckResult, members: CheckResult[]): CheckR
     ...check,
     items: check.items.map((item) => {
       const n = prior.get(item.id);
-      return n !== undefined && n > itemPageCount(item) ? { ...item, pageCount: n } : item;
+      return n !== undefined && n > itemPageCount(item)
+        ? { ...item, pageCount: n }
+        : item;
     }),
   };
 }
@@ -618,15 +683,23 @@ function foldClass(members: CheckResult[]): CheckResult {
     const sorted: CheckResult = {
       ...only,
       ...(only.pages ? { pages: [...only.pages].sort() } : {}),
-      ...(only.items ? { items: [...only.items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) } : {}),
+      ...(only.items
+        ? {
+            items: [...only.items].sort((a, b) =>
+              a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+            ),
+          }
+        : {}),
     };
     return pinWorstPage(sorted, [sorted]);
   }
-  const clean = [...members].sort(compareMembers).map((check) =>
-    check.details?.aggregated === true && FOLD_SUFFIX.test(check.message)
-      ? { ...check, message: check.message.replace(FOLD_SUFFIX, "") }
-      : check,
-  );
+  const clean = [...members]
+    .sort(compareMembers)
+    .map((check) =>
+      check.details?.aggregated === true && FOLD_SUFFIX.test(check.message)
+        ? { ...check, message: check.message.replace(FOLD_SUFFIX, "") }
+        : check
+    );
   const folded = foldOverflowChecks(clean, CLASS_FOLD_LIMITS)[0]!;
   return pinWorstPage(keepPriorPageCounts(folded, clean), clean);
 }
@@ -649,7 +722,9 @@ function capMeta(meta: CappableRuleMeta): CappedRuleMeta {
     name: meta.name,
     description: "",
     category: meta.category,
-    ...(meta.subcategory !== undefined ? { subcategory: meta.subcategory } : {}),
+    ...(meta.subcategory !== undefined
+      ? { subcategory: meta.subcategory }
+      : {}),
     scope: meta.scope,
     severity: meta.severity,
     weight: meta.weight,
@@ -659,7 +734,7 @@ function capMeta(meta: CappableRuleMeta): CappedRuleMeta {
 /** The publish clamps every producer applies to a check list (`capMixedRuleChecksForPublish`'s). */
 function clampChecks(checks: CheckResult[]): CheckResult[] {
   return clampCheckItemsOverflow(
-    clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks))),
+    clampCheckItemIds(clampCheckDetails(clampCheckStrings(checks)))
   );
 }
 
@@ -672,8 +747,8 @@ function boundChecks(checks: CheckResult[]): CheckResult[] {
     checks.map((check) =>
       check.items && check.items.length > REPORT_LIMITS.maxItemsPerCheck
         ? { ...check, items: rankItems(check.items) }
-        : check,
-    ),
+        : check
+    )
   );
 }
 
@@ -693,7 +768,10 @@ function siteCheckKey(original: CheckResult, bounded: CheckResult): string {
  * items named, so a count taken after it would understate the total. The union
  * over every member, so two members naming different pages both count.
  */
-function affectedBeforeBounds(originals: CheckResult[], bounded: CheckResult): number {
+function affectedBeforeBounds(
+  originals: CheckResult[],
+  bounded: CheckResult
+): number {
   if (bounded.pageUrl) return 0;
   const pages = checkAffectedPages(bounded);
   for (const original of originals) {
@@ -706,30 +784,42 @@ function affectedBeforeBounds(originals: CheckResult[], bounded: CheckResult): n
 /** Gap skip rows a rule keeps one by one, with their `pageUrl` (#1775). The rest fold per reason. */
 const GAP_ROWS_PER_RULE = 5;
 
-function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckResult[] }): FoldedRule {
+function foldRule(
+  ruleId: string,
+  rule: { meta: CappableRuleMeta; checks: CheckResult[] }
+): FoldedRule {
   const originals = Array.isArray(rule.checks) ? rule.checks : [];
   // Every clamp maps one check to one check, so index i is the same check in both.
   const checks = boundChecks(originals);
   const site: Array<{ check: CheckResult; original: CheckResult }> = [];
-  const classes = new Map<string, { members: CheckResult[]; originals: CheckResult[] }>();
+  const classes = new Map<
+    string,
+    { members: CheckResult[]; originals: CheckResult[] }
+  >();
   // Per-page gap skips, kept as rows while the per-rule bound allows (#1775).
   const gapRows = new Set<number>();
   const candidates: number[] = [];
   for (let i = 0; i < checks.length; i++) {
     const c = checks[i]!;
-    if (c.pageUrl && c.details?.aggregated !== true && isSkipGap(c)) candidates.push(i);
+    if (c.pageUrl && c.details?.aggregated !== true && isSkipGap(c))
+      candidates.push(i);
   }
   candidates.sort((a, b) => {
     const ca = checks[a]!;
     const cb = checks[b]!;
-    return compareMembers(ca, cb) || (ca.skipReason ?? "").localeCompare(cb.skipReason ?? "") || a - b;
+    return (
+      compareMembers(ca, cb) ||
+      (ca.skipReason ?? "").localeCompare(cb.skipReason ?? "") ||
+      a - b
+    );
   });
   for (const i of candidates.slice(0, GAP_ROWS_PER_RULE)) gapRows.add(i);
   const rows: Array<{ check: CheckResult; original: CheckResult }> = [];
   for (let i = 0; i < checks.length; i++) {
     const check = checks[i]!;
     const original = originals[i]!;
-    const pageAttributed = !!check.pageUrl || check.details?.aggregated === true;
+    const pageAttributed =
+      !!check.pageUrl || check.details?.aggregated === true;
     if (!pageAttributed) {
       site.push({ check, original });
       continue;
@@ -759,19 +849,23 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
       return { check, affected: affectedBeforeBounds(entry.originals, check) };
     })
     .sort((a, b) => compareClassOrder(a.check, b.check));
-  const entries: Array<{ check: CheckResult; affected: number; key?: string }> = [
-    ...site.map(({ check, original }) => ({
-      check,
-      affected: affectedBeforeBounds([original], check),
-      key: siteCheckKey(original, check),
-    })),
-    ...rows
-      .sort((a, b) => compareMembers(a.check, b.check))
-      .map(({ check, original }) => ({ check, affected: affectedBeforeBounds([original], check) })),
-    ...folded,
-  ];
+  const entries: Array<{ check: CheckResult; affected: number; key?: string }> =
+    [
+      ...site.map(({ check, original }) => ({
+        check,
+        affected: affectedBeforeBounds([original], check),
+        key: siteCheckKey(original, check),
+      })),
+      ...rows
+        .sort((a, b) => compareMembers(a.check, b.check))
+        .map(({ check, original }) => ({
+          check,
+          affected: affectedBeforeBounds([original], check),
+        })),
+      ...folded,
+    ];
   const units = entries.map((entry, order) =>
-    unitOf(ruleId, entry.check, order, entry.affected, entry.key),
+    unitOf(ruleId, entry.check, order, entry.affected, entry.key)
   );
   const total = Math.max(units.length, maxChecksTruncated(checks));
   let kept = units;
@@ -788,9 +882,12 @@ function foldRule(ruleId: string, rule: { meta: CappableRuleMeta; checks: CheckR
     [...classes.values()]
       .filter((entry) => {
         const first = entry.members[0]!;
-        return (first.status === "fail" || first.status === "warn") && !isReplayedCheck(first);
+        return (
+          (first.status === "fail" || first.status === "warn") &&
+          !isReplayedCheck(first)
+        );
       })
-      .map((entry) => entry.originals),
+      .map((entry) => entry.originals)
   );
   return {
     id: ruleId,
@@ -829,13 +926,21 @@ const COUNT_KEYS = [
 
 function additionalOf(check: CheckResult): number {
   const extra = check.details?.additional;
-  return typeof extra === "number" && Number.isFinite(extra) && extra > 0 ? Math.floor(extra) : 0;
+  return typeof extra === "number" && Number.isFinite(extra) && extra > 0
+    ? Math.floor(extra)
+    : 0;
 }
 
-function clampMessage(message: string, aggregated: boolean, max: number): string {
+function clampMessage(
+  message: string,
+  aggregated: boolean,
+  max: number
+): string {
   if (message.length <= max) return message;
   const suffix = aggregated ? (FOLD_SUFFIX.exec(message)?.[0] ?? "") : "";
-  const base = suffix ? message.slice(0, message.length - suffix.length) : message;
+  const base = suffix
+    ? message.slice(0, message.length - suffix.length)
+    : message;
   return clampItemString(base, max) + suffix;
 }
 
@@ -843,7 +948,9 @@ function clampMessage(message: string, aggregated: boolean, max: number): string
 function itemPageCount(item: CheckItem): number {
   const listed = item.sourcePages ? new Set(item.sourcePages).size : 0;
   const prior = item.pageCount;
-  return typeof prior === "number" && Number.isFinite(prior) && prior > listed ? Math.floor(prior) : listed;
+  return typeof prior === "number" && Number.isFinite(prior) && prior > listed
+    ? Math.floor(prior)
+    : listed;
 }
 
 /**
@@ -868,7 +975,8 @@ function sampleItem(item: CheckItem, caps: SampleCaps): CheckItem {
   const next: CheckItem = { ...item };
   // A label equal to the id says nothing the id does not (134KB on one real report).
   if (next.label !== undefined && next.label === next.id) delete next.label;
-  if (next.snippet !== undefined) next.snippet = clampItemString(next.snippet, caps.messageChars);
+  if (next.snippet !== undefined)
+    next.snippet = clampItemString(next.snippet, caps.messageChars);
   if (next.sourcePages) {
     const pages = itemPageCount(item);
     // URL order, so the page kept does not depend on the order the crawl met them.
@@ -898,14 +1006,15 @@ function sampleItem(item: CheckItem, caps: SampleCaps): CheckItem {
 function sampleCheck(
   check: CheckResult,
   caps: SampleCaps,
-  affectedBefore: number = affectedPageCount(check),
+  affectedBefore: number = affectedPageCount(check)
 ): CheckResult {
   const out: CheckResult = { ...check };
   const aggregated = check.details?.aggregated === true;
   let details: Record<string, unknown> | undefined = check.details;
 
   out.message = clampMessage(check.message, aggregated, caps.messageChars);
-  if (typeof check.value === "string") out.value = clampItemString(check.value, caps.messageChars);
+  if (typeof check.value === "string")
+    out.value = clampItemString(check.value, caps.messageChars);
   if (typeof check.expected === "string") {
     out.expected = clampItemString(check.expected, caps.messageChars);
   }
@@ -921,9 +1030,11 @@ function sampleCheck(
   if (check.items && check.items.length > 0) {
     // Ranked at most twice per class: renders are memoized per sample level,
     // and a counts row keeps no items to rank.
-    const kept = caps.items > 0 ? rankItems(check.items).slice(0, caps.items) : [];
+    const kept =
+      caps.items > 0 ? rankItems(check.items).slice(0, caps.items) : [];
     const dropped = check.items.length - kept.length;
-    if (dropped > 0) details = { ...details, additional: additionalOf(check) + dropped };
+    if (dropped > 0)
+      details = { ...details, additional: additionalOf(check) + dropped };
     if (kept.length > 0) out.items = kept.map((item) => sampleItem(item, caps));
     else delete out.items;
   }
@@ -932,14 +1043,18 @@ function sampleCheck(
     const affectedAfter = checkAffectedPages(out).size;
     if (affectedAfter < affectedBefore) {
       const prior = details?.pagesTruncated;
-      const known = typeof prior === "number" && Number.isFinite(prior) ? Math.floor(prior) : 0;
+      const known =
+        typeof prior === "number" && Number.isFinite(prior)
+          ? Math.floor(prior)
+          : 0;
       details = { ...details, pagesTruncated: Math.max(known, affectedBefore) };
     }
   }
 
   if (caps.countsOnly && details) {
     const counts: Record<string, unknown> = {};
-    for (const key of COUNT_KEYS) if (details[key] !== undefined) counts[key] = details[key];
+    for (const key of COUNT_KEYS)
+      if (details[key] !== undefined) counts[key] = details[key];
     details = Object.keys(counts).length > 0 ? counts : undefined;
   }
   if (details) out.details = details;
@@ -963,11 +1078,19 @@ function classCaps(tier: ReportCapTier, countsOnly: boolean): SampleCaps {
 }
 
 /** Top-level `siteChecks` keep the site caps, never more than the level's own. */
-function siteCaps(level: number, tier: ReportCapTier, countsOnly: boolean): SampleCaps {
+function siteCaps(
+  level: number,
+  tier: ReportCapTier,
+  countsOnly: boolean
+): SampleCaps {
   const first = level === 0;
   return {
-    pages: first ? REPORT_CAPS.siteCheckPages : Math.min(REPORT_CAPS.siteCheckPages, tier.pagesPerClass),
-    items: first ? REPORT_CAPS.siteCheckItems : Math.min(REPORT_CAPS.siteCheckItems, tier.itemsPerClass),
+    pages: first
+      ? REPORT_CAPS.siteCheckPages
+      : Math.min(REPORT_CAPS.siteCheckPages, tier.pagesPerClass),
+    items: first
+      ? REPORT_CAPS.siteCheckItems
+      : Math.min(REPORT_CAPS.siteCheckItems, tier.itemsPerClass),
     sourcePages: tier.sourcePagesPerItem,
     messageChars: tier.messageChars,
     countsOnly,
@@ -983,7 +1106,9 @@ function isRecord(value: unknown): value is Loose {
 }
 
 function sliceList(value: unknown, max: number): unknown {
-  return Array.isArray(value) && value.length > max ? value.slice(0, max) : value;
+  return Array.isArray(value) && value.length > max
+    ? value.slice(0, max)
+    : value;
 }
 
 /**
@@ -1002,7 +1127,8 @@ function capSummary(summary: unknown, max: number): unknown {
     out[key] = value.slice(0, max).map((entry) => {
       if (!isRecord(entry)) return entry;
       const next: Loose = { ...entry };
-      for (const [k, v] of Object.entries(entry)) if (Array.isArray(v)) next[k] = v.slice(0, max);
+      for (const [k, v] of Object.entries(entry))
+        if (Array.isArray(v)) next[k] = v.slice(0, max);
       return next;
     });
   }
@@ -1018,7 +1144,9 @@ type SectionMode = "normal" | "minimal" | "empty";
 
 function capSitemaps(sitemaps: unknown, mode: SectionMode): unknown {
   if (!isRecord(sitemaps)) return sitemaps;
-  const discovered = Array.isArray(sitemaps.discovered) ? sitemaps.discovered : undefined;
+  const discovered = Array.isArray(sitemaps.discovered)
+    ? sitemaps.discovered
+    : undefined;
   const normal = mode === "normal";
   const entries =
     mode === "normal"
@@ -1035,21 +1163,29 @@ function capSitemaps(sitemaps: unknown, mode: SectionMode): unknown {
               ? {
                   ...s,
                   urls: sliceList(s.urls, normal ? REPORT_CAPS.sitemapUrls : 0),
-                  childSitemaps: sliceList(s.childSitemaps, normal ? REPORT_CAPS.sitemapChildren : 0),
-                  errors: sliceList(s.errors, normal ? PUBLISH_LIMITS.maxSummary : 0),
+                  childSitemaps: sliceList(
+                    s.childSitemaps,
+                    normal ? REPORT_CAPS.sitemapChildren : 0
+                  ),
+                  errors: sliceList(
+                    s.errors,
+                    normal ? PUBLISH_LIMITS.maxSummary : 0
+                  ),
                 }
-              : s,
+              : s
           ),
         }
       : {}),
   };
   const listMax = normal ? PUBLISH_LIMITS.maxSummary : 0;
   for (const key of ["orphanPages", "missingPages", "failed"]) {
-    if (Array.isArray(sitemaps[key])) out[key] = (sitemaps[key] as unknown[]).slice(0, listMax);
+    if (Array.isArray(sitemaps[key]))
+      out[key] = (sitemaps[key] as unknown[]).slice(0, listMax);
   }
   if (isRecord(sitemaps.sources)) {
     const sources: Loose = {};
-    for (const [k, v] of Object.entries(sitemaps.sources)) sources[k] = sliceList(v, listMax);
+    for (const [k, v] of Object.entries(sitemaps.sources))
+      sources[k] = sliceList(v, listMax);
     out.sources = sources;
   }
   return out;
@@ -1061,11 +1197,15 @@ function capRobotsTxt(robots: unknown, mode: SectionMode): unknown {
   const empty = mode !== "normal";
   const out: Loose = { ...robots };
   if (typeof robots.content === "string") {
-    out.content = empty ? null : clampItemString(robots.content, REPORT_LIMITS.maxLongString);
+    out.content = empty
+      ? null
+      : clampItemString(robots.content, REPORT_LIMITS.maxLongString);
   }
   const listMax = empty ? 0 : PUBLISH_LIMITS.maxSummary;
-  if (Array.isArray(robots.sitemaps)) out.sitemaps = robots.sitemaps.slice(0, listMax);
-  if (Array.isArray(robots.errors)) out.errors = robots.errors.slice(0, listMax);
+  if (Array.isArray(robots.sitemaps))
+    out.sitemaps = robots.sitemaps.slice(0, listMax);
+  if (Array.isArray(robots.errors))
+    out.errors = robots.errors.slice(0, listMax);
   if (Array.isArray(robots.rules)) {
     // A directive budget across every user-agent group, in file order.
     let budget = empty ? 0 : REPORT_CAPS.robotsDirectives;
@@ -1098,7 +1238,8 @@ function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
   for (const [category, rows] of Object.entries(resources)) {
     out[category] = Array.isArray(rows)
       ? rows.slice(0, rowsMax).map((row: unknown) =>
-          isRecord(row) && (Array.isArray(row.sourcePages) || Array.isArray(row.deferredPages))
+          isRecord(row) &&
+          (Array.isArray(row.sourcePages) || Array.isArray(row.deferredPages))
             ? {
                 ...row,
                 ...(Array.isArray(row.sourcePages)
@@ -1109,7 +1250,7 @@ function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
                   ? { deferredPages: row.deferredPages.slice(0, sourcesMax) }
                   : {}),
               }
-            : row,
+            : row
         )
       : rows;
   }
@@ -1122,14 +1263,20 @@ function capResourceSizes(resources: unknown, mode: SectionMode): unknown {
  * failing a finished audit's publish, and the stamp says so
  * (`detail.entityMapFailed`), apart from a budget drop (`entityMapDropped`).
  */
-function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; failed: boolean } {
+function slimEntityMap(map: EntityMap | null | undefined): {
+  map?: EntityMap;
+  failed: boolean;
+} {
   if (!map) return { failed: false };
   try {
     return {
       map: projectEntityMap(
         map,
-        { ...ENTITY_MAP_PUBLISH_LIMITS, maxBytes: REPORT_CAPS.entityMapMaxBytes },
-        "publish",
+        {
+          ...ENTITY_MAP_PUBLISH_LIMITS,
+          maxBytes: REPORT_CAPS.entityMapMaxBytes,
+        },
+        "publish"
       ),
       failed: false,
     };
@@ -1144,7 +1291,10 @@ function slimEntityMap(map: EntityMap | null | undefined): { map?: EntityMap; fa
  * budget drop (`pageMapDropped`). It rides the same budget as the entity map: both are
  * report-only sections the fitter drops before it reduces any issue class.
  */
-function slimPageMap(map: PageMap | null | undefined): { map?: PageMap; failed: boolean } {
+function slimPageMap(map: PageMap | null | undefined): {
+  map?: PageMap;
+  failed: boolean;
+} {
   if (!map) return { failed: false };
   try {
     return { map: projectPageMap(map), failed: false };
@@ -1163,7 +1313,11 @@ function slimPageMap(map: PageMap | null | undefined): { map?: PageMap; failed: 
 function removedPageUrls(report: CappableReport): Set<string> {
   const out = new Set<string>();
   const add = (url: unknown, status: unknown): void => {
-    if (typeof url === "string" && typeof status === "number" && REMOVED_STATUSES.has(status)) {
+    if (
+      typeof url === "string" &&
+      typeof status === "number" &&
+      REMOVED_STATUSES.has(status)
+    ) {
       out.add(normalizePageUrl(url));
     }
   };
@@ -1189,10 +1343,11 @@ function removedPageUrls(report: CappableReport): Set<string> {
  */
 function withoutRemovedPages<R extends { checks: CheckResult[] }>(
   ruleResults: Record<string, R>,
-  removedUrls: ReadonlySet<string>,
+  removedUrls: ReadonlySet<string>
 ): Record<string, R> {
   if (removedUrls.size === 0) return ruleResults;
-  const removed = (url: string): boolean => removedUrls.has(normalizePageUrl(url));
+  const removed = (url: string): boolean =>
+    removedUrls.has(normalizePageUrl(url));
   const out: Record<string, R> = {};
   for (const [ruleId, rule] of Object.entries(ruleResults)) {
     if (!Array.isArray(rule.checks)) {
@@ -1227,14 +1382,21 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
                   item.sourcePages?.some(removed)
                     ? alignItemSources({
                         ...item,
-                        sourcePages: item.sourcePages.filter((page) => !removed(page)),
+                        sourcePages: item.sourcePages.filter(
+                          (page) => !removed(page)
+                        ),
                       })
-                    : item,
+                    : item
                 ),
               }
             : {}),
           ...(typeof total === "number" && Number.isFinite(total)
-            ? { details: { ...member.details, pagesTruncated: Math.max(total - gone, kept.length) } }
+            ? {
+                details: {
+                  ...member.details,
+                  pagesTruncated: Math.max(total - gone, kept.length),
+                },
+              }
             : {}),
         });
       }
@@ -1254,14 +1416,18 @@ function withoutRemovedPages<R extends { checks: CheckResult[] }>(
  * status row for a page `pages` does not list is a page too, as the server merge
  * counts it.
  */
-function transportPages(report: CappableReport): Array<{ url: string; statusCode?: number }> {
+function transportPages(
+  report: CappableReport
+): Array<{ url: string; statusCode?: number }> {
   const sent = Array.isArray(report.pageStatuses);
-  const rank = (status: number): number => (REMOVED_STATUSES.has(status) ? 1_000 : 0) + status;
+  const rank = (status: number): number =>
+    (REMOVED_STATUSES.has(status) ? 1_000 : 0) + status;
   const statusOf = new Map<string, number>();
   const note = (url: unknown, status: unknown): void => {
     if (typeof url !== "string" || typeof status !== "number") return;
     const held = statusOf.get(url);
-    if (held === undefined || rank(status) > rank(held)) statusOf.set(url, status);
+    if (held === undefined || rank(status) > rank(held))
+      statusOf.set(url, status);
   };
   const listed = new Set<string>();
   for (const page of Array.isArray(report.pages) ? report.pages : []) {
@@ -1297,7 +1463,7 @@ function largestSections(body: Loose): Record<string, number> {
     Object.entries(body)
       .map(([key, value]) => [key, bytesOf(value)] as const)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5),
+      .slice(0, 5)
   );
 }
 
@@ -1308,9 +1474,9 @@ function stableKey(value: unknown): string {
       ? Object.fromEntries(
           Object.keys(v)
             .sort()
-            .map((k) => [k, v[k]]),
+            .map((k) => [k, v[k]])
         )
-      : v,
+      : v
   );
 }
 
@@ -1333,7 +1499,7 @@ function stableKey(value: unknown): string {
  */
 export function capReportForPublish<T extends CappableReport>(
   report: T,
-  options: CapReportOptions = {},
+  options: CapReportOptions = {}
 ): CappedReport<T> {
   const maxBytes = options.maxBytes ?? PUBLISHED_REPORT_MAX_BYTES;
 
@@ -1353,7 +1519,7 @@ export function capReportForPublish<T extends CappableReport>(
         const rule = report.ruleResults[id]!;
         const checks = Array.isArray(rule.checks) ? rule.checks : [];
         return [id, { checks: [...checks].sort(compareNames) }];
-      }),
+      })
     ),
     transportPages(report),
     {
@@ -1362,11 +1528,13 @@ export function capReportForPublish<T extends CappableReport>(
     },
     // The capped report carries `checkTallies`, the one reader of the page
     // hashes a clipped list ships (#2673).
-    { pageHashes: true },
+    { pageHashes: true }
   );
   const pageStatuses = built.pageStatuses;
   const crawled = Array.isArray(report.pages) && report.pages.length > 0;
-  const resolutionSignalCompact = crawled ? built.resolutionSignalCompact : undefined;
+  const resolutionSignalCompact = crawled
+    ? built.resolutionSignalCompact
+    : undefined;
   // The rows the server scores and shows: none on a page that 404'd or 410'd.
   const live = withoutRemovedPages(report.ruleResults, removedPageUrls(report));
   const checkTallies = buildCheckTallies(live);
@@ -1378,27 +1546,38 @@ export function capReportForPublish<T extends CappableReport>(
   const transportBytes =
     (resolutionSignalCompact
       ? bytesOf(resolutionSignalCompact) + RESOLUTION_SIGNAL_KEY_BYTES
-      : 0) + (pageStatuses ? bytesOf(pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
+      : 0) +
+    (pageStatuses ? bytesOf(pageStatuses) + PAGE_STATUSES_KEY_BYTES : 0);
   const ceiling = maxBytes - REPORT_CAPS.envelopeBytes;
   const budget = ceiling - transportBytes;
 
   // 2. Every rule's classes folded once, in rule-id order.
   const rules = ruleIds.map((id) => foldRule(id, live[id]!));
   const rulePageCounts: Record<string, number> = {};
-  for (const rule of rules) if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
+  for (const rule of rules)
+    if (rule.pageCount !== undefined) rulePageCounts[rule.id] = rule.pageCount;
   // Top-level `siteChecks` repeats the site checks of `ruleResults` (9,137 of
   // 9,138 entries over 187 real reports), and nothing reads it but the schema
   // bounds and the publish counts, so a copy of a check `ruleResults` already
   // publishes is left out. Whatever it holds that no rule does stays.
   const published = new Set<string>();
   for (const rule of rules) {
-    for (const unit of rule.kept) if (unit.key !== undefined) published.add(unit.key);
+    for (const unit of rule.kept)
+      if (unit.key !== undefined) published.add(unit.key);
   }
-  const siteOriginals = Array.isArray(report.siteChecks) ? report.siteChecks : [];
+  const siteOriginals = Array.isArray(report.siteChecks)
+    ? report.siteChecks
+    : [];
   const siteUnits = boundChecks(siteOriginals)
     .map((check, order) => {
       const original = siteOriginals[order]!;
-      return unitOf("", check, order, affectedBeforeBounds([original], check), siteCheckKey(original, check));
+      return unitOf(
+        "",
+        check,
+        order,
+        affectedBeforeBounds([original], check),
+        siteCheckKey(original, check)
+      );
     })
     .filter((unit) => !published.has(unit.key!));
 
@@ -1423,10 +1602,19 @@ export function capReportForPublish<T extends CappableReport>(
     ...rest,
     pages: [],
     ...("summary" in report
-      ? { summary: capSummary(report.summary, mode === "normal" ? PUBLISH_LIMITS.maxSummary : 0) }
+      ? {
+          summary: capSummary(
+            report.summary,
+            mode === "normal" ? PUBLISH_LIMITS.maxSummary : 0
+          ),
+        }
       : {}),
-    ...("sitemaps" in report ? { sitemaps: capSitemaps(report.sitemaps, mode) } : {}),
-    ...("robotsTxt" in report ? { robotsTxt: capRobotsTxt(report.robotsTxt, mode) } : {}),
+    ...("sitemaps" in report
+      ? { sitemaps: capSitemaps(report.sitemaps, mode) }
+      : {}),
+    ...("robotsTxt" in report
+      ? { robotsTxt: capRobotsTxt(report.robotsTxt, mode) }
+      : {}),
     ...("resourceSizes" in report
       ? { resourceSizes: capResourceSizes(report.resourceSizes, mode) }
       : {}),
@@ -1434,7 +1622,7 @@ export function capReportForPublish<T extends CappableReport>(
       ? {
           sitemapUrlStatuses: sliceList(
             report.sitemapUrlStatuses,
-            mode === "normal" ? PUBLISH_LIMITS.maxSitemapUrls : 0,
+            mode === "normal" ? PUBLISH_LIMITS.maxSitemapUrls : 0
           ),
         }
       : {}),
@@ -1442,7 +1630,9 @@ export function capReportForPublish<T extends CappableReport>(
     ...(Object.keys(rulePageCounts).length > 0 ? { rulePageCounts } : {}),
     ...(Object.keys(linkTargetSets).length > 0 ? { linkTargetSets } : {}),
   });
-  const { map: entityMap, failed: entityMapFailed } = slimEntityMap(report.entityMap);
+  const { map: entityMap, failed: entityMapFailed } = slimEntityMap(
+    report.entityMap
+  );
   const { map: pageMap, failed: pageMapFailed } = slimPageMap(report.pageMap);
   const tiers = REPORT_CAPS.tiers;
   const countsLevel = tiers.length - 1;
@@ -1454,7 +1644,7 @@ export function capReportForPublish<T extends CappableReport>(
 
   const detailFor = (
     tier: number,
-    extra: Partial<PublishedReportDetail> = {},
+    extra: Partial<PublishedReportDetail> = {}
   ): PublishedReportDetail => ({
     capped: true,
     tier,
@@ -1478,10 +1668,16 @@ export function capReportForPublish<T extends CappableReport>(
     });
     const bytes = bytesOf(out);
     if (bytes > ceiling) {
-      throw new PublishedReportTooLargeError(bytes, ceiling, largestSections(out), "body", {
-        tier: (body.detail as PublishedReportDetail | undefined)?.tier,
-        pages: pagesCrawled,
-      });
+      throw new PublishedReportTooLargeError(
+        bytes,
+        ceiling,
+        largestSections(out),
+        "body",
+        {
+          tier: (body.detail as PublishedReportDetail | undefined)?.tier,
+          pages: pagesCrawled,
+        }
+      );
     }
     return out as unknown as CappedReport<T>;
   };
@@ -1496,21 +1692,32 @@ export function capReportForPublish<T extends CappableReport>(
   const slots: Slot[] = [];
   for (const rule of rules) {
     rule.kept.forEach((unit, i) => {
-      slots.push({ unit, rule, stamp: i === rule.kept.length - 1 && rule.total > rule.kept.length });
+      slots.push({
+        unit,
+        rule,
+        stamp: i === rule.kept.length - 1 && rule.total > rule.kept.length,
+      });
     });
   }
   for (const unit of siteUnits) slots.push({ unit, stamp: false });
 
   // A class sampled at one level, with its size, memoized: the fill prices
   // every class at every level.
-  const rendered = slots.map(() => new Array<{ check: CheckResult; bytes: number }>(tiers.length));
-  const render = (index: number, level: number): { check: CheckResult; bytes: number } => {
+  const rendered = slots.map(
+    () => new Array<{ check: CheckResult; bytes: number }>(tiers.length)
+  );
+  const render = (
+    index: number,
+    level: number
+  ): { check: CheckResult; bytes: number } => {
     const memo = rendered[index]![level];
     if (memo) return memo;
     const slot = slots[index]!;
     const tier = tiers[level]!;
     const countsOnly = level === countsLevel;
-    const caps = slot.rule ? classCaps(tier, countsOnly) : siteCaps(level, tier, countsOnly);
+    const caps = slot.rule
+      ? classCaps(tier, countsOnly)
+      : siteCaps(level, tier, countsOnly);
     let check = sampleCheck(slot.unit.check, caps, slot.unit.affected);
     if (slot.stamp) check = stampChecksTruncated(check, slot.rule!.total);
     const out = { check, bytes: bytesOf(check) };
@@ -1522,7 +1729,7 @@ export function capReportForPublish<T extends CappableReport>(
     levels: number[],
     mode: SectionMode,
     withEntityMap: boolean,
-    detail: PublishedReportDetail,
+    detail: PublishedReportDetail
   ): Loose => {
     const ruleResults: Loose = {};
     let index = 0;
@@ -1534,7 +1741,8 @@ export function capReportForPublish<T extends CappableReport>(
       ruleResults[rule.id] = { meta: rule.meta, checks };
     }
     const siteChecks: CheckResult[] = [];
-    for (; index < slots.length; index++) siteChecks.push(render(index, levels[index]!).check);
+    for (; index < slots.length; index++)
+      siteChecks.push(render(index, levels[index]!).check);
     return {
       ...sections(mode),
       ...(withEntityMap && entityMap ? { entityMap } : {}),
@@ -1550,7 +1758,7 @@ export function capReportForPublish<T extends CappableReport>(
     slots.map(() => 0),
     "normal",
     true,
-    detailFor(0),
+    detailFor(0)
   );
   const firstBytes = bytesOf(first);
   if (firstBytes <= budget) return finish(first);
@@ -1573,9 +1781,15 @@ export function capReportForPublish<T extends CappableReport>(
    * priced without rebuilding the body; the body is measured at the end anyway.
    * Undefined when the counts rows alone do not fit.
    */
-  function fill(tier: number, mode: SectionMode, withEntityMap: boolean): Loose | undefined {
+  function fill(
+    tier: number,
+    mode: SectionMode,
+    withEntityMap: boolean
+  ): Loose | undefined {
     const dropped = {
-      ...(!withEntityMap && entityMap ? { entityMapDropped: true as const } : {}),
+      ...(!withEntityMap && entityMap
+        ? { entityMapDropped: true as const }
+        : {}),
       ...(!withEntityMap && pageMap ? { pageMapDropped: true as const } : {}),
     };
     const levels = slots.map(() => countsLevel);
@@ -1584,7 +1798,7 @@ export function capReportForPublish<T extends CappableReport>(
       levels,
       mode,
       withEntityMap,
-      detailFor(tier, { classesReduced: slots.length, ...dropped }),
+      detailFor(tier, { classesReduced: slots.length, ...dropped })
     );
     let room = budget - bytesOf(base);
     if (room < 0) return undefined;
@@ -1605,7 +1819,10 @@ export function capReportForPublish<T extends CappableReport>(
       levels,
       mode,
       withEntityMap,
-      detailFor(tier, { ...(reduced > 0 ? { classesReduced: reduced } : {}), ...dropped }),
+      detailFor(tier, {
+        ...(reduced > 0 ? { classesReduced: reduced } : {}),
+        ...dropped,
+      })
     );
     return bytesOf(body) <= budget ? body : undefined;
   }
@@ -1616,7 +1833,9 @@ export function capReportForPublish<T extends CappableReport>(
    */
   function admitByBudget(mode: SectionMode): Loose | undefined {
     const caps = classCaps(tiers[countsLevel]!, true);
-    const rows = slots.map((slot) => sampleCheck(slot.unit.check, caps, slot.unit.affected));
+    const rows = slots.map((slot) =>
+      sampleCheck(slot.unit.check, caps, slot.unit.affected)
+    );
     const total = slots.length;
     const extra = (admitted: number): Partial<PublishedReportDetail> => ({
       ...(entityMap ? { entityMapDropped: true as const } : {}),
@@ -1624,7 +1843,10 @@ export function capReportForPublish<T extends CappableReport>(
       ...(admitted > 0 ? { classesReduced: admitted } : {}),
       ...(total - admitted > 0 ? { classesDropped: total - admitted } : {}),
     });
-    const build = (admitted: Set<number>, detail: PublishedReportDetail): Loose => {
+    const build = (
+      admitted: Set<number>,
+      detail: PublishedReportDetail
+    ): Loose => {
       const ruleResults: Loose = {};
       let index = 0;
       for (const rule of rules) {
@@ -1635,19 +1857,27 @@ export function capReportForPublish<T extends CappableReport>(
         // Every class this rule lost, stamped where a reader of the rule sees it.
         const ruleTotal = Math.max(rule.total, rule.kept.length);
         if (ruleTotal > checks.length && checks.length > 0) {
-          checks[checks.length - 1] = stampChecksTruncated(checks[checks.length - 1]!, ruleTotal);
+          checks[checks.length - 1] = stampChecksTruncated(
+            checks[checks.length - 1]!,
+            ruleTotal
+          );
         }
         ruleResults[rule.id] = { meta: rule.meta, checks };
       }
       const siteChecks: CheckResult[] = [];
-      for (; index < slots.length; index++) if (admitted.has(index)) siteChecks.push(rows[index]!);
+      for (; index < slots.length; index++)
+        if (admitted.has(index)) siteChecks.push(rows[index]!);
       return { ...sections(mode), siteChecks, ruleResults, detail };
     };
 
     // The skeleton, priced with the most digits the counts in `detail` can need.
     const skeleton = build(
       new Set(),
-      detailFor(3, { ...extra(0), classesReduced: total, classesDropped: total }),
+      detailFor(3, {
+        ...extra(0),
+        classesReduced: total,
+        classesDropped: total,
+      })
     );
     const skeletonBytes = bytesOf(skeleton);
     let room = budget - skeletonBytes;
@@ -1658,7 +1888,7 @@ export function capReportForPublish<T extends CappableReport>(
         budget,
         largestSections(skeleton),
         "skeleton",
-        { tier: 3, pages: pagesCrawled },
+        { tier: 3, pages: pagesCrawled }
       );
     }
     // A rule's first admitted class also pays for the `checksTruncated` stamp
@@ -1683,10 +1913,16 @@ export function capReportForPublish<T extends CappableReport>(
     const bytes = bytesOf(body);
     if (bytes > budget) {
       if (mode !== "empty") return undefined;
-      throw new PublishedReportTooLargeError(bytes, budget, largestSections(body), "skeleton", {
-        tier: 3,
-        pages: pagesCrawled,
-      });
+      throw new PublishedReportTooLargeError(
+        bytes,
+        budget,
+        largestSections(body),
+        "skeleton",
+        {
+          tier: 3,
+          pages: pagesCrawled,
+        }
+      );
     }
     return body;
   }

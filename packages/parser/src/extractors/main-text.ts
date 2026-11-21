@@ -76,7 +76,13 @@ export interface ContentLabel {
   nodeId: number | null;
 }
 
-export type ContentBlockKind = "heading" | "paragraph" | "list" | "table" | "code" | "quote";
+export type ContentBlockKind =
+  | "heading"
+  | "paragraph"
+  | "list"
+  | "table"
+  | "code"
+  | "quote";
 
 export interface ContentBlock {
   kind: ContentBlockKind;
@@ -97,7 +103,10 @@ export interface ContentBlock {
  * A label from a placer. `hops` is the element steps from the asked element up to the node that
  * answered (0 = the element itself); a placer that does not report it is treated as inherited.
  */
-export type PlacedContentLabel = PlacedLabel & { nodeId?: number | null; hops?: number };
+export type PlacedContentLabel = PlacedLabel & {
+  nodeId?: number | null;
+  hops?: number;
+};
 
 /** One answer of a placer, structurally what `elementPlacer` returns. */
 export interface ContentPlacement {
@@ -226,7 +235,12 @@ const LEAF_BLOCK_TAGS: ReadonlySet<string> = new Set([
   "li",
 ]);
 
-const ALWAYS_DROP_LANDMARK_TAGS: ReadonlySet<string> = new Set(["nav", "aside", "dialog", "search"]);
+const ALWAYS_DROP_LANDMARK_TAGS: ReadonlySet<string> = new Set([
+  "nav",
+  "aside",
+  "dialog",
+  "search",
+]);
 const ALWAYS_DROP_ROLES: ReadonlySet<string> = new Set([
   "navigation",
   "complementary",
@@ -359,7 +373,9 @@ const MAX_ATTR_SCAN = 4096;
 export function hasFurnitureToken(el: Element): boolean {
   const cls = el.getAttribute?.("class");
   if (cls) {
-    const scan = (cls.length > MAX_ATTR_SCAN ? cls.slice(0, MAX_ATTR_SCAN) : cls).toLowerCase();
+    const scan = (
+      cls.length > MAX_ATTR_SCAN ? cls.slice(0, MAX_ATTR_SCAN) : cls
+    ).toLowerCase();
     for (const token of scan.split(/\s+/)) {
       if (token && isFurnitureToken(token)) return true;
     }
@@ -375,18 +391,26 @@ const COMMENTS_TOKEN =
 
 function isCommentsContainer(el: Element): boolean {
   const id = el.getAttribute?.("id");
-  if (id && id.length <= 200 && COMMENTS_TOKEN.test(id.toLowerCase())) return true;
+  if (id && id.length <= 200 && COMMENTS_TOKEN.test(id.toLowerCase()))
+    return true;
   const cls = el.getAttribute?.("class");
   if (cls) {
-    const scan = (cls.length > MAX_ATTR_SCAN ? cls.slice(0, MAX_ATTR_SCAN) : cls).toLowerCase();
-    for (const token of scan.split(/\s+/)) if (token && COMMENTS_TOKEN.test(token)) return true;
+    const scan = (
+      cls.length > MAX_ATTR_SCAN ? cls.slice(0, MAX_ATTR_SCAN) : cls
+    ).toLowerCase();
+    for (const token of scan.split(/\s+/))
+      if (token && COMMENTS_TOKEN.test(token)) return true;
   }
   return false;
 }
 
 function isHidden(el: Element): boolean {
   const hidden = el.getAttribute?.("hidden");
-  if (hidden !== null && hidden !== undefined && hidden.trim().toLowerCase() !== "until-found") {
+  if (
+    hidden !== null &&
+    hidden !== undefined &&
+    hidden.trim().toLowerCase() !== "until-found"
+  ) {
     return true;
   }
   if (el.getAttribute?.("aria-hidden") === "true") return true;
@@ -427,7 +451,10 @@ const MARKUP_COMMENTS: ContentLabel = {
 
 function deriveCtx(ctx: Ctx, tag: string, el: Element): Ctx {
   let next = ctx;
-  if (!ctx.inContent && (tag === "main" || tag === "article" || el.getAttribute("role") === "main")) {
+  if (
+    !ctx.inContent &&
+    (tag === "main" || tag === "article" || el.getAttribute("role") === "main")
+  ) {
     next = { inContent: true, region: MARKUP_MAIN, section: ctx.section };
   }
   if (next.section === null && isCommentsContainer(el)) {
@@ -486,7 +513,10 @@ function isDroppedInline(el: Element, tag: string): boolean {
  * is a text-focused extraction), images are skipped, inline `<code>` becomes backticks in the
  * markdown, and block-level children read as word breaks.
  */
-function inlineOf(root: Element, skipLists: boolean): { text: string; md: string } {
+function inlineOf(
+  root: Element,
+  skipLists: boolean
+): { text: string; md: string } {
   const text: string[] = [];
   const md: string[] = [];
   const stack: StackItem[] = [];
@@ -519,7 +549,10 @@ function inlineOf(root: Element, skipLists: boolean): { text: string; md: string
       md.push(" ");
       continue;
     }
-    if (isDroppedInline(el, tag) || (skipLists && (tag === "ul" || tag === "ol"))) {
+    if (
+      isDroppedInline(el, tag) ||
+      (skipLists && (tag === "ul" || tag === "ol"))
+    ) {
       text.push(" ");
       md.push(" ");
       continue;
@@ -533,7 +566,8 @@ function inlineOf(root: Element, skipLists: boolean): { text: string; md: string
       stack.push(SPACE_CLOSE);
     }
     const children = el.childNodes;
-    for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as Node);
+    for (let i = children.length - 1; i >= 0; i--)
+      stack.push(children[i] as Node);
   }
   return { text: collapse(text.join("")), md: collapse(md.join("")) };
 }
@@ -544,7 +578,9 @@ function listBlock(root: Element): { text: string; md: string } | null {
   const textLines: string[] = [];
   const mdLines: string[] = [];
   const itemsOf = (list: Element): Element[] =>
-    [...(list.children as unknown as Element[])].filter((c) => c.tagName?.toLowerCase() === "li");
+    [...(list.children as unknown as Element[])].filter(
+      (c) => c.tagName?.toLowerCase() === "li"
+    );
   interface Frame {
     items: Element[];
     i: number;
@@ -552,7 +588,12 @@ function listBlock(root: Element): { text: string; md: string } | null {
     depth: number;
   }
   const frames: Frame[] = [
-    { items: itemsOf(root), i: 0, ordered: root.tagName?.toLowerCase() === "ol", depth: 0 },
+    {
+      items: itemsOf(root),
+      i: 0,
+      ordered: root.tagName?.toLowerCase() === "ol",
+      depth: 0,
+    },
   ];
   while (frames.length > 0) {
     const frame = frames[frames.length - 1]!;
@@ -574,7 +615,9 @@ function listBlock(root: Element): { text: string; md: string } | null {
     // Nested lists run right after their item; pushed in reverse so the first one is on top.
     const nested = [...(li.children as unknown as Element[])].filter((c) => {
       const t = c.tagName?.toLowerCase();
-      return (t === "ul" || t === "ol") && !isHidden(c) && !hasFurnitureToken(c);
+      return (
+        (t === "ul" || t === "ol") && !isHidden(c) && !hasFurnitureToken(c)
+      );
     });
     for (let n = nested.length - 1; n >= 0; n--) {
       const list = nested[n]!;
@@ -594,7 +637,9 @@ function listBlock(root: Element): { text: string; md: string } | null {
 function isLayoutTable(el: Element): boolean {
   const role = el.getAttribute("role")?.toLowerCase();
   if (role === "presentation" || role === "none") return true;
-  return el.querySelector("table table, h1, h2, h3, h4, h5, h6, p, ul, ol") !== null;
+  return (
+    el.querySelector("table table, h1, h2, h3, h4, h5, h6, p, ul, ol") !== null
+  );
 }
 
 function tableBlock(root: Element): { text: string; md: string } | null {
@@ -612,7 +657,8 @@ function tableBlock(root: Element): { text: string; md: string } | null {
     } else if (tag === "thead" || tag === "tbody" || tag === "tfoot") {
       if (isHidden(el)) continue;
       const children = el.childNodes;
-      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as Node);
+      for (let i = children.length - 1; i >= 0; i--)
+        stack.push(children[i] as Node);
     }
   }
   const grid: string[][] = [];
@@ -629,7 +675,10 @@ function tableBlock(root: Element): { text: string; md: string } | null {
   // A loop, not Math.max(...): a spread of a huge table's rows overflows the call stack.
   let width = 0;
   for (const r of grid) if (r.length > width) width = r.length;
-  const pad = (r: string[]): string[] => [...r, ...Array<string>(width - r.length).fill("")];
+  const pad = (r: string[]): string[] => [
+    ...r,
+    ...Array<string>(width - r.length).fill(""),
+  ];
   // Escape backslashes as well as pipes, so a cell ending in a backslash cannot escape the column separator.
   const cell = (c: string): string => c.replace(/[\\|]/g, "\\$&");
   const line = (r: string[]): string => `| ${pad(r).map(cell).join(" | ")} |`;
@@ -638,7 +687,10 @@ function tableBlock(root: Element): { text: string; md: string } | null {
     `| ${Array<string>(width).fill("---").join(" | ")} |`,
     ...grid.slice(1).map(line),
   ].join("\n");
-  return { text: grid.map((r) => r.filter(Boolean).join(" | ")).join("\n"), md };
+  return {
+    text: grid.map((r) => r.filter(Boolean).join(" | ")).join("\n"),
+    md,
+  };
 }
 
 const LANGUAGE_CLASS = /^(?:language|lang)-([a-z0-9_+#.-]+)$/i;
@@ -646,7 +698,8 @@ const LANGUAGE_CLASS = /^(?:language|lang)-([a-z0-9_+#.-]+)$/i;
 function languageOf(pre: Element): string | undefined {
   const candidates: Element[] = [pre];
   const first = pre.firstElementChild;
-  if (first && first.tagName?.toLowerCase() === "code") candidates.push(first as Element);
+  if (first && first.tagName?.toLowerCase() === "code")
+    candidates.push(first as Element);
   for (const el of candidates) {
     const cls = el.getAttribute("class");
     if (!cls) continue;
@@ -674,9 +727,16 @@ function codeText(root: Element): string {
         out.push("\n");
         continue;
       }
-      if (tag === "script" || tag === "style" || tag === "template" || tag === "svg") continue;
+      if (
+        tag === "script" ||
+        tag === "style" ||
+        tag === "template" ||
+        tag === "svg"
+      )
+        continue;
       const children = el.childNodes;
-      for (let i = children.length - 1; i >= 0; i--) stack.push(children[i] as Node);
+      for (let i = children.length - 1; i >= 0; i--)
+        stack.push(children[i] as Node);
     }
   }
   // A leading newline after <pre> is not part of the code (HTML drops it), a trailing one is noise.
@@ -688,7 +748,8 @@ function codeText(root: Element): string {
 
 function fenceFor(code: string): string {
   let longest = 0;
-  for (const m of code.matchAll(/`+/g)) longest = Math.max(longest, m[0].length);
+  for (const m of code.matchAll(/`+/g))
+    longest = Math.max(longest, m[0].length);
   return "`".repeat(Math.max(3, longest + 1));
 }
 
@@ -711,7 +772,10 @@ interface Frame {
  * abstains, the markup rules do. A placer that throws is an abstention. A `truncated` answer drops
  * the element (fail closed).
  */
-export function extractMainText(doc: Document, options: MainTextOptions = {}): MainTextExtraction {
+export function extractMainText(
+  doc: Document,
+  options: MainTextOptions = {}
+): MainTextExtraction {
   const place = options.place;
   const blocks: ContentBlock[] = [];
   const cache = new WeakMap<Element, ContentPlacement | null>();
@@ -739,7 +803,10 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     const p = ask(el);
     if (!p) return null;
     if (p.truncated) return p;
-    if ((p.region && p.region.label !== "unknown") || (p.section && p.section.label !== "unknown")) {
+    if (
+      (p.region && p.region.label !== "unknown") ||
+      (p.section && p.section.label !== "unknown")
+    ) {
       return p;
     }
     return null;
@@ -751,7 +818,8 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
   ): { region: ContentLabel | null; section: ContentLabel | null } => {
     if (!answer) return { region: ctx.region, section: ctx.section };
     const id = answer.region?.nodeId;
-    const region = id != null && overruled.has(id) ? ctx.region : toLabel(answer.region);
+    const region =
+      id != null && overruled.has(id) ? ctx.region : toLabel(answer.region);
     return { region, section: toLabel(answer.section) };
   };
 
@@ -780,7 +848,9 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
           if (LEAF_BLOCK_TAGS.has(tag) && !HEADING.test(tag)) return null;
         }
         const regionDrop =
-          region !== undefined && region !== "article_chrome" && MAIN_TEXT_DROPPED_REGIONS.has(region);
+          region !== undefined &&
+          region !== "article_chrome" &&
+          MAIN_TEXT_DROPPED_REGIONS.has(region);
         // An ASP.NET-style page-wide <form> is labelled `form` but holds the content: it is a wrapper,
         // not a form, when it contains the page's main landmark. Its children are judged on their own.
         const wrapper =
@@ -803,13 +873,15 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
             el.getAttribute("role") === "main");
         if (overrule) overruled.add(answerNode!);
         if (regionDrop && !wrapper && !overrule) return null;
-        if (section !== undefined && MAIN_TEXT_DROPPED_SECTIONS.has(section)) return null;
+        if (section !== undefined && MAIN_TEXT_DROPPED_SECTIONS.has(section))
+          return null;
         if (!wrapper && !overrule) {
           // Markup wins for landmarks. The classifier labels at most 400 candidate nodes, so a `nav`
           // or `aside` that was not one inherits its ancestor's `main_content` (hops > 0) and would
           // be kept. Only a region answer for this very element (hops 0) exempts it, which is how a
           // header the classifier itself calls content or article chrome stays.
-          if (answer.region?.hops !== 0 && isDroppedLandmark(el, tag, ctx)) return null;
+          if (answer.region?.hops !== 0 && isDroppedLandmark(el, tag, ctx))
+            return null;
           // The classifier names no chat widget class, so the furniture tokens still apply to what it
           // kept (an unlabelled chat div inherits its content ancestor's region).
           if (hasFurnitureToken(el)) return null;
@@ -826,10 +898,14 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
   // An element the placer itself (hops 0) labelled content is content context for what is below it,
   // as `<main>` and `<article>` are in the markup: the article's own header and footer are kept
   // rather than read as the site's banner.
-  const withPlacedContext = (ctx: Ctx, verdict: ContentPlacement | "markup"): Ctx => {
+  const withPlacedContext = (
+    ctx: Ctx,
+    verdict: ContentPlacement | "markup"
+  ): Ctx => {
     if (ctx.inContent || verdict === "markup") return ctx;
     const r = verdict.region;
-    if (r && r.hops === 0 && MAIN_TEXT_KEPT_REGIONS.has(r.label)) return { ...ctx, inContent: true };
+    if (r && r.hops === 0 && MAIN_TEXT_KEPT_REGIONS.has(r.label))
+      return { ...ctx, inContent: true };
     return ctx;
   };
 
@@ -850,8 +926,13 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     if (pendingStarted) {
       const text = collapse(pendingText.join(""));
       if (text) {
-        const answer = pendingOwner ? answerFor(pendingOwner, pendingDepth) : null;
-        const labels = labelsOf(answer && !answer.truncated ? answer : null, pendingCtx);
+        const answer = pendingOwner
+          ? answerFor(pendingOwner, pendingDepth)
+          : null;
+        const labels = labelsOf(
+          answer && !answer.truncated ? answer : null,
+          pendingCtx
+        );
         // Loose text in article chrome (a byline, a share row) is dropped like its paragraphs.
         if (answer?.truncated || answer?.region?.label === "article_chrome") {
           pendingText = [];
@@ -895,7 +976,12 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
   const stack: Frame[] = [];
   const top = body.childNodes;
   for (let i = top.length - 1; i >= 0; i--) {
-    stack.push({ node: top[i] as Node, ctx: ROOT_CTX, depth: 0, owner: body as Element });
+    stack.push({
+      node: top[i] as Node,
+      ctx: ROOT_CTX,
+      depth: 0,
+      owner: body as Element,
+    });
   }
 
   while (stack.length > 0) {
@@ -945,11 +1031,21 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
       if (decide(el, tag, frame.ctx, frame.depth, true) === null) continue;
       if (tag === "code" && pendingStarted) {
         pendingMd.push("`");
-        stack.push({ node: CODE_CLOSE, ctx: frame.ctx, depth: frame.depth, owner: frame.owner });
+        stack.push({
+          node: CODE_CLOSE,
+          ctx: frame.ctx,
+          depth: frame.depth,
+          owner: frame.owner,
+        });
       }
       const children = el.childNodes;
       for (let i = children.length - 1; i >= 0; i--) {
-        stack.push({ node: children[i] as Node, ctx: frame.ctx, depth: frame.depth, owner: frame.owner });
+        stack.push({
+          node: children[i] as Node,
+          ctx: frame.ctx,
+          depth: frame.depth,
+          owner: frame.owner,
+        });
       }
       continue;
     }
@@ -964,7 +1060,14 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
       if (heading) {
         const level = Number(heading[1]);
         const s = inlineOf(el, false);
-        if (s.text) emit("heading", { text: s.text, md: `${"#".repeat(level)} ${s.md}` }, verdict, ctx, { level });
+        if (s.text)
+          emit(
+            "heading",
+            { text: s.text, md: `${"#".repeat(level)} ${s.md}` },
+            verdict,
+            ctx,
+            { level }
+          );
       } else if (tag === "pre") {
         const code = codeText(el);
         if (code.trim()) {
@@ -986,7 +1089,8 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
         if (s) emit("table", s, verdict, ctx);
       } else if (tag === "blockquote") {
         const s = inlineOf(el, false);
-        if (s.text) emit("quote", { text: s.text, md: `> ${s.md}` }, verdict, ctx);
+        if (s.text)
+          emit("quote", { text: s.text, md: `> ${s.md}` }, verdict, ctx);
       } else {
         const s = inlineOf(el, false);
         if (s.text) emit("paragraph", s, verdict, ctx);
@@ -1003,7 +1107,12 @@ export function extractMainText(doc: Document, options: MainTextOptions = {}): M
     stack.push({ node: CLOSE, ctx, depth: frame.depth, owner: frame.owner });
     const children = el.childNodes;
     for (let i = children.length - 1; i >= 0; i--) {
-      stack.push({ node: children[i] as Node, ctx, depth: frame.depth + 1, owner: el });
+      stack.push({
+        node: children[i] as Node,
+        ctx,
+        depth: frame.depth + 1,
+        owner: el,
+      });
     }
   }
   flush();

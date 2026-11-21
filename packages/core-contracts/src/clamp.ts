@@ -56,7 +56,10 @@ function truncateUtf16(value: string, max: number): string {
  * negligible per dedupe scope), and the cost is two report items displaying
  * merged; accepted over collision-detection machinery at the fold boundary.
  */
-export function clampItemId(id: string, max: number = REPORT_LIMITS.maxMediumString): string {
+export function clampItemId(
+  id: string,
+  max: number = REPORT_LIMITS.maxMediumString
+): string {
   if (id.length <= max) return id;
   const suffix = `~${hashString(id).toString(36)}`;
   if (suffix.length >= max) return truncateUtf16(id, max);
@@ -66,7 +69,7 @@ export function clampItemId(id: string, max: number = REPORT_LIMITS.maxMediumStr
 /** Plain truncate for check-item strings that need no uniqueness (e.g. `label`). */
 export function clampItemString(
   value: string,
-  max: number = REPORT_LIMITS.maxMediumString,
+  max: number = REPORT_LIMITS.maxMediumString
 ): string {
   return truncateUtf16(value, max);
 }
@@ -139,7 +142,7 @@ function clampDetailsValue(
   value: unknown,
   depth: number,
   limits: DetailsClampLimits,
-  state: ClampState,
+  state: ClampState
 ): unknown {
   state.visited++;
   if (state.visited > limits.maxNodes) {
@@ -214,7 +217,9 @@ function clampDetailsValue(
   // something needed clamping — the untouched case returns the original
   // reference with its order intact.
   const prioritized = prioritizeScalars(entries);
-  const source = sliced ? prioritized.slice(0, limits.maxKeysPerLevel) : prioritized;
+  const source = sliced
+    ? prioritized.slice(0, limits.maxKeysPerLevel)
+    : prioritized;
   // Object.create(null), NOT {}: `details` is attacker-controlled and comes
   // through JSON.parse, which happily creates a real OWN property literally
   // named "__proto__" (JSON.parse never invokes the exotic accessor). But
@@ -247,7 +252,8 @@ function isScalarValue(v: unknown): boolean {
 function prioritizeScalars(entries: [string, unknown][]): [string, unknown][] {
   const scalars: [string, unknown][] = [];
   const rest: [string, unknown][] = [];
-  for (const entry of entries) (isScalarValue(entry[1]) ? scalars : rest).push(entry);
+  for (const entry of entries)
+    (isScalarValue(entry[1]) ? scalars : rest).push(entry);
   return [...scalars, ...rest];
 }
 
@@ -275,9 +281,10 @@ function prioritizeScalars(entries: [string, unknown][]): [string, unknown][] {
  */
 function clampToByteBudget(
   record: Record<string, unknown>,
-  maxBytes: number,
+  maxBytes: number
 ): Record<string, unknown> {
-  const byteSize = (v: unknown): number => new TextEncoder().encode(JSON.stringify(v)).length;
+  const byteSize = (v: unknown): number =>
+    new TextEncoder().encode(JSON.stringify(v)).length;
   if (byteSize(record) <= maxBytes) return record;
 
   const scalarEntries: [string, unknown][] = [];
@@ -331,10 +338,14 @@ function clampToByteBudget(
  */
 export function clampDetailsRecord(
   details: unknown,
-  limits: DetailsClampLimits = DEFAULT_DETAILS_LIMITS,
+  limits: DetailsClampLimits = DEFAULT_DETAILS_LIMITS
 ): unknown {
-  if (!details || typeof details !== "object" || Array.isArray(details)) return details;
+  if (!details || typeof details !== "object" || Array.isArray(details))
+    return details;
   const state: ClampState = { changed: false, visited: 0 };
-  const structural = clampDetailsValue(details, 0, limits, state) as Record<string, unknown>;
+  const structural = clampDetailsValue(details, 0, limits, state) as Record<
+    string,
+    unknown
+  >;
   return clampToByteBudget(structural, limits.maxBytes);
 }

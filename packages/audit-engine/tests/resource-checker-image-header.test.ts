@@ -6,19 +6,20 @@
 // the real checker and assert the request shape, the transfer cap when a
 // server ignores Range, and the cache paths that carry or re-probe the size.
 
-import { Effect } from "effect";
+import type { CachedResourceRecord } from "@squirrelscan/core-contracts";
+
+import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import type { CachedResourceRecord } from "@squirrelscan/core-contracts";
-import { RESOURCE_SIZE_LIMITS } from "@squirrelscan/utils/constants";
 
 import { checkResourceSizes } from "../src/resource-checker";
 
 const CAP = RESOURCE_SIZE_LIMITS.IMAGE_HEADER_BYTES;
 const FIXTURES = join(import.meta.dir, "fixtures", "image-header");
-const fixture = (name: string) => new Uint8Array(readFileSync(join(FIXTURES, name)));
+const fixture = (name: string) =>
+  new Uint8Array(readFileSync(join(FIXTURES, name)));
 
 /** A real PNG header padded out to `size` bytes; only the header is ever parsed. */
 function paddedPng(size: number): Uint8Array<ArrayBuffer> {
@@ -51,7 +52,9 @@ const noRangeServer = Bun.listen<{ started: boolean; done: boolean }>({
       socket.data.started = true;
       noRange.written = 0;
       noRange.closed = false;
-      const status = request.toString().split(" ")[1]?.includes("missing") ? "404 Not Found" : "200 OK";
+      const status = request.toString().split(" ")[1]?.includes("missing")
+        ? "404 Not Found"
+        : "200 OK";
       socket.write(
         `HTTP/1.1 ${status}\r\ncontent-type: image/png\r\ncontent-length: ${BIG.length}\r\n\r\n`
       );
@@ -85,7 +88,11 @@ function ranged(
   const match = /^bytes=(\d+)-(\d+)$/.exec(req.headers.get("range") ?? "");
   if (!match) {
     return new Response(req.method === "HEAD" ? null : body, {
-      headers: { "content-type": type, "content-length": String(body.length), ...extra },
+      headers: {
+        "content-type": type,
+        "content-length": String(body.length),
+        ...extra,
+      },
     });
   }
   const start = Number(match[1]);
@@ -107,10 +114,13 @@ const server = Bun.serve({
   fetch(req) {
     const path = new URL(req.url).pathname;
     if (path === "/ranged/big.png") return ranged(req, BIG, "image/png");
-    if (path === "/ranged/small.gif") return ranged(req, SMALL_GIF, "image/gif");
-    if (path === "/ranged/animated.webp") return ranged(req, WEBP, "image/webp");
+    if (path === "/ranged/small.gif")
+      return ranged(req, SMALL_GIF, "image/gif");
+    if (path === "/ranged/animated.webp")
+      return ranged(req, WEBP, "image/webp");
     if (path === "/etag/a.png") {
-      if (req.headers.get("if-none-match") === '"v1"') return new Response(null, { status: 304 });
+      if (req.headers.get("if-none-match") === '"v1"')
+        return new Response(null, { status: 304 });
       return ranged(req, BIG, "image/png", { etag: '"v1"' });
     }
     if (path === "/chunked/a.png" || path === "/chunked-head/a.png") {
@@ -119,7 +129,10 @@ const server = Bun.serve({
       const body = paddedPng(100_000);
       if (req.method === "HEAD" && path === "/chunked-head/a.png") {
         return new Response(null, {
-          headers: { "content-type": "image/png", "content-length": String(body.length) },
+          headers: {
+            "content-type": "image/png",
+            "content-length": String(body.length),
+          },
         });
       }
       let offset = 0;
@@ -150,11 +163,15 @@ const server = Bun.serve({
         }),
         {
           status: 206,
-          headers: { "content-type": "image/png", "content-range": `bytes 0-${CAP - 1}/${BIG.length}` },
+          headers: {
+            "content-type": "image/png",
+            "content-range": `bytes 0-${CAP - 1}/${BIG.length}`,
+          },
         }
       );
     }
-    if (path === "/missing.png") return new Response("not found", { status: 404 });
+    if (path === "/missing.png")
+      return new Response("not found", { status: 404 });
     return new Response("?", { status: 500 });
   },
 });
@@ -166,12 +183,16 @@ afterAll(() => {
 });
 
 /** Record the method + Range of every request the checks make. */
-async function traceRequests<T>(fn: () => Promise<T>): Promise<{ calls: string[]; result: T }> {
+async function traceRequests<T>(
+  fn: () => Promise<T>
+): Promise<{ calls: string[]; result: T }> {
   const calls: string[] = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const range = new Headers(init?.headers).get("range");
-    calls.push(range ? `${init?.method ?? "GET"} ${range}` : (init?.method ?? "GET"));
+    calls.push(
+      range ? `${init?.method ?? "GET"} ${range}` : (init?.method ?? "GET")
+    );
     return realFetch(input as string, init);
   }) as typeof fetch;
   try {
@@ -202,23 +223,51 @@ describe("one ranged GET per image (#470)", () => {
 
   test("a file under the cap comes back whole, animation and all", async () => {
     const [gif, webp] = await Effect.runPromise(
-      checkResourceSizes([`${base}/ranged/small.gif`, `${base}/ranged/animated.webp`], HEADER)
+      checkResourceSizes(
+        [`${base}/ranged/small.gif`, `${base}/ranged/animated.webp`],
+        HEADER
+      )
     );
-    expect(gif).toMatchObject({ sizeBytes: SMALL_GIF.length, naturalWidth: 20, naturalHeight: 10, animated: true });
-    expect(webp).toMatchObject({ sizeBytes: WEBP.length, naturalWidth: 24, naturalHeight: 18, animated: true });
+    expect(gif).toMatchObject({
+      sizeBytes: SMALL_GIF.length,
+      naturalWidth: 20,
+      naturalHeight: 10,
+      animated: true,
+    });
+    expect(webp).toMatchObject({
+      sizeBytes: WEBP.length,
+      naturalWidth: 24,
+      naturalHeight: 18,
+      animated: true,
+    });
   });
 
   test("pools that do not read headers keep the HEAD, and record no size", async () => {
     const { calls, result } = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([`${base}/ranged/big.png`], { verifyCompression: true }))
+      Effect.runPromise(
+        checkResourceSizes([`${base}/ranged/big.png`], {
+          verifyCompression: true,
+        })
+      )
     );
     expect(calls).toEqual(["HEAD"]);
-    expect(result[0]).toMatchObject({ sizeBytes: BIG.length, naturalWidth: null, naturalHeight: null });
+    expect(result[0]).toMatchObject({
+      sizeBytes: BIG.length,
+      naturalWidth: null,
+      naturalHeight: null,
+    });
   });
 
   test("an error status reads no body and records no size", async () => {
-    const [result] = await Effect.runPromise(checkResourceSizes([`${base}/missing.png`], HEADER));
-    expect(result).toMatchObject({ status: 404, naturalWidth: null, naturalHeight: null, animated: null });
+    const [result] = await Effect.runPromise(
+      checkResourceSizes([`${base}/missing.png`], HEADER)
+    );
+    expect(result).toMatchObject({
+      status: 404,
+      naturalWidth: null,
+      naturalHeight: null,
+      animated: null,
+    });
   });
 });
 
@@ -226,7 +275,12 @@ describe("a server that ignores Range", () => {
   test("with a Content-Length: the read stops at 32 KiB and the connection closes", async () => {
     const url = `http://127.0.0.1:${noRangeServer.port}/big.png`;
     const [result] = await Effect.runPromise(checkResourceSizes([url], HEADER));
-    expect(result).toMatchObject({ status: 200, sizeBytes: BIG.length, naturalWidth: 37, naturalHeight: 23 });
+    expect(result).toMatchObject({
+      status: 200,
+      sizeBytes: BIG.length,
+      naturalWidth: 37,
+      naturalHeight: 23,
+    });
     // Long enough for the 1 MB file to finish (128 writes, 2 ms apart) had
     // the transfer gone on.
     await Bun.sleep(600);
@@ -247,10 +301,17 @@ describe("a server that ignores Range", () => {
 
   test("without one: the size comes from a HEAD, as before the header read", async () => {
     const { calls, result } = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([`${base}/chunked-head/a.png`], HEADER))
+      Effect.runPromise(
+        checkResourceSizes([`${base}/chunked-head/a.png`], HEADER)
+      )
     );
     expect(calls).toEqual([`GET bytes=0-${CAP - 1}`, "HEAD"]);
-    expect(result[0]).toMatchObject({ status: 200, sizeBytes: 100_000, naturalWidth: 37, naturalHeight: 23 });
+    expect(result[0]).toMatchObject({
+      status: 200,
+      sizeBytes: 100_000,
+      naturalWidth: 37,
+      naturalHeight: 23,
+    });
   });
 
   test("without one anywhere: a counted read of the body, as before", async () => {
@@ -258,7 +319,12 @@ describe("a server that ignores Range", () => {
       Effect.runPromise(checkResourceSizes([`${base}/chunked/a.png`], HEADER))
     );
     expect(calls).toEqual([`GET bytes=0-${CAP - 1}`, "HEAD", "GET"]);
-    expect(result[0]).toMatchObject({ status: 200, sizeBytes: 100_000, naturalWidth: 37, naturalHeight: 23 });
+    expect(result[0]).toMatchObject({
+      status: 200,
+      sizeBytes: 100_000,
+      naturalWidth: 37,
+      naturalHeight: 23,
+    });
   });
 
   test("a body that stalls keeps its size and the header that did arrive", async () => {
@@ -277,7 +343,10 @@ describe("a server that ignores Range", () => {
   });
 });
 
-function prior(url: string, overrides: Partial<CachedResourceRecord>): Map<string, CachedResourceRecord> {
+function prior(
+  url: string,
+  overrides: Partial<CachedResourceRecord>
+): Map<string, CachedResourceRecord> {
   return new Map([
     [
       url,
@@ -308,10 +377,17 @@ describe("cache reuse carries the natural size, or re-probes a record without on
 
   test("an origin-fresh hit makes no request and keeps the size", async () => {
     const { calls, result } = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([url], { ...HEADER, priorByUrl: prior(url, {}) }))
+      Effect.runPromise(
+        checkResourceSizes([url], { ...HEADER, priorByUrl: prior(url, {}) })
+      )
     );
     expect(calls).toEqual([]);
-    expect(result[0]).toMatchObject({ cacheReason: "max-age", naturalWidth: 37, naturalHeight: 23, animated: false });
+    expect(result[0]).toMatchObject({
+      cacheReason: "max-age",
+      naturalWidth: 37,
+      naturalHeight: 23,
+      animated: false,
+    });
   });
 
   test("a 304 keeps the size", async () => {
@@ -325,22 +401,42 @@ describe("cache reuse carries the natural size, or re-probes a record without on
       )
     );
     expect(calls).toEqual([`GET bytes=0-${CAP - 1}`]);
-    expect(result[0]).toMatchObject({ cacheReason: "304", naturalWidth: 37, naturalHeight: 23 });
+    expect(result[0]).toMatchObject({
+      cacheReason: "304",
+      naturalWidth: 37,
+      naturalHeight: 23,
+    });
   });
 
   test("a record from before the probe is fetched again rather than reused", async () => {
-    const legacy = prior(url, { naturalWidth: undefined, naturalHeight: undefined, animated: undefined });
+    const legacy = prior(url, {
+      naturalWidth: undefined,
+      naturalHeight: undefined,
+      animated: undefined,
+    });
     const { calls, result } = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([url], { ...HEADER, priorByUrl: legacy }))
+      Effect.runPromise(
+        checkResourceSizes([url], { ...HEADER, priorByUrl: legacy })
+      )
     );
     expect(calls).toEqual([`GET bytes=0-${CAP - 1}`]);
-    expect(result[0]).toMatchObject({ cacheReason: null, naturalWidth: 37, naturalHeight: 23 });
+    expect(result[0]).toMatchObject({
+      cacheReason: null,
+      naturalWidth: 37,
+      naturalHeight: 23,
+    });
   });
 
   test("an SVG never has a size, so its record keeps its cheap reuse", async () => {
-    const svg = prior(url, { contentType: "image/svg+xml", naturalWidth: null, naturalHeight: null });
+    const svg = prior(url, {
+      contentType: "image/svg+xml",
+      naturalWidth: null,
+      naturalHeight: null,
+    });
     const { calls } = await traceRequests(() =>
-      Effect.runPromise(checkResourceSizes([url], { ...HEADER, priorByUrl: svg }))
+      Effect.runPromise(
+        checkResourceSizes([url], { ...HEADER, priorByUrl: svg })
+      )
     );
     expect(calls).toEqual([]);
   });

@@ -13,14 +13,16 @@ import type {
   ResourceSizeData,
   ScriptContentData,
 } from "@squirrelscan/core-contracts";
+
 import {
   ASSET_FETCH_REFUSED_ERROR,
   ASSET_FETCH_SKIPPED_ERROR,
 } from "@squirrelscan/utils/constants";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
-import { registrableDomain } from "../content/dev-leakage";
 import type { Rule, RuleContext, RuleResult, SiteData } from "../types";
+
+import { registrableDomain } from "../content/dev-leakage";
 
 type Kind = "script" | "stylesheet" | "font";
 
@@ -99,7 +101,8 @@ function verdictOf(asset: Asset): Verdict {
   if (asset.status === null) {
     // No status and no error: the fetch never ran. The skipped placeholder is the
     // budget or tarpit path, which the asset phase records explicitly.
-    if (asset.error === null || asset.error === ASSET_FETCH_SKIPPED_ERROR) return "unchecked";
+    if (asset.error === null || asset.error === ASSET_FETCH_SKIPPED_ERROR)
+      return "unchecked";
     if (asset.error === ASSET_FETCH_REFUSED_ERROR) return "refused";
     // A status-less error is a network failure (DNS, TLS, timeout, reset).
     return "warn";
@@ -107,7 +110,11 @@ function verdictOf(asset: Asset): Verdict {
   // Throttling and challenges are read from the response, not the status alone:
   // a bare 503 is an outage and stays broken. Only 503 with Retry-After (flagged
   // `rateLimited`) is the origin asking us to come back later.
-  if (asset.rateLimited || asset.wafBlocked || isRateLimitStatus(asset.status)) {
+  if (
+    asset.rateLimited ||
+    asset.wafBlocked ||
+    isRateLimitStatus(asset.status)
+  ) {
     return "unverified";
   }
   // The audit's custom headers go to the audited origin and named hosts only
@@ -119,7 +126,11 @@ function verdictOf(asset: Asset): Verdict {
   // sibling of the site's own host (a staging CDN behind the same auth) a 401
   // or 407 says the host wants them, not that the file is gone. A true third
   // party that answers 401 fails for visitors too, so it stays a warning.
-  if (asset.credentialless && asset.firstParty && (asset.status === 401 || asset.status === 407)) {
+  if (
+    asset.credentialless &&
+    asset.firstParty &&
+    (asset.status === 401 || asset.status === 407)
+  ) {
     return "unverified";
   }
   if (asset.status < 400) return "ok";
@@ -131,7 +142,9 @@ function verdictOf(asset: Asset): Verdict {
 
 function toItem(asset: Asset): CheckItem {
   const detail =
-    asset.status !== null ? `HTTP ${asset.status}` : `error: ${asset.error ?? "unknown"}`;
+    asset.status !== null
+      ? `HTTP ${asset.status}`
+      : `error: ${asset.error ?? "unknown"}`;
   return {
     id: asset.url,
     label: `${asset.url} (${detail})`,
@@ -158,7 +171,7 @@ function collect(site: SiteData, origin: SiteOrigin | null): Collected {
   const add = (
     entries: Array<ScriptContentData | ResourceSizeData>,
     kind: Kind,
-    credentialless = false,
+    credentialless = false
   ): void => {
     for (const entry of entries) {
       const firstParty = isFirstParty(entry.url, origin);
@@ -195,7 +208,8 @@ function collect(site: SiteData, origin: SiteOrigin | null): Collected {
   if (site.resourceSizes?.fonts === undefined) unmeasured.push("fonts");
   else add(site.resourceSizes.fonts, "font");
 
-  if (site.externalAssets === undefined) unmeasured.push("third-party resources");
+  if (site.externalAssets === undefined)
+    unmeasured.push("third-party resources");
   else {
     add(site.externalAssets.scripts, "script", true);
     add(site.externalAssets.css, "stylesheet", true);
@@ -266,7 +280,10 @@ export const brokenResourcesRule: Rule = {
 
     // URLs the fetch caps left out of the list entirely (#703): they are not in
     // `assets` at all, so only the count says they exist.
-    const dropped = Object.values(site.assetCapDropped ?? {}).reduce((sum, n) => sum + (n ?? 0), 0);
+    const dropped = Object.values(site.assetCapDropped ?? {}).reduce(
+      (sum, n) => sum + (n ?? 0),
+      0
+    );
 
     // Partial when any fetch was skipped, a cap dropped referenced URLs, or a
     // kind was never measured. The result must say so instead of reading as a pass.
@@ -303,7 +320,7 @@ export const brokenResourcesRule: Rule = {
               } catch {
                 return asset.url;
               }
-            }),
+            })
         ),
       ].sort();
       const withheldNote =
@@ -322,14 +339,18 @@ export const brokenResourcesRule: Rule = {
     if (notChecked > 0) {
       const parts: string[] = [];
       if (unchecked > 0) {
-        parts.push(`${unchecked} referenced resource(s) were not fetched (budget or tarpit skip)`);
+        parts.push(
+          `${unchecked} referenced resource(s) were not fetched (budget or tarpit skip)`
+        );
       }
       if (dropped > 0) {
-        parts.push(`${dropped} referenced resource(s) were not fetched (asset fetch cap)`);
+        parts.push(
+          `${dropped} referenced resource(s) were not fetched (asset fetch cap)`
+        );
       }
       if (refused > 0) {
         parts.push(
-          `${refused} referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)`,
+          `${refused} referenced resource(s) were not requested (a private, loopback or metadata address, or another site in an offline audit)`
         );
       }
       if (unmeasured.length > 0) {

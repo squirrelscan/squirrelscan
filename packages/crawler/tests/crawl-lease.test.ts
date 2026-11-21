@@ -6,13 +6,17 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { existsSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
 
 import type { CrawlMetadata } from "../src/storage/types";
-import { releaseActiveLeases, startCrawlLease } from "../src/storage/crawl-lease";
+
+import {
+  releaseActiveLeases,
+  startCrawlLease,
+} from "../src/storage/crawl-lease";
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -74,7 +78,9 @@ function leaseOf(path: string, id: string): LeaseRow {
   const db = new Database(path, { readonly: true });
   try {
     return db
-      .query("SELECT owner_pid, owner_host, heartbeat_at FROM crawls WHERE id = ?")
+      .query(
+        "SELECT owner_pid, owner_host, heartbeat_at FROM crawls WHERE id = ?"
+      )
       .get(id) as LeaseRow;
   } finally {
     db.close();
@@ -84,9 +90,9 @@ function leaseOf(path: string, id: string): LeaseRow {
 function columnsOf(path: string): string[] {
   const db = new Database(path, { readonly: true });
   try {
-    return (db.query("PRAGMA table_info(crawls)").all() as { name: string }[]).map(
-      (c) => c.name
-    );
+    return (
+      db.query("PRAGMA table_info(crawls)").all() as { name: string }[]
+    ).map((c) => c.name);
   } finally {
     db.close();
   }
@@ -183,8 +189,17 @@ describe("migration 35: lease columns", () => {
     const db = new Database(path);
     db.query(
       "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run("old-cli", "https://e.test", 1, "running", "{}", JSON.stringify(STATS));
-    db.query("UPDATE crawls SET status = 'completed' WHERE id = 'old-cli'").run();
+    ).run(
+      "old-cli",
+      "https://e.test",
+      1,
+      "running",
+      "{}",
+      JSON.stringify(STATS)
+    );
+    db.query(
+      "UPDATE crawls SET status = 'completed' WHERE id = 'old-cli'"
+    ).run();
     db.close();
 
     const again = await openStore(path);
@@ -308,7 +323,9 @@ describe("startCrawlLease", () => {
     });
     const other = new Database(path);
     other
-      .query("UPDATE crawls SET owner_pid = 2, owner_host = 'box-b' WHERE id = ?")
+      .query(
+        "UPDATE crawls SET owner_pid = 2, owner_host = 'box-b' WHERE id = ?"
+      )
       .run(id);
     other.close();
     lease.release();
@@ -407,9 +424,9 @@ describe("startCrawlLease", () => {
       }
       expect(resultPaths.every((result) => existsSync(result))).toBe(true);
 
-      const results = await Promise.all(
+      const results = (await Promise.all(
         resultPaths.map(async (result) => Bun.file(result).json())
-      ) as Array<{
+      )) as Array<{
         claim: {
           acquired: boolean;
           ownerPid?: number;

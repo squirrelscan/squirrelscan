@@ -1,6 +1,7 @@
 // a11y/table-headers - Data tables have proper headers
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { ownTableCells, type OwnTable } from "../shared/own-table-cells";
@@ -53,7 +54,10 @@ export const tableHeadersRule: Rule = {
     const owned = [...own.values()];
     for (let i = owned.length - 1; i >= 0; i--) {
       const t = owned[i]!;
-      if (withHeaders.has(t) || t.cells.some((cell) => cell.localName === "th")) {
+      if (
+        withHeaders.has(t) ||
+        t.cells.some((cell) => cell.localName === "th")
+      ) {
         withHeaders.add(t);
         if (t.parent) withHeaders.add(t.parent);
       }

@@ -4,18 +4,18 @@
 // re-audit (fewer pages crawled, the rest carried) must NOT raise the score
 // versus a full audit of the same site.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
 
-import { buildScoringResultsFromMerged, calculateHealthScore } from "../src/scoring";
-import {
-  fingerprint,
-  findingKey,
-  flattenChecks,
-} from "../src/merge";
+import { describe, expect, test } from "bun:test";
+
 import type { CarriedFinding } from "../src/scoring";
+
+import { fingerprint, findingKey, flattenChecks } from "../src/merge";
+import {
+  buildScoringResultsFromMerged,
+  calculateHealthScore,
+} from "../src/scoring";
 
 const META: RuleMeta = {
   id: "core/meta-title",
@@ -95,12 +95,18 @@ describe("union scoring — no inflation on partial re-audit", () => {
   });
 
   test("WITHOUT union scoring, a partial re-audit inflates (control)", () => {
-    const fullScore = calculateHealthScore({ results: freshMapFor(100, 30) }).overall;
+    const fullScore = calculateHealthScore({
+      results: freshMapFor(100, 30),
+    }).overall;
     // Naive: only score the 10 re-crawled pages (3 fail) — issues vanish.
-    const naiveScore = calculateHealthScore({ results: freshMapFor(10, 3) }).overall;
+    const naiveScore = calculateHealthScore({
+      results: freshMapFor(10, 3),
+    }).overall;
     // Same fail ratio here, so equal — bump the re-audit to be "cleaner" to show
     // inflation: re-audit 10 pages with 0 fails.
-    const cleanReaudit = calculateHealthScore({ results: freshMapFor(10, 0) }).overall;
+    const cleanReaudit = calculateHealthScore({
+      results: freshMapFor(10, 0),
+    }).overall;
     expect(cleanReaudit!).toBeGreaterThan(fullScore!);
     // (naiveScore included to document the same-ratio case is stable.)
     expect(naiveScore).toBeGreaterThanOrEqual(0);
@@ -170,7 +176,9 @@ describe("carried-clean passes are counted, not materialized (#918)", () => {
     // 70 clean carried pages (30..99) fold to a COUNT — not 70 pass objects.
     expect(rule.syntheticPassCount).toBe(70);
     expect(
-      rule.checks.some((c) => c.status === "pass" && c.message === "carried (clean)"),
+      rule.checks.some(
+        (c) => c.status === "pass" && c.message === "carried (clean)"
+      )
     ).toBe(false);
     // checks = 10 fresh fails + 20 carried fails, zero synthetic pass rows.
     expect(rule.checks.length).toBe(30);
@@ -202,7 +210,7 @@ describe("finding identity + fingerprint", () => {
   test("findingKey is stable + locator-discriminated", () => {
     expect(findingKey("https://x/a", "r", "c", "")).toBe("https://x/a|r|c|");
     expect(findingKey("https://x/a", "r", "c", "item1")).not.toBe(
-      findingKey("https://x/a", "r", "c", "item2"),
+      findingKey("https://x/a", "r", "c", "item2")
     );
   });
 
@@ -229,7 +237,10 @@ describe("finding identity + fingerprint", () => {
     // c1 (pass) dropped; c2 → 1 finding (locator ""); c3 → 2 findings.
     expect(flat.length).toBe(3);
     expect(flat.filter((f) => f.checkName === "c2")[0].locator).toBe("");
-    const c3 = flat.filter((f) => f.checkName === "c3").map((f) => f.locator).sort();
+    const c3 = flat
+      .filter((f) => f.checkName === "c3")
+      .map((f) => f.locator)
+      .sort();
     expect(c3).toEqual(["i1", "i2"]);
   });
 });

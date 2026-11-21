@@ -19,7 +19,9 @@ const EMPTY_FLAGS: AiOptOutFlags = {
 };
 
 /** Detect the AI opt-out / snippet-limit tokens in one robots-directive string. */
-export function detectAiOptOuts(text: string | null | undefined): AiOptOutFlags {
+export function detectAiOptOuts(
+  text: string | null | undefined
+): AiOptOutFlags {
   if (!text) return { ...EMPTY_FLAGS };
   const t = text.toLowerCase();
   return {
@@ -43,7 +45,11 @@ function collectSources(ctx: RuleContext): DirectiveSource[] {
   const sources: DirectiveSource[] = [];
 
   const header = ctx.page.headers["x-robots-tag"];
-  if (header) sources.push({ origin: "X-Robots-Tag header", flags: detectAiOptOuts(header) });
+  if (header)
+    sources.push({
+      origin: "X-Robots-Tag header",
+      flags: detectAiOptOuts(header),
+    });
 
   const doc = ctx.parsed.document;
   if (doc) {
@@ -57,13 +63,19 @@ function collectSources(ctx: RuleContext): DirectiveSource[] {
     }
   } else if (ctx.parsed.meta.robots) {
     // No DOM (error page / stored parse) — fall back to the extracted robots meta.
-    sources.push({ origin: '<meta name="robots">', flags: detectAiOptOuts(ctx.parsed.meta.robots) });
+    sources.push({
+      origin: '<meta name="robots">',
+      flags: detectAiOptOuts(ctx.parsed.meta.robots),
+    });
   }
 
   return sources.filter((s) => Object.values(s.flags).some(Boolean));
 }
 
-function anyFlag(sources: DirectiveSource[], key: keyof AiOptOutFlags): boolean {
+function anyFlag(
+  sources: DirectiveSource[],
+  key: keyof AiOptOutFlags
+): boolean {
   return sources.some((s) => s.flags[key]);
 }
 
@@ -107,7 +119,8 @@ export const noaiSignalsRule: Rule = {
 
     const declared: string[] = [];
     if (noai) declared.push("noai (advisory opt-out from AI text use)");
-    if (noimageai) declared.push("noimageai (advisory opt-out from AI image use)");
+    if (noimageai)
+      declared.push("noimageai (advisory opt-out from AI image use)");
     if (nosnippet) declared.push("nosnippet (limits AI-search quoting)");
     if (maxSnippet0) declared.push("max-snippet:0 (limits AI-search quoting)");
 
@@ -121,13 +134,23 @@ export const noaiSignalsRule: Rule = {
         name: "noai-signals",
         status: "info",
         message: `Declares AI opt-out signals: ${declared.join(", ")}.${caveat}`,
-        value: declared.length === 1 ? "1 signal" : `${declared.length} signals`,
+        value:
+          declared.length === 1 ? "1 signal" : `${declared.length} signals`,
         items: sources.flatMap((s) =>
           (Object.keys(s.flags) as (keyof AiOptOutFlags)[])
             .filter((k) => s.flags[k])
-            .map((k) => ({ id: `${s.origin}:${k}`, label: `${k} in ${s.origin}` })),
+            .map((k) => ({
+              id: `${s.origin}:${k}`,
+              label: `${k} in ${s.origin}`,
+            }))
         ),
-        details: { noai, noimageai, nosnippet, maxSnippet0, sources: sources.map((s) => s.origin) },
+        details: {
+          noai,
+          noimageai,
+          nosnippet,
+          maxSnippet0,
+          sources: sources.map((s) => s.origin),
+        },
       },
     ];
 

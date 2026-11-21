@@ -1,9 +1,10 @@
 // Endpoint discovery pass: extraction from served JS and HTML, convention paths,
 // dedup, same-origin flagging and the cap. Pure functions, no network.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
 
-import { parseHTML } from "@squirrelscan/parser/dom";
+import type { Rule, RuleContext } from "../src/types";
 
 import {
   buildEndpointSurface,
@@ -17,7 +18,6 @@ import {
   type PageEndpointRefs,
 } from "../src/endpoint-surface";
 import { RuleRunner } from "../src/runner";
-import type { Rule, RuleContext } from "../src/types";
 
 const BASE = "https://example.com/";
 
@@ -25,8 +25,12 @@ function docOf(html: string): Document {
   return parseHTML(html).document as unknown as Document;
 }
 
-function viaOf(refs: { url: string; method?: string; discoveredVia: string }[]) {
-  return refs.map((r) => `${r.method ?? "-"} ${r.url} ${r.discoveredVia}`).sort();
+function viaOf(
+  refs: { url: string; method?: string; discoveredVia: string }[]
+) {
+  return refs
+    .map((r) => `${r.method ?? "-"} ${r.url} ${r.discoveredVia}`)
+    .sort();
 }
 
 describe("endpoint extraction from served JS", () => {
@@ -41,7 +45,10 @@ describe("endpoint extraction from served JS", () => {
       $.post("/api/login");
       jQuery.getJSON("/api/feed.json");
     `;
-    const refs = extractEndpointRefsFromScript(js, "https://example.com/app.js");
+    const refs = extractEndpointRefsFromScript(
+      js,
+      "https://example.com/app.js"
+    );
     expect(viaOf(refs)).toEqual(
       [
         "GET https://example.com/api/users fetch",
@@ -71,7 +78,10 @@ describe("endpoint extraction from served JS", () => {
       const f = "https://api.example.org/v3/things", g = "https://proj.supabase.co/rest/v1/";
       const notApi = "/about", asset = "/api/logo.png", tpl = "/api/\${id}", prose = "see /api docs";
     `;
-    const urls = extractEndpointRefsFromScript(js, "https://example.com/app.js").map((r) => r.url);
+    const urls = extractEndpointRefsFromScript(
+      js,
+      "https://example.com/app.js"
+    ).map((r) => r.url);
     expect(urls.sort()).toEqual(
       [
         "https://example.com/api/health",
@@ -85,7 +95,10 @@ describe("endpoint extraction from served JS", () => {
   });
 
   test("a relative URL without a leading slash is not a candidate (its base depends on the page path)", () => {
-    const refs = extractEndpointRefsFromScript(`fetch("api/users"); axios.get("v1/items")`, "https://example.com/app.js");
+    const refs = extractEndpointRefsFromScript(
+      `fetch("api/users"); axios.get("v1/items")`,
+      "https://example.com/app.js"
+    );
     expect(refs).toEqual([]);
   });
 
@@ -118,7 +131,9 @@ describe("endpoint extraction from HTML", () => {
       <form action="/api/subscribe" method="post"></form>
       <form action="/search"></form>
     </body></html>`);
-    expect(viaOf(extractEndpointRefsFromDocument(doc, "https://example.com/page"))).toEqual(
+    expect(
+      viaOf(extractEndpointRefsFromDocument(doc, "https://example.com/page"))
+    ).toEqual(
       [
         "POST https://example.com/api/subscribe form-action",
         "- https://api.example.org/ link-href",
@@ -131,17 +146,31 @@ describe("endpoint extraction from HTML", () => {
 });
 
 describe("endpoint surface fold", () => {
-  const pages = (refs: PageEndpointRefs["refs"]): PageEndpointRefs[] => [{ pageUrl: BASE, refs }];
+  const pages = (refs: PageEndpointRefs["refs"]): PageEndpointRefs[] => [
+    { pageUrl: BASE, refs },
+  ];
 
   test("adds convention paths per detected stack, and none for an unknown stack", () => {
-    const next = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["nextjs", "react"] });
+    const next = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [],
+      techIds: ["nextjs", "react"],
+    });
     expect(next.candidates.map((c) => c.url).sort()).toEqual(
       CONVENTION_PATHS.nextjs.map((p) => `https://example.com${p}`).sort()
     );
-    expect(next.candidates.every((c) => c.source === "convention" && c.method === "GET")).toBe(true);
+    expect(
+      next.candidates.every(
+        (c) => c.source === "convention" && c.method === "GET"
+      )
+    ).toBe(true);
     expect(next.candidates[0].discoveredVia).toBe("convention:nextjs");
 
-    const none = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["react"] });
+    const none = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [],
+      techIds: ["react"],
+    });
     expect(none.candidates).toEqual([]);
   });
 
@@ -149,9 +178,20 @@ describe("endpoint surface fold", () => {
     const surface = buildEndpointSurface({
       baseUrl: BASE,
       pages: pages([
-        { url: "https://example.com/api/users", discoveredVia: "string-literal" },
-        { url: "https://example.com/api/users#frag", method: "GET", discoveredVia: "fetch" },
-        { url: "https://example.com/api/users", method: "GET", discoveredVia: "form-action" },
+        {
+          url: "https://example.com/api/users",
+          discoveredVia: "string-literal",
+        },
+        {
+          url: "https://example.com/api/users#frag",
+          method: "GET",
+          discoveredVia: "fetch",
+        },
+        {
+          url: "https://example.com/api/users",
+          method: "GET",
+          discoveredVia: "form-action",
+        },
       ]),
       scripts: [
         {
@@ -160,12 +200,26 @@ describe("endpoint surface fold", () => {
         },
       ],
     });
-    expect(surface.candidates.map((c) => [c.method, c.url, c.source, c.discoveredVia])).toEqual([
+    expect(
+      surface.candidates.map((c) => [
+        c.method,
+        c.url,
+        c.source,
+        c.discoveredVia,
+      ])
+    ).toEqual([
       ["GET", "https://example.com/api/users", "static-js", "fetch"],
       ["POST", "https://example.com/api/users", "static-js", "axios.post"],
     ]);
     expect(Object.keys(surface.candidates[0]).sort()).toEqual(
-      ["discoveredVia", "method", "probeEligible", "sameOrigin", "source", "url"].sort()
+      [
+        "discoveredVia",
+        "method",
+        "probeEligible",
+        "sameOrigin",
+        "source",
+        "url",
+      ].sort()
     );
   });
 
@@ -173,9 +227,21 @@ describe("endpoint surface fold", () => {
     const surface = buildEndpointSurface({
       baseUrl: BASE,
       pages: pages([
-        { url: "https://api.vendor.io/v1/data", method: "GET", discoveredVia: "fetch" },
-        { url: "https://example.com/api/mine", method: "GET", discoveredVia: "fetch" },
-        { url: "http://example.com/api/other-scheme", method: "GET", discoveredVia: "fetch" },
+        {
+          url: "https://api.vendor.io/v1/data",
+          method: "GET",
+          discoveredVia: "fetch",
+        },
+        {
+          url: "https://example.com/api/mine",
+          method: "GET",
+          discoveredVia: "fetch",
+        },
+        {
+          url: "http://example.com/api/other-scheme",
+          method: "GET",
+          discoveredVia: "fetch",
+        },
       ]),
     });
     const byUrl = new Map(surface.candidates.map((c) => [c.url, c]));
@@ -188,7 +254,9 @@ describe("endpoint surface fold", () => {
       probeEligible: true,
     });
     // A different scheme is a different origin.
-    expect(byUrl.get("http://example.com/api/other-scheme")?.probeEligible).toBe(false);
+    expect(
+      byUrl.get("http://example.com/api/other-scheme")?.probeEligible
+    ).toBe(false);
   });
 
   test("an origin that differs by www, port or scheme is never probe-eligible, and the cross-origin cap holds with same-origin entries present", () => {
@@ -200,9 +268,13 @@ describe("endpoint surface fold", () => {
       "https://example.com/api/mine",
     ].map((url) => ({ url, method: "GET", discoveredVia: "fetch" }));
     const surface = buildEndpointSurface({ baseUrl: BASE, pages: pages(refs) });
-    const eligible = surface.candidates.filter((c) => c.probeEligible).map((c) => c.url);
+    const eligible = surface.candidates
+      .filter((c) => c.probeEligible)
+      .map((c) => c.url);
     expect(eligible).toEqual(["https://example.com/api/mine"]);
-    expect(surface.candidates.filter((c) => !c.sameOrigin).length).toBe(MAX_CROSS_ORIGIN_CANDIDATES);
+    expect(surface.candidates.filter((c) => !c.sameOrigin).length).toBe(
+      MAX_CROSS_ORIGIN_CANDIDATES
+    );
     expect(surface.truncated).toBe(true);
   });
 
@@ -210,7 +282,9 @@ describe("endpoint surface fold", () => {
     const surface = buildEndpointSurface({
       baseUrl: BASE,
       pages: [],
-      scripts: [{ url: "https://cdn.vendor.io/sdk.js", content: `fetch("/api/track")` }],
+      scripts: [
+        { url: "https://cdn.vendor.io/sdk.js", content: `fetch("/api/track")` },
+      ],
     });
     expect(surface.candidates).toEqual([]);
   });
@@ -226,15 +300,21 @@ describe("endpoint surface fold", () => {
       method: "GET",
       discoveredVia: "fetch",
     }));
-    const a = buildEndpointSurface({ baseUrl: BASE, pages: pages([...cross, ...same]) });
-    const b = buildEndpointSurface({ baseUrl: BASE, pages: pages([...same, ...cross].reverse()) });
+    const a = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: pages([...cross, ...same]),
+    });
+    const b = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: pages([...same, ...cross].reverse()),
+    });
 
     expect(a.candidates.length).toBe(MAX_ENDPOINT_CANDIDATES);
     expect(a.total).toBe(520);
     expect(a.truncated).toBe(true);
-    expect(a.candidates.filter((c) => !c.sameOrigin).length).toBeLessThanOrEqual(
-      MAX_CROSS_ORIGIN_CANDIDATES
-    );
+    expect(
+      a.candidates.filter((c) => !c.sameOrigin).length
+    ).toBeLessThanOrEqual(MAX_CROSS_ORIGIN_CANDIDATES);
     expect(b.candidates).toEqual(a.candidates);
   });
 
@@ -242,7 +322,9 @@ describe("endpoint surface fold", () => {
     const surface = buildEndpointSurface({
       baseUrl: BASE,
       pages: [],
-      renderedRequests: [{ url: "https://example.com/api/live", method: "post" }],
+      renderedRequests: [
+        { url: "https://example.com/api/live", method: "post" },
+      ],
     });
     expect(surface.candidates).toMatchObject([
       { url: "https://example.com/api/live", method: "POST", source: "render" },
@@ -254,7 +336,10 @@ describe("script scan budget", () => {
   const filler = "var x=1;".repeat(Math.ceil((512 * 1024) / 8));
   const bundle = (i: number) => ({
     url: `https://example.com/static/b${String(i).padStart(3, "0")}.js`,
-    content: `fetch("/api/b${String(i).padStart(3, "0")}");${filler}`.slice(0, 512 * 1024),
+    content: `fetch("/api/b${String(i).padStart(3, "0")}");${filler}`.slice(
+      0,
+      512 * 1024
+    ),
   });
 
   test("many large bundles are bounded by the total-bytes budget, in URL order, and the skip is reported", () => {
@@ -266,7 +351,10 @@ describe("script scan budget", () => {
     const scanned = Math.floor(MAX_SCRIPT_SCAN_CHARS / (512 * 1024));
     expect(surface.candidates.length).toBe(scanned);
     expect(surface.candidates.map((c) => c.url)).toEqual(
-      Array.from({ length: scanned }, (_, i) => `https://example.com/api/b${String(i).padStart(3, "0")}`)
+      Array.from(
+        { length: scanned },
+        (_, i) => `https://example.com/api/b${String(i).padStart(3, "0")}`
+      )
     );
     expect(surface.scriptsSkipped).toBe(300 - scanned);
     expect(surface.truncated).toBe(true);
@@ -288,10 +376,18 @@ describe("script scan budget", () => {
   test("which scripts are read does not depend on the order they arrive in, and a small site is not truncated", () => {
     const scripts = Array.from({ length: 300 }, (_, i) => bundle(i));
     const a = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts });
-    const b = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts: [...scripts].reverse() });
+    const b = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [],
+      scripts: [...scripts].reverse(),
+    });
     expect(b).toEqual(a);
 
-    const small = buildEndpointSurface({ baseUrl: BASE, pages: [], scripts: scripts.slice(0, 3) });
+    const small = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [],
+      scripts: scripts.slice(0, 3),
+    });
     expect(small.scriptsSkipped).toBe(0);
     expect(small.truncated).toBe(false);
   });
@@ -317,13 +413,27 @@ describe("rule context", () => {
       },
     } as unknown as Rule;
 
-    const runner = new RuleRunner({ config: { rule_options: {}, rules: { enable: [] } } as never });
-    const internals = runner as unknown as { rules: Map<string, Rule>; enabledRuleIds: string[] };
+    const runner = new RuleRunner({
+      config: { rule_options: {}, rules: { enable: [] } } as never,
+    });
+    const internals = runner as unknown as {
+      rules: Map<string, Rule>;
+      enabledRuleIds: string[];
+    };
     internals.rules.set(probe.meta.id, probe);
     internals.enabledRuleIds = [probe.meta.id];
 
-    const surface = buildEndpointSurface({ baseUrl: BASE, pages: [], techIds: ["nuxt"] });
-    await runner.runSiteRules({ baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null }, undefined, undefined, surface);
+    const surface = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [],
+      techIds: ["nuxt"],
+    });
+    await runner.runSiteRules(
+      { baseUrl: BASE, pages: [], robotsTxt: null, sitemaps: null },
+      undefined,
+      undefined,
+      surface
+    );
     expect(seen).toBe(surface);
   });
 });

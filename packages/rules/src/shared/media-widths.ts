@@ -52,7 +52,10 @@ function normalize(ranges: WidthRange[]): WidthRange[] {
   const out: WidthRange[] = [];
   for (const r of sorted) {
     const last = out[out.length - 1];
-    if (last && (r.lo < last.hi || (r.lo === last.hi && !(r.loOpen && last.hiOpen)))) {
+    if (
+      last &&
+      (r.lo < last.hi || (r.lo === last.hi && !(r.loOpen && last.hiOpen)))
+    ) {
       if (r.hi > last.hi || (r.hi === last.hi && !r.hiOpen)) {
         last.hi = r.hi;
         last.hiOpen = r.hiOpen;
@@ -71,9 +74,19 @@ export function intersectWidths(a: WidthSet, b: WidthSet): WidthSet {
   for (const x of a) {
     for (const y of b) {
       const lo = Math.max(x.lo, y.lo);
-      const loOpen = x.lo === y.lo ? x.loOpen || y.loOpen : x.lo > y.lo ? x.loOpen : y.loOpen;
+      const loOpen =
+        x.lo === y.lo
+          ? x.loOpen || y.loOpen
+          : x.lo > y.lo
+            ? x.loOpen
+            : y.loOpen;
       const hi = Math.min(x.hi, y.hi);
-      const hiOpen = x.hi === y.hi ? x.hiOpen || y.hiOpen : x.hi < y.hi ? x.hiOpen : y.hiOpen;
+      const hiOpen =
+        x.hi === y.hi
+          ? x.hiOpen || y.hiOpen
+          : x.hi < y.hi
+            ? x.hiOpen
+            : y.hiOpen;
       out.push({ lo, loOpen, hi, hiOpen });
     }
   }
@@ -109,18 +122,26 @@ function px(n: number): string {
  */
 export function describeShownWidths(set: WidthSet): string {
   const pieces: string[] = [];
-  const emit = (lo: number, loIncl: boolean, hi: number, hiIncl: boolean): void => {
+  const emit = (
+    lo: number,
+    loIncl: boolean,
+    hi: number,
+    hiIncl: boolean
+  ): void => {
     if (hi !== Infinity && hi - lo <= WIDTH_GAP_TOLERANCE + EPS) return;
     if (lo === 0 && loIncl && hi === Infinity) pieces.push("at every width");
-    else if (lo === 0 && loIncl) pieces.push(hiIncl ? `at ${px(hi)} and below` : `below ${px(hi)}`);
-    else if (hi === Infinity) pieces.push(loIncl ? `at ${px(lo)} and above` : `above ${px(lo)}`);
+    else if (lo === 0 && loIncl)
+      pieces.push(hiIncl ? `at ${px(hi)} and below` : `below ${px(hi)}`);
+    else if (hi === Infinity)
+      pieces.push(loIncl ? `at ${px(lo)} and above` : `above ${px(lo)}`);
     else pieces.push(`between ${px(lo)} and ${px(hi)}`);
   };
   let pos = 0;
   // Whether the point at `pos` is still uncovered.
   let free = true;
   for (const r of set) {
-    if (r.lo > pos || (r.lo === pos && free && r.loOpen)) emit(pos, free, r.lo, r.loOpen);
+    if (r.lo > pos || (r.lo === pos && free && r.loOpen))
+      emit(pos, free, r.lo, r.loOpen);
     if (r.hi > pos || (r.hi === pos && !r.hiOpen)) {
       pos = r.hi;
       free = r.hiOpen;
@@ -149,7 +170,13 @@ function widthCompare(op: Cmp, n: number): WidthRange {
   }
 }
 
-const FLIP: Record<Cmp, Cmp> = { "<": ">", "<=": ">=", ">": "<", ">=": "<=", "=": "=" };
+const FLIP: Record<Cmp, Cmp> = {
+  "<": ">",
+  "<=": ">=",
+  ">": "<",
+  ">=": "<=",
+  "=": "=",
+};
 
 /** One `( … )` feature: the ranges it covers, or null when it is not a plain width test. */
 function readFeature(inner: string): WidthSet | null {
@@ -159,7 +186,12 @@ function readFeature(inner: string): WidthSet | null {
     const n = readLength(colon[2] as string);
     if (n === null) return null;
     const kind = colon[1];
-    return [widthCompare(kind === "min-width" ? ">=" : kind === "max-width" ? "<=" : "=", n)];
+    return [
+      widthCompare(
+        kind === "min-width" ? ">=" : kind === "max-width" ? "<=" : "=",
+        n
+      ),
+    ];
   }
   // Range syntax: `width >= 990px`, `990px <= width`, `400px <= width < 990px`.
   const parts = text.split(/(<=|>=|<|>|=)/).map((p) => p.trim());

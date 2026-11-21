@@ -7,10 +7,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { detectTechnologies } from "../src/detect";
-import { GENERATED_FINGERPRINTS, SECURITY_FINGERPRINTS } from "../src/fingerprints";
+import {
+  GENERATED_FINGERPRINTS,
+  SECURITY_FINGERPRINTS,
+} from "../src/fingerprints";
 
 const detected = (headers: Record<string, string>) =>
-  detectTechnologies({ url: "https://example.com", headers, html: "" }).map((t) => t.id);
+  detectTechnologies({ url: "https://example.com", headers, html: "" }).map(
+    (t) => t.id
+  );
 
 describe("Imperva detection (pub#646)", () => {
   test("X-CDN: Imperva and X-CDN: Incapsula are both Imperva, X-CDN: Fastly is not", () => {
@@ -20,7 +25,11 @@ describe("Imperva detection (pub#646)", () => {
   });
 
   test("the fingerprint lives in the curated set, so a regeneration keeps it", () => {
-    expect(SECURITY_FINGERPRINTS.some((fp) => fp.id === "imperva-incapsula")).toBe(true);
-    expect(GENERATED_FINGERPRINTS.some((fp) => fp.id === "imperva-incapsula")).toBe(false);
+    expect(
+      SECURITY_FINGERPRINTS.some((fp) => fp.id === "imperva-incapsula")
+    ).toBe(true);
+    expect(
+      GENERATED_FINGERPRINTS.some((fp) => fp.id === "imperva-incapsula")
+    ).toBe(false);
   });
 });

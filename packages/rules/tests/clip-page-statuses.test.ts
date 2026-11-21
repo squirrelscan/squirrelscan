@@ -15,7 +15,8 @@ describe("clipPageStatusesToBytes (#1028)", () => {
       url: `https://x.test/p/${i}`.padEnd(urlLen, "a"),
       status: 404,
     }));
-  const bytes = (arr: unknown) => new TextEncoder().encode(JSON.stringify(arr)).length;
+  const bytes = (arr: unknown) =>
+    new TextEncoder().encode(JSON.stringify(arr)).length;
 
   test("leaves an array already inside the budget completely alone", () => {
     const r = { pageStatuses: statuses(100) };
@@ -44,7 +45,9 @@ describe("clipPageStatusesToBytes (#1028)", () => {
     const longR = { pageStatuses: statuses(20_000, 2000) };
     clipPageStatusesToBytes(shortR, small);
     clipPageStatusesToBytes(longR, small);
-    expect(shortR.pageStatuses.length).toBeGreaterThan(longR.pageStatuses.length * 10);
+    expect(shortR.pageStatuses.length).toBeGreaterThan(
+      longR.pageStatuses.length * 10
+    );
     expect(bytes(shortR.pageStatuses)).toBeLessThanOrEqual(small);
     expect(bytes(longR.pageStatuses)).toBeLessThanOrEqual(small);
   });
@@ -60,7 +63,11 @@ describe("clipPageStatusesToBytes (#1028)", () => {
   });
 
   test("tolerates a report with no pageStatuses at all", () => {
-    expect(() => clipPageStatusesToBytes({ pageStatuses: null }, budget)).not.toThrow();
-    expect(() => clipPageStatusesToBytes({ pageStatuses: [] }, budget)).not.toThrow();
+    expect(() =>
+      clipPageStatusesToBytes({ pageStatuses: null }, budget)
+    ).not.toThrow();
+    expect(() =>
+      clipPageStatusesToBytes({ pageStatuses: [] }, budget)
+    ).not.toThrow();
   });
 });

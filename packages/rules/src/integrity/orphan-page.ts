@@ -13,11 +13,10 @@
 // only when `ctx.collectedSignals` is set too: the v1 fallback detects signals on parsed pages,
 // which the streaming path does not have, so without collected signals it stays on legacy.
 
+import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 
 import { detectPageSignals } from "./signals";
 
@@ -47,7 +46,8 @@ export const orphanPageRule: Rule = {
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
-    if (ctx.siteQuery?.outgoingEdges && ctx.collectedSignals) return runSiteQuery(ctx);
+    if (ctx.siteQuery?.outgoingEdges && ctx.collectedSignals)
+      return runSiteQuery(ctx);
     return runLegacy(ctx);
   },
 };
@@ -87,7 +87,8 @@ function readSitemaps(ctx: RuleContext) {
   // never escalated toward "likely injected".
   const sm = ctx.site?.sitemaps;
   const corpusIncomplete =
-    sm?.truncated === true || ((sm?.discovered.length ?? 0) > 0 && sm?.readState !== "complete");
+    sm?.truncated === true ||
+    ((sm?.discovered.length ?? 0) > 0 && sm?.readState !== "complete");
   return { sitemapUrls, corpusIncomplete, hasSitemap: sitemapUrls.size > 0 };
 }
 
@@ -98,7 +99,9 @@ function frontDoorSkip(ctx: RuleContext) {
   // Where the crawl started (#788). A root that redirects to `/en/` or to a
   // sign-in page lands the crawl on a page that is often linked from nowhere,
   // and it is the site's front door, not a hidden one.
-  const entryPages = new Set((ctx.site?.entryUrls ?? []).map((url) => normalizeUrl(url)));
+  const entryPages = new Set(
+    (ctx.site?.entryUrls ?? []).map((url) => normalizeUrl(url))
+  );
   return (key: string, url: string) =>
     key === normalizedBase || getPathname(url) === "/" || entryPages.has(key);
 }
@@ -112,7 +115,7 @@ function frontDoorSkip(ctx: RuleContext) {
 function isHiddenPage(
   hasSitemap: boolean,
   inSitemap: boolean,
-  inboundCount: number,
+  inboundCount: number
 ): boolean {
   return hasSitemap ? inboundCount === 0 && !inSitemap : inboundCount === 0;
 }
@@ -120,7 +123,7 @@ function isHiddenPage(
 function buildChecks(
   hidden: HiddenPage[],
   hasSitemap: boolean,
-  corpusIncomplete: boolean,
+  corpusIncomplete: boolean
 ): RuleResult {
   const checks: CheckResult[] = [];
   if (hidden.length === 0) {
@@ -138,8 +141,10 @@ function buildChecks(
   const escalated = hidden.filter((h) => h.escalated);
   const reviewOnly = hidden.filter((h) => !h.escalated);
   const listOf = (items: typeof hidden) =>
-    items.slice(0, 5).map((h) => getPathname(h.url)).join("\n") +
-    (items.length > 5 ? `\n+${items.length - 5} more` : "");
+    items
+      .slice(0, 5)
+      .map((h) => getPathname(h.url))
+      .join("\n") + (items.length > 5 ? `\n+${items.length - 5} more` : "");
 
   if (escalated.length > 0) {
     checks.push({
@@ -161,7 +166,12 @@ function buildChecks(
         : `${reviewOnly.length} hidden page(s): in no sitemap and linked from nowhere (review)`,
       value: listOf(reviewOnly),
       items: reviewOnly.map((h) => ({ id: h.url })),
-      details: { total: reviewOnly.length, hasSitemap, escalated: false, ...(corpusIncomplete ? { sitemapIncomplete: true } : {}) },
+      details: {
+        total: reviewOnly.length,
+        hasSitemap,
+        escalated: false,
+        ...(corpusIncomplete ? { sitemapIncomplete: true } : {}),
+      },
     });
   }
 
@@ -216,7 +226,8 @@ function runLegacy(ctx: RuleContext): RuleResult {
     // Only consider successfully fetched pages.
     if (page.statusCode < 200 || page.statusCode >= 300) continue;
 
-    if (!isHiddenPage(hasSitemap, sitemapUrls.has(n), inbound.get(n) ?? 0)) continue;
+    if (!isHiddenPage(hasSitemap, sitemapUrls.has(n), inbound.get(n) ?? 0))
+      continue;
 
     // Correlate with page-level integrity signals.
     let signalCount: number;
@@ -244,7 +255,10 @@ function runLegacy(ctx: RuleContext): RuleResult {
       };
       signalCount = detectPageSignals(pageCtx).size;
     }
-    hidden.push({ url: page.url, escalated: !corpusIncomplete && signalCount >= 1 });
+    hidden.push({
+      url: page.url,
+      escalated: !corpusIncomplete && signalCount >= 1,
+    });
   }
 
   return buildChecks(hidden, hasSitemap, corpusIncomplete);
@@ -266,21 +280,25 @@ async function runSiteQuery(ctx: RuleContext): Promise<RuleResult> {
   for (const url of universe) inbound.set(normalizeUrl(url), 0);
   const notOk = new Set<string>();
   for await (const page of query.outgoingEdges!()) {
-    if (page.status === null || page.status < 200 || page.status >= 300) notOk.add(page.source);
+    if (page.status === null || page.status < 200 || page.status >= 300)
+      notOk.add(page.source);
     for (const edge of page.edges) {
       inbound.set(edge.target, (inbound.get(edge.target) ?? 0) + 1);
     }
   }
 
   const isFrontDoor = frontDoorSkip(ctx);
-  const signalCountByUrl = new Map(ctx.collectedSignals!.pages.map((r) => [r.url, r.signals.length]));
+  const signalCountByUrl = new Map(
+    ctx.collectedSignals!.pages.map((r) => [r.url, r.signals.length])
+  );
 
   const hidden: HiddenPage[] = [];
   for (const url of universe) {
     const n = normalizeUrl(url);
     if (isFrontDoor(n, url)) continue;
     if (notOk.has(url)) continue;
-    if (!isHiddenPage(hasSitemap, sitemapUrls.has(n), inbound.get(n) ?? 0)) continue;
+    if (!isHiddenPage(hasSitemap, sitemapUrls.has(n), inbound.get(n) ?? 0))
+      continue;
     const signalCount = signalCountByUrl.get(url) ?? 0;
     hidden.push({ url, escalated: !corpusIncomplete && signalCount >= 1 });
   }

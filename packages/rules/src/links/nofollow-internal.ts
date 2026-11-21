@@ -1,8 +1,8 @@
 // links/nofollow-internal - Internal links with nofollow
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import {
   addSection,
@@ -71,7 +71,10 @@ export const nofollowInternalRule: Rule = {
       // A parse that recorded no `rel` has nothing to say, and the items stay bare.
       const placed = new Map<string, SectionCounts>();
       for (const link of ctx.parsed.links ?? []) {
-        if (link.isInternal && link.rel?.some((r) => r.toLowerCase() === "nofollow")) {
+        if (
+          link.isInternal &&
+          link.rel?.some((r) => r.toLowerCase() === "nofollow")
+        ) {
           addSection(placed, link.url, link.section);
         }
       }

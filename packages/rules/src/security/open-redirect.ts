@@ -54,7 +54,8 @@ export const OPEN_REDIRECT_PAYLOADS = [
   { kind: "protocol-relative", value: `//${OPEN_REDIRECT_CANARY_HOST}/` },
 ] as const;
 
-export type OpenRedirectPayloadKind = (typeof OPEN_REDIRECT_PAYLOADS)[number]["kind"];
+export type OpenRedirectPayloadKind =
+  (typeof OPEN_REDIRECT_PAYLOADS)[number]["kind"];
 
 /** URL and parameter pairs probed per run. Each costs at most two requests. */
 export const MAX_OPEN_REDIRECT_CANDIDATES = 10;
@@ -142,7 +143,11 @@ export function selectOpenRedirectCandidates(
   const robotsTxt = ctx.site?.robotsTxt ?? null;
   const seen = new Set<string>();
 
-  const consider = (rawUrl: string | undefined, foundVia: string, method?: string): void => {
+  const consider = (
+    rawUrl: string | undefined,
+    foundVia: string,
+    method?: string
+  ): void => {
     if (!rawUrl || !rawUrl.includes("?")) return;
     let u: URL;
     try {
@@ -155,7 +160,8 @@ export function selectOpenRedirectCandidates(
     u.hash = "";
     const page = `${u.origin}${u.pathname}`;
     const unsafe =
-      isStateChangingPath(u.pathname) || (method !== undefined && method.toUpperCase() !== "GET");
+      isStateChangingPath(u.pathname) ||
+      (method !== undefined && method.toUpperCase() !== "GET");
     for (const param of new Set(u.searchParams.keys())) {
       if (!isRedirectParamName(param)) continue;
       const key = `${page}\n${param.toLowerCase()}`;
@@ -210,7 +216,10 @@ export function buildOpenRedirectProbe(
       method: "GET",
       credentials: "omit",
       redirect: "manual",
-      headers: { Accept: "text/html,*/*;q=0.8", "User-Agent": SQUIRRELSCAN_USER_AGENT },
+      headers: {
+        Accept: "text/html,*/*;q=0.8",
+        "User-Agent": SQUIRRELSCAN_USER_AGENT,
+      },
     },
   };
 }
@@ -231,7 +240,8 @@ export function classifyRedirect(
   location: string | null,
   requestUrl: string
 ): OpenRedirectVerdict {
-  if (status < 300 || status > 399 || !location) return { kind: "no-redirect", status };
+  if (status < 300 || status > 399 || !location)
+    return { kind: "no-redirect", status };
   let target: URL;
   try {
     // Resolved the way a browser would: `//host` and `/\host` take the request's scheme.
@@ -239,8 +249,10 @@ export function classifyRedirect(
   } catch {
     return { kind: "no-redirect", status };
   }
-  if (target.hostname.toLowerCase() === OPEN_REDIRECT_CANARY_HOST) return { kind: "open", status };
-  if (target.origin === new URL(requestUrl).origin) return { kind: "same-origin", status };
+  if (target.hostname.toLowerCase() === OPEN_REDIRECT_CANARY_HOST)
+    return { kind: "open", status };
+  if (target.origin === new URL(requestUrl).origin)
+    return { kind: "same-origin", status };
   return { kind: "other-host", status };
 }
 
@@ -271,11 +283,18 @@ export async function sendOpenRedirectProbe(
   probe.record();
   try {
     const res = await fetchUndecoded(url, { ...init, signal });
-    const verdict = classifyRedirect(res.status, res.headers.get("location"), url);
+    const verdict = classifyRedirect(
+      res.status,
+      res.headers.get("location"),
+      url
+    );
     await res.body?.cancel().catch(() => {});
     return { sent: true, verdict };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || err.message : String(err) };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || err.message : String(err),
+    };
   } finally {
     done.abort();
   }
@@ -296,20 +315,32 @@ async function probeCandidate(
   let sentAny = false;
   let answered = false;
   for (const payload of OPEN_REDIRECT_PAYLOADS) {
-    const outcome = await sendOpenRedirectProbe(ctx.probe, candidate, payload.value);
+    const outcome = await sendOpenRedirectProbe(
+      ctx.probe,
+      candidate,
+      payload.value
+    );
     if (!outcome.sent) {
       if (!sentAny) return { kind: "not-sent" };
       // The budget ran out between the two forms: this parameter was only half checked.
-      return answered ? { kind: "closed", cut: true } : { kind: "errored", cut: true };
+      return answered
+        ? { kind: "closed", cut: true }
+        : { kind: "errored", cut: true };
     }
     sentAny = true;
     if ("error" in outcome) continue;
     answered = true;
     if (outcome.verdict.kind === "open") {
-      return { kind: "open", payload: payload.kind, status: outcome.verdict.status };
+      return {
+        kind: "open",
+        payload: payload.kind,
+        status: outcome.verdict.status,
+      };
     }
   }
-  return answered ? { kind: "closed", cut: false } : { kind: "errored", cut: false };
+  return answered
+    ? { kind: "closed", cut: false }
+    : { kind: "errored", cut: false };
 }
 
 export const openRedirectRule: Rule = {
@@ -319,7 +350,7 @@ export const openRedirectRule: Rule = {
     description:
       "Probes same-origin URLs whose query carries a redirect-shaped parameter (next, url, redirect, returnTo, continue and the like) with an off-site value, and flags a parameter the server redirects to whatever host it names. The redirect is never followed. Runs only when probing is active or aggressive.",
     solution:
-      "Never redirect to a URL taken from the request as it is. Accept only a relative path that starts with a single `/` (reject `//`, `/\\` and anything with a scheme), or map a short key to a fixed list of destinations, or check the parsed host against an allowlist of your own hosts. Resolve the value with a URL parser before you check it: string prefix checks such as `startsWith(\"/\")` let `//evil.example` through. Fall back to a safe default page when the value fails the check.",
+      'Never redirect to a URL taken from the request as it is. Accept only a relative path that starts with a single `/` (reject `//`, `/\\` and anything with a scheme), or map a short key to a fixed list of destinations, or check the parsed host against an allowlist of your own hosts. Resolve the value with a URL parser before you check it: string prefix checks such as `startsWith("/")` let `//evil.example` through. Fall back to a safe default page when the value fails the check.',
     category: "security",
     scope: "site",
     findingScope: "page",
@@ -356,7 +387,8 @@ export const openRedirectRule: Rule = {
       checks.push({
         name: CHECK,
         status: "pass",
-        message: "No same-origin URL with a redirect-shaped parameter could be probed",
+        message:
+          "No same-origin URL with a redirect-shaped parameter could be probed",
         details,
       });
       return { checks };
@@ -365,8 +397,11 @@ export const openRedirectRule: Rule = {
     let probed = 0;
     let errored = 0;
     let budgetStopped = false;
-    const open: Array<{ candidate: OpenRedirectCandidate; payload: OpenRedirectPayloadKind; status: number }> =
-      [];
+    const open: Array<{
+      candidate: OpenRedirectCandidate;
+      payload: OpenRedirectPayloadKind;
+      status: number;
+    }> = [];
     for (const candidate of selection.candidates) {
       const verdict = await probeCandidate(ctx, candidate);
       if (verdict.kind === "not-sent") {
@@ -376,7 +411,12 @@ export const openRedirectRule: Rule = {
       probed++;
       if (verdict.kind !== "open" && verdict.cut) budgetStopped = true;
       if (verdict.kind === "errored") errored++;
-      if (verdict.kind === "open") open.push({ candidate, payload: verdict.payload, status: verdict.status });
+      if (verdict.kind === "open")
+        open.push({
+          candidate,
+          payload: verdict.payload,
+          status: verdict.status,
+        });
     }
 
     if (probed === 0) {
@@ -384,7 +424,8 @@ export const openRedirectRule: Rule = {
         name: CHECK,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any redirect parameter was probed",
+        message:
+          "The probe budget ran out before any redirect parameter was probed",
         details,
       });
       return { checks };
@@ -402,7 +443,10 @@ export const openRedirectRule: Rule = {
     }
 
     for (const { candidate, payload, status } of open) {
-      const form = payload === "absolute" ? "an absolute URL" : "a protocol-relative URL (//host)";
+      const form =
+        payload === "absolute"
+          ? "an absolute URL"
+          : "a protocol-relative URL (//host)";
       checks.push({
         name: CHECK,
         status: "warn",
@@ -411,10 +455,21 @@ export const openRedirectRule: Rule = {
           {
             id: `${candidate.page}?${candidate.param}`,
             label: `${candidate.page} (?${candidate.param}=): ${status} to an off-site host`,
-            meta: { page: candidate.page, param: candidate.param, payload, status, foundVia: candidate.foundVia },
+            meta: {
+              page: candidate.page,
+              param: candidate.param,
+              payload,
+              status,
+              foundVia: candidate.foundVia,
+            },
           },
         ],
-        details: { page: candidate.page, param: candidate.param, payload, status },
+        details: {
+          page: candidate.page,
+          param: candidate.param,
+          payload,
+          status,
+        },
       });
     }
 

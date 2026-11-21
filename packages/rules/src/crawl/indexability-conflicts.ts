@@ -1,8 +1,9 @@
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { isPageIndexable, isRobotsTxtDisallowed } from "@squirrelscan/utils";
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const SKIP_CHECK: CheckResult = {
   name: "conflicts",
@@ -32,7 +33,9 @@ function buildChecks(blockedWithoutNoindex: string[]): CheckResult[] {
       message: `${blockedWithoutNoindex.length} page(s) blocked by robots.txt without noindex`,
       value:
         blockedWithoutNoindex.slice(0, 3).map(getPathname).join("\n") +
-        (blockedWithoutNoindex.length > 3 ? `\n+${blockedWithoutNoindex.length - 3} more` : ""),
+        (blockedWithoutNoindex.length > 3
+          ? `\n+${blockedWithoutNoindex.length - 3} more`
+          : ""),
       pages: blockedWithoutNoindex,
     },
   ];
@@ -59,8 +62,7 @@ export const indexabilityConflicts: Rule = {
   meta: {
     id: "crawl/indexability-conflicts",
     name: "Indexability Conflicts",
-    description:
-      "Detects pages blocked by robots.txt that carry no noindex",
+    description: "Detects pages blocked by robots.txt that carry no noindex",
     solution:
       "Allowing a page in robots.txt and marking it noindex is the correct way to keep it out of search results, and is not reported. A page blocked in robots.txt without noindex is never fetched, so the URL can still be listed from links elsewhere. To remove it from results, allow the crawl and add noindex; to only save crawl budget, the Disallow alone is fine.",
     category: "crawl",

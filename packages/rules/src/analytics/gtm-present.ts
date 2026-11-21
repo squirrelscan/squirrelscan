@@ -27,7 +27,10 @@ export const gtmPresentRule: Rule = {
 
     // Check for Google Tag Manager: a container loader or its noscript frame.
     // gtag.js is also served from googletagmanager.com but is GA4, not a container (#1600).
-    if (html.includes("googletagmanager.com/ns.html") || html.includes("gtm.js")) {
+    if (
+      html.includes("googletagmanager.com/ns.html") ||
+      html.includes("gtm.js")
+    ) {
       analyticsFound.push("GTM");
     }
 

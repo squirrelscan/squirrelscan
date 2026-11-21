@@ -20,9 +20,9 @@
 // is deliberately the quantity we can measure exactly and cheaply, rather than a
 // parsed-size estimate that would be wrong per site in a way nobody could debug.
 
-import { Effect } from "effect";
-
 import type { SQLiteStorage } from "@squirrelscan/crawler";
+
+import { Effect } from "effect";
 
 /**
  * Default raw-html bytes held per batch. 48 MB parses to roughly 600 MB on the
@@ -142,7 +142,10 @@ export function resolveStreamBatchPages(opts: {
   maxPages?: number;
 }): number {
   const min = toPositiveInt(opts.minPages, STREAM_BATCH_MIN_PAGES);
-  const max = Math.max(min, toPositiveInt(opts.maxPages, STREAM_BATCH_MAX_PAGES));
+  const max = Math.max(
+    min,
+    toPositiveInt(opts.maxPages, STREAM_BATCH_MAX_PAGES)
+  );
   const budget = toPositiveInt(opts.byteBudget, STREAM_BATCH_BYTES);
   if (!Number.isFinite(opts.avgPageBytes) || opts.avgPageBytes <= 0) return min;
   const pages = Math.floor(budget / opts.avgPageBytes);
@@ -172,7 +175,7 @@ export function resolveStreamBatchPages(opts: {
 export function sampleAveragePageBytes(
   storage: SQLiteStorage,
   crawlId: string,
-  totalPages: number,
+  totalPages: number
 ): Effect.Effect<number, never, never> {
   return Effect.gen(function* () {
     if (!Number.isFinite(totalPages) || totalPages <= 0) return 0;
@@ -190,10 +193,18 @@ export function sampleAveragePageBytes(
     // samples fewer distinct pages than intended.
     const perWindow = Math.max(1, Math.ceil(SIZE_SAMPLE_PAGES / 3));
     const starts: number[] = [];
-    for (const candidate of [0, Math.floor((total - perWindow) / 2), total - perWindow]) {
-      const start = Math.max(0, Math.min(total - perWindow, Math.floor(candidate)));
+    for (const candidate of [
+      0,
+      Math.floor((total - perWindow) / 2),
+      total - perWindow,
+    ]) {
+      const start = Math.max(
+        0,
+        Math.min(total - perWindow, Math.floor(candidate))
+      );
       const previous = starts[starts.length - 1];
-      if (previous === undefined || start >= previous + perWindow) starts.push(start);
+      if (previous === undefined || start >= previous + perWindow)
+        starts.push(start);
     }
 
     let bytes = 0;
@@ -215,7 +226,9 @@ export function sampleAveragePageBytes(
 }
 
 /** Mean html length over the pages that have html; 0 when none do. */
-function averageHtmlBytes(pages: ReadonlyArray<{ html: string | null }>): number {
+function averageHtmlBytes(
+  pages: ReadonlyArray<{ html: string | null }>
+): number {
   let bytes = 0;
   let counted = 0;
   for (const page of pages) {
@@ -248,13 +261,21 @@ export function resolveStreamBatch(
   storage: SQLiteStorage,
   crawlId: string,
   totalPages: number,
-  opts?: { pages?: number; byteBudget?: number; minPages?: number; maxPages?: number },
+  opts?: {
+    pages?: number;
+    byteBudget?: number;
+    minPages?: number;
+    maxPages?: number;
+  }
 ): Effect.Effect<ResolvedStreamBatch, never, never> {
   return Effect.gen(function* () {
     const byteBudget = toPositiveInt(opts?.byteBudget, STREAM_BATCH_BYTES);
     if (opts?.pages !== undefined) {
       const min = toPositiveInt(opts.minPages, STREAM_BATCH_MIN_PAGES);
-      const max = Math.max(min, toPositiveInt(opts.maxPages, STREAM_BATCH_MAX_PAGES));
+      const max = Math.max(
+        min,
+        toPositiveInt(opts.maxPages, STREAM_BATCH_MAX_PAGES)
+      );
       // An unusable explicit count (NaN, 0, fractional) falls back to the floor
       // rather than propagating: a NaN batch is an infinite walk, not a slow one.
       return {
@@ -264,7 +285,11 @@ export function resolveStreamBatch(
         explicit: true,
       };
     }
-    const avgPageBytes = yield* sampleAveragePageBytes(storage, crawlId, totalPages);
+    const avgPageBytes = yield* sampleAveragePageBytes(
+      storage,
+      crawlId,
+      totalPages
+    );
     return {
       pages: resolveStreamBatchPages({
         avgPageBytes,

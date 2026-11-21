@@ -1,13 +1,17 @@
 // ax/api-discovery — api-catalog, OpenAPI, and OAuth (DCR/CIMD self-onboarding) discovery.
 
-import { describe, expect, test } from "bun:test";
+import type {
+  CheckResult,
+  WellKnownProbe,
+  WellKnownProbeData,
+} from "@squirrelscan/core-contracts";
 
 import { WELL_KNOWN_PATHS } from "@squirrelscan/core-contracts/storage";
+import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, WellKnownProbe, WellKnownProbeData } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { apiDiscoveryRule } from "../src/ax/api-discovery";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function probe(over: Partial<WellKnownProbe> = {}): WellKnownProbe {
   return {
@@ -34,14 +38,17 @@ function sweep(probes: WellKnownProbe[]): WellKnownProbe[] {
   return WELL_KNOWN_PATHS.map(
     (path) =>
       probes.find((p) => p.path === path) ??
-      probe({ path, url: `https://example.com${path}`, status: 404 }),
+      probe({ path, url: `https://example.com${path}`, status: 404 })
   );
 }
 
 const CATALOG_BODY =
   '{"linkset":[{"anchor":"https://example.invalid/","item":[{"href":"https://example.invalid/api"}]}]}';
 
-function catalog(body: string, over: Partial<WellKnownProbe> = {}): WellKnownProbe {
+function catalog(
+  body: string,
+  over: Partial<WellKnownProbe> = {}
+): WellKnownProbe {
   return probe({
     status: 200,
     contentType: "application/linkset+json",
@@ -53,23 +60,43 @@ function catalog(body: string, over: Partial<WellKnownProbe> = {}): WellKnownPro
   });
 }
 
-function ctx(probes: WellKnownProbe[] | null | undefined, raw = false): RuleContext {
-  const wk: WellKnownProbeData | null = probes ? { probes: raw ? probes : sweep(probes) } : null;
+function ctx(
+  probes: WellKnownProbe[] | null | undefined,
+  raw = false
+): RuleContext {
+  const wk: WellKnownProbeData | null = probes
+    ? { probes: raw ? probes : sweep(probes) }
+    : null;
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, wellKnown: wk },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      wellKnown: wk,
+    },
     options: {},
   };
 }
 
-async function run(probes: WellKnownProbe[] | null | undefined, raw = false): Promise<CheckResult[]> {
+async function run(
+  probes: WellKnownProbe[] | null | undefined,
+  raw = false
+): Promise<CheckResult[]> {
   return (await apiDiscoveryRule.run(ctx(probes, raw))).checks;
 }
 
 describe("ax/api-discovery", () => {
   test("data unavailable → not checked info, no crash", async () => {
-    const checks = (await run(undefined));
+    const checks = await run(undefined);
     expect(checks[0]?.status).toBe("skipped");
     expect(checks[0]?.value).toBe("not-checked");
     expect(checks[0]?.message).toContain("not checked");
@@ -78,7 +105,10 @@ describe("ax/api-discovery", () => {
   // #409: `--rule-exclude` of this rule, or probes off, leaves its paths out of
   // the sweep. That is not evidence the documents are missing.
   test("API and OAuth paths missing from the sweep → both not checked", async () => {
-    const checks = (await run([probe({ path: "/AGENTS.md", status: 404 })], true));
+    const checks = await run(
+      [probe({ path: "/AGENTS.md", status: 404 })],
+      true
+    );
     expect(checks.map((c) => [c.name, c.value])).toEqual([
       ["api-discovery", "not-checked"],
       ["api-discovery-oauth", "not-checked"],
@@ -87,88 +117,126 @@ describe("ax/api-discovery", () => {
   });
 
   test("a hit still counts when another API path was not requested", async () => {
-    const checks = (await run(
-      [probe({ path: "/openapi.json", status: 200, jsonValid: true, jsonKeys: ["openapi"] })],
-      true,
-    ));
-    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("present");
+    const checks = await run(
+      [
+        probe({
+          path: "/openapi.json",
+          status: 200,
+          jsonValid: true,
+          jsonKeys: ["openapi"],
+        }),
+      ],
+      true
+    );
+    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe(
+      "present"
+    );
   });
 
   test("nothing found → two quiet absent checks (catalog/openapi + oauth)", async () => {
-    const checks = (await run([]));
+    const checks = await run([]);
     expect(checks.every((c) => c.status === "info")).toBe(true);
-    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("absent");
-    expect(checks.find((c) => c.name === "api-discovery-oauth")?.value).toBe("absent");
+    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe(
+      "absent"
+    );
+    expect(checks.find((c) => c.name === "api-discovery-oauth")?.value).toBe(
+      "absent"
+    );
   });
 
   test("api-catalog hit → present", async () => {
-    const checks = (await run([catalog(CATALOG_BODY)]));
-    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("present");
+    const checks = await run([catalog(CATALOG_BODY)]);
+    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe(
+      "present"
+    );
   });
 
   // #1650: the catalog is validated as a non-empty linkset and each failure has its own state.
   describe("api-catalog states (#1650)", () => {
-    const api = async (probes: WellKnownProbe[]) => (await run(probes)).find((c) => c.name === "api-discovery");
+    const api = async (probes: WellKnownProbe[]) =>
+      (await run(probes)).find((c) => c.name === "api-discovery");
 
     test("non-empty linkset → present, media type recorded", async () => {
-      const c = (await api([catalog(CATALOG_BODY)]));
+      const c = await api([catalog(CATALOG_BODY)]);
       expect(c?.value).toBe("present");
-      expect(c?.details).toMatchObject({ apiCatalogState: "present", apiCatalogMediaTypeOk: true });
+      expect(c?.details).toMatchObject({
+        apiCatalogState: "present",
+        apiCatalogMediaTypeOk: true,
+      });
     });
 
     test("wrong media type still present, flagged in details", async () => {
-      const c = (await api([catalog(CATALOG_BODY, { contentType: "application/json" })]));
+      const c = await api([
+        catalog(CATALOG_BODY, { contentType: "application/json" }),
+      ]);
       expect(c?.value).toBe("present");
       expect(c?.details).toMatchObject({ apiCatalogMediaTypeOk: false });
     });
 
     test("truncated excerpt of a large catalog is still present", async () => {
-      const c = (await api([catalog(CATALOG_BODY.slice(0, 40))]));
+      const c = await api([catalog(CATALOG_BODY.slice(0, 40))]);
       expect(c?.value).toBe("present");
     });
 
     test("empty linkset → empty-linkset", async () => {
-      expect((await api([catalog('{"linkset":[]}')]))?.value).toBe("empty-linkset");
+      expect((await api([catalog('{"linkset":[]}')]))?.value).toBe(
+        "empty-linkset"
+      );
     });
 
     test("linkset with no link objects is empty, a non-list is invalid-linkset", async () => {
-      expect((await api([catalog('{"linkset":["x"]}')]))?.value).toBe("empty-linkset");
-      expect((await api([catalog('{"linkset":"x"}')]))?.value).toBe("invalid-linkset");
+      expect((await api([catalog('{"linkset":["x"]}')]))?.value).toBe(
+        "empty-linkset"
+      );
+      expect((await api([catalog('{"linkset":"x"}')]))?.value).toBe(
+        "invalid-linkset"
+      );
     });
 
     test("JSON without linkset → not-a-catalog; OpenAPI document is told apart", async () => {
-      expect((await api([catalog('{"a":1}', { jsonKeys: ["a"] })]))?.value).toBe("not-a-catalog");
       expect(
-        (await api([catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] })]))?.value,
+        (await api([catalog('{"a":1}', { jsonKeys: ["a"] })]))?.value
+      ).toBe("not-a-catalog");
+      expect(
+        (await api([catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] })]))
+          ?.value
       ).toBe("openapi-document");
     });
 
     test("malformed JSON → malformed-json", async () => {
-      const c = (await api([catalog('{"linkset":[', { jsonValid: false, jsonKeys: [] })]));
+      const c = await api([
+        catalog('{"linkset":[', { jsonValid: false, jsonKeys: [] }),
+      ]);
       expect(c?.value).toBe("malformed-json");
     });
 
     test("200 HTML fallback → html-fallback", async () => {
-      const c = (await api([
+      const c = await api([
         catalog("<!doctype html><html></html>", {
           looksHtml: true,
           jsonValid: false,
           jsonKeys: [],
           contentType: "text/html",
         }),
-      ]));
+      ]);
       expect(c?.value).toBe("html-fallback");
     });
 
     test("the six states that are not a catalog are distinct, and none is the present state", async () => {
-      const values = await Promise.all([
-        catalog('{"linkset":[]}'),
-        catalog('{"linkset":"x"}'),
-        catalog('{"a":1}', { jsonKeys: ["a"] }),
-        catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] }),
-        catalog("{", { jsonValid: false, jsonKeys: [] }),
-        catalog("<html>", { looksHtml: true, jsonValid: false, jsonKeys: [] }),
-      ].map(async (p) => (await api([p]))?.value));
+      const values = await Promise.all(
+        [
+          catalog('{"linkset":[]}'),
+          catalog('{"linkset":"x"}'),
+          catalog('{"a":1}', { jsonKeys: ["a"] }),
+          catalog('{"openapi":"3.0.0"}', { jsonKeys: ["openapi"] }),
+          catalog("{", { jsonValid: false, jsonKeys: [] }),
+          catalog("<html>", {
+            looksHtml: true,
+            jsonValid: false,
+            jsonKeys: [],
+          }),
+        ].map(async (p) => (await api([p]))?.value)
+      );
       expect(values).toEqual([
         "empty-linkset",
         "invalid-linkset",
@@ -181,44 +249,67 @@ describe("ax/api-discovery", () => {
       expect(values).not.toContain("present");
     });
 
-    test.each([401, 403, 429, 503])("HTTP %d → not checked, never absent", async (status) => {
-      const c = (await api([probe({ status })]));
-      expect(c?.value).toBe("not-checked");
-      expect(c?.status).toBe("skipped");
-      expect(c?.details).toMatchObject({ blocked: { "/.well-known/api-catalog": status } });
-    });
+    test.each([401, 403, 429, 503])(
+      "HTTP %d → not checked, never absent",
+      async (status) => {
+        const c = await api([probe({ status })]);
+        expect(c?.value).toBe("not-checked");
+        expect(c?.status).toBe("skipped");
+        expect(c?.details).toMatchObject({
+          blocked: { "/.well-known/api-catalog": status },
+        });
+      }
+    );
 
     test("404 on every API path stays absent", async () => {
       expect((await api([]))?.value).toBe("absent");
     });
 
     test("a blocked OpenAPI path is not checked even when the catalog was 404", async () => {
-      const c = (await api([probe({ path: "/openapi.json", status: 403 })]));
+      const c = await api([probe({ path: "/openapi.json", status: 403 })]);
       expect(c?.value).toBe("not-checked");
     });
 
     test("a catalog hit still wins over a blocked OpenAPI path", async () => {
-      const c = (await api([catalog(CATALOG_BODY), probe({ path: "/openapi.json", status: 429 })]));
+      const c = await api([
+        catalog(CATALOG_BODY),
+        probe({ path: "/openapi.json", status: 429 }),
+      ]);
       expect(c?.value).toBe("present");
     });
   });
 
   test("openapi.json validated by jsonKeys → present", async () => {
-    const checks = (await run([
-      probe({ path: "/openapi.json", status: 200, jsonValid: true, jsonKeys: ["openapi", "paths"] }),
-    ]));
-    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("present");
+    const checks = await run([
+      probe({
+        path: "/openapi.json",
+        status: 200,
+        jsonValid: true,
+        jsonKeys: ["openapi", "paths"],
+      }),
+    ]);
+    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe(
+      "present"
+    );
   });
 
   test("swagger.json without a version field is not counted as a hit", async () => {
-    const checks = (await run([
-      probe({ path: "/swagger.json", status: 200, jsonValid: true, jsonKeys: ["unrelated"], excerpt: "{}" }),
-    ]));
-    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe("absent");
+    const checks = await run([
+      probe({
+        path: "/swagger.json",
+        status: 200,
+        jsonValid: true,
+        jsonKeys: ["unrelated"],
+        excerpt: "{}",
+      }),
+    ]);
+    expect(checks.find((c) => c.name === "api-discovery")?.value).toBe(
+      "absent"
+    );
   });
 
   test("OAuth AS metadata with registration_endpoint → self-onboarding info", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         path: "/.well-known/oauth-authorization-server",
         status: 200,
@@ -226,14 +317,14 @@ describe("ax/api-discovery", () => {
         jsonKeys: ["issuer"],
         oauthRegistrationEndpoint: "https://auth.example.com/register",
       }),
-    ]));
+    ]);
     const oauth = checks.find((c) => c.name === "api-discovery-oauth");
     expect(oauth?.value).toBe("self-onboarding");
     expect(oauth?.status).toBe("info");
   });
 
   test("OAuth AS metadata with CIMD flag → self-onboarding info", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         path: "/.well-known/oauth-authorization-server",
         status: 200,
@@ -241,19 +332,21 @@ describe("ax/api-discovery", () => {
         jsonKeys: ["issuer"],
         oauthClientIdMetadataDocumentSupported: true,
       }),
-    ]));
-    expect(checks.find((c) => c.name === "api-discovery-oauth")?.value).toBe("self-onboarding");
+    ]);
+    expect(checks.find((c) => c.name === "api-discovery-oauth")?.value).toBe(
+      "self-onboarding"
+    );
   });
 
   test("OAuth AS metadata with neither DCR nor CIMD → suggests adding one", async () => {
-    const checks = (await run([
+    const checks = await run([
       probe({
         path: "/.well-known/oauth-authorization-server",
         status: 200,
         jsonValid: true,
         jsonKeys: ["issuer"],
       }),
-    ]));
+    ]);
     const oauth = checks.find((c) => c.name === "api-discovery-oauth");
     expect(oauth?.value).toBe("no-self-onboarding");
     expect(oauth?.status).toBe("info");
@@ -261,9 +354,14 @@ describe("ax/api-discovery", () => {
   });
 
   test("every check stays info — never penalizes", async () => {
-    const checks = (await run([
-      probe({ path: "/.well-known/oauth-authorization-server", status: 200, jsonValid: true, jsonKeys: [] }),
-    ]));
+    const checks = await run([
+      probe({
+        path: "/.well-known/oauth-authorization-server",
+        status: 200,
+        jsonValid: true,
+        jsonKeys: [],
+      }),
+    ]);
     expect(checks.every((c) => c.status === "info")).toBe(true);
   });
 });

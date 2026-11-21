@@ -2,14 +2,14 @@
 // security/form-https extension that tells an HTTPS-page downgrade apart from
 // a form on an already-insecure page.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { autocompleteTokensRule } from "../src/a11y/autocomplete-tokens";
 import { inputTypesRule } from "../src/a11y/input-types";
 import { formHttpsRule } from "../src/security/form-https";
-import type { CheckResult, RuleContext } from "../src/types";
 
 function ctx(html: string, url = "https://example.com/checkout"): RuleContext {
   return {
@@ -64,7 +64,10 @@ describe("forms UX — correctly marked-up checkout stays clean", () => {
   const html = page(CLEAN_CHECKOUT);
 
   test("a11y/autocomplete-tokens passes", async () => {
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("pass");
     expect(result?.items).toBeUndefined();
   });
@@ -81,7 +84,9 @@ describe("forms UX — correctly marked-up checkout stays clean", () => {
   });
 
   test("security/form-https passes", async () => {
-    expect(check((await formHttpsRule.run(ctx(html))).checks, "form-https")?.status).toBe("pass");
+    expect(
+      check((await formHttpsRule.run(ctx(html))).checks, "form-https")?.status
+    ).toBe("pass");
   });
 });
 
@@ -92,10 +97,17 @@ describe("a11y/autocomplete-tokens", () => {
       <label for="e">Email</label><input id="e" name="email" type="email">
       <label for="p">Phone</label><input id="p" name="phone" type="tel">
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("warn");
     expect(itemIds(result)).toEqual(["input#n", "input#e", "input#p"]);
-    expect(result?.details).toMatchObject({ fieldsChecked: 3, incorrect: 0, missing: 3 });
+    expect(result?.details).toMatchObject({
+      fieldsChecked: 3,
+      incorrect: 0,
+      missing: 3,
+    });
   });
 
   test("fail: a token that is not in the spec, and a token for the wrong purpose", async () => {
@@ -103,10 +115,16 @@ describe("a11y/autocomplete-tokens", () => {
       <label for="e">Email</label><input id="e" name="email" autocomplete="mail">
       <label for="f">First name</label><input id="f" name="firstName" autocomplete="family-name">
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["input#e", "input#f"]);
-    expect(result?.items?.[0]?.meta).toMatchObject({ reason: "invalid-token", expected: "email" });
+    expect(result?.items?.[0]?.meta).toMatchObject({
+      reason: "invalid-token",
+      expected: "email",
+    });
     expect(result?.items?.[1]?.meta).toMatchObject({
       reason: "wrong-token",
       expected: "given-name",
@@ -116,7 +134,10 @@ describe("a11y/autocomplete-tokens", () => {
 
   test("every item carries a selector and a snippet naming the exact node", async () => {
     const html = page(`<form action="/x"><input id="e" name="email"></form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.items?.[0]?.id).toBe("input#e");
     expect(result?.items?.[0]?.snippet).toContain('name="email"');
   });
@@ -126,18 +147,27 @@ describe("a11y/autocomplete-tokens", () => {
       <label for="q">Search</label><input id="q" name="q" type="search">
       <button type="submit">Go</button>
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("skipped");
     expect(result?.skipReason).toBe("no-identifiable-fields");
   });
 
   test("warn: autocomplete=off on a payment field is not an accepted answer", async () => {
     const html = page(
-      `<form action="/pay"><label for="cc">Card number</label><input id="cc" name="cardNumber" autocomplete="off"></form>`,
+      `<form action="/pay"><label for="cc">Card number</label><input id="cc" name="cardNumber" autocomplete="off"></form>`
     );
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("warn");
-    expect(result?.items?.[0]?.meta).toMatchObject({ reason: "disabled", expected: "cc-number" });
+    expect(result?.items?.[0]?.meta).toMatchObject({
+      reason: "disabled",
+      expected: "cc-number",
+    });
   });
 
   test("section-*, shipping/billing and contact prefixes are valid, not typos", async () => {
@@ -146,16 +176,22 @@ describe("a11y/autocomplete-tokens", () => {
       <input id="t1" name="phone" autocomplete="section-payment billing mobile tel">
       <input id="e1" name="email" autocomplete="section-payment billing home email">
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("pass");
   });
 
   test("username is accepted on a login email field", async () => {
     const html = page(
-      `<form action="/login"><input id="e" name="email" type="email" autocomplete="username"><input type="password" name="password" autocomplete="current-password"></form>`,
+      `<form action="/login"><input id="e" name="email" type="email" autocomplete="username"><input type="password" name="password" autocomplete="current-password"></form>`
     );
     expect(
-      check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens")?.status,
+      check(
+        (await autocompleteTokensRule.run(ctx(html))).checks,
+        "autocomplete-tokens"
+      )?.status
     ).toBe("pass");
   });
 
@@ -165,15 +201,21 @@ describe("a11y/autocomplete-tokens", () => {
       <input name="firstName" disabled>
       <div aria-hidden="true"><input name="lastName"></div>
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("skipped");
   });
 
   test("the submitted name outranks a weaker id or placeholder, not the PURPOSES order", async () => {
     const html = page(
-      `<form action="/x"><input id="email" name="firstName" placeholder="City"></form>`,
+      `<form action="/x"><input id="email" name="firstName" placeholder="City"></form>`
     );
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.items?.[0]?.meta).toMatchObject({ expected: "given-name" });
   });
 
@@ -182,7 +224,10 @@ describe("a11y/autocomplete-tokens", () => {
       <input id="u" name="email" type="email" autocomplete="username webauthn">
       <input id="e" name="emailAddress" type="email" autocomplete="email webauthn">
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["input#e"]);
     expect(result?.items?.[0]?.meta).toMatchObject({ reason: "invalid-token" });
@@ -194,23 +239,29 @@ describe("a11y/autocomplete-tokens", () => {
       <label for="h">Hotel</label><input id="h" name="hotel" type="text">
       <label for="m">Mailing list name</label><input id="m" name="mailingListName" type="text">
     </form>`);
-    const result = check((await autocompleteTokensRule.run(ctx(html))).checks, "autocomplete-tokens");
+    const result = check(
+      (await autocompleteTokensRule.run(ctx(html))).checks,
+      "autocomplete-tokens"
+    );
     expect(result?.status).toBe("skipped");
   });
 });
 
 describe("a11y/autocomplete-tokens: lone country fields", () => {
   const run = async (html: string) =>
-    check((await autocompleteTokensRule.run(ctx(page(html)))).checks, "autocomplete-tokens");
+    check(
+      (await autocompleteTokensRule.run(ctx(page(html)))).checks,
+      "autocomplete-tokens"
+    );
   const countryItems = (result: CheckResult | undefined) =>
     (result?.items ?? []).filter((i) => i.meta?.purpose === "country");
 
   test("reporter's localization form: no item", async () => {
-    const result = (await run(`<form action="/localization" method="post">
+    const result = await run(`<form action="/localization" method="post">
       <label for="cc">Country</label><select id="cc" name="country_code"><option value="DE">Germany</option><option value="AT">Austria</option></select>
       <label for="lc">Language</label><select id="lc" name="locale_code"><option value="de">Deutsch</option><option value="en">English</option></select>
       <button type="submit">Update</button>
-    </form>`));
+    </form>`);
     expect(result?.items).toBeUndefined();
     expect(result?.status).not.toBe("warn");
     expect(result?.status).not.toBe("fail");
@@ -226,12 +277,15 @@ describe("a11y/autocomplete-tokens: lone country fields", () => {
     "country_region",
   ];
 
-  test.each(NAMES)("%s alone in a non-personal form: not reported", async (name) => {
-    const result = (await run(
-      `<form action="/prefs"><select id="c" name="${name}"><option>DE</option></select></form>`,
-    ));
-    expect(result?.items).toBeUndefined();
-  });
+  test.each(NAMES)(
+    "%s alone in a non-personal form: not reported",
+    async (name) => {
+      const result = await run(
+        `<form action="/prefs"><select id="c" name="${name}"><option>DE</option></select></form>`
+      );
+      expect(result?.items).toBeUndefined();
+    }
+  );
 
   test.each(NAMES)("%s next to a name field: reported", async (name) => {
     const result = await run(`<form action="/prefs">
@@ -277,47 +331,47 @@ describe("a11y/autocomplete-tokens: lone country fields", () => {
   });
 
   test("country plus language and currency selects in a header preferences form: no item", async () => {
-    const result = (await run(`<form action="/prefs" class="header-prefs">
+    const result = await run(`<form action="/prefs" class="header-prefs">
       <label for="c">Country</label><select id="c" name="country"><option>DE</option></select>
       <label for="l">Language</label><select id="l" name="language"><option>de</option></select>
       <label for="cur">Currency</label><select id="cur" name="currency"><option>EUR</option></select>
-    </form>`));
+    </form>`);
     expect(result?.items).toBeUndefined();
   });
 
   test.each(["country", "country-name", "shipping country"])(
     'autocomplete="%s" inside an address form: passes',
     async (token) => {
-      const result = (await run(`<form action="/address">
+      const result = await run(`<form action="/address">
         <label for="s">Street</label><input id="s" name="street" autocomplete="address-line1">
         <label for="c">Country</label><select id="c" name="country" autocomplete="${token}"><option>US</option></select>
-      </form>`));
+      </form>`);
       expect(result?.status).toBe("pass");
-    },
+    }
   );
 
   test.each(["country", "country-name"])(
     'autocomplete="%s" on a lone country in a preferences form: passes',
     async (token) => {
-      const result = (await run(
-        `<form action="/prefs"><select id="c" name="country_code" autocomplete="${token}"><option>DE</option></select></form>`,
-      ));
+      const result = await run(
+        `<form action="/prefs"><select id="c" name="country_code" autocomplete="${token}"><option>DE</option></select></form>`
+      );
       expect(result?.status).toBe("pass");
-    },
+    }
   );
 
   test("a lone country with an invalid token is still validated", async () => {
-    const result = (await run(
-      `<form action="/prefs"><select id="c" name="country_code" autocomplete="contry"><option>DE</option></select></form>`,
-    ));
+    const result = await run(
+      `<form action="/prefs"><select id="c" name="country_code" autocomplete="contry"><option>DE</option></select></form>`
+    );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["select#c"]);
   });
 
   test("a country select with no form ancestor: reported", async () => {
-    const result = (await run(
-      `<label for="c">Country</label><select id="c" name="country_code"><option>DE</option></select>`,
-    ));
+    const result = await run(
+      `<label for="c">Country</label><select id="c" name="country_code"><option>DE</option></select>`
+    );
     expect(result?.status).toBe("warn");
     expect(itemIds(result)).toEqual(["select#c"]);
   });
@@ -325,27 +379,30 @@ describe("a11y/autocomplete-tokens: lone country fields", () => {
   test.each([
     ["name", `<input id="n" name="name" type="text">`],
     ["email", `<input id="n" name="email" type="text">`],
-  ])("a country-only form with a visible text input named %s: reported", async (_label, input) => {
-    const result = await run(`<form action="/prefs">
+  ])(
+    "a country-only form with a visible text input named %s: reported",
+    async (_label, input) => {
+      const result = await run(`<form action="/prefs">
       <select id="c" name="country_code"><option>DE</option></select>${input}
     </form>`);
-    expect(itemIds(result)).toContain("select#c");
-  });
+      expect(itemIds(result)).toContain("select#c");
+    }
+  );
 
   test("a hidden country input in an address form: not reported", async () => {
-    const result = (await run(`<form action="/address">
+    const result = await run(`<form action="/address">
       <input type="hidden" name="country" value="US">
       <label for="s">Street</label><input id="s" name="street" autocomplete="address-line1">
-    </form>`));
+    </form>`);
     expect(result?.status).toBe("pass");
     expect(result?.items).toBeUndefined();
   });
 
   test("a hidden name input does not make a locale form personal", async () => {
-    const result = (await run(`<form action="/localization">
+    const result = await run(`<form action="/localization">
       <input type="hidden" name="name" value="x">
       <select id="c" name="country_code"><option>DE</option></select>
-    </form>`));
+    </form>`);
     expect(result?.items).toBeUndefined();
   });
 });
@@ -358,10 +415,23 @@ describe("a11y/input-types — the right type", () => {
       <label for="w">Website</label><input id="w" name="website" type="text">
       <label for="q">Quantity</label><input id="q" name="quantity" type="text">
     </form>`);
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "input-types");
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "input-types"
+    );
     expect(result?.status).toBe("warn");
-    expect(itemIds(result)).toEqual(["input#e", "input#p", "input#w", "input#q"]);
-    expect(result?.items?.map((i) => i.meta?.expected)).toEqual(["email", "tel", "url", "number"]);
+    expect(itemIds(result)).toEqual([
+      "input#e",
+      "input#p",
+      "input#w",
+      "input#q",
+    ]);
+    expect(result?.items?.map((i) => i.meta?.expected)).toEqual([
+      "email",
+      "tel",
+      "url",
+      "number",
+    ]);
   });
 
   test("fail: type=number on a digit string mangles leading zeros", async () => {
@@ -369,17 +439,24 @@ describe("a11y/input-types — the right type", () => {
       <label for="z">ZIP code</label><input id="z" name="postalCode" type="number">
       <label for="cc">Card number</label><input id="cc" name="cardNumber" type="number">
     </form>`);
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "input-types");
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "input-types"
+    );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["input#z", "input#cc"]);
-    expect(result?.items?.[0]?.meta).toMatchObject({ reason: "number-hostile" });
+    expect(result?.items?.[0]?.meta).toMatchObject({
+      reason: "number-hostile",
+    });
   });
 
   test("inputmode already delivers the keyboard, so text is a deliberate choice", async () => {
     const html = page(
-      `<form action="/x"><label for="p">Phone</label><input id="p" name="phone" type="text" inputmode="tel"></form>`,
+      `<form action="/x"><label for="p">Phone</label><input id="p" name="phone" type="text" inputmode="tel"></form>`
     );
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "input-types")?.status).toBe("pass");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "input-types")?.status
+    ).toBe("pass");
   });
 
   test("the escape hatch survives a camelCase inputMode (#1507)", async () => {
@@ -387,16 +464,21 @@ describe("a11y/input-types — the right type", () => {
     // through, the exemption read "inputmode", missed it, and the rule warned
     // on correct markup across five pages.
     const html = page(
-      `<form action="/x"><label for="u">Site URL</label><input id="u" name="websiteUrl" type="text" inputMode="url"></form>`,
+      `<form action="/x"><label for="u">Site URL</label><input id="u" name="websiteUrl" type="text" inputMode="url"></form>`
     );
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "input-types")?.status).toBe("pass");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "input-types")?.status
+    ).toBe("pass");
   });
 
   test("skipped: no input on the page implies a particular type", async () => {
     const html = page(
-      `<form action="/x"><label for="m">Message</label><textarea id="m" name="message"></textarea><input id="n" name="fullName" type="text" autocomplete="name"></form>`,
+      `<form action="/x"><label for="m">Message</label><textarea id="m" name="message"></textarea><input id="n" name="fullName" type="text" autocomplete="name"></form>`
     );
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "input-types");
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "input-types"
+    );
     expect(result?.status).toBe("skipped");
     expect(result?.skipReason).toBe("no-typed-inputs");
   });
@@ -409,15 +491,26 @@ describe("a11y/input-types — enterkeyhint", () => {
   </form>`;
 
   test("warn: a multi-field form with no keyboard hint anywhere", async () => {
-    const result = check((await inputTypesRule.run(ctx(page(threeFields)))).checks, "enterkeyhint");
+    const result = check(
+      (await inputTypesRule.run(ctx(page(threeFields)))).checks,
+      "enterkeyhint"
+    );
     expect(result?.status).toBe("warn");
     expect(itemIds(result)).toEqual(["form#signup"]);
-    expect(result?.items?.[0]?.meta).toMatchObject({ reason: "missing-enterkeyhint", fields: 3 });
+    expect(result?.items?.[0]?.meta).toMatchObject({
+      reason: "missing-enterkeyhint",
+      fields: 3,
+    });
   });
 
   test("pass: one hint on the form is enough to show the intent", async () => {
-    const html = page(threeFields.replace('name="gamma"', 'name="gamma" enterkeyhint="done"'));
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "enterkeyhint")?.status).toBe("pass");
+    const html = page(
+      threeFields.replace('name="gamma"', 'name="gamma" enterkeyhint="done"')
+    );
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "enterkeyhint")
+        ?.status
+    ).toBe("pass");
   });
 
   test("skipped: a two-field login is not a multi-field form", async () => {
@@ -425,7 +518,10 @@ describe("a11y/input-types — enterkeyhint", () => {
       <input name="username" type="text"><input name="password" type="password">
       <button type="submit">Sign in</button>
     </form>`);
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "enterkeyhint");
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "enterkeyhint"
+    );
     expect(result?.status).toBe("skipped");
     expect(result?.skipReason).toBe("no-multi-field-forms");
   });
@@ -435,7 +531,10 @@ describe("a11y/input-types — enterkeyhint", () => {
       <input name="alpha" type="text"><input type="hidden" name="csrf" value="x">
       <input type="submit" value="Go"><input type="reset" value="Reset">
     </form>`);
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "enterkeyhint")?.status).toBe("skipped");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "enterkeyhint")
+        ?.status
+    ).toBe("skipped");
   });
 });
 
@@ -446,7 +545,10 @@ describe("a11y/input-types — novalidate intent", () => {
       <input id="p" name="password" type="password" required>
       <button type="submit">Join</button>
     </form>`);
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate");
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "form-novalidate"
+    );
     expect(result?.status).toBe("warn");
     expect(itemIds(result)).toEqual(["form#signup"]);
   });
@@ -457,7 +559,10 @@ describe("a11y/input-types — novalidate intent", () => {
       <div role="alert" id="err"></div>
       <button type="submit">Join</button>
     </form>`);
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")?.status).toBe("pass");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")
+        ?.status
+    ).toBe("pass");
   });
 
   test("not every occurrence: a page that calls checkValidity itself", async () => {
@@ -466,19 +571,30 @@ describe("a11y/input-types — novalidate intent", () => {
       <button type="submit">Join</button>
     </form>
     <script>document.getElementById('signup').addEventListener('submit', function (e) { if (!e.target.checkValidity()) e.preventDefault(); });</script>`);
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")?.status).toBe("pass");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")
+        ?.status
+    ).toBe("pass");
   });
 
   test("not every occurrence: novalidate on a form with no constraints to disable", async () => {
     const html = page(
-      `<form action="/search" novalidate><input name="q" type="text"><button type="submit">Go</button></form>`,
+      `<form action="/search" novalidate><input name="q" type="text"><button type="submit">Go</button></form>`
     );
-    expect(check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")?.status).toBe("pass");
+    expect(
+      check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate")
+        ?.status
+    ).toBe("pass");
   });
 
   test("skipped: no form on the page sets novalidate", async () => {
-    const html = page(`<form action="/x"><input name="q" type="text" required></form>`);
-    const result = check((await inputTypesRule.run(ctx(html))).checks, "form-novalidate");
+    const html = page(
+      `<form action="/x"><input name="q" type="text" required></form>`
+    );
+    const result = check(
+      (await inputTypesRule.run(ctx(html))).checks,
+      "form-novalidate"
+    );
     expect(result?.status).toBe("skipped");
     expect(result?.skipReason).toBe("not-applicable");
   });
@@ -486,17 +602,31 @@ describe("a11y/input-types — novalidate intent", () => {
 
 describe("security/form-https", () => {
   test("fail: an HTTPS page whose form action points at http://", async () => {
-    const html = page(`<form id="pay" action="http://pay.example.com/charge"><input name="cardNumber"></form>`);
-    const result = check((await formHttpsRule.run(ctx(html, "https://example.com/checkout"))).checks, "form-https");
+    const html = page(
+      `<form id="pay" action="http://pay.example.com/charge"><input name="cardNumber"></form>`
+    );
+    const result = check(
+      (await formHttpsRule.run(ctx(html, "https://example.com/checkout")))
+        .checks,
+      "form-https"
+    );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["form#pay"]);
-    expect(result?.items?.[0]?.meta).toMatchObject({ reason: "https-page-http-action" });
+    expect(result?.items?.[0]?.meta).toMatchObject({
+      reason: "https-page-http-action",
+    });
     expect(result?.details).toMatchObject({ downgrades: 1 });
   });
 
   test("warn: the same action on a page that is itself served over http", async () => {
-    const html = page(`<form id="pay" action="http://pay.example.com/charge"><input name="cardNumber"></form>`);
-    const result = check((await formHttpsRule.run(ctx(html, "http://example.com/checkout"))).checks, "form-https");
+    const html = page(
+      `<form id="pay" action="http://pay.example.com/charge"><input name="cardNumber"></form>`
+    );
+    const result = check(
+      (await formHttpsRule.run(ctx(html, "http://example.com/checkout")))
+        .checks,
+      "form-https"
+    );
     expect(result?.status).toBe("warn");
     expect(result?.items?.[0]?.meta).toMatchObject({ reason: "http-action" });
     expect(result?.details).toMatchObject({ downgrades: 0 });
@@ -504,9 +634,13 @@ describe("security/form-https", () => {
 
   test("fail: a submit button's formaction downgrades the submission", async () => {
     const html = page(
-      `<form id="pay" action="/charge"><input name="cardNumber"><button type="submit" formaction="http://pay.example.com/charge">Pay</button></form>`,
+      `<form id="pay" action="/charge"><input name="cardNumber"><button type="submit" formaction="http://pay.example.com/charge">Pay</button></form>`
     );
-    const result = check((await formHttpsRule.run(ctx(html, "https://example.com/checkout"))).checks, "form-https");
+    const result = check(
+      (await formHttpsRule.run(ctx(html, "https://example.com/checkout")))
+        .checks,
+      "form-https"
+    );
     expect(result?.status).toBe("fail");
     expect(result?.items?.[0]?.meta).toMatchObject({ attribute: "formaction" });
   });
@@ -517,26 +651,37 @@ describe("security/form-https", () => {
       <div formaction="http://b.example.com/x">Not a control</div>
     </form>`);
     expect(
-      check((await formHttpsRule.run(ctx(html, "https://example.com/checkout"))).checks, "form-https")
-        ?.status,
+      check(
+        (await formHttpsRule.run(ctx(html, "https://example.com/checkout")))
+          .checks,
+        "form-https"
+      )?.status
     ).toBe("pass");
   });
 
   test("an unparseable http:// action is still an insecure submission", async () => {
-    const html = page(`<form id="pay" action="http://["><input name="cardNumber"></form>`);
+    const html = page(
+      `<form id="pay" action="http://["><input name="cardNumber"></form>`
+    );
     const result = check(
-      (await formHttpsRule.run(ctx(html, "https://example.com/checkout"))).checks,
-      "form-https",
+      (await formHttpsRule.run(ctx(html, "https://example.com/checkout")))
+        .checks,
+      "form-https"
     );
     expect(result?.status).toBe("fail");
     expect(itemIds(result)).toEqual(["form#pay"]);
   });
 
   test("a protocol-relative action inherits HTTPS from the page and is clean", async () => {
-    const html = page(`<form action="//pay.example.com/charge"><input name="cardNumber"></form>`);
+    const html = page(
+      `<form action="//pay.example.com/charge"><input name="cardNumber"></form>`
+    );
     expect(
-      check((await formHttpsRule.run(ctx(html, "https://example.com/checkout"))).checks, "form-https")
-        ?.status,
+      check(
+        (await formHttpsRule.run(ctx(html, "https://example.com/checkout")))
+          .checks,
+        "form-https"
+      )?.status
     ).toBe("pass");
   });
 
@@ -545,15 +690,18 @@ describe("security/form-https", () => {
       <form action="mailto:sales@example.com"><input name="email"></form>
       <form action="javascript:void(0)"><input name="email"></form>`);
     expect(
-      check((await formHttpsRule.run(ctx(html, "http://example.com/checkout"))).checks, "form-https")
-        ?.status,
+      check(
+        (await formHttpsRule.run(ctx(html, "http://example.com/checkout")))
+          .checks,
+        "form-https"
+      )?.status
     ).toBe("pass");
   });
 
   test("info: nothing on the page submits anywhere", async () => {
     const result = check(
       (await formHttpsRule.run(ctx(page(`<p>No forms here.</p>`)))).checks,
-      "form-https",
+      "form-https"
     );
     expect(result?.status).toBe("info");
   });

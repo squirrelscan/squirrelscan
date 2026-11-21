@@ -1,6 +1,7 @@
 // a11y/focus-visible - Check for focus indicators
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const focusVisibleRule: Rule = {

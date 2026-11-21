@@ -24,8 +24,12 @@ import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { UNREADABLE_MESSAGE, bareTypeName, jsonLdTypes, microdataAndRdfaTypes } from "./markup-types";
-
+import {
+  UNREADABLE_MESSAGE,
+  bareTypeName,
+  jsonLdTypes,
+  microdataAndRdfaTypes,
+} from "./markup-types";
 
 export const optionsSchema = z.object({
   min_confidence: z
@@ -33,7 +37,9 @@ export const optionsSchema = z.object({
     .min(0)
     .max(1)
     .default(0.9)
-    .describe("Minimum classifier confidence (0 to 1) before a page type is trusted"),
+    .describe(
+      "Minimum classifier confidence (0 to 1) before a page type is trusted"
+    ),
 });
 
 type PageTypeFamily = {
@@ -55,7 +61,8 @@ const ARTICLE_TYPES = new Set([
   "discussionforumposting",
 ]);
 // Not `endsWith("posting")`: that would take JobPosting for an article.
-const isArticleType = (name: string): boolean => name.endsWith("article") || ARTICLE_TYPES.has(name);
+const isArticleType = (name: string): boolean =>
+  name.endsWith("article") || ARTICLE_TYPES.has(name);
 
 const PRODUCT_TYPES = new Set([
   "product",
@@ -71,10 +78,21 @@ const PRODUCT_TYPES = new Set([
   "webapplication",
 ]);
 
-const LISTING_TYPES = new Set(["collectionpage", "itemlist", "searchresultspage", "blog", "offercatalog"]);
+const LISTING_TYPES = new Set([
+  "collectionpage",
+  "itemlist",
+  "searchresultspage",
+  "blog",
+  "offercatalog",
+]);
 // The subset that says "this page is an index", used for the veto. OfferCatalog is
 // a valid listing answer for product_listing but does not prove a post is an index.
-const VETO_TYPES = new Set(["collectionpage", "itemlist", "searchresultspage", "blog"]);
+const VETO_TYPES = new Set([
+  "collectionpage",
+  "itemlist",
+  "searchresultspage",
+  "blog",
+]);
 
 const DOCS_TYPES = new Set(["apireference", "howto", "faqpage", "qapage"]);
 
@@ -93,10 +111,12 @@ const ORGANIZATION_TYPES = new Set(
     "SportsOrganization",
     "PerformingGroup",
     ...LOCAL_BUSINESS_TYPES,
-  ].map((t) => t.toLowerCase()),
+  ].map((t) => t.toLowerCase())
 );
 const isOrganizationType = (name: string): boolean =>
-  ORGANIZATION_TYPES.has(name) || name.endsWith("business") || name.endsWith("organization");
+  ORGANIZATION_TYPES.has(name) ||
+  name.endsWith("business") ||
+  name.endsWith("organization");
 
 const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
   article: {
@@ -145,7 +165,10 @@ const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
     noun: "about page",
     wanted: "AboutPage, ProfilePage, Person or Organization",
     matches: (name) =>
-      name === "aboutpage" || name === "profilepage" || name === "person" || isOrganizationType(name),
+      name === "aboutpage" ||
+      name === "profilepage" ||
+      name === "person" ||
+      isOrganizationType(name),
     detail: false,
   },
 };
@@ -164,7 +187,8 @@ function declaredTypes(ctx: RuleContext): DeclaredTypes {
   const topLevel = new Map<string, string>();
   const put = (into: Map<string, string>, raw: string): void => {
     const bare = bareTypeName(raw);
-    if (bare && !into.has(bare.toLowerCase())) into.set(bare.toLowerCase(), bare);
+    if (bare && !into.has(bare.toLowerCase()))
+      into.set(bare.toLowerCase(), bare);
   };
 
   // The parser's list is the top-level and @graph node types only. The veto reads
@@ -184,7 +208,10 @@ function declaredTypes(ctx: RuleContext): DeclaredTypes {
   return { all, topLevel, complete: nested.complete && markup.complete };
 }
 
-function firstMatch(declared: Map<string, string>, test: (name: string) => boolean): string | null {
+function firstMatch(
+  declared: Map<string, string>,
+  test: (name: string) => boolean
+): string | null {
   for (const [key, spelling] of declared) {
     if (test(key)) return spelling;
   }
@@ -242,13 +269,18 @@ export const expectedTypeSchemaRule: Rule = {
     // Model answers only: a rules label is read from the schema (circular) or is a
     // low-confidence default.
     // `!(x >= y)`, not `x < y`: a missing or NaN confidence must read as not confident.
-    if (!pageType || pageType.source !== "model" || !(pageType.confidence >= opts.min_confidence)) {
+    if (
+      !pageType ||
+      pageType.source !== "model" ||
+      !(pageType.confidence >= opts.min_confidence)
+    ) {
       return {
         checks: [
           {
             name: "expected-type",
             status: "info",
-            message: "Page type not classified with enough confidence to expect structured data",
+            message:
+              "Page type not classified with enough confidence to expect structured data",
             details: { inconclusive: true },
           },
         ],
@@ -299,7 +331,9 @@ export const expectedTypeSchemaRule: Rule = {
     }
 
     if (family.detail) {
-      const listing = firstMatch(declared.topLevel, (name) => VETO_TYPES.has(name));
+      const listing = firstMatch(declared.topLevel, (name) =>
+        VETO_TYPES.has(name)
+      );
       if (listing) {
         checks.push({
           name: "expected-type",

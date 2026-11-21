@@ -14,14 +14,18 @@ import type {
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
 
+import { SQLiteStorage } from "@squirrelscan/crawler/storage";
+import { parsePage } from "@squirrelscan/parser";
 import { Effect } from "effect";
 
 import type { SiteModel } from "./types";
 
-import { SQLiteStorage } from "@squirrelscan/crawler/storage";
-import { parsePage } from "@squirrelscan/parser";
-
-import { absoluteHref, buildRobotsTxt, linkText, renderPageHtml } from "./html-render";
+import {
+  absoluteHref,
+  buildRobotsTxt,
+  linkText,
+  renderPageHtml,
+} from "./html-render";
 import { hashString32, hashStringHex } from "./prng";
 
 export interface WriteCrawlOptions {
@@ -105,8 +109,14 @@ const DEFAULT_BATCH_SIZE = 200;
 // 1.25MB would otherwise transiently hold ~250MB just for one batch.
 const MAX_BATCH_BYTES = 20_000_000;
 
-function effectiveBatchSize(configuredBatchSize: number, maxPageSizeBytes: number): number {
-  const byBytes = Math.max(1, Math.floor(MAX_BATCH_BYTES / Math.max(1, maxPageSizeBytes)));
+function effectiveBatchSize(
+  configuredBatchSize: number,
+  maxPageSizeBytes: number
+): number {
+  const byBytes = Math.max(
+    1,
+    Math.floor(MAX_BATCH_BYTES / Math.max(1, maxPageSizeBytes))
+  );
   return Math.max(1, Math.min(configuredBatchSize, byBytes));
 }
 
@@ -119,7 +129,11 @@ function effectiveBatchSize(configuredBatchSize: number, maxPageSizeBytes: numbe
  * shares `baseUrl`'s host, so comparing against `baseUrl`'s hostname once is
  * equivalent to the real per-page `page.finalUrl` comparison, just cheaper.
  */
-function isExternalHref(href: string, baseUrl: string, baseHostname: string): boolean {
+function isExternalHref(
+  href: string,
+  baseUrl: string,
+  baseHostname: string
+): boolean {
   return new URL(absoluteHref(href, baseUrl)).hostname !== baseHostname;
 }
 
@@ -145,7 +159,7 @@ function computeDepths(model: SiteModel): Map<string, number> {
     if (!page) continue;
     const depth = depths.get(path)!;
     const targetPaths: string[] = page.outgoingLinks.map(
-      (href) => (href.split("?")[0] ?? href).split("#")[0]!,
+      (href) => (href.split("?")[0] ?? href).split("#")[0]!
     );
     if (page.redirectTo) targetPaths.push(page.redirectTo);
     for (const targetPath of targetPaths) {
@@ -166,7 +180,7 @@ function computeDepths(model: SiteModel): Map<string, number> {
 export async function writeCrawlToStorage(
   model: SiteModel,
   storagePath: string,
-  opts: WriteCrawlOptions = {},
+  opts: WriteCrawlOptions = {}
 ): Promise<{ storage: SQLiteStorage } & WriteCrawlResult> {
   const baseUrl = opts.baseUrl ?? "http://synthetic.example.com";
   const now = opts.now ?? deterministicTimestamp(model.seed);
@@ -194,7 +208,7 @@ async function writeCrawlBody(
   storage: SQLiteStorage,
   baseUrl: string,
   now: number,
-  opts: WriteCrawlOptions,
+  opts: WriteCrawlOptions
 ): Promise<{ storage: SQLiteStorage } & WriteCrawlResult> {
   const crawlId = await run(
     storage.createCrawl({
@@ -234,14 +248,14 @@ async function writeCrawlBody(
         // crawl reads its one sitemap in full.
         sitemapReadState: "complete",
       },
-    }),
+    })
   );
 
   const depthByPath = computeDepths(model);
   const fetchedAt = now;
   const batchSize = effectiveBatchSize(
     Math.max(1, opts.batchSize ?? DEFAULT_BATCH_SIZE),
-    model.options.maxPageSizeBytes,
+    model.options.maxPageSizeBytes
   );
   const baseHostname = new URL(baseUrl).hostname;
 
@@ -264,7 +278,10 @@ async function writeCrawlBody(
       // is one link in the chain (page-model.ts's applyRedirectChains).
       // Consumers that want the final landing page should walk `redirectTo`
       // hop-by-hop rather than reading a single hop's `finalUrl`.
-      const finalUrl = isRedirect && page.redirectTo ? `${baseUrl}${page.redirectTo}` : pageUrl;
+      const finalUrl =
+        isRedirect && page.redirectTo
+          ? `${baseUrl}${page.redirectTo}`
+          : pageUrl;
       // Faithfully mirror the real crawler's write path (crawler.ts:938-973):
       // HTML pages store `parsedData` = JSON of parsePage(body, finalUrl) minus
       // the (non-serializable) document. Rules re-hydrate this via
@@ -275,7 +292,10 @@ async function writeCrawlBody(
       // stays bounded to one live DOM at a time even at 25k scale.
       let parsedData: string | null = null;
       if (html !== null) {
-        const { document: _doc, ...serializableParsed } = parsePage(html, finalUrl);
+        const { document: _doc, ...serializableParsed } = parsePage(
+          html,
+          finalUrl
+        );
         parsedData = JSON.stringify(serializableParsed);
       }
       const record: PageRecord = {
@@ -325,7 +345,7 @@ async function writeCrawlBody(
             runSync(storage.addLinkAppearancesBatch(crawlId, appearances));
           }
         }
-      }),
+      })
     );
 
     for (const { sizeBytes, appearances } of prepared) {
@@ -349,7 +369,7 @@ async function writeCrawlBody(
       // reason to record. Explicit rather than omitted so the fixture keeps
       // matching the shape a real crawl writes (squirrelscan/repo#1733).
       error: null,
-    }),
+    })
   );
   await run(
     storage.addSitemap(crawlId, {
@@ -359,7 +379,7 @@ async function writeCrawlBody(
       childSitemaps: [],
       errors: [],
       fetchedAt,
-    }),
+    })
   );
   await run(
     storage.addSitemapUrls(
@@ -370,8 +390,8 @@ async function writeCrawlBody(
         sitemapUrl,
         loc: `${baseUrl}${path}`,
         lastmod: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
-      })),
-    ),
+      }))
+    )
   );
 
   await run(
@@ -385,14 +405,19 @@ async function writeCrawlBody(
       imagesTotal: 0,
       bytesTotal,
       avgLoadTimeMs: 1,
-    }),
+    })
   );
   await run(
     storage.updateCrawl(crawlId, {
       status: opts.crawlStatus ?? "crawled",
       completedAt: now,
-    }),
+    })
   );
 
-  return { storage, crawlId, pageCount: model.pages.length, linkAppearanceCount };
+  return {
+    storage,
+    crawlId,
+    pageCount: model.pages.length,
+    linkAppearanceCount,
+  };
 }

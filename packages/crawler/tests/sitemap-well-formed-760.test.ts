@@ -5,7 +5,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { decodeSitemapBody, parseSitemap, SITEMAP_NOT_WELL_FORMED_ERROR } from "../src/sitemaps";
+import {
+  decodeSitemapBody,
+  parseSitemap,
+  SITEMAP_NOT_WELL_FORMED_ERROR,
+} from "../src/sitemaps";
 
 const URL = "https://example.com/sitemap.xml";
 const HEAD =
@@ -16,33 +20,55 @@ describe("sitemap well-formedness (#760)", () => {
   test("a mismatched closing tag is reported and the readable URLs are kept", () => {
     const data = parseSitemap(
       `${HEAD}<url><loc>https://example.com/a</loc></lox></url><url><loc>https://example.com/b</loc></url></urlset>`,
-      URL,
+      URL
     );
     expect(data.errors).toHaveLength(1);
-    expect(data.errors[0]).toStartWith(`${SITEMAP_NOT_WELL_FORMED_ERROR}: Expected closing tag 'url'`);
+    expect(data.errors[0]).toStartWith(
+      `${SITEMAP_NOT_WELL_FORMED_ERROR}: Expected closing tag 'url'`
+    );
     expect(data.errors[0]).toContain("instead of closing tag 'lox'");
     expect(data.urls.map((u) => u.loc)).toContain("https://example.com/a");
   });
 
   test("an unclosed element is reported", () => {
-    const data = parseSitemap(`${HEAD}<url><loc>https://example.com/a</loc></urlset>`, URL);
+    const data = parseSitemap(
+      `${HEAD}<url><loc>https://example.com/a</loc></urlset>`,
+      URL
+    );
     expect(data.errors).toEqual([
-      expect.stringMatching(/^XML is not well formed: Expected closing tag 'url' .*\(line 1, column \d+\)$/),
+      expect.stringMatching(
+        /^XML is not well formed: Expected closing tag 'url' .*\(line 1, column \d+\)$/
+      ),
     ]);
     expect(data.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
   });
 
   test("a raw & in a <loc> is reported and the URL is still read", () => {
-    const data = parseSitemap(`${HEAD}<url><loc>https://example.com/a?x=1&y=2</loc></url></urlset>`, URL);
-    expect(data.errors).toEqual([expect.stringMatching(/^XML is not well formed: char '&' is not expected\./)]);
-    expect(data.urls.map((u) => u.loc)).toEqual(["https://example.com/a?x=1&y=2"]);
+    const data = parseSitemap(
+      `${HEAD}<url><loc>https://example.com/a?x=1&y=2</loc></url></urlset>`,
+      URL
+    );
+    expect(data.errors).toEqual([
+      expect.stringMatching(
+        /^XML is not well formed: char '&' is not expected\./
+      ),
+    ]);
+    expect(data.urls.map((u) => u.loc)).toEqual([
+      "https://example.com/a?x=1&y=2",
+    ]);
   });
 
   test("an error's position is in the body as served, past leading whitespace", () => {
-    const data = parseSitemap(`\n\n  ${HEAD}\n<url><loc>https://example.com/a</loc></lox></url></urlset>`, URL);
+    const data = parseSitemap(
+      `\n\n  ${HEAD}\n<url><loc>https://example.com/a</loc></lox></url></urlset>`,
+      URL
+    );
     expect(data.errors[0]).toMatch(/\(line 4, column \d+\)$/);
     // The position inside the validator's message moves with it.
-    const opened = parseSitemap(`\r\n\r\n  ${HEAD}<url><loc>https://example.com/a</loc></urlset>`, URL);
+    const opened = parseSitemap(
+      `\r\n\r\n  ${HEAD}<url><loc>https://example.com/a</loc></urlset>`,
+      URL
+    );
     expect(opened.errors[0]).toMatch(/opened in line 3, col \d+/);
   });
 
@@ -60,7 +86,11 @@ describe("sitemap well-formedness (#760)", () => {
     const withReference =
       '<?xml version="1.0"?><!DOCTYPE urlset [<!ENTITY averyveryverylongentityname "x">]>' +
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/&averyveryverylongentityname;</loc></url></urlset>';
-    expect(parseSitemap(withReference, URL).errors.filter((e) => e.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR))).toEqual([]);
+    expect(
+      parseSitemap(withReference, URL).errors.filter((e) =>
+        e.startsWith(SITEMAP_NOT_WELL_FORMED_ERROR)
+      )
+    ).toEqual([]);
   });
 
   test("a well-formedness error does not make a page-labelled body a page", () => {
@@ -68,13 +98,15 @@ describe("sitemap well-formedness (#760)", () => {
     // were read and stay read.
     const decoded = decodeSitemapBody(
       new TextEncoder().encode(
-        '<other></other><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/a</loc></url></urlset>',
+        '<other></other><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/a</loc></url></urlset>'
       ),
       URL,
-      "text/html",
+      "text/html"
     );
     expect(decoded.notASitemap).toBeFalsy();
-    expect(decoded.data.urls.map((u) => u.loc)).toEqual(["https://example.com/a"]);
+    expect(decoded.data.urls.map((u) => u.loc)).toEqual([
+      "https://example.com/a",
+    ]);
   });
 
   test("well-formed sitemaps get no new error: CDATA, comments, extensions, escapes, leading whitespace", () => {
@@ -120,7 +152,8 @@ describe("sitemap well-formedness (#760)", () => {
     // Linear is about 4x; quadratic would be about 16x.
     expect(large).toBeLessThan(small * 8 + 50);
     // A body of repeated DOCTYPE openers is read once.
-    const doctypes = (n: number) => `${HEAD}${"<!DOCTYPE x ".repeat(n)}</urlset>`;
+    const doctypes = (n: number) =>
+      `${HEAD}${"<!DOCTYPE x ".repeat(n)}</urlset>`;
     const fewDoctypes = time(doctypes(100_000));
     const manyDoctypes = time(doctypes(400_000));
     expect(manyDoctypes).toBeLessThan(fewDoctypes * 8 + 50);

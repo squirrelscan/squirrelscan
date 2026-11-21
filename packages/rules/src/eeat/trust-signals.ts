@@ -1,8 +1,8 @@
 // eeat/trust-signals - Trust badges and security indicators
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const trustSignalsRule: Rule = {
   meta: {

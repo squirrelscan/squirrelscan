@@ -117,7 +117,10 @@ const SCRIPT = `
  * The rows as a complete HTML document. At most {@link PAGE_MAP_HTML_ROW_CAP} rows are inlined;
  * the page says so when more matched, and `total` stays the audit's real page count.
  */
-export function renderPageMapHtml(rows: readonly PageMapRow[], meta: PageMapMeta): string {
+export function renderPageMapHtml(
+  rows: readonly PageMapRow[],
+  meta: PageMapMeta
+): string {
   const shown = rows.slice(0, PAGE_MAP_HTML_ROW_CAP);
   const payload = escapeEntityJsonForScript(
     JSON.stringify({
@@ -129,7 +132,8 @@ export function renderPageMapHtml(rows: readonly PageMapRow[], meta: PageMapMeta
         status: row.status,
         title: row.title === null ? null : cleanText(row.title),
         titleLength: row.titleLength,
-        description: row.description === null ? null : cleanText(row.description),
+        description:
+          row.description === null ? null : cleanText(row.description),
         descriptionLength: row.descriptionLength,
         h1Count: row.h1Count,
         wordCount: row.wordCount,
@@ -139,7 +143,7 @@ export function renderPageMapHtml(rows: readonly PageMapRow[], meta: PageMapMeta
         externalOutlinks: row.externalOutlinks,
         flags: row.flags.map(cleanText),
       })),
-    }),
+    })
   );
   const cut =
     rows.length > shown.length

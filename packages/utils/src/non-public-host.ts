@@ -47,7 +47,11 @@ import { isSpecialUseIpLiteral } from "./special-use-ip";
 import { isPrivateOrReservedHost } from "./url";
 
 /** Loopback by name. RFC 6761 for `localhost`; the rest are conventional. */
-const LOOPBACK_NAMES = new Set(["localhost", "localhost.localdomain", "ip6-localhost"]);
+const LOOPBACK_NAMES = new Set([
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+]);
 
 /** Cloud instance-metadata services named directly rather than by address. */
 const METADATA_HOSTNAMES = new Set([
@@ -149,7 +153,11 @@ export function isNonPublicHostname(rawHost: string): boolean {
   if (LOOPBACK_NAMES.has(host)) return true;
   if (METADATA_HOSTNAMES.has(host)) return true;
   // Both the apex (`home.arpa`) and anything under it (`router.home.arpa`).
-  if (NON_PUBLIC_NAME_ZONES.some((zone) => host === zone || host.endsWith(`.${zone}`))) {
+  if (
+    NON_PUBLIC_NAME_ZONES.some(
+      (zone) => host === zone || host.endsWith(`.${zone}`)
+    )
+  ) {
     return true;
   }
   // A dotless host resolves through the machine's own search domain in practice
@@ -207,7 +215,10 @@ export function privateNetworkHostLabel(rawUrl: string): string | null {
   return hostLabelWhere(rawUrl, isNonPublicHostname);
 }
 
-function hostLabelWhere(rawUrl: string, classify: (host: string) => boolean): string | null {
+function hostLabelWhere(
+  rawUrl: string,
+  classify: (host: string) => boolean
+): string | null {
   const trimmed = rawUrl.trim();
   if (trimmed.length === 0) return null;
   // An explicit non-http(s) scheme is someone else's error to report.

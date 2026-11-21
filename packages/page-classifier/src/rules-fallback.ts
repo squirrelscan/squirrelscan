@@ -11,6 +11,7 @@
 // page inside the CLI.
 
 import type { NodeFeatures } from "./featurize";
+
 import { SECTIONING_TAGS } from "./featurize";
 
 export type RegionLabel =
@@ -91,7 +92,7 @@ export function declaresOwnRegion(node: NodeFeatures): boolean {
 
 export function ruleRegion(
   node: NodeFeatures,
-  byId: ReadonlyMap<number, NodeFeatures>,
+  byId: ReadonlyMap<number, NodeFeatures>
 ): RegionLabel {
   const role = ROLE_REGION[node.role];
   if (role) return role;
@@ -119,7 +120,7 @@ export function ruleRegion(
 
 function hasSectioningAncestor(
   node: NodeFeatures,
-  byId: ReadonlyMap<number, NodeFeatures>,
+  byId: ReadonlyMap<number, NodeFeatures>
 ): boolean {
   let current = byId.get(node.parentCandidateId);
   let guard = 0;
@@ -168,7 +169,9 @@ const OG_TYPE_MAP: Record<string, PageTypeLabel> = {
 };
 
 interface SchemaDocument {
-  querySelector(selector: string): { getAttribute(name: string): string | null } | null;
+  querySelector(
+    selector: string
+  ): { getAttribute(name: string): string | null } | null;
   querySelectorAll(selector: string): Iterable<{
     textContent: string | null;
     getAttribute(name: string): string | null;
@@ -185,9 +188,14 @@ interface SchemaDocument {
  * best other class, or falls back to this function), so no non-root page is
  * ever labelled `homepage`, from the model or from the rules.
  */
-export function rulePageType(document: SchemaDocument, url: string): PageTypeLabel {
+export function rulePageType(
+  document: SchemaDocument,
+  url: string
+): PageTypeLabel {
   const types = new Set<string>();
-  for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+  for (const script of document.querySelectorAll(
+    'script[type="application/ld+json"]'
+  )) {
     const raw = (script.textContent ?? "").trim();
     if (!raw) continue;
     try {
@@ -209,9 +217,14 @@ export function rulePageType(document: SchemaDocument, url: string): PageTypeLab
   }
   if (classes.size === 1) return [...classes][0]!;
 
-  if (isRootPath(url) && (types.has("website") || types.has("organization"))) return "homepage";
+  if (isRootPath(url) && (types.has("website") || types.has("organization")))
+    return "homepage";
 
-  const og = (document.querySelector('meta[property="og:type"]')?.getAttribute("content") ?? "")
+  const og = (
+    document
+      .querySelector('meta[property="og:type"]')
+      ?.getAttribute("content") ?? ""
+  )
     .trim()
     .toLowerCase();
   const fromOg = OG_TYPE_MAP[og];
@@ -269,12 +282,19 @@ export function isRootPath(url: string): boolean {
   }
 }
 
-const NESTED_KEYS = ["@graph", "mainentity", "mainentityofpage", "about", "itemlistelement"];
+const NESTED_KEYS = [
+  "@graph",
+  "mainentity",
+  "mainentityofpage",
+  "about",
+  "itemlistelement",
+];
 
 function collectTypes(value: unknown, into: Set<string>, depth: number): void {
   if (depth > 6 || value === null || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    for (const entry of value.slice(0, 50)) collectTypes(entry, into, depth + 1);
+    for (const entry of value.slice(0, 50))
+      collectTypes(entry, into, depth + 1);
     return;
   }
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
@@ -286,7 +306,8 @@ function collectTypes(value: unknown, into: Set<string>, depth: number): void {
           : Array.isArray(entry)
             ? entry.filter((v): v is string => typeof v === "string")
             : [];
-      for (const type of list) into.add((type.split(/[/#:]/).pop() ?? type).trim().toLowerCase());
+      for (const type of list)
+        into.add((type.split(/[/#:]/).pop() ?? type).trim().toLowerCase());
       continue;
     }
     if (NESTED_KEYS.includes(lower)) collectTypes(entry, into, depth + 1);

@@ -4,10 +4,9 @@
 // unanswered. Every assertion here is on what the probes stored or
 // recorded, driven against a real origin.
 
+import { MAX_REFUSED_FETCHES } from "@squirrelscan/core-contracts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { MAX_REFUSED_FETCHES } from "@squirrelscan/core-contracts";
 
 import { createPhaseBudget } from "../src/deadline";
 import { fetchLlmsTxt } from "../src/llms";
@@ -22,7 +21,10 @@ afterEach(() => {
 });
 
 /** An origin that answers every path with `status`, as a bot wall does. */
-function serveAll(status: number, headers: Record<string, string> = {}): string {
+function serveAll(
+  status: number,
+  headers: Record<string, string> = {}
+): string {
   const server = Bun.serve({
     port: 0,
     fetch: () => new Response("blocked", { status, headers }),
@@ -51,9 +53,12 @@ describe("isRefusal", () => {
   });
 
   test("a 503 is a refusal only when Cloudflare stamps it as a challenge", () => {
-    expect(isRefusal({ status: 503, headers: headersOf({ "cf-mitigated": "challenge" }) })).toBe(
-      true,
-    );
+    expect(
+      isRefusal({
+        status: 503,
+        headers: headersOf({ "cf-mitigated": "challenge" }),
+      })
+    ).toBe(true);
   });
 });
 
@@ -67,13 +72,21 @@ describe("RefusalLog", () => {
 
     expect(noted).toBe(true);
     expect(log.list()).toEqual([
-      { url: "https://x.test/robots.txt", resource: "robots.txt", status: 403, provider: "Cloudflare" },
+      {
+        url: "https://x.test/robots.txt",
+        resource: "robots.txt",
+        status: 403,
+        provider: "Cloudflare",
+      },
     ]);
   });
 
   test("a refusal from an unrecognised wall carries no vendor", () => {
     const log = new RefusalLog();
-    log.note("https://x.test/llms.txt", "llms.txt", { status: 403, headers: headersOf({}) });
+    log.note("https://x.test/llms.txt", "llms.txt", {
+      status: 403,
+      headers: headersOf({}),
+    });
 
     expect(log.list()).toEqual([
       { url: "https://x.test/llms.txt", resource: "llms.txt", status: 403 },
@@ -82,9 +95,12 @@ describe("RefusalLog", () => {
 
   test("an answer is not recorded", () => {
     const log = new RefusalLog();
-    expect(log.note("https://x.test/robots.txt", "robots.txt", { status: 404, headers: headersOf({}) })).toBe(
-      false,
-    );
+    expect(
+      log.note("https://x.test/robots.txt", "robots.txt", {
+        status: 404,
+        headers: headersOf({}),
+      })
+    ).toBe(false);
     expect(log.list()).toEqual([]);
   });
 
@@ -97,7 +113,9 @@ describe("RefusalLog", () => {
       log.note(`https://x.test/child-${i}.xml`, "sitemap", refused);
     }
 
-    expect(log.list().filter((r) => r.url.endsWith("/sitemap.xml"))).toHaveLength(1);
+    expect(
+      log.list().filter((r) => r.url.endsWith("/sitemap.xml"))
+    ).toHaveLength(1);
     expect(log.list()).toHaveLength(MAX_REFUSED_FETCHES);
   });
 });
@@ -107,12 +125,19 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const llms = await Effect.runPromise(
-      fetchLlmsTxt(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchLlmsTxt(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals)
+      )
     );
 
     // null is "nothing learned": no row is stored, so the rule says not checked.
     expect(llms).toBeNull();
-    expect(refusals.list().map((r) => [r.resource, r.status, r.provider])).toEqual([
+    expect(
+      refusals.list().map((r) => [r.resource, r.status, r.provider])
+    ).toEqual([
       ["llms.txt", 403, "Cloudflare"],
       ["llms.txt", 403, "Cloudflare"],
     ]);
@@ -122,7 +147,12 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(404);
     const refusals = new RefusalLog();
     const llms = await Effect.runPromise(
-      fetchLlmsTxt(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchLlmsTxt(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals)
+      )
     );
 
     expect(llms?.llmsTxt.exists).toBe(false);
@@ -133,36 +163,54 @@ describe("root probes against a site that refuses every request", () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const markdown = await Effect.runPromise(
-      probeMarkdownResponse(origin, "squirrel-test", undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      probeMarkdownResponse(
+        origin,
+        "squirrel-test",
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals)
+      )
     );
 
     expect(markdown).toBeNull();
-    expect(refusals.list().map((r) => r.resource)).toEqual(["markdown", "markdown"]);
+    expect(refusals.list().map((r) => r.resource)).toEqual([
+      "markdown",
+      "markdown",
+    ]);
   });
 
   test("robots.txt: the refusal is recorded and the stored error keeps the status", async () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const robots = await Effect.runPromise(
-      fetchRobotsEvaluator(origin, "squirrel-test", true, undefined, createPhaseBudget(10_000, Date.now(), refusals)),
+      fetchRobotsEvaluator(
+        origin,
+        "squirrel-test",
+        true,
+        undefined,
+        createPhaseBudget(10_000, Date.now(), refusals)
+      )
     );
 
     expect(robots.data.exists).toBe(false);
     expect(robots.data.errors).toEqual(["HTTP 403"]);
-    expect(refusals.list()).toMatchObject([{ resource: "robots.txt", status: 403, provider: "Cloudflare" }]);
+    expect(refusals.list()).toMatchObject([
+      { resource: "robots.txt", status: 403, provider: "Cloudflare" },
+    ]);
   });
 
   test("sitemaps: every refused candidate location is recorded", async () => {
     const origin = serveAll(403, WALL_HEADERS);
     const refusals = new RefusalLog();
     const result = await Effect.runPromise(
-      discoverSitemaps(origin, null, "squirrel-test", { refusals }),
+      discoverSitemaps(origin, null, "squirrel-test", { refusals })
     );
 
     expect(result.discovered).toEqual([]);
     const refused = refusals.list();
     expect(refused.length).toBeGreaterThan(0);
-    expect(refused.every((r) => r.resource === "sitemap" && r.status === 403)).toBe(true);
+    expect(
+      refused.every((r) => r.resource === "sitemap" && r.status === 403)
+    ).toBe(true);
   });
 
   test("a probe run without a log still treats a refusal as no answer", async () => {

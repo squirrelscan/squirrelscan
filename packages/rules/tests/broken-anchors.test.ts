@@ -6,14 +6,14 @@
 // with the DOM dropped from site.pages). Both must give the same answer, so
 // the parity test at the end compares the two outputs for one mixed site.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 import { skipLinkRule } from "../src/a11y/skip-link";
 import { buildCollectedPageSignal } from "../src/collected-signals";
 import { brokenAnchorsRule } from "../src/links/broken-anchors";
-import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 
@@ -24,7 +24,8 @@ interface Fixture {
   rendered?: boolean;
 }
 
-const emptyParsed = (): ParsedPage => ({ document: null, links: [] }) as unknown as ParsedPage;
+const emptyParsed = (): ParsedPage =>
+  ({ document: null, links: [] }) as unknown as ParsedPage;
 
 /** The site's page universe, as the engines build it: error pages carry no document. */
 function sitePages(fixtures: Fixture[]) {
@@ -32,7 +33,9 @@ function sitePages(fixtures: Fixture[]) {
     const url = `${BASE}${f.path}`;
     const statusCode = f.status ?? 200;
     const parsed =
-      statusCode >= 400 || f.html === undefined ? emptyParsed() : parsePage(f.html, url);
+      statusCode >= 400 || f.html === undefined
+        ? emptyParsed()
+        : parsePage(f.html, url);
     return { url, statusCode, parsed, rendered: f.rendered === true };
   });
 }
@@ -40,7 +43,12 @@ function sitePages(fixtures: Fixture[]) {
 /** v1: the DOM is on every page. */
 function domContext(fixtures: Fixture[]): RuleContext {
   return {
-    site: { baseUrl: BASE, pages: sitePages(fixtures), robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: BASE,
+      pages: sitePages(fixtures),
+      robotsTxt: null,
+      sitemaps: null,
+    },
   } as unknown as RuleContext;
 }
 
@@ -55,13 +63,16 @@ function streamContext(fixtures: Fixture[]): RuleContext {
           url: p.url,
           parsed: p.parsed,
           rendered: p.rendered,
-        }),
+        })
       ),
   };
   return {
     site: {
       baseUrl: BASE,
-      pages: pages.map((p) => ({ ...p, parsed: { ...p.parsed, document: null } })),
+      pages: pages.map((p) => ({
+        ...p,
+        parsed: { ...p.parsed, document: null },
+      })),
       robotsTxt: null,
       sitemaps: null,
     },
@@ -95,9 +106,14 @@ const page = (body: string) =>
 for (const [engine, build] of ENGINES) {
   describe(`links/broken-anchors — ${engine}`, () => {
     test("same-page link to a missing id is a warning naming the link, fragment and page", async () => {
-      const checks = (await run(
-        build([{ path: "/", html: page('<a href="#pricing">Pricing</a><h1>Home</h1>') }]),
-      ));
+      const checks = await run(
+        build([
+          {
+            path: "/",
+            html: page('<a href="#pricing">Pricing</a><h1>Home</h1>'),
+          },
+        ])
+      );
       const w = warning(checks)!;
       expect(w).toBeDefined();
       expect(w.items).toHaveLength(1);
@@ -106,26 +122,36 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("an element with that id, or an <a name>, satisfies the link", async () => {
-      const withId = (await run(
+      const withId = await run(
         build([
-          { path: "/", html: page('<a href="#pricing">P</a><section id="pricing">x</section>') },
-        ]),
-      ));
+          {
+            path: "/",
+            html: page(
+              '<a href="#pricing">P</a><section id="pricing">x</section>'
+            ),
+          },
+        ])
+      );
       expect(warning(withId)).toBeUndefined();
 
-      const withName = (await run(
-        build([{ path: "/", html: page('<a href="#pricing">P</a><a name="pricing">x</a>') }]),
-      ));
+      const withName = await run(
+        build([
+          {
+            path: "/",
+            html: page('<a href="#pricing">P</a><a name="pricing">x</a>'),
+          },
+        ])
+      );
       expect(warning(withName)).toBeUndefined();
     });
 
     test("a link into another crawled page with no such id names that page and its source", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           { path: "/", html: page('<a href="/b#install">Install</a>') },
           { path: "/b", html: page("<h1>Setup</h1><p>no anchor here</p>") },
-        ]),
-      ));
+        ])
+      );
       const w = warning(checks)!;
       expect(w.items).toHaveLength(1);
       expect(w.items![0]!.label).toContain("/b#install");
@@ -134,7 +160,7 @@ for (const [engine, build] of ENGINES) {
 
     test("five pages sharing one nav link to a missing id make one finding listing all five", async () => {
       const nav = '<a href="/#pricing">Pricing</a>';
-      const checks = (await run(
+      const checks = await run(
         build([
           { path: "/", html: page("<h1>Home</h1>") },
           { path: "/p1", html: page(nav) },
@@ -142,53 +168,63 @@ for (const [engine, build] of ENGINES) {
           { path: "/p3", html: page(nav) },
           { path: "/p4", html: page(nav) },
           { path: "/p5", html: page(nav) },
-        ]),
-      ));
+        ])
+      );
       const w = warning(checks)!;
       expect(w.items).toHaveLength(1);
       expect(w.items![0]!.sourcePages).toHaveLength(5);
     });
 
     test("fragments the rule does not judge produce no finding", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           {
             path: "/",
             html: page(
               '<a href="#">a</a><a href="#top">b</a><a href="#/settings">c</a><a href="#!/home">d</a>' +
-                '<a href="#access_token=abc">e</a><a href="#:~:text=hello">f</a>',
+                '<a href="#access_token=abc">e</a><a href="#:~:text=hello">f</a>'
             ),
           },
-        ]),
-      ));
+        ])
+      );
       expect(warning(checks)).toBeUndefined();
     });
 
     test("links to pages the crawl did not fetch, or that answered an error, are not judged", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           { path: "/", html: page('<a href="/c#x">c</a><a href="/d#x">d</a>') },
           { path: "/d", status: 404 },
-        ]),
-      ));
+        ])
+      );
       expect(warning(checks)).toBeUndefined();
     });
 
     test("percent-encoded ids match their decoded form; ids are case-sensitive", async () => {
-      const matched = (await run(
-        build([{ path: "/", html: page('<a href="#caf%C3%A9">c</a><h2 id="café">Café</h2>') }]),
-      ));
+      const matched = await run(
+        build([
+          {
+            path: "/",
+            html: page('<a href="#caf%C3%A9">c</a><h2 id="café">Café</h2>'),
+          },
+        ])
+      );
       expect(warning(matched)).toBeUndefined();
 
-      const cased = (await run(
-        build([{ path: "/", html: page('<a href="#Pricing">P</a><h2 id="pricing">x</h2>') }]),
-      ));
+      const cased = await run(
+        build([
+          {
+            path: "/",
+            html: page('<a href="#Pricing">P</a><h2 id="pricing">x</h2>'),
+          },
+        ])
+      );
       const w = warning(cased)!;
       expect(w.items![0]!.label).toContain("#Pricing");
     });
 
     test("an unrendered client-side shell target is unconfirmed (info), not a warning", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           { path: "/", html: page('<a href="/app#settings">Settings</a>') },
           {
@@ -196,8 +232,8 @@ for (const [engine, build] of ENGINES) {
             html: '<!doctype html><html><head><script src="/app.js"></script></head><body><div id="root"></div></body></html>',
             rendered: false,
           },
-        ]),
-      ));
+        ])
+      );
       expect(warning(checks)).toBeUndefined();
       const info = check(checks, "unconfirmed-anchors")!;
       expect(info.status).toBe("info");
@@ -205,7 +241,7 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("the same shell fetched with rendering is a real miss, so a warning", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           { path: "/", html: page('<a href="/app#settings">Settings</a>') },
           {
@@ -213,8 +249,8 @@ for (const [engine, build] of ENGINES) {
             html: '<!doctype html><html><head><script src="/app.js"></script></head><body><div id="root"></div></body></html>',
             rendered: true,
           },
-        ]),
-      ));
+        ])
+      );
       expect(warning(checks)).toBeDefined();
       expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
     });
@@ -224,7 +260,7 @@ for (const [engine, build] of ENGINES) {
         {
           path: "/",
           html: page(
-            '<a class="skip-link" href="#main-content">Skip to content</a><main><h1>Hi</h1></main>',
+            '<a class="skip-link" href="#main-content">Skip to content</a><main><h1>Hi</h1></main>'
           ),
         },
       ];
@@ -235,13 +271,19 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("ids beyond the per-page cap are not judged", async () => {
-      const many = Array.from({ length: 600 }, (_, i) => `<div id="x${i}"></div>`).join("");
-      const checks = (await run(
+      const many = Array.from(
+        { length: 600 },
+        (_, i) => `<div id="x${i}"></div>`
+      ).join("");
+      const checks = await run(
         build([
-          { path: "/", html: page('<a href="/big#x599">a</a><a href="/big#missing">b</a>') },
+          {
+            path: "/",
+            html: page('<a href="/big#x599">a</a><a href="/big#missing">b</a>'),
+          },
           { path: "/big", html: page(many) },
-        ]),
-      ));
+        ])
+      );
       expect(warning(checks)).toBeUndefined();
     });
   });
@@ -250,19 +292,27 @@ for (const [engine, build] of ENGINES) {
 for (const [engine, build] of ENGINES) {
   describe(`links/broken-anchors review fixes: ${engine}`, () => {
     test("purely numeric fragments (#0, #1) are template do-nothing links, not judged", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
-          { path: "/", html: page('<a href="#0">Menu</a><a href="#1">Close</a><h1>Home</h1>') },
-        ]),
-      ));
+          {
+            path: "/",
+            html: page(
+              '<a href="#0">Menu</a><a href="#1">Close</a><h1>Home</h1>'
+            ),
+          },
+        ])
+      );
       expect(warning(checks)).toBeUndefined();
-      expect(check(checks, "broken-anchors")?.details).toMatchObject({ anchorLinks: 0 });
+      expect(check(checks, "broken-anchors")?.details).toMatchObject({
+        anchorLinks: 0,
+      });
     });
 
     test("a nav link repeated on every page is one finding listing each page once", async () => {
       const nav = '<a href="/#gone">Gone</a><a href="/#gone">Gone again</a>';
       const pages: Fixture[] = [{ path: "/", html: page("<h1>Home</h1>") }];
-      for (let n = 0; n < 40; n++) pages.push({ path: `/p${n}`, html: page(nav) });
+      for (let n = 0; n < 40; n++)
+        pages.push({ path: `/p${n}`, html: page(nav) });
       const w = warning(await run(build(pages)))!;
       expect(w.items).toHaveLength(1);
       const sources = w.items![0]!.sourcePages!;
@@ -276,9 +326,12 @@ for (const [engine, build] of ENGINES) {
 
 describe("links/broken-anchors: cached streaming records", () => {
   test("records cached before the anchor field existed are skipped, not passed", async () => {
-    const ctx = streamContext([{ path: "/", html: page('<a href="#gone">x</a>') }]);
-    for (const rec of ctx.collectedSignals!.pages) delete (rec as { anchors?: unknown }).anchors;
-    const checks = (await run(ctx));
+    const ctx = streamContext([
+      { path: "/", html: page('<a href="#gone">x</a>') },
+    ]);
+    for (const rec of ctx.collectedSignals!.pages)
+      delete (rec as { anchors?: unknown }).anchors;
+    const checks = await run(ctx);
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("skipped");
     expect(checks[0]!.message).toContain("--refresh");
@@ -300,34 +353,44 @@ describe("links/broken-anchors — streaming parity", () => {
       {
         path: "/",
         html: page(
-          '<a href="#pricing">P</a><a href="/b#install">I</a><a href="#top">t</a><a href="/app#settings">S</a><h1 id="home">Home</h1>',
+          '<a href="#pricing">P</a><a href="/b#install">I</a><a href="#top">t</a><a href="/app#settings">S</a><h1 id="home">Home</h1>'
         ),
       },
       { path: "/b", html: page("<h1>Setup</h1>") },
       {
         path: "/c",
-        html: page('<a href="/#pricing">nav</a><a href="/#home">ok</a><a name="deep">d</a>'),
+        html: page(
+          '<a href="/#pricing">nav</a><a href="/#home">ok</a><a name="deep">d</a>'
+        ),
       },
-      { path: "/c2", html: page('<a href="/c#deep">ok</a><a href="/c#gone">miss</a>') },
+      {
+        path: "/c2",
+        html: page('<a href="/c#deep">ok</a><a href="/c#gone">miss</a>'),
+      },
       {
         path: "/app",
         html: '<!doctype html><html><head><script src="/a.js"></script></head><body><div id="root"></div></body></html>',
       },
       { path: "/gone", status: 404 },
-      { path: "/z", html: page('<a href="/gone#x">broken target, not judged</a>') },
+      {
+        path: "/z",
+        html: page('<a href="/gone#x">broken target, not judged</a>'),
+      },
     ];
-    const v1 = (await run(domContext(fixtures)));
-    const streamed = (await run(streamContext(fixtures)));
+    const v1 = await run(domContext(fixtures));
+    const streamed = await run(streamContext(fixtures));
     expect(streamed).toEqual(v1);
     expect(warning(v1)).toBeDefined();
   });
 
   test("the a11y/skip-link verdict is unchanged by this rule", async () => {
     const html = page(
-      '<a class="skip-link" href="#main-content">Skip to content</a><main><h1>Hi</h1></main>',
+      '<a class="skip-link" href="#main-content">Skip to content</a><main><h1>Hi</h1></main>'
     );
     const parsed = parsePage(html, `${BASE}/`);
-    const { checks } = (await skipLinkRule.run({ parsed } as unknown as RuleContext));
+    const { checks } = await skipLinkRule.run({
+      parsed,
+    } as unknown as RuleContext);
     expect(checks[0]!.name).toBe("skip-link");
     expect(checks[0]!.status).toBe("pass");
     expect(checks[0]!.message).toBe("Skip link found");
@@ -341,7 +404,7 @@ for (const [engine, build] of ENGINES) {
       {
         path: "/",
         html: page(
-          '<footer><a href="/guide#gone">Guide</a></footer><main><a href="/guide#gone">Guide again</a></main>',
+          '<footer><a href="/guide#gone">Guide</a></footer><main><a href="/guide#gone">Guide again</a></main>'
         ),
       },
       { path: "/guide", html: page("<h1>Guide</h1>") },
@@ -351,7 +414,9 @@ for (const [engine, build] of ENGINES) {
       const w = warning(await run(build(fixtures)))!;
 
       expect(w.items).toHaveLength(1);
-      expect(w.items![0]!.label).toBe(`${BASE}/guide#gone, linked in the page content and the footer`);
+      expect(w.items![0]!.label).toBe(
+        `${BASE}/guide#gone, linked in the page content and the footer`
+      );
       expect(w.items![0]!.meta).toEqual({
         skipLink: false,
         sections: { footer: 1, content: 1 },
@@ -360,7 +425,11 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("a same-page link has no section and the item stays as it was", async () => {
-      const w = warning(await run(build([{ path: "/", html: page('<a href="#pricing">P</a>') }])))!;
+      const w = warning(
+        await run(
+          build([{ path: "/", html: page('<a href="#pricing">P</a>') }])
+        )
+      )!;
 
       expect(w.items![0]!.label).toBe(`${BASE}/#pricing`);
       expect(w.items![0]!.meta).toEqual({ skipLink: false, linkedFrom: 1 });
@@ -375,18 +444,26 @@ for (const [engine, build] of ENGINES) {
   describe(`links/broken-anchors runtime-created ids (#1616): ${engine}`, () => {
     // Invented fixture text. The long paragraph keeps the page from reading as an empty client-side shell.
     const prose = `<p>${"Sizing notes for the example garment, written for the fixture only. ".repeat(6)}</p>`;
-    const sizeImg = '<img alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">';
+    const sizeImg =
+      '<img alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">';
     const links =
       '<a href="#size">Size chart</a><a href="#missing">Missing control</a><a href="#static">Static control</a>';
     const doc = (script: string, extra = "") =>
-      page(`${prose}${links}${sizeImg}<div id="static">Static</div>${script}${extra}`);
+      page(
+        `${prose}${links}${sizeImg}<div id="static">Static</div>${script}${extra}`
+      );
 
     test("a target id set by inline script is unconfirmed, a missing one is still a warning", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
-          { path: "/", html: doc('<script>document.querySelector("img").id="size"</script>') },
-        ]),
-      ));
+          {
+            path: "/",
+            html: doc(
+              '<script>document.querySelector("img").id="size"</script>'
+            ),
+          },
+        ])
+      );
       const w = warning(checks)!;
       expect(w.items).toHaveLength(1);
       expect(w.items![0]!.label).toBe(`${BASE}/#missing`);
@@ -398,7 +475,9 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("a static id passes and is in neither check", async () => {
-      const checks = (await run(build([{ path: "/", html: doc("<script>var n = 1;</script>") }])));
+      const checks = await run(
+        build([{ path: "/", html: doc("<script>var n = 1;</script>") }])
+      );
       const labels = [
         ...(check(checks, "broken-anchors")?.items ?? []),
         ...(check(checks, "unconfirmed-anchors")?.items ?? []),
@@ -407,60 +486,80 @@ for (const [engine, build] of ENGINES) {
     });
 
     test("a script on the page does not excuse an id no script names", async () => {
-      const checks = (await run(build([{ path: "/", html: doc("<script>var n = 1;</script>") }])));
+      const checks = await run(
+        build([{ path: "/", html: doc("<script>var n = 1;</script>") }])
+      );
       const w = warning(checks)!;
-      expect(w.items!.map((i) => i.label).sort()).toEqual([`${BASE}/#missing`, `${BASE}/#size`]);
+      expect(w.items!.map((i) => i.label).sort()).toEqual([
+        `${BASE}/#missing`,
+        `${BASE}/#size`,
+      ]);
       expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
     });
 
     test("an id written inside an HTML string is recognised", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           {
             path: "/",
-            html: doc("<script>host.innerHTML = '<h2 id=\"size\">Size</h2>';</script>"),
+            html: doc(
+              "<script>host.innerHTML = '<h2 id=\"size\">Size</h2>';</script>"
+            ),
           },
-        ]),
-      ));
-      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
-        `${BASE}/#size`,
-      ]);
+        ])
+      );
+      expect(
+        check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)
+      ).toEqual([`${BASE}/#size`]);
     });
 
     test("a cross-page link into a page whose script sets the id is unconfirmed", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           {
             path: "/",
-            html: page('<a href="/sizes#size">Sizes</a><a href="/sizes#nope">Nope</a>'),
+            html: page(
+              '<a href="/sizes#size">Sizes</a><a href="/sizes#nope">Nope</a>'
+            ),
           },
-          { path: "/sizes", html: page(`${prose}<script>el.setAttribute("id", "size")</script>`) },
-        ]),
-      ));
-      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
-        `${BASE}/sizes#size`,
+          {
+            path: "/sizes",
+            html: page(
+              `${prose}<script>el.setAttribute("id", "size")</script>`
+            ),
+          },
+        ])
+      );
+      expect(
+        check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)
+      ).toEqual([`${BASE}/sizes#size`]);
+      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([
+        `${BASE}/sizes#nope`,
       ]);
-      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([`${BASE}/sizes#nope`]);
     });
 
     test("scripts that are data, not code, do not count", async () => {
-      const checks = (await run(
+      const checks = await run(
         build([
           {
             path: "/",
-            html: doc('<script type="application/ld+json">{"name":"size"}</script>'),
+            html: doc(
+              '<script type="application/ld+json">{"name":"size"}</script>'
+            ),
           },
-        ]),
-      ));
+        ])
+      );
       expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
       expect(warning(checks)!.items).toHaveLength(2);
     });
 
     test("a rendered fetch reads the initialized DOM: the runtime id passes, a missing one fails", async () => {
       const initialized = page(
-        `${prose}${links}<img id="size" alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div id="static">Static</div><script>document.querySelector("img").id="size"; var missing = "missing";</script>`,
+        `${prose}${links}<img id="size" alt="Size chart" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div id="static">Static</div><script>document.querySelector("img").id="size"; var missing = "missing";</script>`
       );
-      const checks = (await run(build([{ path: "/", html: initialized, rendered: true }])));
+      const checks = await run(
+        build([{ path: "/", html: initialized, rendered: true }])
+      );
       expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
       const w = warning(checks)!;
       expect(w.items!.map((i) => i.label)).toEqual([`${BASE}/#missing`]);
@@ -468,33 +567,41 @@ for (const [engine, build] of ENGINES) {
 
     test("a big inline script does not silence a genuinely broken id", async () => {
       // 1500 distinct quoted tokens, past the 1024 cap, as a framework data stream would carry.
-      const tokens = Array.from({ length: 1500 }, (_, i) => `"tok${i}"`).join(",");
+      const tokens = Array.from({ length: 1500 }, (_, i) => `"tok${i}"`).join(
+        ","
+      );
       const big = `<script>document.querySelector("img").id="size"; var t=[${tokens}];</script>`;
-      const checks = (await run(build([{ path: "/", html: doc(big) }])));
-      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([`${BASE}/#missing`]);
-      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
-        `${BASE}/#size`,
+      const checks = await run(build([{ path: "/", html: doc(big) }]));
+      expect(warning(checks)!.items!.map((i) => i.label)).toEqual([
+        `${BASE}/#missing`,
       ]);
+      expect(
+        check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)
+      ).toEqual([`${BASE}/#size`]);
     });
 
     test("script text past the scan limit is not read and demotes nothing", async () => {
       const filler = `<script>${"var a = 1;\n".repeat(40000)}</script>`;
       const late = '<script>document.querySelector("img").id="size"</script>';
-      const checks = (await run(build([{ path: "/", html: doc(filler + late) }])));
+      const checks = await run(
+        build([{ path: "/", html: doc(filler + late) }])
+      );
       // `size` is named only after the 256 KB limit, so it is reported, like `missing`.
       expect(
         warning(checks)!
           .items!.map((i) => i.label)
-          .sort(),
+          .sort()
       ).toEqual([`${BASE}/#missing`, `${BASE}/#size`]);
       expect(check(checks, "unconfirmed-anchors")).toBeUndefined();
     });
 
     test("a name match is not a creation test: a quoted string anywhere in the script counts", async () => {
-      const checks = (await run(build([{ path: "/", html: doc('<script>track("size");</script>') }])));
-      expect(check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)).toEqual([
-        `${BASE}/#size`,
-      ]);
+      const checks = await run(
+        build([{ path: "/", html: doc('<script>track("size");</script>') }])
+      );
+      expect(
+        check(checks, "unconfirmed-anchors")?.items?.map((i) => i.label)
+      ).toEqual([`${BASE}/#size`]);
     });
   });
 }

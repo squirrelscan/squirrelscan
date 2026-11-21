@@ -21,11 +21,14 @@ export type RuleCatalogLookup = (ruleId: string) => RuleCatalogText | undefined;
 
 /** A lookup over catalog entries (any list of `{ id, description, solution }`). */
 export function ruleCatalogLookup(
-  entries: Iterable<{ id: string } & RuleCatalogText>,
+  entries: Iterable<{ id: string } & RuleCatalogText>
 ): RuleCatalogLookup {
   const byId = new Map<string, RuleCatalogText>();
   for (const entry of entries) {
-    byId.set(entry.id, { description: entry.description, solution: entry.solution });
+    byId.set(entry.id, {
+      description: entry.description,
+      solution: entry.solution,
+    });
   }
   return (ruleId) => byId.get(ruleId);
 }
@@ -51,7 +54,10 @@ export function withCatalogRuleText<
     const text = lookup(rule.meta.id ?? ruleId);
     const description = text?.description || rule.meta.description;
     const solution = text?.solution ?? rule.meta.solution;
-    if (description === rule.meta.description && solution === rule.meta.solution) {
+    if (
+      description === rule.meta.description &&
+      solution === rule.meta.solution
+    ) {
       ruleResults[ruleId] = rule;
       continue;
     }

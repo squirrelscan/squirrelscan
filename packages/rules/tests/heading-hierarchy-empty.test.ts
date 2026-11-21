@@ -1,12 +1,12 @@
 // content/heading-hierarchy counts only empty headings a reader can see (#547).
 // The parser marks the hidden ones; the replayed parse must agree with a fresh one.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { headingHierarchyRule } from "../src/content/heading-hierarchy";
-import type { CheckResult, RuleContext } from "../src/types";
 
 const URL = "https://example.com/";
 
@@ -22,8 +22,13 @@ function ctxFor(html: string, parsed = parsePage(html, URL)): RuleContext {
   } as unknown as RuleContext;
 }
 
-async function emptyCheck(html: string, parsed?: ReturnType<typeof parsePage>): Promise<CheckResult | undefined> {
-  const result = (await headingHierarchyRule.run(ctxFor(html, parsed))) as { checks: CheckResult[] };
+async function emptyCheck(
+  html: string,
+  parsed?: ReturnType<typeof parsePage>
+): Promise<CheckResult | undefined> {
+  const result = (await headingHierarchyRule.run(ctxFor(html, parsed))) as {
+    checks: CheckResult[];
+  };
   return result.checks.find((c) => c.name === "empty-headings");
 }
 
@@ -41,13 +46,15 @@ describe("content/heading-hierarchy empty headings (#547)", () => {
   });
 
   test("a visible empty heading is still counted", async () => {
-    const check = (await emptyCheck(page(`${VISIBLE_TEXT}<h2></h2>`)));
+    const check = await emptyCheck(page(`${VISIBLE_TEXT}<h2></h2>`));
     expect(check?.status).toBe("warn");
     expect(check?.message).toBe("1 empty heading(s) found");
   });
 
   test("hidden and visible empties in one page count only the visible one", async () => {
-    const check = (await emptyCheck(page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`)));
+    const check = await emptyCheck(
+      page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`)
+    );
     expect(check?.message).toBe("1 empty heading(s) found");
   });
 
@@ -55,6 +62,8 @@ describe("content/heading-hierarchy empty headings (#547)", () => {
     const html = page(`${VISIBLE_TEXT}<h2 hidden></h2><h3></h3>`);
     const fresh = parsePage(html, URL);
     const replayed = JSON.parse(JSON.stringify(fresh));
-    expect((await emptyCheck(html, replayed))?.message).toBe((await emptyCheck(html, fresh))?.message);
+    expect((await emptyCheck(html, replayed))?.message).toBe(
+      (await emptyCheck(html, fresh))?.message
+    );
   });
 });

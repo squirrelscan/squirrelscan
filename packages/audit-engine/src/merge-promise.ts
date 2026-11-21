@@ -21,6 +21,8 @@ import type {
   RuleScope,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+import type { RuleRunResult } from "@squirrelscan/rules/types";
+
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   buildSupersededIndex,
@@ -31,10 +33,21 @@ import {
 } from "@squirrelscan/core-contracts/resolution";
 // `/types` (leaf type module) not the barrel — see scoring.ts. (#195)
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
-import type { RuleRunResult } from "@squirrelscan/rules/types";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+import type { SkippedPassCounts } from "./stream-findings";
+
 import { canonicalVariantMap } from "./canonical-fold";
+import {
+  createCompleteStoreTallyFold,
+  foldCompleteStoreTallies,
+  carriedChecksPerPageFor,
+  freshTally,
+  untouchedCarriedFinding,
+  type FindingPageSource,
+  type UntouchedCarriedAggregate,
+  type UntouchedSamplePage,
+} from "./complete-store-fold";
 import {
   computeMerge,
   createMergeSession,
@@ -50,16 +63,6 @@ import {
   type MergeResolutionInput,
   type NotEvaluatedEvidence,
 } from "./merge-core";
-import {
-  createCompleteStoreTallyFold,
-  foldCompleteStoreTallies,
-  carriedChecksPerPageFor,
-  freshTally,
-  untouchedCarriedFinding,
-  type FindingPageSource,
-  type UntouchedCarriedAggregate,
-  type UntouchedSamplePage,
-} from "./complete-store-fold";
 import { buildCheckTallies } from "./publish-cap";
 import { isReplayedCheck, REMOVED_STATUSES } from "./published-checks";
 import {
@@ -67,7 +70,6 @@ import {
   SampledStoreEstimator,
   type SampledStoreMarker,
 } from "./sampled-store";
-import type { SkippedPassCounts } from "./stream-findings";
 import {
   addChecksToTally,
   buildScoringResultsFromMerged,
@@ -79,7 +81,6 @@ import {
   type PageUrlSet,
   type RuleTally,
 } from "./scoring";
-
 
 /** Every page a check speaks for, normalized to the store's page identity. */
 function attributedPages(check: CheckResult): string[] {
@@ -156,7 +157,9 @@ export interface UntouchedCarriedSplit {
 }
 
 /** Prior findings a page at a time; a page must never be split across two items. */
-export type PriorFindingPageSource = AsyncIterable<readonly PageFindingRecord[]>;
+export type PriorFindingPageSource = AsyncIterable<
+  readonly PageFindingRecord[]
+>;
 
 /**
  * Narrow Promise port of the smart-audits store surface. A backing store
@@ -165,7 +168,10 @@ export type PriorFindingPageSource = AsyncIterable<readonly PageFindingRecord[]>
  */
 export interface SmartAuditStore {
   /** Findings for a site, optionally restricted to lifecycle `states`. */
-  getFindings(siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]>;
+  getFindings(
+    siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]>;
   /**
    * (#1876) OPTIONAL page-at-a-time cursor over the same rows {@link getFindings}
    * returns. When a store offers it, the merge decides carry/resolve/stale in
@@ -177,7 +183,7 @@ export interface SmartAuditStore {
    */
   streamFindingPages?(
     siteKey: string,
-    states?: FindingState[],
+    states?: FindingState[]
   ): PriorFindingPageSource;
   getSitePages(siteKey: string): Promise<SitePageRecord[]>;
   upsertFindings(findings: PageFindingRecord[]): Promise<void>;
@@ -203,13 +209,13 @@ export interface SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void>;
   /** Bulk page→removed + findings→stale for all pages in ONE transaction; empty = no-op (#288). */
   markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void>;
   /** Best-effort prune of terminal rows (never open/active). Returns rows deleted. */
   compactFindings(siteKey: string): Promise<number>;
@@ -248,9 +254,12 @@ export interface MergeFindingsPromiseInput {
  * Promise mirror of {@link mergeFindings}: load prior OPEN findings + site pages
  * via the store, then run the pure {@link computeMerge}.
  */
-export async function mergeFindingsPromise(input: MergeFindingsPromiseInput): Promise<MergedState> {
+export async function mergeFindingsPromise(
+  input: MergeFindingsPromiseInput
+): Promise<MergedState> {
   const { store, siteKey, now, priorFindings: preloaded, ...rest } = input;
-  const priorFindings = preloaded ?? (await store.getFindings(siteKey, ["open"]));
+  const priorFindings =
+    preloaded ?? (await store.getFindings(siteKey, ["open"]));
   const priorPages = await store.getSitePages(siteKey);
   return computeMerge({
     ...rest,
@@ -268,7 +277,10 @@ export interface CloudSmartAuditsInput {
   /** This run's audit id (= page_findings.last_seen_crawl_id). */
   crawlId: string;
   /** This run's rule results (the published report's `ruleResults`). */
-  ruleResults: Record<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>;
+  ruleResults: Record<
+    string,
+    { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+  >;
   /**
    * Compact per-page HTTP status for THIS run (raw or normalized urls — they're
    * re-normalized here). Lets the merge stale findings on pages that 404/410'd
@@ -348,7 +360,9 @@ export interface CloudSmartAuditsInput {
      * `{ ...prior, provenance: "carried" }`, so the store applies it itself: set
      * `provenance` to "carried" on the untouched rows that do not have it yet.
      */
-    untouchedCarried?: (scope: CompleteStoreScope) => Promise<UntouchedCarriedSplit>;
+    untouchedCarried?: (
+      scope: CompleteStoreScope
+    ) => Promise<UntouchedCarriedSplit>;
     /** Full crawled-URL list (`resolutionSignal.crawledUrls`); normalized here. */
     crawledUrls: string[];
     /**
@@ -545,7 +559,11 @@ export interface CloudSmartAuditsResult {
 const NO_VARIANTS: ReadonlyMap<string, string> = new Map();
 
 /** Stable identity for a carried finding, used to tag report checks (mirror CLI). */
-function carriedKey(normalizedUrl: string, ruleId: string, checkName: string): string {
+function carriedKey(
+  normalizedUrl: string,
+  ruleId: string,
+  checkName: string
+): string {
   return `${normalizedUrl}|${ruleId}|${checkName}`;
 }
 
@@ -556,7 +574,7 @@ function carriedKey(normalizedUrl: string, ruleId: string, checkName: string): s
  * `apps/cli/src/audit/smart-audits.ts` (keep them in sync).
  */
 export async function runCloudSmartAudits(
-  input: CloudSmartAuditsInput,
+  input: CloudSmartAuditsInput
 ): Promise<CloudSmartAuditsResult> {
   const { store, siteKey, crawlId } = input;
   const now = input.now ?? Date.now();
@@ -619,7 +637,10 @@ export async function runCloudSmartAudits(
    * (repo#2078) The refused checks per rule, so the capped path can take them
    * back out of the producer's `checkTallies`, which counted them.
    */
-  const outsideCrawledChecks = new Map<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }>();
+  const outsideCrawledChecks = new Map<
+    string,
+    { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+  >();
   const wholeCrawledSet: Set<string> | undefined =
     !completeStore && input.resolutionSignal?.crawledUrlsComplete === true
       ? new Set([
@@ -682,7 +703,8 @@ export async function runCloudSmartAudits(
     // is transient (the next audit re-creates a finding that is still there) and
     // needs a publish from the NEW engine to have already keyed that page, so it
     // is bounded by whatever audits are in flight across one deploy.
-    for (const u of completeStore.crawledUrls) crawledUrls.add(normalizePageUrl(u));
+    for (const u of completeStore.crawledUrls)
+      crawledUrls.add(normalizePageUrl(u));
     for (const u of statusByUrl.keys()) crawledUrls.add(u);
     for (const u of removedUrls) crawledUrls.delete(u);
     // (#1873) NOT reconstructed here. The complete findings are folded into
@@ -722,7 +744,10 @@ export async function runCloudSmartAudits(
     // tally; page rules contribute counts rather than checks, so this is defence
     // in depth rather than a second live path.
     shellResults = Object.fromEntries(
-      Array.from(freshResults, ([ruleId, r]) => [ruleId, { meta: r.meta, checks: r.checks }]),
+      Array.from(freshResults, ([ruleId, r]) => [
+        ruleId,
+        { meta: r.meta, checks: r.checks },
+      ])
     );
   } else {
     // A published report arrives already folded (#910): an over-cap per-rule
@@ -749,7 +774,10 @@ export async function runCloudSmartAudits(
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       const checks: CheckResult[] = [];
       for (const original of r.checks) {
-        if (original.details?.aggregated === true && !isReplayedCheck(original)) {
+        if (
+          original.details?.aggregated === true &&
+          !isReplayedCheck(original)
+        ) {
           aggregatedChecks.add(`${ruleId}|${original.name}`);
         }
         for (const c of unfoldAggregateCheck(original)) {
@@ -763,7 +791,8 @@ export async function runCloudSmartAudits(
             for (const u of attributedPages(c)) outsideCrawledUrls.add(u);
             const refused = outsideCrawledChecks.get(ruleId);
             if (refused) refused.checks.push(c);
-            else outsideCrawledChecks.set(ruleId, { meta: r.meta, checks: [c] });
+            else
+              outsideCrawledChecks.set(ruleId, { meta: r.meta, checks: [c] });
             continue;
           }
           checks.push(c);
@@ -772,9 +801,13 @@ export async function runCloudSmartAudits(
       freshResults.set(ruleId, { meta: r.meta, checks });
       talliedResults?.set(ruleId, {
         meta: r.meta,
-        checks: r.checks.filter((c) => !isReplayedCheck(c) && !namesUncrawledPage(r.meta.scope, c)),
+        checks: r.checks.filter(
+          (c) => !isReplayedCheck(c) && !namesUncrawledPage(r.meta.scope, c)
+        ),
       });
-      if (r.checks.some((c) => typeof c.details?.checksTruncated === "number")) {
+      if (
+        r.checks.some((c) => typeof c.details?.checksTruncated === "number")
+      ) {
         rulesWithDroppedChecks.add(ruleId);
       }
     }
@@ -799,7 +832,8 @@ export async function runCloudSmartAudits(
     // for would read as authoritative evidence the finding is gone.
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       for (const c of r.checks) {
-        if (c.provenance === "carried" || c.provenance === "unrendered") continue;
+        if (c.provenance === "carried" || c.provenance === "unrendered")
+          continue;
         const truncated =
           typeof c.details?.pagesTruncated === "number" &&
           !!c.pages &&
@@ -874,7 +908,10 @@ export async function runCloudSmartAudits(
             ruleComplete &&
             !aggregatedChecks.has(`${ruleId}|${c.name}`) &&
             itemListComplete(ruleId, c);
-          itemListCompleteness.set(key, (itemListCompleteness.get(key) ?? true) && complete);
+          itemListCompleteness.set(
+            key,
+            (itemListCompleteness.get(key) ?? true) && complete
+          );
         }
       }
     }
@@ -919,7 +956,9 @@ export async function runCloudSmartAudits(
       notEvaluatedByCheck: tallySignal.notEvaluatedByCheck,
       truncatedChecks: new Set(),
       exactNotEvaluatedChecks: new Set(
-        [...tallySignal.failingByCheck.keys()].filter((k) => !tallySignal.truncatedChecks.has(k)),
+        [...tallySignal.failingByCheck.keys()].filter(
+          (k) => !tallySignal.truncatedChecks.has(k)
+        )
       ),
     });
 
@@ -932,15 +971,24 @@ export async function runCloudSmartAudits(
   // the checks that can need it, so a whole signal costs nothing here.
   let passedCheckPages: Set<string> | undefined;
   let notApplicablePages: Set<string> | undefined;
-  if (resolution && (resolution.crawledComplete === false || resolution.truncatedChecks.size > 0)) {
+  if (
+    resolution &&
+    (resolution.crawledComplete === false ||
+      resolution.truncatedChecks.size > 0)
+  ) {
     const needed = (key: string) =>
-      resolution!.crawledComplete === false || resolution!.truncatedChecks.has(key);
+      resolution!.crawledComplete === false ||
+      resolution!.truncatedChecks.has(key);
     const failingSampled = new Set<string>();
     for (const [ruleId, r] of Object.entries(input.ruleResults)) {
       for (const c of r.checks) {
-        if (isReplayedCheck(c) || (c.status !== "fail" && c.status !== "warn")) continue;
+        if (isReplayedCheck(c) || (c.status !== "fail" && c.status !== "warn"))
+          continue;
         const pagesTruncated = c.details?.pagesTruncated;
-        if (typeof pagesTruncated === "number" && pagesTruncated > (c.pages?.length ?? 0)) {
+        if (
+          typeof pagesTruncated === "number" &&
+          pagesTruncated > (c.pages?.length ?? 0)
+        ) {
           failingSampled.add(`${ruleId}|${c.name}`);
         }
       }
@@ -963,14 +1011,21 @@ export async function runCloudSmartAudits(
         const key = `${ruleId}|${c.name}`;
         // A rule whose publish dropped whole check classes (`checksTruncated`)
         // may have dropped this page's failing row for the check with them.
-        if (!needed(key) || failingSampled.has(key) || rulesWithDroppedChecks.has(ruleId)) continue;
-        if (c.status === "pass") passedCheckPages.add(pageCheckKey(url, ruleId, c.name));
+        if (
+          !needed(key) ||
+          failingSampled.has(key) ||
+          rulesWithDroppedChecks.has(ruleId)
+        )
+          continue;
+        if (c.status === "pass")
+          passedCheckPages.add(pageCheckKey(url, ruleId, c.name));
         else if (c.status === "fail" || c.status === "warn") {
           failingPageChecks.add(pageCheckKey(url, ruleId, c.name));
         }
       }
     }
-    for (const pageCheck of failingPageChecks) passedCheckPages.delete(pageCheck);
+    for (const pageCheck of failingPageChecks)
+      passedCheckPages.delete(pageCheck);
   }
 
   // ── merge ────────────────────────────────────────────────────────────────
@@ -986,7 +1041,8 @@ export async function runCloudSmartAudits(
   if (Array.isArray(input.canonicalVariantPages)) {
     runCanonicals = new Map();
     for (const v of input.canonicalVariantPages) {
-      if (typeof v?.page !== "string" || typeof v?.canonical !== "string") continue;
+      if (typeof v?.page !== "string" || typeof v?.canonical !== "string")
+        continue;
       const page = normalizePageUrl(v.page);
       const canonical = normalizePageUrl(v.canonical);
       if (page !== canonical) runCanonicals.set(page, canonical);
@@ -1023,7 +1079,7 @@ export async function runCloudSmartAudits(
     {
       persist: (record) => onPersist(record),
       active: (finding) => onActive(finding),
-    },
+    }
   );
 
   // Carried pages = every active page NOT (re-)crawled this run (incl. clean
@@ -1064,10 +1120,12 @@ export async function runCloudSmartAudits(
         crawledSetExact: completeStore
           ? !tallySignal ||
             (tallySignal.truncatedChecks.size === 0 &&
-              (tallySignal.crawledComplete !== false || !!tallySignal.crawledHashes))
+              (tallySignal.crawledComplete !== false ||
+                !!tallySignal.crawledHashes))
           : !!resolution &&
             resolution.truncatedChecks.size === 0 &&
-            (resolution.crawledComplete !== false || !!resolution.crawledHashes),
+            (resolution.crawledComplete !== false ||
+              !!resolution.crawledHashes),
       })
     : undefined;
   // (repo#4626) The complete-store finalize never holds the sampled rows as one
@@ -1077,7 +1135,8 @@ export async function runCloudSmartAudits(
   const noteSampledCarry = (finding: MergedFinding): void => {
     if (!sampledEstimator || !completeStore) return;
     if (!sampledEstimator.isSampledRow(finding)) return;
-    if (!isRecrawled(finding.normalizedUrl, crawledUrls, estimatorSignal)) return;
+    if (!isRecrawled(finding.normalizedUrl, crawledUrls, estimatorSignal))
+      return;
     const carried = toCarriedFinding(finding);
     sampledEstimator.noteCarried(finding, carried);
     sampledCarried.push(carried);
@@ -1105,11 +1164,15 @@ export async function runCloudSmartAudits(
   const signalPages = claimed(input.resolutionSignal?.crawledCount);
   const signalRemoved = Math.max(
     removedUrls.size,
-    claimed(input.resolutionSignal?.removedCount) ?? 0,
+    claimed(input.resolutionSignal?.removedCount) ?? 0
   );
   const auditedPages =
-    input.resolutionSignal?.crawledComplete === false && signalPages !== undefined
-      ? Math.max(auditedUrls.size, signalPages - Math.min(signalPages, signalRemoved))
+    input.resolutionSignal?.crawledComplete === false &&
+    signalPages !== undefined
+      ? Math.max(
+          auditedUrls.size,
+          signalPages - Math.min(signalPages, signalRemoved)
+        )
       : auditedUrls.size;
 
   // (#2063) Reduce the refused checks' pages to the ones this site has no record
@@ -1142,7 +1205,8 @@ export async function runCloudSmartAudits(
   const pendingWrites: PageFindingRecord[] = [];
   const deferredWrites: PageFindingRecord[] = [];
   const flushWrites = async (): Promise<void> => {
-    if (pendingWrites.length > 0) await store.upsertFindings(pendingWrites.splice(0));
+    if (pendingWrites.length > 0)
+      await store.upsertFindings(pendingWrites.splice(0));
   };
   onPersist = (record) => {
     persistedFindings += 1;
@@ -1170,7 +1234,8 @@ export async function runCloudSmartAudits(
   // (repo#3348) A carry on a page the tallies already count for its check stays
   // open in the store but is left out of the union, as on the sampled path.
   const countedByTallies = tallySignal
-    ? (f: CarriedFinding): boolean => evaluatedThisRun(f, crawledUrls, tallySignal)
+    ? (f: CarriedFinding): boolean =>
+        evaluatedThisRun(f, crawledUrls, tallySignal)
     : undefined;
 
   // (#1031) Pages this run crawled that still carry a finding no run re-observed: the page was
@@ -1183,15 +1248,24 @@ export async function runCloudSmartAudits(
   let outsideUnknown = false;
   const isCrawledPage = (url: string): boolean =>
     crawledUrls.has(url) || (resolution?.crawledUrls.has(url) ?? false);
-  const noteCarriedOutside = (finding: { normalizedUrl: string; neverRendered?: boolean }): void => {
+  const noteCarriedOutside = (finding: {
+    normalizedUrl: string;
+    neverRendered?: boolean;
+  }): void => {
     if (!finding.neverRendered && !isCrawledPage(finding.normalizedUrl)) {
       carriedOutside.add(finding.normalizedUrl);
     }
   };
   const staleCarryPages = new Set<string>();
-  const noteStaleCarry = (finding: { normalizedUrl: string; lastSeenAt?: number }): void => {
+  const noteStaleCarry = (finding: {
+    normalizedUrl: string;
+    lastSeenAt?: number;
+  }): void => {
     if ((finding.lastSeenAt ?? 0) >= now) return;
-    if (crawledUrls.has(finding.normalizedUrl) || (resolution?.crawledUrls.has(finding.normalizedUrl) ?? false)) {
+    if (
+      crawledUrls.has(finding.normalizedUrl) ||
+      (resolution?.crawledUrls.has(finding.normalizedUrl) ?? false)
+    ) {
       staleCarryPages.add(finding.normalizedUrl);
     }
   };
@@ -1203,13 +1277,26 @@ export async function runCloudSmartAudits(
   // neither crawled nor removed is carried by the merge unchanged; the merge notes
   // the ones on crawled pages as it carries them.
   if (sampledEstimator && completeStore) {
-    for await (const batch of priorFindingPages(store, siteKey, completeStore.priorOpenFindings)) {
+    for await (const batch of priorFindingPages(
+      store,
+      siteKey,
+      completeStore.priorOpenFindings
+    )) {
       for (const row of batch) {
-        if (row.state !== "open" || !sampledEstimator.isSampledRow(row)) continue;
+        if (row.state !== "open" || !sampledEstimator.isSampledRow(row))
+          continue;
         sampledEstimator.observePrior(row);
-        if (isRunLocalRuleErrorFinding(row) || removedUrls.has(row.normalizedUrl)) continue;
-        if (isRecrawled(row.normalizedUrl, crawledUrls, estimatorSignal)) continue;
-        const carried = toCarriedFinding({ ...row, neverRendered: false } as MergedFinding);
+        if (
+          isRunLocalRuleErrorFinding(row) ||
+          removedUrls.has(row.normalizedUrl)
+        )
+          continue;
+        if (isRecrawled(row.normalizedUrl, crawledUrls, estimatorSignal))
+          continue;
+        const carried = toCarriedFinding({
+          ...row,
+          neverRendered: false,
+        } as MergedFinding);
         sampledEstimator.noteCarried(row, carried);
         sampledCarried.push(carried);
       }
@@ -1225,7 +1312,10 @@ export async function runCloudSmartAudits(
       freshTallies: completeTallies,
       carriedPageUrls,
       ruleMetaIndex,
-      carriedNotEvaluated: countCarriedNotEvaluated(priorPages, carriedPageUrls),
+      carriedNotEvaluated: countCarriedNotEvaluated(
+        priorPages,
+        carriedPageUrls
+      ),
       // Same exclusion the union scoring applies below via `freshForUnion`: a
       // page that 404/410'd this run is not one of the known non-removed pages.
       removedUrls,
@@ -1235,7 +1325,8 @@ export async function runCloudSmartAudits(
       requireAggregatableCarried: !!split && split.aggregate.findings > 0,
     });
     onActive = (finding) => {
-      if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
+      if (finding.provenance !== "carried" || countedByTallies?.(finding))
+        return;
       carriedCount += 1;
       noteStaleCarry(finding);
       noteCarriedOutside(finding);
@@ -1257,7 +1348,7 @@ export async function runCloudSmartAudits(
           page.normalizedUrl,
           page.sample
             .filter((row) => !isRunLocalRuleErrorFinding(row))
-            .map((row) => untouchedCarriedFinding(row, neverRendered)),
+            .map((row) => untouchedCarriedFinding(row, neverRendered))
         );
         continue;
       }
@@ -1286,7 +1377,8 @@ export async function runCloudSmartAudits(
     carriedSource = fold.carriedUnion();
   } else {
     onActive = (finding) => {
-      if (finding.provenance !== "carried" || countedByTallies?.(finding)) return;
+      if (finding.provenance !== "carried" || countedByTallies?.(finding))
+        return;
       carriedCount += 1;
       const carried = toCarriedFinding(finding);
       carriedFindings.push(carried);
@@ -1298,15 +1390,22 @@ export async function runCloudSmartAudits(
       }
       carriedLastSeen.set(
         carriedKey(finding.normalizedUrl, finding.ruleId, finding.checkName),
-        finding.lastSeenAt,
+        finding.lastSeenAt
       );
     };
-    for await (const batch of priorFindingPages(store, siteKey, completeStore?.priorOpenFindings)) {
+    for await (const batch of priorFindingPages(
+      store,
+      siteKey,
+      completeStore?.priorOpenFindings
+    )) {
       if (sampledEstimator && !completeStore) {
         for (const row of batch) sampledEstimator.observePrior(row);
       }
       session.addPriorFindings(batch);
-      if (persistWhileStreaming && pendingWrites.length >= MERGE_PERSIST_BATCH) {
+      if (
+        persistWhileStreaming &&
+        pendingWrites.length >= MERGE_PERSIST_BATCH
+      ) {
         await flushWrites();
       }
     }
@@ -1328,7 +1427,10 @@ export async function runCloudSmartAudits(
         carriedFindings,
         carriedPageUrls,
         ruleMetaIndex,
-        carriedNotEvaluated: countCarriedNotEvaluated(priorPages, carriedPageUrls),
+        carriedNotEvaluated: countCarriedNotEvaluated(
+          priorPages,
+          carriedPageUrls
+        ),
         removedUrls,
       });
       // Pushed one at a time: a spread of a whole site's backlog is an argument
@@ -1350,7 +1452,7 @@ export async function runCloudSmartAudits(
   // as `getSitePages` returned them, and rewriting them made every publish pay
   // for the site's whole page history.
   await store.upsertSitePages(
-    session.changedSitePages.filter((p) => !removedUrls.has(p.normalizedUrl)),
+    session.changedSitePages.filter((p) => !removedUrls.has(p.normalizedUrl))
   );
   // Best-effort hygiene — only ever prunes terminal rows, never open/carried, so
   // it can't affect the merged report. NEVER fail the audit on a prune error.
@@ -1373,7 +1475,8 @@ export async function runCloudSmartAudits(
             {
               meta: r.meta,
               checks: r.checks.filter(
-                (c) => !(c.pageUrl && removedUrls.has(normalizePageUrl(c.pageUrl))),
+                (c) =>
+                  !(c.pageUrl && removedUrls.has(normalizePageUrl(c.pageUrl)))
               ),
               // Preserve the complete-store fresh-clean pass count (#1023) — a
               // removed page was already excluded from crawledUrls before the
@@ -1382,7 +1485,7 @@ export async function runCloudSmartAudits(
                 ? { syntheticPassCount: r.syntheticPassCount }
                 : {}),
             },
-          ]),
+          ])
         );
 
   // (repo#2657) A capped report's tallies already count every page this run
@@ -1411,16 +1514,25 @@ export async function runCloudSmartAudits(
   // and the per-page figure read them with those taken back out.
   const scoredTallies =
     checkTallies && outsideCrawledChecks.size > 0
-      ? subtractCheckTallies(checkTallies, buildCheckTallies(Object.fromEntries(outsideCrawledChecks)))
+      ? subtractCheckTallies(
+          checkTallies,
+          buildCheckTallies(Object.fromEntries(outsideCrawledChecks))
+        )
       : checkTallies;
   const perPageTallies: CheckTallies =
     scoredTallies ?? buildCheckTallies(Object.fromEntries(freshForUnion));
   const carriedChecksPerPage = (ruleId: string): number =>
-    carriedChecksPerPageFor({ completeStore: !!completeStore, completeTallies, perPageTallies }, ruleId);
+    carriedChecksPerPageFor(
+      { completeStore: !!completeStore, completeTallies, perPageTallies },
+      ruleId
+    );
   // (pub#2099) The checks the union's carried pages were not evaluated for when
   // last crawled, off their stored rows (a row written before the record existed
   // counts nothing, so its page scores as before).
-  const carriedNotEvaluated = countCarriedNotEvaluated(priorPages, unionCarriedPages);
+  const carriedNotEvaluated = countCarriedNotEvaluated(
+    priorPages,
+    unionCarriedPages
+  );
   const unionRuleResults = buildScoringResultsFromMerged({
     freshResults: freshForUnion,
     carriedFindings: unionCarried,
@@ -1430,7 +1542,6 @@ export async function runCloudSmartAudits(
     carriedNotEvaluated,
     ...(carriedSource ? { carriedSource } : {}),
   });
-
 
   let reportTotals: CloudSmartAuditsResult["reportTotals"];
   let shownLastSeen = carriedLastSeen;
@@ -1449,9 +1560,13 @@ export async function runCloudSmartAudits(
     carriedCount = unionCarried.length;
     unrenderedCount = unionCarried.filter((f) => f.neverRendered).length;
     const shown = new Set(
-      unionCarried.map((f) => carriedKey(f.normalizedUrl, f.ruleId, f.checkName)),
+      unionCarried.map((f) =>
+        carriedKey(f.normalizedUrl, f.ruleId, f.checkName)
+      )
     );
-    shownLastSeen = new Map([...carriedLastSeen].filter(([key]) => shown.has(key)));
+    shownLastSeen = new Map(
+      [...carriedLastSeen].filter(([key]) => shown.has(key))
+    );
   } else if (completeTallies && scoringTallies) {
     reportTotals = tallyReportTotals(scoringTallies, completeTallies);
   }
@@ -1483,21 +1598,28 @@ export async function runCloudSmartAudits(
   // recorded. Nothing is read, computed or changed unless one was reported or is stored, so a site without
   // any is byte-identical. `auditedPages` is NOT folded: it is what this run crawled, and billing reads it.
   let canonicalVariantOf: ReadonlyMap<string, string> = NO_VARIANTS;
-  if ((runCanonicals && runCanonicals.size > 0) || priorPages.some((p) => !!p.canonical)) {
-    const active: Array<{ url: string; canonical: string | null | undefined }> = [];
+  if (
+    (runCanonicals && runCanonicals.size > 0) ||
+    priorPages.some((p) => !!p.canonical)
+  ) {
+    const active: Array<{ url: string; canonical: string | null | undefined }> =
+      [];
     for (const p of session.sitePages) {
-      if (p.state === "active") active.push({ url: p.normalizedUrl, canonical: p.canonical });
+      if (p.state === "active")
+        active.push({ url: p.normalizedUrl, canonical: p.canonical });
     }
     canonicalVariantOf = canonicalVariantMap(active);
   }
   let auditedVariants = 0;
   if (canonicalVariantOf.size > 0) {
-    for (const url of auditedUrls) if (canonicalVariantOf.has(url)) auditedVariants += 1;
+    for (const url of auditedUrls)
+      if (canonicalVariantOf.has(url)) auditedVariants += 1;
   }
-  const outsidePages = outsideUnknown || !input.countCarriedPagesOutsideCrawl
-    ? undefined
-    : new Set([...carriedOutside].map((u) => canonicalVariantOf.get(u) ?? u)).size +
-      untouchedOutsidePages;
+  const outsidePages =
+    outsideUnknown || !input.countCarriedPagesOutsideCrawl
+      ? undefined
+      : new Set([...carriedOutside].map((u) => canonicalVariantOf.get(u) ?? u))
+          .size + untouchedOutsidePages;
 
   return {
     canonicalVariantOf,
@@ -1519,11 +1641,13 @@ export async function runCloudSmartAudits(
       knownPages: knownPageCount(
         session.activePageCount - canonicalVariantOf.size,
         Math.max(0, auditedPages - auditedVariants),
-        input.unfetchedPages,
+        input.unfetchedPages
       ),
       carriedFindings: carriedCount - unrenderedCount,
       ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
-      ...(staleCarryPages.size > 0 ? { pagesWithStaleCarry: staleCarryPages.size } : {}),
+      ...(staleCarryPages.size > 0
+        ? { pagesWithStaleCarry: staleCarryPages.size }
+        : {}),
       ...(outsidePages ? { carriedPagesOutsideCrawl: outsidePages } : {}),
     },
     carriedLastSeen: shownLastSeen,
@@ -1540,7 +1664,7 @@ export async function runCloudSmartAudits(
 
 /** (repo#4626) The report totals a set of rule tallies scores. */
 function tallyTotals(
-  scoringTallies: Map<string, RuleTally>,
+  scoringTallies: Map<string, RuleTally>
 ): NonNullable<CloudSmartAuditsResult["reportTotals"]> {
   const totals = { passed: 0, warnings: 0, failed: 0 };
   for (const { tally } of scoringTallies.values()) {
@@ -1580,7 +1704,7 @@ function unionTallies(union: Map<string, RuleRunResult>): {
 function isRecrawled(
   url: string,
   crawledUrls: ReadonlySet<string>,
-  resolution: MergeResolutionInput | undefined,
+  resolution: MergeResolutionInput | undefined
 ): boolean {
   if (crawledUrls.has(url) || resolution?.crawledUrls.has(url)) return true;
   return (
@@ -1598,9 +1722,10 @@ function isRecrawled(
  */
 function makeCheckEvaluated(
   crawledUrls: ReadonlySet<string>,
-  resolution: MergeResolutionInput,
+  resolution: MergeResolutionInput
 ): (url: string, ruleId: string, checkName: string) => boolean {
-  const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
+  const crawled = (u: string): boolean =>
+    crawledUrls.has(u) || resolution.crawledUrls.has(u);
   const cache = new Map<string, { own: string; all: string[] }>();
   const hashesOf = (url: string) => {
     let hashes = cache.get(url);
@@ -1613,11 +1738,18 @@ function makeCheckEvaluated(
   return (url, ruleId, checkName) => {
     const ruleKey = resolutionRuleKey(ruleId);
     const key = resolutionCheckKey(ruleId, checkName);
-    if (resolution.truncatedChecks.has(ruleKey) || resolution.truncatedChecks.has(key)) return false;
+    if (
+      resolution.truncatedChecks.has(ruleKey) ||
+      resolution.truncatedChecks.has(key)
+    )
+      return false;
     const hashes = hashesOf(url);
     const ruleSkipped = resolution.notEvaluatedByCheck.get(ruleKey);
     if (ruleSkipped && hashes.all.some((h) => ruleSkipped.has(h))) return false;
-    if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+    if (
+      resolution.crawledComplete === false &&
+      !resolution.crawledUrls.has(url)
+    ) {
       if (!resolution.crawledHashes?.has(hashes.own)) return false;
       return (
         resolution.failingByCheck.has(key) &&
@@ -1641,7 +1773,11 @@ function makeCheckEvaluated(
  * floor. A max rather than a sum with the active set: a carried page the
  * frontier also queued would otherwise be counted twice.
  */
-function knownPageCount(active: number, audited: number, unfetched = 0): number {
+function knownPageCount(
+  active: number,
+  audited: number,
+  unfetched = 0
+): number {
   return Math.max(active, audited + Math.max(0, unfetched));
 }
 
@@ -1655,15 +1791,23 @@ function assertUntouched(
   page: UntouchedSamplePage,
   crawlId: string,
   crawledUrls: ReadonlySet<string>,
-  removedUrls: ReadonlySet<string>,
+  removedUrls: ReadonlySet<string>
 ): void {
   const url = page.normalizedUrl;
   if (crawledUrls.has(url) || removedUrls.has(url)) {
-    throw new Error(`untouched sample page ${url} is in this run's crawled or removed set`);
+    throw new Error(
+      `untouched sample page ${url} is in this run's crawled or removed set`
+    );
   }
   for (const row of page.sample) {
-    if (row.normalizedUrl !== url || row.lastSeenCrawlId === crawlId || row.state !== "open") {
-      throw new Error(`untouched sample page ${url} holds a row that is not an open prior on it`);
+    if (
+      row.normalizedUrl !== url ||
+      row.lastSeenCrawlId === crawlId ||
+      row.state !== "open"
+    ) {
+      throw new Error(
+        `untouched sample page ${url} holds a row that is not an open prior on it`
+      );
     }
   }
 }
@@ -1700,7 +1844,7 @@ function assertUntouched(
 function withoutUnscorablePages(
   carriedPageUrls: PageUrlSet,
   resolution: MergeResolutionInput,
-  carriedFindings: readonly CarriedFinding[],
+  carriedFindings: readonly CarriedFinding[]
 ): PageUrlSet {
   const candidates = new Set<string>();
   const byHash = new Map<string, string[]>();
@@ -1722,7 +1866,8 @@ function withoutUnscorablePages(
   }
   const pagesOf = (hashes: Iterable<string>): Set<string> => {
     const out = new Set<string>();
-    for (const hash of hashes) for (const url of byHash.get(hash) ?? []) out.add(url);
+    for (const hash of hashes)
+      for (const url of byHash.get(hash) ?? []) out.add(url);
     return out;
   };
 
@@ -1757,10 +1902,14 @@ function withoutUnscorablePages(
  * no crawled page owns that spelling (`crawled`), or `/p` would speak for
  * `/p?id=1`. One reading for every scorer that looks a page up in the signal.
  */
-function signalHashes(url: string, crawled: (url: string) => boolean): string[] {
+function signalHashes(
+  url: string,
+  crawled: (url: string) => boolean
+): string[] {
   const hashes = [resolutionUrlHash(url)];
   const q = url.indexOf("?");
-  if (q !== -1 && !crawled(url.slice(0, q))) hashes.push(resolutionUrlHash(url.slice(0, q)));
+  if (q !== -1 && !crawled(url.slice(0, q)))
+    hashes.push(resolutionUrlHash(url.slice(0, q)));
   return hashes;
 }
 
@@ -1776,16 +1925,18 @@ function signalHashes(url: string, crawled: (url: string) => boolean): string[] 
 function notEvaluatedThisRun(
   carriedFindings: readonly CarriedFinding[],
   crawledUrls: ReadonlySet<string>,
-  resolution: MergeResolutionInput,
+  resolution: MergeResolutionInput
 ): CarriedFinding[] {
-  return carriedFindings.filter((f) => !evaluatedThisRun(f, crawledUrls, resolution));
+  return carriedFindings.filter(
+    (f) => !evaluatedThisRun(f, crawledUrls, resolution)
+  );
 }
 
 /** True when the tallies already count `f`'s page for its check: {@link notEvaluatedThisRun}. */
 function evaluatedThisRun(
   f: CarriedFinding,
   crawledUrls: ReadonlySet<string>,
-  resolution: MergeResolutionInput,
+  resolution: MergeResolutionInput
 ): boolean {
   const url = f.normalizedUrl;
   // (#2658, #2673) Off a clipped list the signal has no page sets. A page its
@@ -1800,7 +1951,10 @@ function evaluatedThisRun(
   // crawled one is taken for crawled here too, and its carries drop out of the
   // union (about 1.6e-6 a page at 7,000 hashes); they stay open in the store
   // either way.
-  if (resolution.crawledComplete === false && !resolution.crawledUrls.has(url)) {
+  if (
+    resolution.crawledComplete === false &&
+    !resolution.crawledUrls.has(url)
+  ) {
     const hash = resolutionUrlHash(url);
     if (!resolution.crawledHashes?.has(hash)) return false;
     const key = resolutionCheckKey(f.ruleId, f.checkName);
@@ -1817,7 +1971,8 @@ function evaluatedThisRun(
   const notEvaluated = resolution.notEvaluatedByCheck.get(key);
   if (!notEvaluated) return true;
   // `/p` not evaluated says nothing about `/p?id=1`.
-  const crawled = (u: string): boolean => crawledUrls.has(u) || resolution.crawledUrls.has(u);
+  const crawled = (u: string): boolean =>
+    crawledUrls.has(u) || resolution.crawledUrls.has(u);
   return !signalHashes(url, crawled).some((hash) => notEvaluated.has(hash));
 }
 
@@ -1863,7 +2018,7 @@ function indexResolutionSignal(signal: ResolutionSignal): MergeResolutionInput {
  */
 function notCrawledThisRun(
   carriedPageUrls: PageUrlSet,
-  resolution: MergeResolutionInput,
+  resolution: MergeResolutionInput
 ): PageUrlSet {
   const out = new Set<string>();
   const hashes = resolution.crawledHashes;
@@ -1907,13 +2062,20 @@ function scoreFromCheckTallies(input: {
   // clean-carried pass count.
   const carriedSide = buildScoringResultsFromMerged({
     freshResults: new Map(
-      Array.from(input.freshForUnion, ([ruleId, r]) => [ruleId, { meta: r.meta, checks: [] }]),
+      Array.from(input.freshForUnion, ([ruleId, r]) => [
+        ruleId,
+        { meta: r.meta, checks: [] },
+      ])
     ),
     carriedFindings: [...input.carriedFindings],
     carriedPageUrls: input.carriedPageUrls,
     ruleMetaIndex: input.ruleMetaIndex,
-    ...(input.carriedChecksPerPage ? { carriedChecksPerPage: input.carriedChecksPerPage } : {}),
-    ...(input.carriedNotEvaluated ? { carriedNotEvaluated: input.carriedNotEvaluated } : {}),
+    ...(input.carriedChecksPerPage
+      ? { carriedChecksPerPage: input.carriedChecksPerPage }
+      : {}),
+    ...(input.carriedNotEvaluated
+      ? { carriedNotEvaluated: input.carriedNotEvaluated }
+      : {}),
   });
 
   // Keyed like the union: every published rule (an emptied one keeps its key, and
@@ -1940,13 +2102,23 @@ function scoreFromCheckTallies(input: {
  * field, check name or rule that reaches 0 is dropped, as `buildCheckTallies`
  * omits zero entries. `tallies` is not modified.
  */
-function subtractCheckTallies(tallies: CheckTallies, minus: CheckTallies): CheckTallies {
+function subtractCheckTallies(
+  tallies: CheckTallies,
+  minus: CheckTallies
+): CheckTallies {
   const left = (a: unknown, b: unknown): number => {
     const n = typeof a === "number" && Number.isFinite(a) ? a : 0;
     const m = typeof b === "number" && Number.isFinite(b) ? b : 0;
     return Math.max(n - m, 0);
   };
-  const fields = ["passed", "warnings", "failed", "warnUnits", "failUnits", "skipped"] as const;
+  const fields = [
+    "passed",
+    "warnings",
+    "failed",
+    "warnUnits",
+    "failUnits",
+    "skipped",
+  ] as const;
   const out: CheckTallies = {};
   for (const [ruleId, byName] of Object.entries(tallies)) {
     const sub = minus[ruleId];
@@ -1988,7 +2160,7 @@ function subtractCheckTallies(tallies: CheckTallies, minus: CheckTallies): Check
  */
 function tallyReportTotals(
   scoringTallies: Map<string, RuleTally>,
-  checkTallies: CheckTallies,
+  checkTallies: CheckTallies
 ): NonNullable<CloudSmartAuditsResult["reportTotals"]> {
   const totals = { passed: 0, warnings: 0, failed: 0 };
   for (const [ruleId, { tally }] of scoringTallies) {
@@ -2012,7 +2184,7 @@ async function* emptyPageSource(): FindingPageSource {
 async function* priorFindingPages(
   store: SmartAuditStore,
   siteKey: string,
-  preloaded: PageFindingRecord[] | undefined,
+  preloaded: PageFindingRecord[] | undefined
 ): PriorFindingPageSource {
   if (preloaded) {
     if (preloaded.length > 0) yield preloaded;

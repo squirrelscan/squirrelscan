@@ -1,7 +1,15 @@
 // a11y/aria-dialog-name - Dialog elements have accessible names
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import { fieldSnippet } from "../shared/form-fields";
 import {
@@ -10,7 +18,6 @@ import {
   unconfirmedRow,
   type UnnamedControls,
 } from "../shared/static-hidden";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // Classes kept in an id-less dialog's descriptor: enough to tell a page's
 // drawers and popups apart without echoing a utility-class soup.
@@ -35,7 +42,11 @@ function hasAccessibleName(el: Element, doc: Document): boolean {
  * (kept as it was, so those items read the same as before); `withoutId` is
  * the base the classes are appended to.
  */
-function describeDialog(el: Element, withId: string, withoutId: string): string {
+function describeDialog(
+  el: Element,
+  withId: string,
+  withoutId: string
+): string {
   const id = el.getAttribute("id");
   if (id) return `${withId}#${id}`;
   const classes = (el.getAttribute("class") || "")
@@ -130,7 +141,10 @@ export const ariaDialogNameRule: Rule = {
     });
     const dialogVisibility = {
       visibility: (el: Element) =>
-        (el.tagName.toLowerCase() === "dialog" ? nativeVisibility : visibility).visibility(el),
+        (el.tagName.toLowerCase() === "dialog"
+          ? nativeVisibility
+          : visibility
+        ).visibility(el),
     };
 
     // Check ARIA dialogs — fail if unnamed
@@ -139,7 +153,11 @@ export const ariaDialogNameRule: Rule = {
       ariaDialogs,
       (dialog) => {
         const role = dialog.getAttribute("role") || "dialog";
-        return describeDialog(dialog, role, `${dialog.tagName.toLowerCase()}[role="${role}"]`);
+        return describeDialog(
+          dialog,
+          role,
+          `${dialog.tagName.toLowerCase()}[role="${role}"]`
+        );
       },
       isNamed,
       aria
@@ -165,14 +183,22 @@ export const ariaDialogNameRule: Rule = {
         )
       );
     }
-    if (unnamed.length === 0 && aria.unconfirmed.length === 0 && ariaDialogs.length > 0) {
+    if (
+      unnamed.length === 0 &&
+      aria.unconfirmed.length === 0 &&
+      ariaDialogs.length > 0
+    ) {
       checks.push({
         name: "aria-dialog-name",
         status: "pass",
         ...(aria.hidden > 0
           ? {
-              message: "All ARIA dialogs in the accessibility tree have accessible names",
-              details: { dialogsChecked: ariaDialogs.length, hiddenWithoutName: aria.hidden },
+              message:
+                "All ARIA dialogs in the accessibility tree have accessible names",
+              details: {
+                dialogsChecked: ariaDialogs.length,
+                hiddenWithoutName: aria.hidden,
+              },
             }
           : {
               message: `All ${ariaDialogs.length} ARIA dialog(s) have accessible names`,
@@ -212,14 +238,22 @@ export const ariaDialogNameRule: Rule = {
         )
       );
     }
-    if (unnamedNative.length === 0 && native.unconfirmed.length === 0 && nativeDialogs.length > 0) {
+    if (
+      unnamedNative.length === 0 &&
+      native.unconfirmed.length === 0 &&
+      nativeDialogs.length > 0
+    ) {
       checks.push({
         name: "dialog-name",
         status: "pass",
         ...(native.hidden > 0
           ? {
-              message: "All native <dialog>s in the accessibility tree have accessible names",
-              details: { dialogsChecked: nativeDialogs.length, hiddenWithoutName: native.hidden },
+              message:
+                "All native <dialog>s in the accessibility tree have accessible names",
+              details: {
+                dialogsChecked: nativeDialogs.length,
+                hiddenWithoutName: native.hidden,
+              },
             }
           : {
               message: `All ${nativeDialogs.length} native <dialog>(s) have accessible names`,

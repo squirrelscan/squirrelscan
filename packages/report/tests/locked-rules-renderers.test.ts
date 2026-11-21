@@ -5,7 +5,9 @@
 // and paid-quick-coverage.
 
 import { describe, expect, test } from "bun:test";
+
 import type { AuditReport } from "../src/types";
+
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
@@ -32,12 +34,16 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 describe("renderLlm locked rules (#780)", () => {
   test("anonymous: <locked-rules> block with signup CTA and rule ids", () => {
     const xml = renderLlm(baseReport());
-    expect(xml).toContain('<locked-rules count="2" audience="anonymous-upsell">');
+    expect(xml).toContain(
+      '<locked-rules count="2" audience="anonymous-upsell">'
+    );
     expect(xml).toContain("free squirrelscan account");
     expect(xml).toContain(
-      '<cta label="Get started to unlock them" url="https://squirrelscan.com"/>',
+      '<cta label="Get started to unlock them" url="https://squirrelscan.com"/>'
     );
-    expect(xml).toContain('<rule id="ai/llm-parsability" name="LLM Parsability"/>');
+    expect(xml).toContain(
+      '<rule id="ai/llm-parsability" name="LLM Parsability"/>'
+    );
     expect(xml).toContain('<rule id="ai/site-metadata" name="Site Metadata"/>');
     expect(xml).toContain("</locked-rules>");
   });
@@ -47,12 +53,14 @@ describe("renderLlm locked rules (#780)", () => {
     expect(xml).toContain('audience="free-upsell"');
     expect(xml).not.toContain("free squirrelscan account");
     expect(xml).toContain(
-      '<cta label="Add credits in your dashboard" url="https://app.squirrelscan.com"/>',
+      '<cta label="Add credits in your dashboard" url="https://app.squirrelscan.com"/>'
     );
   });
 
   test("paid + quick coverage: re-run hint, no CTA element", () => {
-    const xml = renderLlm(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
+    const xml = renderLlm(
+      baseReport({ cloudPlan: "paid", coverageMode: "quick" })
+    );
     expect(xml).toContain('audience="quick-coverage"');
     expect(xml).toContain("--level surface or --level full");
     expect(xml).not.toContain("<cta ");
@@ -75,7 +83,10 @@ describe("renderLlm locked rules (#780)", () => {
     ]) {
       const xml = renderLlm(baseReport(overrides));
       const start = xml.indexOf("<locked-rules");
-      const notice = xml.slice(start, xml.indexOf("</locked-rules>") + "</locked-rules>".length);
+      const notice = xml.slice(
+        start,
+        xml.indexOf("</locked-rules>") + "</locked-rules>".length
+      );
       expect(notice).not.toContain("—");
     }
   });
@@ -85,18 +96,24 @@ describe("renderMarkdown locked rules (#780)", () => {
   test("anonymous: ## Checks not run section with signup link", () => {
     const md = renderMarkdown(baseReport());
     expect(md).toContain("## Checks not run");
-    expect(md).toContain("[Get started to unlock them](https://squirrelscan.com)");
+    expect(md).toContain(
+      "[Get started to unlock them](https://squirrelscan.com)"
+    );
     expect(md).toContain("`ai/llm-parsability`, LLM Parsability");
   });
 
   test("free, no credits: dashboard link, no signup copy", () => {
     const md = renderMarkdown(baseReport({ cloudPlan: "free" }));
-    expect(md).toContain("[Add credits in your dashboard](https://app.squirrelscan.com)");
+    expect(md).toContain(
+      "[Add credits in your dashboard](https://app.squirrelscan.com)"
+    );
     expect(md).not.toContain("free squirrelscan account");
   });
 
   test("paid + quick coverage: re-run hint, no link", () => {
-    const md = renderMarkdown(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
+    const md = renderMarkdown(
+      baseReport({ cloudPlan: "paid", coverageMode: "quick" })
+    );
     expect(md).toContain("--level surface or --level full");
     expect(md).not.toContain("[Add credits");
   });
@@ -116,18 +133,24 @@ describe("renderText locked rules (#780)", () => {
   test("anonymous: CHECKS NOT RUN block with signup link", () => {
     const txt = renderText(baseReport());
     expect(txt).toContain("CHECKS NOT RUN");
-    expect(txt).toContain("Get started to unlock them: https://squirrelscan.com");
+    expect(txt).toContain(
+      "Get started to unlock them: https://squirrelscan.com"
+    );
     expect(txt).toContain("ai/llm-parsability, LLM Parsability");
   });
 
   test("free, no credits: dashboard link, no signup copy", () => {
     const txt = renderText(baseReport({ cloudPlan: "free" }));
-    expect(txt).toContain("Add credits in your dashboard: https://app.squirrelscan.com");
+    expect(txt).toContain(
+      "Add credits in your dashboard: https://app.squirrelscan.com"
+    );
     expect(txt).not.toContain("free squirrelscan account");
   });
 
   test("paid + quick coverage: re-run hint, no link", () => {
-    const txt = renderText(baseReport({ cloudPlan: "paid", coverageMode: "quick" }));
+    const txt = renderText(
+      baseReport({ cloudPlan: "paid", coverageMode: "quick" })
+    );
     expect(txt).toContain("--level surface or --level full");
     expect(txt).not.toContain("Add credits");
   });

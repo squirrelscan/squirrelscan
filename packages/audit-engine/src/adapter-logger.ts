@@ -10,7 +10,11 @@ export interface AdapterLogger {
   warn: (...args: unknown[]) => void;
   traceStart: (name: string) => string;
   traceEnd: (span: string, meta?: Record<string, unknown>) => void;
-  withTrace: <T>(name: string, fn: () => T, meta?: () => Record<string, unknown>) => T;
+  withTrace: <T>(
+    name: string,
+    fn: () => T,
+    meta?: () => Record<string, unknown>
+  ) => T;
 }
 
 const noopLogger: AdapterLogger = {

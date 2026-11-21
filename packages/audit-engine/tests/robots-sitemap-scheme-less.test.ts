@@ -12,7 +12,10 @@
 // the report named another. A test that only drove one side would stay green
 // through exactly that.
 
-import type { RobotsTxtData, RobotsTxtRecord } from "@squirrelscan/core-contracts";
+import type {
+  RobotsTxtData,
+  RobotsTxtRecord,
+} from "@squirrelscan/core-contracts";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { discoverSitemaps } from "@squirrelscan/crawler/sitemaps";
@@ -37,19 +40,30 @@ let headersSeen: Map<string, Record<string, string>> = new Map();
 function stubFetch(body?: (url: string) => string | null): void {
   requested = [];
   headersSeen = new Map();
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ) => {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
     requested.push(url);
     const raw = init?.headers;
     headersSeen.set(
       url,
       raw instanceof Headers
         ? Object.fromEntries(raw.entries())
-        : { ...((raw ?? {}) as Record<string, string>) },
+        : { ...((raw ?? {}) as Record<string, string>) }
     );
     const content = body?.(url) ?? null;
     if (content === null) return new Response("nope", { status: 404 });
-    return new Response(content, { status: 200, headers: { "content-type": "application/xml" } });
+    return new Response(content, {
+      status: 200,
+      headers: { "content-type": "application/xml" },
+    });
   }) as typeof fetch;
 }
 
@@ -94,7 +108,7 @@ function declaredFetches(origin = ORIGIN): string[] {
       "/post-sitemap.xml",
       "/page-sitemap.xml",
       "/news-sitemap.xml",
-    ].map((path) => new URL(path, origin).toString()),
+    ].map((path) => new URL(path, origin).toString())
   );
   return requested.filter((url) => !common.has(url));
 }
@@ -132,7 +146,7 @@ function requestedProtocol(...protocols: string[]): boolean {
 
 async function discover(robotsTxt: RobotsTxtData, origin = ORIGIN) {
   return await Effect.runPromise(
-    discoverSitemaps(origin, robotsTxt, "squirrel-test", { maxUrls: 50 }),
+    discoverSitemaps(origin, robotsTxt, "squirrel-test", { maxUrls: 50 })
   );
 }
 
@@ -147,18 +161,26 @@ afterEach(() => {
 describe("scheme-less Sitemap line, crawl side (#2316)", () => {
   test("worldairops shape is fetched at the declared HOST, not as a path", async () => {
     stubFetch((url) =>
-      url === "https://worldairops.com/sitemap.xml" ? urlset(`${ORIGIN}/a`) : null,
+      url === "https://worldairops.com/sitemap.xml"
+        ? urlset(`${ORIGIN}/a`)
+        : null
     );
 
-    const result = await discover(robotsTxtData(["worldairops.com/sitemap.xml"]));
+    const result = await discover(
+      robotsTxtData(["worldairops.com/sitemap.xml"])
+    );
 
     expect(requested).toContain("https://worldairops.com/sitemap.xml");
-    expect(requested).not.toContain("https://worldairops.com/worldairops.com/sitemap.xml");
+    expect(requested).not.toContain(
+      "https://worldairops.com/worldairops.com/sitemap.xml"
+    );
     // The declared line and the common location are the same file, so the walk
     // has exactly one entry point for it.
     expect(declaredFetches()).toEqual([]);
     // AC: no robots.txt-sourced failure that only our own resolution created.
-    expect(result.failed.filter((entry) => entry.source === "robots.txt")).toEqual([]);
+    expect(
+      result.failed.filter((entry) => entry.source === "robots.txt")
+    ).toEqual([]);
     expect(result.discovered.map((sitemap) => sitemap.url)).toEqual([
       "https://worldairops.com/sitemap.xml",
     ]);
@@ -166,38 +188,57 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
 
   test("a declared path that is NOT a common location is still reached", async () => {
     stubFetch((url) =>
-      url === "https://worldairops.com/custom/sitemap-index.xml" ? urlset(`${ORIGIN}/b`) : null,
+      url === "https://worldairops.com/custom/sitemap-index.xml"
+        ? urlset(`${ORIGIN}/b`)
+        : null
     );
 
-    const result = await discover(robotsTxtData(["worldairops.com/custom/sitemap-index.xml"]));
+    const result = await discover(
+      robotsTxtData(["worldairops.com/custom/sitemap-index.xml"])
+    );
 
-    expect(declaredFetches()).toEqual(["https://worldairops.com/custom/sitemap-index.xml"]);
-    expect(result.all.flatMap((sitemap) => sitemap.urls.map((u) => u.loc))).toEqual([
-      "https://worldairops.com/b",
+    expect(declaredFetches()).toEqual([
+      "https://worldairops.com/custom/sitemap-index.xml",
     ]);
+    expect(
+      result.all.flatMap((sitemap) => sitemap.urls.map((u) => u.loc))
+    ).toEqual(["https://worldairops.com/b"]);
   });
 
   test("a scheme-less line naming ANOTHER host is fetched there, without customHeaders", async () => {
-    stubFetch((url) => (url === "https://cdn.example.test/s.xml" ? urlset(`${ORIGIN}/c`) : null));
+    stubFetch((url) =>
+      url === "https://cdn.example.test/s.xml" ? urlset(`${ORIGIN}/c`) : null
+    );
 
     await Effect.runPromise(
-      discoverSitemaps(ORIGIN, robotsTxtData(["cdn.example.test/s.xml"]), "squirrel-test", {
-        maxUrls: 50,
-        customHeaders: { "signature-agent": "https://squirrelscan.com" },
-      }),
+      discoverSitemaps(
+        ORIGIN,
+        robotsTxtData(["cdn.example.test/s.xml"]),
+        "squirrel-test",
+        {
+          maxUrls: 50,
+          customHeaders: { "signature-agent": "https://squirrelscan.com" },
+        }
+      )
     );
 
     expect(requested).toContain("https://cdn.example.test/s.xml");
     // #1393: the caller's secret headers are scoped to the audited origin.
-    expect(headersSeen.get("https://cdn.example.test/s.xml")).not.toHaveProperty("signature-agent");
-    expect(headersSeen.get("https://worldairops.com/sitemap.xml")).toHaveProperty("signature-agent");
+    expect(
+      headersSeen.get("https://cdn.example.test/s.xml")
+    ).not.toHaveProperty("signature-agent");
+    expect(
+      headersSeen.get("https://worldairops.com/sitemap.xml")
+    ).toHaveProperty("signature-agent");
   });
 
   test("a bare filename with a query string stays on the audited origin", async () => {
     await discover(robotsTxtData(["sitemap.xml?offset=100"]));
 
     // The trap #2315 hit: `sitemap.xml` must never be read as a HOST.
-    expect(declaredFetches()).toEqual(["https://worldairops.com/sitemap.xml?offset=100"]);
+    expect(declaredFetches()).toEqual([
+      "https://worldairops.com/sitemap.xml?offset=100",
+    ]);
     expect(requestedHost("sitemap.xml")).toBe(false);
   });
 
@@ -211,10 +252,15 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
   });
 
   test("a relative declaration resolves against the ORIGIN, not a deep base path", async () => {
-    await discover(robotsTxtData(["sitemap-news.xml"], ORIGIN), `${ORIGIN}/en/docs/`);
+    await discover(
+      robotsTxtData(["sitemap-news.xml"], ORIGIN),
+      `${ORIGIN}/en/docs/`
+    );
 
     expect(requested).toContain("https://worldairops.com/sitemap-news.xml");
-    expect(requested).not.toContain("https://worldairops.com/en/docs/sitemap-news.xml");
+    expect(requested).not.toContain(
+      "https://worldairops.com/en/docs/sitemap-news.xml"
+    );
   });
 
   test("unusable values are dropped before any fetch", async () => {
@@ -229,32 +275,42 @@ describe("scheme-less Sitemap line, crawl side (#2316)", () => {
         // sitemap.
         "https:/",
         "",
-      ]),
+      ])
     );
 
     expect(declaredFetches()).toEqual([]);
     expect(requestedProtocol("ftp:", "file:")).toBe(false);
     expect(requested).not.toContain(`${ORIGIN}/`);
-    expect(result.failed.filter((entry) => entry.source === "robots.txt")).toEqual([]);
+    expect(
+      result.failed.filter((entry) => entry.source === "robots.txt")
+    ).toEqual([]);
   });
 
   test("an absolute declaration keeps its path and query", async () => {
-    await discover(robotsTxtData(["https://cdn.example.test/Sitemap_Index.XML?v=2"]));
+    await discover(
+      robotsTxtData(["https://cdn.example.test/Sitemap_Index.XML?v=2"])
+    );
 
-    expect(declaredFetches()).toEqual(["https://cdn.example.test/Sitemap_Index.XML?v=2"]);
+    expect(declaredFetches()).toEqual([
+      "https://cdn.example.test/Sitemap_Index.XML?v=2",
+    ]);
   });
 
   test("a differently spelled declaration is the SAME entry point as the common location", async () => {
     // Default port and host case are not a second sitemap. Keeping the declared
     // spelling would fetch this file twice, spend the walk's URL budget twice,
     // and on a 404 record one file as failed under two different sources.
-    const result = await discover(robotsTxtData(["https://WORLDAIROPS.COM:443/sitemap.xml"]));
+    const result = await discover(
+      robotsTxtData(["https://WORLDAIROPS.COM:443/sitemap.xml"])
+    );
 
     expect(declaredFetches()).toEqual([]);
     expect(requested.filter((url) => url.endsWith("/sitemap.xml"))).toEqual([
       "https://worldairops.com/sitemap.xml",
     ]);
-    expect(result.failed.filter((entry) => entry.url.endsWith("/sitemap.xml"))).toHaveLength(1);
+    expect(
+      result.failed.filter((entry) => entry.url.endsWith("/sitemap.xml"))
+    ).toHaveLength(1);
   });
 
   test("a scheme with no authority is dropped, never read as a host", async () => {
@@ -276,7 +332,7 @@ describe("scheme-less Sitemap line, report side (#2316)", () => {
         "/sitemap-news.xml",
         "https://cdn.example.test/s.xml",
         "not a url at all",
-      ]),
+      ])
     );
 
     expect(data?.sitemaps).toEqual([
@@ -292,7 +348,10 @@ describe("scheme-less Sitemap line, report side (#2316)", () => {
 
   test("the repair is reported, not silent", () => {
     const data = buildRobotsData(
-      robotsRecord(["worldairops.com/sitemap.xml", "ftp://worldairops.com/s.xml"]),
+      robotsRecord([
+        "worldairops.com/sitemap.xml",
+        "ftp://worldairops.com/s.xml",
+      ])
     );
 
     expect(data?.errors).toEqual([
@@ -303,7 +362,7 @@ describe("scheme-less Sitemap line, report side (#2316)", () => {
 
   test("healthy declarations add no parse problems", () => {
     const data = buildRobotsData(
-      robotsRecord(["https://worldairops.com/sitemap.xml", "/sitemap-news.xml"]),
+      robotsRecord(["https://worldairops.com/sitemap.xml", "/sitemap-news.xml"])
     );
 
     expect(data?.errors).toEqual([]);
@@ -340,16 +399,25 @@ describe("scheme-less Sitemap line, report side (#2316)", () => {
             avgLoadTimeMs: 0,
           },
         });
-        yield* storage.setRobotsTxt(crawlId, robotsRecord(["worldairops.com/sitemap.xml"]));
+        yield* storage.setRobotsTxt(
+          crawlId,
+          robotsRecord(["worldairops.com/sitemap.xml"])
+        );
         return {
-          v1: yield* generateReportFromStorage(storage, crawlId, emptyRuleExecutionResult()),
+          v1: yield* generateReportFromStorage(
+            storage,
+            crawlId,
+            emptyRuleExecutionResult()
+          ),
           v2: yield* buildV2Report(storage, crawlId, streamingInput),
         };
-      }),
+      })
     );
 
     for (const report of [v1, v2]) {
-      expect(report.robotsTxt?.sitemaps).toEqual(["https://worldairops.com/sitemap.xml"]);
+      expect(report.robotsTxt?.sitemaps).toEqual([
+        "https://worldairops.com/sitemap.xml",
+      ]);
       expect(report.sitemaps?.sources.robotsTxt).toEqual([
         "https://worldairops.com/sitemap.xml",
       ]);

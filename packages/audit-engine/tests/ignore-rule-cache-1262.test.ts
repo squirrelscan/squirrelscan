@@ -1,27 +1,47 @@
 // `[[ignore]]` waivers and the per-page rule-result cache (#1262): a waiver changes
 // a rule's verdict, so editing one must miss the cache, for the rules it names only.
 
+import {
+  RuleRunner,
+  type IgnoreEntry,
+  type RulesConfig,
+} from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
 
-import { RuleRunner, type IgnoreEntry, type RulesConfig } from "@squirrelscan/rules";
-
-import { computeRunContextHash, withoutStoringAfterIgnoreTimeout } from "../src/rule-cache";
+import {
+  computeRunContextHash,
+  withoutStoringAfterIgnoreTimeout,
+} from "../src/rule-cache";
 
 const COOKIE = "security/cookie-flags";
 const TITLE = "core/meta-title";
 
 function signature(ignore: IgnoreEntry[] | undefined) {
-  const config: RulesConfig = { rule_options: {}, rules: { enable: [COOKIE, TITLE] }, ...(ignore ? { ignore } : {}) };
+  const config: RulesConfig = {
+    rule_options: {},
+    rules: { enable: [COOKIE, TITLE] },
+    ...(ignore ? { ignore } : {}),
+  };
   return new RuleRunner({ config }).pageRuleSignature();
 }
 
-async function hashOf(ignore: IgnoreEntry[] | undefined, only?: string): Promise<string> {
-  const pageRules = signature(ignore).filter((r) => only === undefined || r.id === only);
+async function hashOf(
+  ignore: IgnoreEntry[] | undefined,
+  only?: string
+): Promise<string> {
+  const pageRules = signature(ignore).filter(
+    (r) => only === undefined || r.id === only
+  );
   const out = await computeRunContextHash({
     engineVersion: "test",
     rulesVersion: "test",
     pageRules,
-    siteData: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null },
+    siteData: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteMetadata: undefined,
     cloudResults: undefined,
     ignoreApplicability: false,
@@ -35,7 +55,9 @@ async function hashOf(ignore: IgnoreEntry[] | undefined, only?: string): Promise
 
 describe("the run context hash", () => {
   const a: IgnoreEntry[] = [{ rule: COOKIE, items: ["localization"] }];
-  const b: IgnoreEntry[] = [{ rule: COOKIE, items: ["localization", "cart_currency"] }];
+  const b: IgnoreEntry[] = [
+    { rule: COOKIE, items: ["localization", "cart_currency"] },
+  ];
 
   test("is unchanged when there is no ignore list (existing caches stay valid)", async () => {
     expect(await hashOf(undefined)).toBe(await hashOf([]));

@@ -1,9 +1,11 @@
+import { normalizeCategoryCode } from "@squirrelscan/core-contracts";
+import {
+  PUBLIC_CATEGORY_COUNT,
+  PUBLIC_RULE_COUNT_FLOOR,
+} from "@squirrelscan/utils/constants";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-
-import { normalizeCategoryCode } from "@squirrelscan/core-contracts";
-import { PUBLIC_CATEGORY_COUNT, PUBLIC_RULE_COUNT_FLOOR } from "@squirrelscan/utils/constants";
 
 import { loadAllRules } from "../src/index";
 
@@ -22,13 +24,17 @@ const REPO_ROOT = join(import.meta.dir, "../../..");
 const FIX =
   "To fix: update the number in the named file (and the constant in packages/utils/src/constants.ts if needed).";
 
-const read = (file: string): string => readFileSync(join(REPO_ROOT, file), "utf8");
+const read = (file: string): string =>
+  readFileSync(join(REPO_ROOT, file), "utf8");
 
 const rules = [...loadAllRules().values()];
 const liveTotal = rules.length;
 const liveByCategory = new Map<string, number>();
 for (const rule of rules) {
-  liveByCategory.set(rule.meta.category, (liveByCategory.get(rule.meta.category) ?? 0) + 1);
+  liveByCategory.set(
+    rule.meta.category,
+    (liveByCategory.get(rule.meta.category) ?? 0) + 1
+  );
 }
 const liveCategories = liveByCategory.size;
 
@@ -42,20 +48,32 @@ const TOTAL_SURFACES: Surface[] = [
   { file: "docs/rules/index.mdx", re: /\*\*(\d+)\+ rules\*\*/g },
   { file: "docs/index.mdx", re: /(\d+)\+ rules, \d+ categories/g },
   { file: "docs/index.mdx", re: /\*\*(\d+)\+ rules\*\*/g },
-  { file: "docs/index.mdx", re: /\*\*Total: (\d+)\+ rules across \d+ categories\b/g },
+  {
+    file: "docs/index.mdx",
+    re: /\*\*Total: (\d+)\+ rules across \d+ categories\b/g,
+  },
   { file: "docs/agent-setup/index.mdx", re: /(\d+)\+ rules across SEO/g },
   { file: "docs/configuration/rules.mdx", re: /\*\*(\d+)\+ rules\*\*/g },
   { file: "README.md", re: /\*\*\[(\d+)\+ rules, \d+ categories\]/g },
-  { file: "README.md", re: /\*\*Total: (\d+)\+ rules across \d+ categories\*\*/g },
+  {
+    file: "README.md",
+    re: /\*\*Total: (\d+)\+ rules across \d+ categories\*\*/g,
+  },
 ];
 
 const CATEGORY_SURFACES: Surface[] = [
   { file: "docs/rules/index.mdx", re: /\*\*(\d+) categories\*\*/g },
   { file: "docs/index.mdx", re: /\d+\+ rules, (\d+) categories/g },
   { file: "docs/index.mdx", re: /\*\*(\d+) categories\*\*/g },
-  { file: "docs/index.mdx", re: /\*\*Total: \d+\+ rules across (\d+) categories\b/g },
+  {
+    file: "docs/index.mdx",
+    re: /\*\*Total: \d+\+ rules across (\d+) categories\b/g,
+  },
   { file: "README.md", re: /\*\*\[\d+\+ rules, (\d+) categories\]/g },
-  { file: "README.md", re: /\*\*Total: \d+\+ rules across (\d+) categories\*\*/g },
+  {
+    file: "README.md",
+    re: /\*\*Total: \d+\+ rules across (\d+) categories\*\*/g,
+  },
 ];
 
 const numbersIn = (s: Surface): number[] =>
@@ -64,7 +82,7 @@ const numbersIn = (s: Surface): number[] =>
 describe("public rule counts match the registry (repo#2139)", () => {
   test("PUBLIC_RULE_COUNT_FLOOR is the live total rounded down to the nearest 10", () => {
     expect(`floor ${PUBLIC_RULE_COUNT_FLOOR} (live total ${liveTotal})`).toBe(
-      `floor ${advertisedFloor} (live total ${liveTotal})`,
+      `floor ${advertisedFloor} (live total ${liveTotal})`
     );
   });
 
@@ -76,11 +94,13 @@ describe("public rule counts match the registry (repo#2139)", () => {
     test(`${s.file} ${s.re.source} states the rule floor`, () => {
       const found = numbersIn(s);
       if (found.length === 0)
-        throw new Error(`${s.re} not found in ${s.file}: the copy moved; update this test.`);
+        throw new Error(
+          `${s.re} not found in ${s.file}: the copy moved; update this test.`
+        );
       for (const n of found) {
         if (n !== advertisedFloor) {
           throw new Error(
-            `${s.file} says ${n}+ rules, expected ${advertisedFloor}+ (live total ${liveTotal}). ${FIX}`,
+            `${s.file} says ${n}+ rules, expected ${advertisedFloor}+ (live total ${liveTotal}). ${FIX}`
           );
         }
       }
@@ -91,10 +111,14 @@ describe("public rule counts match the registry (repo#2139)", () => {
     test(`${s.file} ${s.re.source} states the live category count`, () => {
       const found = numbersIn(s);
       if (found.length === 0)
-        throw new Error(`${s.re} not found in ${s.file}: the copy moved; update this test.`);
+        throw new Error(
+          `${s.re} not found in ${s.file}: the copy moved; update this test.`
+        );
       for (const n of found) {
         if (n !== liveCategories) {
-          throw new Error(`${s.file} says ${n} categories, expected ${liveCategories}. ${FIX}`);
+          throw new Error(
+            `${s.file} says ${n} categories, expected ${liveCategories}. ${FIX}`
+          );
         }
       }
     });
@@ -112,7 +136,7 @@ describe("every rounded rule total in the public copy is the floor", () => {
     "npm/package.json",
     ".claude-plugin/marketplace.json",
     ...[...new Bun.Glob("docs/**/*.mdx").scanSync({ cwd: REPO_ROOT })].filter(
-      (file) => !file.includes("node_modules"),
+      (file) => !file.includes("node_modules")
     ),
   ].sort();
 
@@ -128,7 +152,8 @@ describe("every rounded rule total in the public copy is the floor", () => {
       for (const m of text.matchAll(TOTAL_RE)) {
         seen += 1;
         const n = Number((m[1] as string).replace(/,/g, ""));
-        if (n !== advertisedFloor) wrong.push(`${file}: "${m[0]}", expected ${advertisedFloor}+`);
+        if (n !== advertisedFloor)
+          wrong.push(`${file}: "${m[0]}", expected ${advertisedFloor}+`);
       }
     }
     expect(seen).toBeGreaterThan(0);
@@ -140,7 +165,8 @@ describe("docs category cards match the registry (repo#2139)", () => {
   const DIR = "docs/rules";
   // Cloud-only gap analysis has no local rules, so its card cannot be derived.
   const DOCS_ONLY = new Set(["gaps"]);
-  const CARD_RE = /<Card\b[^>]*\bhref="\/rules\/([a-z0-9-]+)"[^>]*>([\s\S]*?)<\/Card>/g;
+  const CARD_RE =
+    /<Card\b[^>]*\bhref="\/rules\/([a-z0-9-]+)"[^>]*>([\s\S]*?)<\/Card>/g;
   const COUNT_RE = /\((\d+)\s+rules\b/;
 
   const pages = [
@@ -169,8 +195,12 @@ describe("docs category cards match the registry (repo#2139)", () => {
 
   test("every live category has a card on the rules index", () => {
     const index = pages.find((p) => p.file === `${DIR}/index.mdx`);
-    const documented = new Set(index?.cards.map((c) => normalizeCategoryCode(c.slug)));
-    const owed = [...liveByCategory.keys()].filter((c) => !documented.has(c)).sort();
+    const documented = new Set(
+      index?.cards.map((c) => normalizeCategoryCode(c.slug))
+    );
+    const owed = [...liveByCategory.keys()]
+      .filter((c) => !documented.has(c))
+      .sort();
     expect(owed).toEqual([]);
   });
 
@@ -180,19 +210,19 @@ describe("docs category cards match the registry (repo#2139)", () => {
         const code = normalizeCategoryCode(slug);
         if (count === undefined) {
           throw new Error(
-            `/rules/${slug} card in ${file} has no "(N rules)" count: card format changed; update this test.`,
+            `/rules/${slug} card in ${file} has no "(N rules)" count: card format changed; update this test.`
           );
         }
         if (DOCS_ONLY.has(code)) return;
         const live = liveByCategory.get(code);
         if (live === undefined) {
           throw new Error(
-            `/rules/${slug} in ${file} maps to category "${code}" with no rules in loadAllRules(): renamed or removed category.`,
+            `/rules/${slug} in ${file} maps to category "${code}" with no rules in loadAllRules(): renamed or removed category.`
           );
         }
         if (Number(count) !== live) {
           throw new Error(
-            `${file}: /rules/${slug} card says ${count} rules, registry has ${live}. ${FIX}`,
+            `${file}: /rules/${slug} card says ${count} rules, registry has ${live}. ${FIX}`
           );
         }
       });

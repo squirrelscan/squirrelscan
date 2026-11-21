@@ -33,7 +33,10 @@ interface PropertyRule {
    */
   lastMayOmit?: string[];
   /** Other places a required field may be given, keyed by field. */
-  alsoAt?: Record<string, (obj: Record<string, unknown>, nodes: NodeIndex) => boolean>;
+  alsoAt?: Record<
+    string,
+    (obj: Record<string, unknown>, nodes: NodeIndex) => boolean
+  >;
 }
 
 interface SchemaRule {
@@ -126,7 +129,10 @@ const TYPE_RULES: Record<string, SchemaRule> = {
   FAQPage: {
     required: ["mainEntity"],
     properties: {
-      mainEntity: { type: "objectOrArray", required: ["name", "acceptedAnswer"] },
+      mainEntity: {
+        type: "objectOrArray",
+        required: ["name", "acceptedAnswer"],
+      },
     },
   },
   VideoObject: {
@@ -210,7 +216,11 @@ function indexNodes(schemas: readonly Record<string, unknown>[]): NodeIndex {
 }
 
 /** schema.org `ImageObject` and its subtypes. */
-const IMAGE_OBJECT_TYPES = new Set(["ImageObject", "Barcode", "ImageObjectSnapshot"]);
+const IMAGE_OBJECT_TYPES = new Set([
+  "ImageObject",
+  "Barcode",
+  "ImageObjectSnapshot",
+]);
 
 /** `ImageObject` from `ImageObject`, `schema:ImageObject` or `https://schema.org/ImageObject`. */
 function bareTypeName(type: string): string {
@@ -226,11 +236,18 @@ function isUrlOrImage(value: unknown): boolean {
   if (typeof value === "string") return true;
   if (!isPlainObject(value)) return false;
   const type = value["@type"];
-  const types: unknown[] = Array.isArray(type) ? type : type === undefined ? [] : [type];
-  const isImage = (t: unknown) => typeof t === "string" && IMAGE_OBJECT_TYPES.has(bareTypeName(t));
+  const types: unknown[] = Array.isArray(type)
+    ? type
+    : type === undefined
+      ? []
+      : [type];
+  const isImage = (t: unknown) =>
+    typeof t === "string" && IMAGE_OBJECT_TYPES.has(bareTypeName(t));
   if (types.length > 0 && !types.some(isImage)) return false;
   return (
-    typeof value["@id"] === "string" || !isMissing(value.url) || !isMissing(value.contentUrl)
+    typeof value["@id"] === "string" ||
+    !isMissing(value.url) ||
+    !isMissing(value.contentUrl)
   );
 }
 
@@ -263,7 +280,7 @@ function validatePropertyType(
   value: unknown,
   rule: PropertyRule,
   nodes: NodeIndex,
-  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void,
+  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void
 ): void {
   if (isMissing(value)) {
     return;
@@ -310,7 +327,9 @@ function validatePropertyType(
       }
       break;
     case "urlOrImage":
-      if (Array.isArray(value) ? !value.every(isUrlOrImage) : !isUrlOrImage(value)) {
+      if (
+        Array.isArray(value) ? !value.every(isUrlOrImage) : !isUrlOrImage(value)
+      ) {
         addTypeError("a URL, an ImageObject, or an array of either");
       }
       break;
@@ -346,7 +365,8 @@ function validatePropertyType(
       const elsewhere = rule.alsoAt?.[key];
       if (
         targets.every(
-          (target) => isMissing(target[key]) && !(elsewhere && elsewhere(target, nodes)),
+          (target) =>
+            isMissing(target[key]) && !(elsewhere && elsewhere(target, nodes))
         )
       ) {
         addIssue({
@@ -369,7 +389,10 @@ function validatePropertyType(
 }
 
 /** The required list that applies to an object, by any `@type` its descriptions give. */
-function requiredFor(rule: PropertyRule, targets: Record<string, unknown>[]): string[] {
+function requiredFor(
+  rule: PropertyRule,
+  targets: Record<string, unknown>[]
+): string[] {
   const byType = rule.requiredByType;
   if (byType) {
     for (const target of targets) {
@@ -391,7 +414,11 @@ function positionOf(entry: unknown, nodes: NodeIndex): number | undefined {
     const raw = node.position;
     // Numbers and numeric strings only: coercing an object can run its code.
     const position =
-      typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim() !== ""
+          ? Number(raw)
+          : NaN;
     if (Number.isFinite(position)) return position;
   }
   return undefined;
@@ -429,7 +456,7 @@ function normalizeTypes(schema: ParsedSchema): string[] {
 function validateContext(
   schema: ParsedSchema,
   typeName: string,
-  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void,
+  addIssue: (issue: Omit<SchemaValidationIssue, "type">) => void
 ): void {
   const context = schema["@context"];
   if (!context) {
@@ -465,11 +492,15 @@ function validateContext(
   }
 }
 
-function validateSchema(schema: ParsedSchema, nodes: NodeIndex): SchemaValidationIssue[] {
+function validateSchema(
+  schema: ParsedSchema,
+  nodes: NodeIndex
+): SchemaValidationIssue[] {
   const issues: SchemaValidationIssue[] = [];
 
   const baseTypeRaw =
-    (Array.isArray(schema["@type"]) ? schema["@type"][0] : schema["@type"]) ?? "Schema";
+    (Array.isArray(schema["@type"]) ? schema["@type"][0] : schema["@type"]) ??
+    "Schema";
   const baseType = TYPE_ALIASES[baseTypeRaw] ?? baseTypeRaw;
 
   const addIssueForType =
@@ -525,7 +556,7 @@ function validateSchema(schema: ParsedSchema, nodes: NodeIndex): SchemaValidatio
  */
 export function validateSchemas(
   schemas: ParsedSchema[],
-  untypedNodes: readonly Record<string, unknown>[] = [],
+  untypedNodes: readonly Record<string, unknown>[] = []
 ): SchemaValidationIssue[] {
   // Untyped top-level nodes are not schemas to validate, but a reference may
   // point at one: `{"@id": "#p", "name": "…"}` in a `@graph` still describes #p.

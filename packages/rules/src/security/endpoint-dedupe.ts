@@ -32,9 +32,15 @@ import type { CheckResult, RuleRunResult } from "../types";
 
 import { AUTH_ENDPOINT_DISCLOSURE_RULE_ID } from "./auth-endpoint-disclosure";
 import { authFieldKey } from "./field-key";
-import { dropFieldsReportedElsewhere, JSON_SENSITIVE_FIELDS_RULE_ID } from "./json-sensitive-fields";
+import {
+  dropFieldsReportedElsewhere,
+  JSON_SENSITIVE_FIELDS_RULE_ID,
+} from "./json-sensitive-fields";
 import { anonymousGetUrl } from "./probe-http";
-import { dropEndpointsReportedElsewhere, UNAUTHENTICATED_API_RULE_ID } from "./unauthenticated-api";
+import {
+  dropEndpointsReportedElsewhere,
+  UNAUTHENTICATED_API_RULE_ID,
+} from "./unauthenticated-api";
 
 /** The auth rule's finding check: one per endpoint, its URL in `details.endpoint`. */
 const AUTH_FINDING_CHECK = "auth-endpoint-disclosure";
@@ -45,11 +51,14 @@ const AUTH_FINDING_CHECK = "auth-endpoint-disclosure";
  * the rule's results, and the waiver should not bring the same leak back as
  * another rule's finding.
  */
-function authFindings(checks: readonly CheckResult[]): Map<string, CheckResult> {
+function authFindings(
+  checks: readonly CheckResult[]
+): Map<string, CheckResult> {
   const out = new Map<string, CheckResult>();
   for (const check of checks) {
     if (check.name !== AUTH_FINDING_CHECK) continue;
-    const waived = check.status === "pass" && check.details?.ignored !== undefined;
+    const waived =
+      check.status === "pass" && check.details?.ignored !== undefined;
     if (check.status !== "fail" && !waived) continue;
     const endpoint = check.details?.endpoint;
     if (typeof endpoint !== "string") continue;
@@ -63,7 +72,9 @@ function authFindings(checks: readonly CheckResult[]): Map<string, CheckResult> 
 }
 
 /** Normalised URLs (anonymousGetUrl) of the endpoints the auth rule reported. */
-export function endpointsReportedByAuthRule(checks: readonly CheckResult[]): Set<string> {
+export function endpointsReportedByAuthRule(
+  checks: readonly CheckResult[]
+): Set<string> {
   return new Set(authFindings(checks).keys());
 }
 
@@ -71,7 +82,9 @@ export function endpointsReportedByAuthRule(checks: readonly CheckResult[]): Set
  * The field keys (field-key.ts) the auth rule reported, by normalised endpoint
  * URL. Read from the finding's items, one per field (`meta.field`).
  */
-export function fieldsReportedByAuthRule(checks: readonly CheckResult[]): Map<string, Set<string>> {
+export function fieldsReportedByAuthRule(
+  checks: readonly CheckResult[]
+): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   for (const [endpoint, check] of authFindings(checks)) {
     const keys = new Set<string>();
@@ -91,7 +104,10 @@ interface CrossRulePair {
   /** The rule that loses the overlapping finding. */
   drops: string;
   /** The dropping rule's checks without the overlap; `dropping` itself when nothing overlaps. */
-  dedupe: (kept: readonly CheckResult[], dropping: CheckResult[]) => CheckResult[];
+  dedupe: (
+    kept: readonly CheckResult[],
+    dropping: CheckResult[]
+  ) => CheckResult[];
 }
 
 /** Every cross-rule pair, in the order they are applied. */
@@ -99,12 +115,14 @@ export const CROSS_RULE_PAIRS: readonly CrossRulePair[] = [
   {
     keeps: AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
     drops: UNAUTHENTICATED_API_RULE_ID,
-    dedupe: (auth, api) => dropEndpointsReportedElsewhere(api, endpointsReportedByAuthRule(auth)),
+    dedupe: (auth, api) =>
+      dropEndpointsReportedElsewhere(api, endpointsReportedByAuthRule(auth)),
   },
   {
     keeps: AUTH_ENDPOINT_DISCLOSURE_RULE_ID,
     drops: JSON_SENSITIVE_FIELDS_RULE_ID,
-    dedupe: (auth, json) => dropFieldsReportedElsewhere(json, fieldsReportedByAuthRule(auth)),
+    dedupe: (auth, json) =>
+      dropFieldsReportedElsewhere(json, fieldsReportedByAuthRule(auth)),
   },
 ];
 
@@ -113,7 +131,9 @@ export const CROSS_RULE_PAIRS: readonly CrossRulePair[] = [
  * rule id. Returns the replacement result of each rule that changed, keyed by
  * rule id (empty when none did). Pure: the inputs are not modified.
  */
-export function dedupeCrossRuleFindings(results: ReadonlyMap<string, RuleRunResult>): Map<string, RuleRunResult> {
+export function dedupeCrossRuleFindings(
+  results: ReadonlyMap<string, RuleRunResult>
+): Map<string, RuleRunResult> {
   const current = new Map(results);
   const changed = new Map<string, RuleRunResult>();
   for (const pair of CROSS_RULE_PAIRS) {
@@ -133,6 +153,8 @@ export function dedupeCrossRuleFindings(results: ReadonlyMap<string, RuleRunResu
  * unauthenticated-api's replacement result from `dedupeCrossRuleFindings`, or
  * undefined when it did not change.
  */
-export function dedupeEndpointFindings(results: ReadonlyMap<string, RuleRunResult>): RuleRunResult | undefined {
+export function dedupeEndpointFindings(
+  results: ReadonlyMap<string, RuleRunResult>
+): RuleRunResult | undefined {
   return dedupeCrossRuleFindings(results).get(UNAUTHENTICATED_API_RULE_ID);
 }

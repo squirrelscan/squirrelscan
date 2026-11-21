@@ -4,13 +4,15 @@
 // each URL and the headers it was sent, so every negative also proves the URL was
 // requested.
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import { createHeaderScope } from "@squirrelscan/utils/headers";
+import { describe, expect, test } from "bun:test";
 
 import { runCloakingProbe, type ProbeFetch } from "../src/cloaking-probe";
-import { confirmSoft404Candidates, type ConfirmFetch } from "../src/soft404-confirm";
+import {
+  confirmSoft404Candidates,
+  type ConfirmFetch,
+} from "../src/soft404-confirm";
 
 const BASE = "https://example.test";
 const HEADERS = { "X-Audit-Token": "secret" };
@@ -41,7 +43,7 @@ describe("cloaking probe re-fetches (#959)", () => {
         customHeaders: HEADERS,
         headerScope: createHeaderScope(BASE, headerHosts),
       },
-      fetchImpl,
+      fetchImpl
     );
     return sent;
   };
@@ -71,13 +73,17 @@ describe("soft-404 confirmation re-fetches (#959)", () => {
       return { status: 200, body: SHELL };
     };
     await confirmSoft404Candidates(
-      URLS.map((url) => ({ url, statusCode: 200, parsed: parsePage(SHELL, url) })),
+      URLS.map((url) => ({
+        url,
+        statusCode: 200,
+        parsed: parsePage(SHELL, url),
+      })),
       {
         userAgent: "test-agent",
         customHeaders: HEADERS,
         headerScope: createHeaderScope(BASE, headerHosts),
       },
-      fetchImpl,
+      fetchImpl
     );
     return sent;
   };
@@ -104,7 +110,7 @@ describe("soft-404 confirmation re-fetches (#959)", () => {
       async (url, _ua, headers) => {
         sent.set(url, headers);
         return { status: 200, body: SHELL };
-      },
+      }
     );
     expect(sent.has(SAME)).toBe(true);
     expect(sent.get(SAME)).toBeUndefined();

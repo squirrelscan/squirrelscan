@@ -13,15 +13,16 @@
 // flat delay before every response. The per-request timeout is a few hundred
 // ms so the crawl's deadlines fire the way they do in production, only faster.
 
+import type { AuditFailureDetail } from "@squirrelscan/core-contracts";
+import type { DocumentFetcher } from "@squirrelscan/fetchers";
+
+import { auditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import type { DocumentFetcher } from "@squirrelscan/fetchers";
-import type { AuditFailureDetail } from "@squirrelscan/core-contracts";
-import { auditFailureReasonText } from "@squirrelscan/core-contracts/failure-reason";
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 import { createCrawler, entryRetryTimeoutMs } from "../src/core/crawler";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 import { crawlErrorToFailureDetail, fetchPage } from "../src/fetcher";
 
 const TIMEOUT_MS = 400;
@@ -76,16 +77,21 @@ function serveSlowSite(ttfbMs: number): Origin {
       hits.set(path, (hits.get(path) ?? 0) + 1);
       await Bun.sleep(ttfbMs);
       if (path === "/robots.txt") {
-        return new Response(`User-agent: *\nSitemap: ${new URL("/sitemap.xml", req.url)}\n`, {
-          headers: { "content-type": "text/plain" },
-        });
+        return new Response(
+          `User-agent: *\nSitemap: ${new URL("/sitemap.xml", req.url)}\n`,
+          {
+            headers: { "content-type": "text/plain" },
+          }
+        );
       }
       if (path === "/sitemap.xml") {
         return new Response(CROSS_DOMAIN_SITEMAP, {
           headers: { "content-type": "application/xml" },
         });
       }
-      return new Response(BIG_PAGE, { headers: { "content-type": "text/html" } });
+      return new Response(BIG_PAGE, {
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -115,15 +121,21 @@ interface CrawlOutcome {
   reason: string | undefined;
 }
 
-async function crawl(origin: string, config: Partial<CrawlerConfig>): Promise<CrawlOutcome> {
-  const crawler = await Effect.runPromise(createCrawler({ config: { ...CONFIG, ...config } }));
+async function crawl(
+  origin: string,
+  config: Partial<CrawlerConfig>
+): Promise<CrawlOutcome> {
+  const crawler = await Effect.runPromise(
+    createCrawler({ config: { ...CONFIG, ...config } })
+  );
   const warnings: CrawlOutcome["warnings"] = [];
   const events = Effect.runFork(
     Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
       Effect.sync(() => {
-        if (event.type === "warning") warnings.push({ code: event.code, message: event.message });
-      }),
-    ),
+        if (event.type === "warning")
+          warnings.push({ code: event.code, message: event.message });
+      })
+    )
   );
   try {
     const crawlId = await Effect.runPromise(crawler.start(origin, origin));
@@ -150,22 +162,26 @@ describe("an abort from a document fetcher is a timeout, not an unknown failure 
           timeoutMs: 12_000,
           followRedirects: true,
           fetcher: abortingFetcher(),
-        }),
-      ),
+        })
+      )
     );
     expect(result._tag).toBe("Left");
     if (result._tag !== "Left") return;
     expect(result.left.type).toBe("timeout");
-    expect(result.left.message).toBe("page fetch via cloud-render was aborted (deadline 12000ms)");
+    expect(result.left.message).toBe(
+      "page fetch via cloud-render was aborted (deadline 12000ms)"
+    );
 
     // …and the reason line built from it is the timeout sentence with that
     // detail, classified as `timeout`, never the sentence the run shipped.
     const detail = crawlErrorToFailureDetail(result.left);
     expect(detail.code).toBe("timeout");
-    expect(detail.detail).toBe("page fetch via cloud-render was aborted (deadline 12000ms)");
+    expect(detail.detail).toBe(
+      "page fetch via cloud-render was aborted (deadline 12000ms)"
+    );
     const reason = auditFailureReasonText(detail);
     expect(reason).toBe(
-      "No response from example.com within the request timeout: page fetch via cloud-render was aborted (deadline 12000ms)",
+      "No response from example.com within the request timeout: page fetch via cloud-render was aborted (deadline 12000ms)"
     );
     expect(reason).not.toContain("The operation was aborted");
   });
@@ -197,7 +213,9 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
     // never get the retry, and their failure is recorded under `sitemap`, not
     // as the ENTRY's failure — the entry landed.
     expect(out.rootFailure?.source).not.toBe("entry");
-    expect(out.warnings.filter((w) => w.code === "entry-fetch-retried")).toHaveLength(1);
+    expect(
+      out.warnings.filter((w) => w.code === "entry-fetch-retried")
+    ).toHaveLength(1);
   }, 30_000);
 
   test("a corpus already stored never pays the retry", async () => {
@@ -208,7 +226,8 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
       id: "cloud-render",
       capabilities: { jsRendering: true, cookies: false, screenshot: false },
       async fetch(req) {
-        if (seen++ > 0) throw new DOMException("The operation was aborted.", "AbortError");
+        if (seen++ > 0)
+          throw new DOMException("The operation was aborted.", "AbortError");
         const res = await fetch(req.url);
         const body = await res.text();
         const now = Date.now();
@@ -221,7 +240,9 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
           redirectChain: {
             sourceUrl: req.url,
             finalUrl: req.url,
-            hops: [{ url: req.url, statusCode: res.status, type: "http" as const }],
+            hops: [
+              { url: req.url, statusCode: res.status, type: "http" as const },
+            ],
             chainLength: 0,
             isLoop: false,
             endsInError: false,
@@ -236,7 +257,9 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
     const out = await crawl(origin.url, { documentFetcher: fetcher });
 
     expect(out.pages).toContain(origin.url);
-    expect(out.warnings.map((w) => w.code)).not.toContain("entry-fetch-retried");
+    expect(out.warnings.map((w) => w.code)).not.toContain(
+      "entry-fetch-retried"
+    );
   }, 30_000);
 
   test("when nothing at all can be fetched, the reason names the step and both deadlines", async () => {
@@ -251,7 +274,7 @@ describe("the entry URL gets a second, relaxed-deadline fetch before the audit i
     expect(out.rootFailure?.host).toBe("localhost");
     expect(out.reason).toContain("within the request timeout");
     expect(out.reason).toContain(
-      `entry page failed at ${TIMEOUT_MS}ms via cloud-render, then a ${entryRetryTimeoutMs(TIMEOUT_MS)}ms plain retry timed out`,
+      `entry page failed at ${TIMEOUT_MS}ms via cloud-render, then a ${entryRetryTimeoutMs(TIMEOUT_MS)}ms plain retry timed out`
     );
     expect(out.reason).not.toContain("The operation was aborted");
   }, 30_000);
@@ -265,10 +288,12 @@ describe("preamble budget expiry degrades and says so (#1699)", () => {
       new Response(
         new ReadableStream({
           start(controller) {
-            controller.enqueue(new TextEncoder().encode("<!doctype html><html><body>"));
+            controller.enqueue(
+              new TextEncoder().encode("<!doctype html><html><body>")
+            );
           },
         }),
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html" } }
       );
     const server = Bun.serve({
       port: 0,
@@ -288,7 +313,9 @@ describe("preamble budget expiry degrades and says so (#1699)", () => {
     });
 
     expect(out.pages.length).toBeGreaterThan(0);
-    const exhausted = out.warnings.filter((w) => w.code === "preamble-budget-exhausted");
+    const exhausted = out.warnings.filter(
+      (w) => w.code === "preamble-budget-exhausted"
+    );
     expect(exhausted).toHaveLength(1);
     expect(exhausted[0]!.message).toContain("preamble budget ran out");
     // Every other failure surface stays quiet: nothing here is a crawl failure.

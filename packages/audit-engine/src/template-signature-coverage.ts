@@ -14,17 +14,23 @@
 // bound for a real site. The numbers that matter come from real crawls
 // (`apps/cli/scripts/template-fanout-bench.ts --coverage`).
 
-import { fingerprintPage, SIGNATURE_ATTRIBUTES, SIGNATURE_SELECTORS } from "@squirrelscan/rules";
+import {
+  fingerprintPage,
+  SIGNATURE_ATTRIBUTES,
+  SIGNATURE_SELECTORS,
+} from "@squirrelscan/rules";
 
 import { parseHtmlForRules } from "./adapter";
+import { fnv1a64 } from "./fingerprint";
 import { fanoutClusterKey, fanoutInputSignature } from "./template-fanout";
 import { templateFingerprintKey } from "./template-key";
-import { fnv1a64 } from "./fingerprint";
 
 export type SignatureMode = "current" | "derived";
 
 interface Queryable {
-  querySelectorAll(selector: string): ArrayLike<{ getAttribute(name: string): string | null }>;
+  querySelectorAll(
+    selector: string
+  ): ArrayLike<{ getAttribute(name: string): string | null }>;
 }
 
 /**
@@ -39,10 +45,13 @@ export function derivedFanoutSignature(doc: Queryable | null): string | null {
   const reads = SIGNATURE_SELECTORS.map((selector) => [
     selector,
     Array.from(doc.querySelectorAll(selector), (el) =>
-      SIGNATURE_ATTRIBUTES.map((name) => el.getAttribute(name)),
+      SIGNATURE_ATTRIBUTES.map((name) => el.getAttribute(name))
     ),
   ]);
-  return fnv1a64(new TextEncoder().encode(JSON.stringify([current, reads])), 0n);
+  return fnv1a64(
+    new TextEncoder().encode(JSON.stringify([current, reads])),
+    0n
+  );
 }
 
 export interface CoveragePage {
@@ -75,7 +84,9 @@ export interface CoverageAccumulator {
  * every page's HTML at once (a real crawl is gigabytes of it). Only the key
  * counts are retained, so memory grows with the number of clusters.
  */
-export function createCoverageAccumulator(mode: SignatureMode): CoverageAccumulator {
+export function createCoverageAccumulator(
+  mode: SignatureMode
+): CoverageAccumulator {
   const sizes = new Map<string, number>();
   let total = 0;
   let keyed = 0;
@@ -90,7 +101,7 @@ export function createCoverageAccumulator(mode: SignatureMode): CoverageAccumula
       const key = fanoutClusterKey(
         templateFingerprintKey(fingerprintPage(parsed, url)),
         url,
-        signature,
+        signature
       );
       if (key === null) return;
       keyed++;
@@ -119,7 +130,7 @@ export function createCoverageAccumulator(mode: SignatureMode): CoverageAccumula
  */
 export function measureSignatureCoverage(
   pages: Iterable<CoveragePage>,
-  mode: SignatureMode,
+  mode: SignatureMode
 ): SignatureCoverage {
   const acc = createCoverageAccumulator(mode);
   for (const page of pages) acc.add(page);

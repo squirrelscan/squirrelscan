@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { detectTechnologies } from "../src/detect";
+
 import type { TechDetectInput } from "../src/types";
+
+import { detectTechnologies } from "../src/detect";
 
 function input(partial: Partial<TechDetectInput>): TechDetectInput {
   return { url: "https://example.com/", headers: {}, html: "", ...partial };
@@ -10,7 +12,16 @@ function ids(i: TechDetectInput): string[] {
   return detectTechnologies(i).map((t) => t.id);
 }
 
-const IDS = ["lovable", "base44", "bolt-new", "replit", "v0", "supabase", "clerk", "firebase"];
+const IDS = [
+  "lovable",
+  "base44",
+  "bolt-new",
+  "replit",
+  "v0",
+  "supabase",
+  "clerk",
+  "firebase",
+];
 
 // A blog post that talks about every product, with code samples shown escaped in
 // <pre>, and hosts written as prose. None of it is the product running.
@@ -52,13 +63,17 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     test("hosted artifact script", () => {
       const src = "/__l5e/events.b21a279f52bb8621.js";
       const html = `<script defer src="${src}" data-artifact-kind="dwl_content_hash"></script>`;
-      expect(ids(input({ html, scripts: [{ url: src }] }))).toContain("lovable");
+      expect(ids(input({ html, scripts: [{ url: src }] }))).toContain(
+        "lovable"
+      );
     });
 
     test("legacy gptengineer script", () => {
       const src = "https://cdn.gpteng.co/gptengineer.js";
       const html = `<script src="${src}" type="module"></script>`;
-      expect(ids(input({ html, scripts: [{ url: src }] }))).toContain("lovable");
+      expect(ids(input({ html, scripts: [{ url: src }] }))).toContain(
+        "lovable"
+      );
     });
 
     test("uploaded social image bucket", () => {
@@ -80,13 +95,21 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
 
     test("base44.app host", () => {
-      expect(ids(input({ url: "https://my-tool.base44.app/" }))).toContain("base44");
+      expect(ids(input({ url: "https://my-tool.base44.app/" }))).toContain(
+        "base44"
+      );
     });
 
     test("near-miss: a look-alike host and a page that links to one", () => {
-    expect(ids(input({ url: "https://evilbase44.app.attacker.example/" }))).not.toContain("base44");
-    expect(ids(input({ url: "https://base44.app.attacker.example/" }))).not.toContain("base44");
-      expect(ids(input({ url: "https://base44.app.example.com/" }))).not.toContain("base44");
+      expect(
+        ids(input({ url: "https://evilbase44.app.attacker.example/" }))
+      ).not.toContain("base44");
+      expect(
+        ids(input({ url: "https://base44.app.attacker.example/" }))
+      ).not.toContain("base44");
+      expect(
+        ids(input({ url: "https://base44.app.example.com/" }))
+      ).not.toContain("base44");
       const html = `<a href="https://my-tool.base44.app/">demo</a>`;
       expect(ids(input({ html }))).not.toContain("base44");
     });
@@ -94,25 +117,44 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
   describe("replit", () => {
     test("deployed host", () => {
-      expect(ids(input({ url: "https://my-app.replit.app/" }))).toContain("replit");
-      expect(ids(input({ url: "https://x.y.kirk.replit.dev/u/someone" }))).toContain("replit");
-      expect(ids(input({ url: "https://old-app.user.repl.co/" }))).toContain("replit");
+      expect(ids(input({ url: "https://my-app.replit.app/" }))).toContain(
+        "replit"
+      );
+      expect(
+        ids(input({ url: "https://x.y.kirk.replit.dev/u/someone" }))
+      ).toContain("replit");
+      expect(ids(input({ url: "https://old-app.user.repl.co/" }))).toContain(
+        "replit"
+      );
     });
 
     test("dev banner script and platform static path", () => {
       const src = "https://replit.com/public/js/replit-dev-banner.js";
-      expect(ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] }))).toContain(
-        "replit",
-      );
+      expect(
+        ids(
+          input({
+            html: `<script src="${src}"></script>`,
+            scripts: [{ url: src }],
+          })
+        )
+      ).toContain("replit");
       const html = `<style>@font-face{src:url("/__replco/static/fonts/ReplitDiatypeVariable.woff2")}</style>`;
       expect(ids(input({ html }))).toContain("replit");
     });
 
     test("near-miss: a look-alike host, and replit.com itself without the markers", () => {
-      expect(ids(input({ url: "https://replit.app.evil.example/" }))).not.toContain("replit");
-      expect(ids(input({ url: "https://notreplit.app/" }))).not.toContain("replit");
-      expect(ids(input({ url: "https://my-app.replit.app.attacker.example/" }))).not.toContain("replit");
-      expect(ids(input({ url: "https://evilrepl.co.attacker.example/" }))).not.toContain("replit");
+      expect(
+        ids(input({ url: "https://replit.app.evil.example/" }))
+      ).not.toContain("replit");
+      expect(ids(input({ url: "https://notreplit.app/" }))).not.toContain(
+        "replit"
+      );
+      expect(
+        ids(input({ url: "https://my-app.replit.app.attacker.example/" }))
+      ).not.toContain("replit");
+      expect(
+        ids(input({ url: "https://evilrepl.co.attacker.example/" }))
+      ).not.toContain("replit");
     });
   });
 
@@ -124,7 +166,9 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
     });
 
     test("near-miss: another generator that contains v0", () => {
-      expect(ids(input({ meta: { generator: "Hugo v0.123.0" } }))).not.toContain("v0");
+      expect(
+        ids(input({ meta: { generator: "Hugo v0.123.0" } }))
+      ).not.toContain("v0");
     });
   });
 
@@ -138,9 +182,9 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
     test("next/image proxy URL (encoded)", () => {
       const u = `https%3A%2F%2F${ref}.supabase.co%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fb%2Fx.png`;
-      expect(ids(input({ html: `<img src="/_next/image?url=${u}&w=640&q=75">` }))).toContain(
-        "supabase",
-      );
+      expect(
+        ids(input({ html: `<img src="/_next/image?url=${u}&w=640&q=75">` }))
+      ).toContain("supabase");
     });
 
     test("inline client config and the CDN client build", () => {
@@ -165,48 +209,63 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
   describe("clerk", () => {
     test("clerk-js script tag with a custom frontend API host", () => {
-      const src = "https://clerk.example.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
+      const src =
+        "https://clerk.example.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
       const html = `<script src="${src}" data-clerk-js-script="true" async crossorigin="anonymous" data-clerk-publishable-key="pk_live_Y2xlcmsuZXhhbXBsZS5jb20k"></script>`;
-      const found = detectTechnologies(input({ html, scripts: [{ url: src }] })).find(
-        (t) => t.id === "clerk",
-      );
+      const found = detectTechnologies(
+        input({ html, scripts: [{ url: src }] })
+      ).find((t) => t.id === "clerk");
       expect(found).toBeDefined();
       expect(found?.version).toBe("6");
     });
 
     test("dev instance host", () => {
-      const src = "https://sunny-owl-12.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
-      expect(ids(input({ html: "", scripts: [{ url: src }] }))).toContain("clerk");
+      const src =
+        "https://sunny-owl-12.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js";
+      expect(ids(input({ html: "", scripts: [{ url: src }] }))).toContain(
+        "clerk"
+      );
     });
 
     test("near-miss: Clerk named as a vendor, an unrelated clerk script", () => {
       const html = `<p>Our clerk.js helper and the Clerk docs.</p><script src="/assets/clerk-widget.js"></script>`;
-      expect(ids(input({ html, scripts: [{ url: "/assets/clerk-widget.js" }] }))).not.toContain(
-        "clerk",
-      );
+      expect(
+        ids(input({ html, scripts: [{ url: "/assets/clerk-widget.js" }] }))
+      ).not.toContain("clerk");
     });
   });
 
   describe("firebase", () => {
     test("gstatic SDK script with version", () => {
-      const src = "https://www.gstatic.com/firebasejs/9.13.0/firebase-app-compat.js";
+      const src =
+        "https://www.gstatic.com/firebasejs/9.13.0/firebase-app-compat.js";
       const found = detectTechnologies(
-        input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] }),
+        input({
+          html: `<script src="${src}"></script>`,
+          scripts: [{ url: src }],
+        })
       ).find((t) => t.id === "firebase");
       expect(found?.version).toBe("9.13.0");
     });
 
     test("Hosting reserved init script and inline web config", () => {
       const src = "/__/firebase/init.js";
-      expect(ids(input({ html: `<script src="${src}"></script>`, scripts: [{ url: src }] }))).toContain(
-        "firebase",
-      );
+      expect(
+        ids(
+          input({
+            html: `<script src="${src}"></script>`,
+            scripts: [{ url: src }],
+          })
+        )
+      ).toContain("firebase");
       const cfg = `<script>const firebaseConfig = { apiKey: "x", authDomain: "my-app-1234.firebaseapp.com", projectId: "my-app-1234" };</script>`;
       expect(ids(input({ html: cfg }))).toContain("firebase");
     });
 
     test("firebase hosting host alone is Hosting, not the SDK", () => {
-      const found = ids(input({ url: "https://my-app-1234.web.app/", html: "<p>hi</p>" }));
+      const found = ids(
+        input({ url: "https://my-app-1234.web.app/", html: "<p>hi</p>" })
+      );
       expect(found).toContain("firebase-hosting");
       expect(found).not.toContain("firebase");
     });
@@ -220,7 +279,8 @@ describe("vibe-coding builder and BaaS fingerprints", () => {
 
 // Review round: raw (unescaped) code samples and prose, shared backends, comments.
 describe("vibe-coding fingerprints: raw code samples, shared backends, comments", () => {
-  const found = (html: string): string[] => ids(input({ html })).filter((id) => IDS.includes(id));
+  const found = (html: string): string[] =>
+    ids(input({ html })).filter((id) => IDS.includes(id));
 
   test("raw-quoted code samples in <pre>, <code> and <p> match nothing", () => {
     const html = `<!doctype html><html><body>
@@ -251,9 +311,11 @@ fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${page}\`)</pre>
     const commented = `<!-- <script src="https://www.gstatic.com/firebasejs/9.13.0/firebase-app.js"></script>
 <script src="https://clerk.example.com/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script> -->`;
     expect(found(commented)).toEqual([]);
-    expect(found(`<!-- note --><meta name="generator" content="x">${lazy.replace("data-src", "src")}`)).toEqual([
-      "firebase",
-    ]);
+    expect(
+      found(
+        `<!-- note --><meta name="generator" content="x">${lazy.replace("data-src", "src")}`
+      )
+    ).toEqual(["firebase"]);
   });
 
   test("an unterminated comment is kept, not dropped", () => {
@@ -267,7 +329,9 @@ fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${page}\`)</pre>
   const appId = "${appId}";
   fetch(\`/api/app-logs/\${appId}/log-user-in-app/\${pageName}\`, { method: "POST" });
 </script></head></html>`;
-    expect(ids(input({ url: "https://tools.example.org/", html }))).toContain("base44");
+    expect(ids(input({ url: "https://tools.example.org/", html }))).toContain(
+      "base44"
+    );
   });
 
   test("Base44 app that loads shared Supabase storage images is not also Supabase", () => {
@@ -315,36 +379,53 @@ describe("vibe-coding fingerprints: bounded on adversarial markup", () => {
 });
 
 describe("vibe-coding fingerprints: late config and meta URL position", () => {
-  const found = (html: string): string[] => ids(input({ html })).filter((id) => IDS.includes(id));
+  const found = (html: string): string[] =>
+    ids(input({ html })).filter((id) => IDS.includes(id));
   const filler = "var a=1;".repeat(700);
 
   test("config far into a large inline script still matches", () => {
-    expect(found(`<script>${filler}var k='base44_access_token'</script>`)).toEqual(["base44"]);
     expect(
-      found(`<script>${filler}var c={authDomain:"my-app-1234.firebaseapp.com"}</script>`),
+      found(`<script>${filler}var k='base44_access_token'</script>`)
+    ).toEqual(["base44"]);
+    expect(
+      found(
+        `<script>${filler}var c={authDomain:"my-app-1234.firebaseapp.com"}</script>`
+      )
     ).toEqual(["firebase"]);
   });
 
   test("the same strings far into a <pre> or <p> still match nothing", () => {
-    expect(found(`<pre>${filler}var k='base44_access_token'</pre>`)).toEqual([]);
-    expect(found(`<p>${filler}{authDomain:"my-app-1234.firebaseapp.com"}</p>`)).toEqual([]);
+    expect(found(`<pre>${filler}var k='base44_access_token'</pre>`)).toEqual(
+      []
+    );
+    expect(
+      found(`<p>${filler}{authDomain:"my-app-1234.firebaseapp.com"}</p>`)
+    ).toEqual([]);
   });
 
   test("a script match does not run past its closing tag", () => {
-    expect(found(`<script>var a=1;</script><p>base44_access_token</p>`)).toEqual([]);
+    expect(
+      found(`<script>var a=1;</script><p>base44_access_token</p>`)
+    ).toEqual([]);
   });
 
   test("Lovable social image meta: URL must start the value, either attribute order", () => {
-    const url = "https://storage.googleapis.com/gpt-engineer-file-uploads/u/social.webp";
-    expect(found(`<meta property="og:image" content="${url}">`)).toEqual(["lovable"]);
-    expect(found(`<meta content="${url}" name="twitter:image">`)).toEqual(["lovable"]);
+    const url =
+      "https://storage.googleapis.com/gpt-engineer-file-uploads/u/social.webp";
+    expect(found(`<meta property="og:image" content="${url}">`)).toEqual([
+      "lovable",
+    ]);
+    expect(found(`<meta content="${url}" name="twitter:image">`)).toEqual([
+      "lovable",
+    ]);
     expect(found(`<meta name="description" content="see ${url}">`)).toEqual([]);
     expect(found(`<meta name="description" content="${url}">`)).toEqual([]);
   });
 
   test("hostile flood with every trigger literal present stays fast", () => {
     const html =
-      "<script>".repeat(20_000) + "<style>".repeat(20_000) +
+      "<script>".repeat(20_000) +
+      "<style>".repeat(20_000) +
       " .supabase.co .firebaseapp.com base44_access_token /api/app-logs/ #lovable-badge /__replco/static/";
     const start = performance.now();
     detectTechnologies({ url: "https://example.com/", headers: {}, html });

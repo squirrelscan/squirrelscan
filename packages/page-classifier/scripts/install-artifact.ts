@@ -8,14 +8,21 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { findAssetLayoutProblems, findStrayStrings, findTopologyProblems } from "../src/artifact-shape";
+import {
+  findAssetLayoutProblems,
+  findStrayStrings,
+  findTopologyProblems,
+} from "../src/artifact-shape";
 import { tryLoadModel } from "../src/predict";
 
 const source = process.argv[2];
 if (!source) throw new Error("usage: install-artifact.ts <artifact.json>");
 
 const assets = join(import.meta.dir, "../assets");
-const json = JSON.parse(readFileSync(source, "utf8")) as Record<string, unknown>;
+const json = JSON.parse(readFileSync(source, "utf8")) as Record<
+  string,
+  unknown
+>;
 
 // Metadata the exporter may record (label sources, notes) is dropped; the shape check then proves
 // nothing else is left.
@@ -30,7 +37,9 @@ const KEEP = new Set([
   "pageType",
   "section",
 ]);
-const clean = Object.fromEntries(Object.entries(json).filter(([key]) => KEEP.has(key)));
+const clean = Object.fromEntries(
+  Object.entries(json).filter(([key]) => KEEP.has(key))
+);
 for (const head of ["region", "pageType", "section"] as const) {
   const value = clean[head] as Record<string, unknown> | undefined;
   if (!value) continue;
@@ -47,17 +56,22 @@ for (const head of ["region", "pageType", "section"] as const) {
         "platformClassThresholds",
         "tokenStreams",
         "trees",
-      ].includes(key),
-    ),
+      ].includes(key)
+    )
   );
 }
 
 const stray = findStrayStrings(clean);
-if (stray.length > 0) throw new Error(`artifact holds disallowed strings: ${stray.join(", ")}`);
+if (stray.length > 0)
+  throw new Error(`artifact holds disallowed strings: ${stray.join(", ")}`);
 const topology = findTopologyProblems(clean);
-if (topology.length > 0) throw new Error(`artifact has the wrong topology: ${topology.join(", ")}`);
-const layout = findAssetLayoutProblems(readdirSync(assets).filter((file) => !file.startsWith(".")));
-if (layout.length > 0) throw new Error(`assets/ layout is wrong: ${layout.join(", ")}`);
+if (topology.length > 0)
+  throw new Error(`artifact has the wrong topology: ${topology.join(", ")}`);
+const layout = findAssetLayoutProblems(
+  readdirSync(assets).filter((file) => !file.startsWith("."))
+);
+if (layout.length > 0)
+  throw new Error(`assets/ layout is wrong: ${layout.join(", ")}`);
 const { model, reason } = tryLoadModel(clean);
 if (!model) throw new Error(`artifact does not load: ${reason}`);
 
@@ -70,7 +84,12 @@ const manifest = {
   format: clean.format,
   artifactVersion: clean.artifactVersion,
   featurizerVersion: clean.featurizerVersion,
-  heads: ["region", "pageType", "section"].filter((head) => clean[head] !== undefined),
+  heads: ["region", "pageType", "section"].filter(
+    (head) => clean[head] !== undefined
+  ),
 };
-writeFileSync(join(assets, "classifier-v2.manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+writeFileSync(
+  join(assets, "classifier-v2.manifest.json"),
+  `${JSON.stringify(manifest, null, 2)}\n`
+);
 console.log(manifest);

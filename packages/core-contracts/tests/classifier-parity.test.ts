@@ -20,7 +20,8 @@ describe("classifier parity corpus (#1822)", () => {
     const wrong: string[] = [];
     for (const [reason, expected] of CLASSIFIER_PARITY_CORPUS) {
       const actual = classifyAuditFailureReasonText(reason);
-      if (actual !== expected) wrong.push(`${expected} != ${actual}  ${reason}`);
+      if (actual !== expected)
+        wrong.push(`${expected} != ${actual}  ${reason}`);
     }
     expect(wrong).toEqual([]);
   });
@@ -47,9 +48,9 @@ describe("classifier parity corpus (#1822)", () => {
   test("a bare 429 in an internal message is not read as a refusal", () => {
     // 429 needs the status lead-in like 401 and 403. Every real throttle string
     // still classifies, on a marker rather than on the number.
-    expect(classifyAuditFailureReasonText("database query failed after 429 retries")).toBe(
-      "unknown",
-    );
+    expect(
+      classifyAuditFailureReasonText("database query failed after 429 retries")
+    ).toBe("unknown");
     for (const reason of [
       "429 Too Many Requests",
       "Rate limited (429), retry after 30s",
@@ -62,19 +63,41 @@ describe("classifier parity corpus (#1822)", () => {
   test("the CLI's reachability sentences classify on the probe's own wording", () => {
     // DNS needs the "Cannot reach" lead-in AND the ": Host not found" tail, so
     // neither half alone claims an internal message.
-    expect(classifyAuditFailureReasonText("Cannot reach http://a.test/: Host not found")).toBe(
-      "dns",
-    );
+    expect(
+      classifyAuditFailureReasonText(
+        "Cannot reach http://a.test/: Host not found"
+      )
+    ).toBe("dns");
     expect(classifyAuditFailureReasonText("Host not found")).toBe("unknown");
-    expect(classifyAuditFailureReasonText("Cannot reach the billing service")).toBe("unknown");
+    expect(
+      classifyAuditFailureReasonText("Cannot reach the billing service")
+    ).toBe("unknown");
     // TLS keys on the probe's whole certificate sentence, with or without the lead-in.
-    expect(classifyAuditFailureReasonText("SSL/TLS error - certificate issue")).toBe("tls");
-    expect(classifyAuditFailureReasonText("certificate rotation failed")).toBe("unknown");
+    expect(
+      classifyAuditFailureReasonText("SSL/TLS error - certificate issue")
+    ).toBe("tls");
+    expect(classifyAuditFailureReasonText("certificate rotation failed")).toBe(
+      "unknown"
+    );
     // The runtime's own TLS error names (#1259).
-    expect(classifyAuditFailureReasonText("ERR_TLS_CERT_ALTNAME_INVALID fetching \"https://x.example/\"")).toBe("tls");
-    expect(classifyAuditFailureReasonText("unable to get local issuer certificate")).toBe("tls");
-    expect(classifyAuditFailureReasonText("the certificate chains to an untrusted root (SELF_SIGNED_CERT_IN_CHAIN)")).toBe("tls");
-    expect(classifyAuditFailureReasonText("the chain does not verify to a trusted root: an intermediate may be missing")).toBe("tls");
+    expect(
+      classifyAuditFailureReasonText(
+        'ERR_TLS_CERT_ALTNAME_INVALID fetching "https://x.example/"'
+      )
+    ).toBe("tls");
+    expect(
+      classifyAuditFailureReasonText("unable to get local issuer certificate")
+    ).toBe("tls");
+    expect(
+      classifyAuditFailureReasonText(
+        "the certificate chains to an untrusted root (SELF_SIGNED_CERT_IN_CHAIN)"
+      )
+    ).toBe("tls");
+    expect(
+      classifyAuditFailureReasonText(
+        "the chain does not verify to a trusted root: an intermediate may be missing"
+      )
+    ).toBe("tls");
   });
 
   test("our own internal failures never read as the audited site's", () => {

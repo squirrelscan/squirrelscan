@@ -16,6 +16,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -49,7 +50,10 @@ const SECURITY_HEADERS = {
   xRobotsTag: null,
 } satisfies SecurityHeaders;
 
-function page(normalizedUrl: string, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: normalizedUrl,
     normalizedUrl,
@@ -97,7 +101,7 @@ async function crawl(store: SQLiteStorage): Promise<string> {
       status: "running",
       config: {},
       stats: {},
-    } as unknown as Omit<CrawlMetadata, "id">),
+    } as unknown as Omit<CrawlMetadata, "id">)
   );
 }
 
@@ -116,15 +120,19 @@ describe("evicted page bodies (#2342)", () => {
     await run(storage.upsertPage(crawlId, page("https://example.com/kept")));
     await run(storage.upsertPage(crawlId, page("https://example.com/evicted")));
 
-    const before = await run(storage.getCachedPage("https://example.com/evicted"));
+    const before = await run(
+      storage.getCachedPage("https://example.com/evicted")
+    );
     expect(before?.html).toContain("/evicted");
     // The cap evicts the body; the page row still points at it.
     content.bodies.delete(before!.htmlHash!);
 
-    expect(await run(storage.getCachedPage("https://example.com/evicted"))).toBeNull();
-    expect((await run(storage.getCachedPage("https://example.com/kept")))?.html).toContain(
-      "/kept",
-    );
+    expect(
+      await run(storage.getCachedPage("https://example.com/evicted"))
+    ).toBeNull();
+    expect(
+      (await run(storage.getCachedPage("https://example.com/kept")))?.html
+    ).toContain("/kept");
     expect(storage.evictedCacheEntryCount()).toBe(1);
   });
 
@@ -138,10 +146,15 @@ describe("evicted page bodies (#2342)", () => {
     await run(
       storage.upsertPage(
         crawlId,
-        page("https://example.com/file.pdf", { html: null, contentType: "application/pdf" }),
-      ),
+        page("https://example.com/file.pdf", {
+          html: null,
+          contentType: "application/pdf",
+        })
+      )
     );
-    const hit = await run(storage.getCachedPage("https://example.com/file.pdf"));
+    const hit = await run(
+      storage.getCachedPage("https://example.com/file.pdf")
+    );
     expect(hit).not.toBeNull();
     expect(storage.evictedCacheEntryCount()).toBe(0);
   });
@@ -159,8 +172,8 @@ describe("evicted page bodies (#2342)", () => {
           html: "",
           sizeBytes: 0,
           contentHash: "empty-body",
-        }),
-      ),
+        })
+      )
     );
     await run(
       storage.upsertPage(
@@ -170,12 +183,16 @@ describe("evicted page bodies (#2342)", () => {
           sizeBytes: 0,
           contentHash: "missing-body",
           contentType: null,
-        }),
-      ),
+        })
+      )
     );
 
-    expect((await run(storage.getPage(crawlId, "https://example.com/empty")))?.html).toBe("");
-    expect((await run(storage.getPage(crawlId, "https://example.com/missing")))?.html).toBeNull();
+    expect(
+      (await run(storage.getPage(crawlId, "https://example.com/empty")))?.html
+    ).toBe("");
+    expect(
+      (await run(storage.getPage(crawlId, "https://example.com/missing")))?.html
+    ).toBeNull();
   });
 
   test("a pre-v28 row with no html_hash and no body left is a miss, not counted", async () => {
@@ -186,7 +203,9 @@ describe("evicted page bodies (#2342)", () => {
     await run(storage.init());
     const crawlId = await crawl(storage);
     await run(storage.upsertPage(crawlId, page("https://example.com/legacy")));
-    const stored = await run(storage.getCachedPage("https://example.com/legacy"));
+    const stored = await run(
+      storage.getCachedPage("https://example.com/legacy")
+    );
     content.bodies.delete(stored!.htmlHash!);
     // Wind the row back to the pre-v28 shape.
     (storage as unknown as { getDb(): import("bun:sqlite").Database })
@@ -194,7 +213,9 @@ describe("evicted page bodies (#2342)", () => {
       .prepare("UPDATE pages SET html_hash = NULL")
       .run();
 
-    expect(await run(storage.getCachedPage("https://example.com/legacy"))).toBeNull();
+    expect(
+      await run(storage.getCachedPage("https://example.com/legacy"))
+    ).toBeNull();
     expect(storage.evictedCacheEntryCount()).toBe(0);
   });
 
@@ -206,16 +227,23 @@ describe("evicted page bodies (#2342)", () => {
     await run(storage.init());
     const crawlId = await crawl(storage);
     await run(
-      storage.upsertPage(crawlId, page("https://example.com/sniffed", { contentType: null })),
+      storage.upsertPage(
+        crawlId,
+        page("https://example.com/sniffed", { contentType: null })
+      )
     );
-    const stored = await run(storage.getCachedPage("https://example.com/sniffed"));
+    const stored = await run(
+      storage.getCachedPage("https://example.com/sniffed")
+    );
     content.bodies.delete(stored!.htmlHash!);
     (storage as unknown as { getDb(): import("bun:sqlite").Database })
       .getDb()
       .prepare("UPDATE pages SET html_hash = NULL")
       .run();
 
-    expect(await run(storage.getCachedPage("https://example.com/sniffed"))).toBeNull();
+    expect(
+      await run(storage.getCachedPage("https://example.com/sniffed"))
+    ).toBeNull();
   });
 
   test("retainPageBodies touches this crawl's stored bodies only", async () => {
@@ -240,7 +268,7 @@ describe("evicted page bodies (#2342)", () => {
       [
         (await run(storage.getCachedPage("https://example.com/a")))!.htmlHash!,
         (await run(storage.getCachedPage("https://example.com/b")))!.htmlHash!,
-      ].sort(),
+      ].sort()
     );
   });
 
@@ -249,8 +277,13 @@ describe("evicted page bodies (#2342)", () => {
     await run(storage.init());
     const crawlId = await crawl(storage);
     await run(storage.upsertPage(crawlId, page("https://example.com/a")));
-    expect((await run(storage.getCachedPage("https://example.com/a")))?.html).toContain("/a");
-    expect(await run(storage.countEvictedPageBodies(crawlId))).toEqual({ evicted: 0, stored: 0 });
+    expect(
+      (await run(storage.getCachedPage("https://example.com/a")))?.html
+    ).toContain("/a");
+    expect(await run(storage.countEvictedPageBodies(crawlId))).toEqual({
+      evicted: 0,
+      stored: 0,
+    });
   });
 
   test("countEvictedPageBodies counts this crawl's missing bodies and nothing else", async () => {
@@ -262,17 +295,35 @@ describe("evicted page bodies (#2342)", () => {
     for (const path of ["a", "b", "c", "d"]) {
       await run(storage.upsertPage(mine, page(`https://example.com/${path}`)));
     }
-    await run(storage.upsertPage(mine, page("https://example.com/no-body", { html: null })));
+    await run(
+      storage.upsertPage(
+        mine,
+        page("https://example.com/no-body", { html: null })
+      )
+    );
     await run(storage.upsertPage(other, page("https://example.com/other")));
 
-    expect(await run(storage.countEvictedPageBodies(mine))).toEqual({ evicted: 0, stored: 4 });
+    expect(await run(storage.countEvictedPageBodies(mine))).toEqual({
+      evicted: 0,
+      stored: 4,
+    });
 
     // Evict two of this crawl's bodies and the other crawl's one.
-    for (const url of ["https://example.com/a", "https://example.com/c", "https://example.com/other"]) {
+    for (const url of [
+      "https://example.com/a",
+      "https://example.com/c",
+      "https://example.com/other",
+    ]) {
       const row = await run(storage.getCachedPage(url));
       content.bodies.delete(row!.htmlHash!);
     }
-    expect(await run(storage.countEvictedPageBodies(mine))).toEqual({ evicted: 2, stored: 4 });
-    expect(await run(storage.countEvictedPageBodies(other))).toEqual({ evicted: 1, stored: 1 });
+    expect(await run(storage.countEvictedPageBodies(mine))).toEqual({
+      evicted: 2,
+      stored: 4,
+    });
+    expect(await run(storage.countEvictedPageBodies(other))).toEqual({
+      evicted: 1,
+      stored: 1,
+    });
   });
 });

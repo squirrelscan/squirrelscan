@@ -16,7 +16,10 @@ import {
   ruleResults,
   type EvalOrder,
 } from "./component-eval/evaluate";
-import { EVAL_CASES, EVAL_RULES_UNDER_TEST } from "./fixtures/component-eval/cases";
+import {
+  EVAL_CASES,
+  EVAL_RULES_UNDER_TEST,
+} from "./fixtures/component-eval/cases";
 
 const ORDERS: EvalOrder[] = ["forward", "reversed", "shuffled"];
 
@@ -26,9 +29,14 @@ describe("component findings evaluation (repo#2307)", () => {
     for (const n of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]) {
       expect(plans).toContain(n);
     }
-    expect(plans.filter((p) => p?.startsWith("stale-copyright"))).toHaveLength(3);
+    expect(plans.filter((p) => p?.startsWith("stale-copyright"))).toHaveLength(
+      3
+    );
     expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(EVAL_CASES.length);
-    expect(EVAL_RULES_UNDER_TEST).toEqual(["a11y/link-text", "content/stale-copyright"]);
+    expect(EVAL_RULES_UNDER_TEST).toEqual([
+      "a11y/link-text",
+      "content/stale-copyright",
+    ]);
   });
 
   for (const evalCase of EVAL_CASES) {
@@ -37,7 +45,9 @@ describe("component findings evaluation (repo#2307)", () => {
         const result = await evaluateCase(evalCase);
         expect(result.unlabeled).toEqual([]);
         expect(result.unmatchedLabels).toEqual([]);
-        expect(result.observations).toBe(evalCase.legacy ? 0 : evalCase.labels.length);
+        expect(result.observations).toBe(
+          evalCase.legacy ? 0 : evalCase.labels.length
+        );
       });
 
       test("zero incorrect merges, zero missed merges, zero overclaims", async () => {
@@ -60,12 +70,16 @@ describe("component findings evaluation (repo#2307)", () => {
           // A group is a unit of ONE fix, so its pages are exactly the pages its labelled fix occurs on.
           expect(group.fixKeys).toHaveLength(1);
           const pages = new Set(
-            evalCase.labels.filter((l) => l.fixKey === group.fixKeys[0]).map((l) => l.page),
+            evalCase.labels
+              .filter((l) => l.fixKey === group.fixKeys[0])
+              .map((l) => l.page)
           );
           expect([...pages].sort()).toEqual(group.pages);
         }
         for (const label of evalCase.labels.filter((l) => l.expectGrouped)) {
-          const group = result.groups.find((g) => g.fixKeys.includes(label.fixKey));
+          const group = result.groups.find((g) =>
+            g.fixKeys.includes(label.fixKey)
+          );
           expect(group?.attribution).toBe("observed-component-evidence");
         }
       });
@@ -79,8 +93,12 @@ describe("component findings evaluation (repo#2307)", () => {
         expect(result.coverageOk).toBe(true);
         if (!evalCase.legacy) {
           for (const rule of Object.values(checks)) {
-            for (const check of rule.filter((c) => c.status === "warn" || c.status === "fail")) {
-              expect(check.componentOccurrences?.length ?? 0).toBeGreaterThan(0);
+            for (const check of rule.filter(
+              (c) => c.status === "warn" || c.status === "fail"
+            )) {
+              expect(check.componentOccurrences?.length ?? 0).toBeGreaterThan(
+                0
+              );
             }
           }
         }
@@ -88,13 +106,28 @@ describe("component findings evaluation (repo#2307)", () => {
 
       test("ids, membership and rollups do not depend on page order", async () => {
         const [forward, ...others] = await Promise.all(
-          ORDERS.map((order) => evaluateCase(evalCase, { order })),
+          ORDERS.map((order) => evaluateCase(evalCase, { order }))
         );
         const shape = (r: NonNullable<typeof forward>) =>
           JSON.stringify({
-            groups: r.groups.map((g) => [g.id, g.attribution, g.pages, g.members]),
-            rollups: r.rollupSummary.map((x) => [x.level, x.variants, x.groupIds, x.pages]),
-            counts: [r.observations, r.beforeGroups, r.afterGroups, r.affectedPages],
+            groups: r.groups.map((g) => [
+              g.id,
+              g.attribution,
+              g.pages,
+              g.members,
+            ]),
+            rollups: r.rollupSummary.map((x) => [
+              x.level,
+              x.variants,
+              x.groupIds,
+              x.pages,
+            ]),
+            counts: [
+              r.observations,
+              r.beforeGroups,
+              r.afterGroups,
+              r.affectedPages,
+            ],
           });
         for (const other of others) expect(shape(other!)).toBe(shape(forward!));
       });
@@ -102,7 +135,9 @@ describe("component findings evaluation (repo#2307)", () => {
       test("the rules' detections equal the pinned golden (AC6)", async () => {
         const result = await evaluateCase(evalCase);
         for (const id of EVAL_RULES_UNDER_TEST) {
-          expect(result.detectionRows[id] ?? []).toEqual(evalCase.expect.detections[id] ?? []);
+          expect(result.detectionRows[id] ?? []).toEqual(
+            evalCase.expect.detections[id] ?? []
+          );
         }
       });
 
@@ -117,12 +152,16 @@ describe("component findings evaluation (repo#2307)", () => {
         const { checks } = await runCaseRules(evalCase, "forward");
         const legacy = buildReport(evalCase, ruleResults(checks, true));
         const json = JSON.parse(renderJson(legacy)) as {
-          issues: Array<{ componentFixGroups?: unknown; checks: Array<{ componentOccurrences?: unknown }> }>;
+          issues: Array<{
+            componentFixGroups?: unknown;
+            checks: Array<{ componentOccurrences?: unknown }>;
+          }>;
         };
         expect(json.issues.length).toBeGreaterThan(0);
         for (const issue of json.issues) {
           expect(issue.componentFixGroups).toBeUndefined();
-          for (const check of issue.checks) expect(check.componentOccurrences).toBeUndefined();
+          for (const check of issue.checks)
+            expect(check.componentOccurrences).toBeUndefined();
         }
         const llm = renderLlm(legacy);
         const text = renderText(legacy);
@@ -135,7 +174,9 @@ describe("component findings evaluation (repo#2307)", () => {
   }
 
   test("with evidence, a shared footer renders as one fix-once line", async () => {
-    const evalCase = EVAL_CASES.find((c) => c.id === "identical-footer-across-layouts")!;
+    const evalCase = EVAL_CASES.find(
+      (c) => c.id === "identical-footer-across-layouts"
+    )!;
     const { checks } = await runCaseRules(evalCase, "forward");
     const report = buildReport(evalCase, ruleResults(checks, false));
     expect(renderLlm(report)).toContain('<fix-once pages="4">');
@@ -143,9 +184,14 @@ describe("component findings evaluation (repo#2307)", () => {
   });
 
   test("repeated cards and landmark-less blocks never claim observed (site-chrome) attribution", async () => {
-    for (const id of ["repeated-cards-with-differing-data", "no-semantic-landmarks"]) {
+    for (const id of [
+      "repeated-cards-with-differing-data",
+      "no-semantic-landmarks",
+    ]) {
       const result = await evaluateCase(EVAL_CASES.find((c) => c.id === id)!);
-      expect(result.groups.every((g) => g.attribution === "repeated-subtree")).toBe(true);
+      expect(
+        result.groups.every((g) => g.attribution === "repeated-subtree")
+      ).toBe(true);
     }
   });
 

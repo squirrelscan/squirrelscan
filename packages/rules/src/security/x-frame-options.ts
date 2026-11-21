@@ -45,8 +45,24 @@ export const xFrameOptionsRule: Rule = {
       { name: "x-frame-options-missing", outcome: "problem" },
       { name: "x-frame-options-invalid", outcome: "problem" },
       { name: "x-frame-options-allow-from", outcome: "problem" },
-      { name: "x-frame-options", outcome: "clean", clears: ["x-frame-options-missing", "x-frame-options-invalid", "x-frame-options-allow-from"] },
-      { name: "x-frame-options-csp-frame-ancestors", outcome: "clean", clears: ["x-frame-options-missing", "x-frame-options-invalid", "x-frame-options-allow-from"] },
+      {
+        name: "x-frame-options",
+        outcome: "clean",
+        clears: [
+          "x-frame-options-missing",
+          "x-frame-options-invalid",
+          "x-frame-options-allow-from",
+        ],
+      },
+      {
+        name: "x-frame-options-csp-frame-ancestors",
+        outcome: "clean",
+        clears: [
+          "x-frame-options-missing",
+          "x-frame-options-invalid",
+          "x-frame-options-allow-from",
+        ],
+      },
       { name: "x-frame-options-no-pages", outcome: "skipped" },
     ],
   },
@@ -106,7 +122,8 @@ function judgeXfo(page: SitePage): CheckResult[] {
         name: "x-frame-options-invalid",
         status: "warn",
         message: `Unrecognised X-Frame-Options value: ${printable(xFrameOptions)}`,
-        value: "Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors",
+        value:
+          "Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors",
       });
     }
   } else if (hasFrameAncestors) {

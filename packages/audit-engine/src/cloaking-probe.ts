@@ -13,17 +13,17 @@
 // inbound-link analysis that only exists once pages are parsed. OFF by default and
 // capped to `maxPages` so it never multiplies crawl cost.
 
-import { datePeriod } from "@squirrelscan/utils/date-period";
-import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
+import type { CloakingProbeData } from "@squirrelscan/core-contracts";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
+
 import { stripHtmlForText } from "@squirrelscan/utils";
+import { datePeriod } from "@squirrelscan/utils/date-period";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { getPathname, normalizeUrl } from "@squirrelscan/utils/url";
 
 import { DEFAULT_MAX_BODY_BYTES, readBodyCapped } from "./lib/capped-body-read";
 import { customHeadersFor, type ScopedHeaderOptions } from "./lib/header-scope";
 import { probeFetch } from "./lib/probe-fetch";
-import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
-
-import type { CloakingProbeData } from "@squirrelscan/core-contracts";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 
 const DAY_MS = 86_400_000;
 
@@ -42,7 +42,8 @@ export const TOKEN_SIMILARITY_THRESHOLD = 0.5;
 /** Query param appended to detect token-/query-gated responses. */
 export const PROBE_QUERY_PARAM = "ss_cloak_probe";
 
-export type CloakingProbeOptions = CloakingProbeBaseOptions & ScopedHeaderOptions;
+export type CloakingProbeOptions = CloakingProbeBaseOptions &
+  ScopedHeaderOptions;
 
 interface CloakingProbeBaseOptions {
   /** Hard cap on probed paths. */
@@ -95,7 +96,7 @@ export interface ProbeResponse {
 export type ProbeFetch = (
   url: string,
   userAgent: string,
-  headers?: Record<string, string>,
+  headers?: Record<string, string>
 ) => Promise<ProbeResponse>;
 
 // ── selection ───────────────────────────────────────────────────────
@@ -106,7 +107,10 @@ export type ProbeFetch = (
  * `2026` names the whole year, so with `now` inside it the page may have
  * changed today; read as 1 January it would never be recent.
  */
-export function parseLastmod(value: string | null, now: number = Date.now()): number | null {
+export function parseLastmod(
+  value: string | null,
+  now: number = Date.now()
+): number | null {
   const period = datePeriod(value);
   if (!period || period.start > now) return period ? period.start : null;
   return Math.min(period.end, now);
@@ -123,7 +127,12 @@ export function parseLastmod(value: string | null, now: number = Date.now()): nu
  */
 export function selectSuspiciousPaths(
   candidates: CloakingCandidate[],
-  opts: { maxPages: number; recentDays: number; hasSitemap: boolean; now: number },
+  opts: {
+    maxPages: number;
+    recentDays: number;
+    hasSitemap: boolean;
+    now: number;
+  }
 ): SelectedProbe[] {
   const orphans: SelectedProbe[] = [];
   const recent: { probe: SelectedProbe; rankMs: number }[] = [];
@@ -136,7 +145,8 @@ export function selectSuspiciousPaths(
 
     // Orphan: no inbound links AND (not in sitemap, when a sitemap exists). With
     // no sitemap at all, absence is meaningless → zero inbound links alone.
-    const isOrphan = c.inboundCount === 0 && (opts.hasSitemap ? !c.inSitemap : true);
+    const isOrphan =
+      c.inboundCount === 0 && (opts.hasSitemap ? !c.inSitemap : true);
 
     const lastmodMs = parseLastmod(c.lastmod, opts.now);
     const isRecent =
@@ -157,14 +167,19 @@ export function selectSuspiciousPaths(
   }
 
   recent.sort((a, b) => b.rankMs - a.rankMs);
-  return [...orphans, ...recent.map((r) => r.probe)].slice(0, Math.max(0, opts.maxPages));
+  return [...orphans, ...recent.map((r) => r.probe)].slice(
+    0,
+    Math.max(0, opts.maxPages)
+  );
 }
 
 // ── comparison ──────────────────────────────────────────────────────
 
 /** Strip markup + script/style and return the set of visible-text tokens. */
 export function visibleTokens(html: string): Set<string> {
-  const text = stripHtmlForText(html, { exclude: ["script", "style"] }).toLowerCase();
+  const text = stripHtmlForText(html, {
+    exclude: ["script", "style"],
+  }).toLowerCase();
   const set = new Set<string>();
   for (const t of text.split(/[^a-z0-9]+/)) {
     if (t.length > 1) set.add(t);
@@ -191,9 +206,10 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
 export function classifyDivergence(
   base: ProbeResponse,
   variant: ProbeResponse,
-  threshold: number,
+  threshold: number
 ): { similarity: number; divergent: boolean } {
-  if (base.status === 0 || variant.status === 0) return { similarity: 1, divergent: false };
+  if (base.status === 0 || variant.status === 0)
+    return { similarity: 1, divergent: false };
 
   const baseOk = base.status >= 200 && base.status < 300;
   const varOk = variant.status >= 200 && variant.status < 300;
@@ -201,7 +217,10 @@ export function classifyDivergence(
   if (!baseOk && !varOk) return { similarity: 1, divergent: false };
 
   const sim = jaccard(visibleTokens(base.body), visibleTokens(variant.body));
-  return { similarity: Math.round(sim * 1000) / 1000, divergent: sim < threshold };
+  return {
+    similarity: Math.round(sim * 1000) / 1000,
+    divergent: sim < threshold,
+  };
 }
 
 /** Append the probe token to a URL (query-gating detection). */
@@ -224,13 +243,21 @@ function byteLen(s: string): number {
 
 /** `headers` without any `User-Agent`, whatever its casing. */
 function withoutUserAgent(
-  headers: Record<string, string> | undefined,
+  headers: Record<string, string> | undefined
 ): Record<string, string> | undefined {
   if (!headers) return headers;
-  return Object.fromEntries(Object.entries(headers).filter(([name]) => name.toLowerCase() !== "user-agent"));
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      ([name]) => name.toLowerCase() !== "user-agent"
+    )
+  );
 }
 
-function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: AbortSignal): ProbeFetch {
+function defaultProbeFetch(
+  timeoutMs: number,
+  egress?: EgressPolicy,
+  cancel?: AbortSignal
+): ProbeFetch {
   return async (url, userAgent, headers) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -245,13 +272,14 @@ function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: Ab
           headers: mergeHeaderRecords(
             {
               "User-Agent": userAgent,
-              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              Accept:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
-            headers,
+            headers
           ),
           signal: controller.signal,
         },
-        egress,
+        egress
       );
       let body = "";
       try {
@@ -261,7 +289,11 @@ function defaultProbeFetch(timeoutMs: number, egress?: EgressPolicy, cancel?: Ab
       }
       return { status: res.status, body };
     } catch (e) {
-      return { status: 0, body: "", error: e instanceof Error ? e.message : String(e) };
+      return {
+        status: 0,
+        body: "",
+        error: e instanceof Error ? e.message : String(e),
+      };
     } finally {
       clearTimeout(timer);
       cancel?.removeEventListener("abort", onCancel);
@@ -282,7 +314,7 @@ function throwIfCancelled(opts: CloakingProbeOptions): void {
 async function probeOne(
   sel: SelectedProbe,
   opts: CloakingProbeOptions,
-  fetchImpl: ProbeFetch,
+  fetchImpl: ProbeFetch
 ): Promise<CloakingProbeData> {
   const errors: string[] = [];
   const note = (label: string, res: ProbeResponse) => {
@@ -292,7 +324,7 @@ async function probeOne(
   const def = await fetchImpl(
     sel.url,
     opts.defaultUserAgent,
-    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope),
+    customHeadersFor(sel.url, opts.customHeaders, opts.headerScope)
   );
   note("default", def);
   // The Googlebot fetch IS its agent: a custom User-Agent among the audit's
@@ -302,7 +334,9 @@ async function probeOne(
   const gb = await fetchImpl(
     sel.url,
     opts.googlebotUserAgent,
-    withoutUserAgent(customHeadersFor(sel.url, opts.customHeaders, opts.headerScope)),
+    withoutUserAgent(
+      customHeadersFor(sel.url, opts.customHeaders, opts.headerScope)
+    )
   );
   note("googlebot", gb);
 
@@ -320,7 +354,7 @@ async function probeOne(
     const q = await fetchImpl(
       queryUrl,
       opts.defaultUserAgent,
-      customHeadersFor(queryUrl, opts.customHeaders, opts.headerScope),
+      customHeadersFor(queryUrl, opts.customHeaders, opts.headerScope)
     );
     note("query", q);
     queryStatus = q.status;
@@ -348,7 +382,11 @@ async function probeOne(
   };
 }
 
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   const worker = async () => {
@@ -358,7 +396,9 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
       out[idx] = await fn(items[idx]!);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker));
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker)
+  );
   return out;
 }
 
@@ -366,7 +406,11 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 export function runCloakingProbe(
   selected: SelectedProbe[],
   opts: CloakingProbeOptions,
-  fetchImpl: ProbeFetch = defaultProbeFetch(opts.timeoutMs ?? 15_000, opts.egress, opts.signal),
+  fetchImpl: ProbeFetch = defaultProbeFetch(
+    opts.timeoutMs ?? 15_000,
+    opts.egress,
+    opts.signal
+  )
 ): Promise<CloakingProbeData[]> {
   const limited = selected.slice(0, Math.max(0, opts.maxPages));
   // A cancelled probe (a deadline) dispatches nothing more: the pages not reached have no entry.
@@ -378,8 +422,8 @@ export function runCloakingProbe(
       if (error instanceof ProbeCancelled) return null;
       throw error;
     }
-  }).then(
-    (results) => results.filter((r): r is CloakingProbeData => r !== null),
+  }).then((results) =>
+    results.filter((r): r is CloakingProbeData => r !== null)
   );
 }
 
@@ -411,7 +455,7 @@ export interface CloakingProbeSiteInput {
 export function probeSiteForCloaking(
   input: CloakingProbeSiteInput,
   opts: CloakingProbeOptions,
-  fetchImpl?: ProbeFetch,
+  fetchImpl?: ProbeFetch
 ): Promise<CloakingProbeData[]> {
   return runCloakingProbe(selectCloakingPaths(input, opts), opts, fetchImpl);
 }
@@ -419,7 +463,7 @@ export function probeSiteForCloaking(
 /** The paths a probe would fetch for this site, before any request: candidates, then the suspicious ones (capped at `maxPages`). */
 export function selectCloakingPaths(
   input: CloakingProbeSiteInput,
-  opts: Pick<CloakingProbeOptions, "maxPages" | "recentDays" | "now">,
+  opts: Pick<CloakingProbeOptions, "maxPages" | "recentDays" | "now">
 ): SelectedProbe[] {
   const sitemapSet = new Set<string>();
   const lastmodMap = new Map<string, string>();
@@ -438,7 +482,8 @@ export function selectCloakingPaths(
       if (!link.isInternal || !link.url) continue;
       try {
         const target = normalizeUrl(new URL(link.url, p.url).href);
-        if (inbound.has(target)) inbound.set(target, (inbound.get(target) ?? 0) + 1);
+        if (inbound.has(target))
+          inbound.set(target, (inbound.get(target) ?? 0) + 1);
       } catch {
         /* ignore unparsable link */
       }
@@ -446,12 +491,15 @@ export function selectCloakingPaths(
   }
 
   const normalizedBase = input.baseUrl ? normalizeUrl(input.baseUrl) : "";
-  const entryPages = new Set((input.entryUrls ?? []).map((u) => normalizeUrl(u)));
+  const entryPages = new Set(
+    (input.entryUrls ?? []).map((u) => normalizeUrl(u))
+  );
   const candidates: CloakingCandidate[] = [];
   for (const p of input.pages) {
     const n = normalizeUrl(p.url);
     // Never the homepage, nor the page the crawl started on (integrity/orphan-page).
-    if (n === normalizedBase || getPathname(p.url) === "/" || entryPages.has(n)) continue;
+    if (n === normalizedBase || getPathname(p.url) === "/" || entryPages.has(n))
+      continue;
     candidates.push({
       url: p.url,
       normalizedUrl: n,
@@ -496,7 +544,7 @@ export async function resolveCloakingProbes(
     /** Cancels the probe at a `--max-duration` deadline (#1327). */
     signal?: AbortSignal;
   } & ScopedHeaderOptions,
-  fetchImpl?: ProbeFetch,
+  fetchImpl?: ProbeFetch
 ): Promise<CloakingProbeData[] | undefined> {
   if (!cfg?.enabled) return undefined;
   try {
@@ -509,12 +557,15 @@ export async function resolveCloakingProbes(
         googlebotUserAgent: cfg.googlebot_user_agent,
         defaultUserAgent: runtime.defaultUserAgent,
         ...(runtime.customHeaders
-          ? { customHeaders: runtime.customHeaders, headerScope: runtime.headerScope }
+          ? {
+              customHeaders: runtime.customHeaders,
+              headerScope: runtime.headerScope,
+            }
           : { headerScope: runtime.headerScope }),
         egress: runtime.egress,
         signal: runtime.signal,
       },
-      fetchImpl,
+      fetchImpl
     );
   } catch {
     return [];

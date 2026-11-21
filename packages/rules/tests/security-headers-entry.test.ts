@@ -8,12 +8,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
+import { getAllRuleIds } from "../src/loader";
 import {
   SECURITY_HEADER_RULES,
   gradeResponseHeaders,
   hstsRule,
 } from "../src/security-headers";
-import { getAllRuleIds } from "../src/loader";
 
 const SRC = join(import.meta.dir, "..", "src");
 const ENTRY = join(SRC, "security-headers.ts");
@@ -24,7 +24,8 @@ function runtimeImports(file: string): string[] {
   const specifiers: string[] = [];
   const pattern = /^(?:import|export)\s+(?!type\b)[^;]*?from\s+"([^"]+)"/gms;
   for (const match of source.matchAll(pattern)) specifiers.push(match[1]!);
-  for (const match of source.matchAll(/^import\s+"([^"]+)"/gm)) specifiers.push(match[1]!);
+  for (const match of source.matchAll(/^import\s+"([^"]+)"/gm))
+    specifiers.push(match[1]!);
   return specifiers;
 }
 
@@ -39,7 +40,9 @@ function closure(entry: string): string[] {
       if (!spec.startsWith(".")) {
         throw new Error(`${relative(SRC, file)} loads ${spec} at runtime`);
       }
-      queue.push(resolve(dirname(file), spec.endsWith(".ts") ? spec : `${spec}.ts`));
+      queue.push(
+        resolve(dirname(file), spec.endsWith(".ts") ? spec : `${spec}.ts`)
+      );
     }
   }
   return [...seen].map((f) => relative(SRC, f)).sort();
@@ -83,19 +86,23 @@ describe("@squirrelscan/rules/security-headers", () => {
     expect(
       gradeResponseHeaders(hstsRule, "https://example.com/", {
         "strict-transport-security": "max-age=31536000",
-      }),
+      })
     ).toEqual(
-      (await hstsRule.run({
-        site: {
-          pages: [
-            {
-              url: "https://example.com/",
-              headers: { "strict-transport-security": "max-age=31536000" },
-            },
-          ],
-        },
-      } as never)).checks,
+      (
+        await hstsRule.run({
+          site: {
+            pages: [
+              {
+                url: "https://example.com/",
+                headers: { "strict-transport-security": "max-age=31536000" },
+              },
+            ],
+          },
+        } as never)
+      ).checks
     );
-    expect(gradeResponseHeaders(hstsRule, "http://example.com/", {})[0]?.status).toBe("info");
+    expect(
+      gradeResponseHeaders(hstsRule, "http://example.com/", {})[0]?.status
+    ).toBe("info");
   });
 });

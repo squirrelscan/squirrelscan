@@ -1,39 +1,49 @@
 // getSeparatedText: element text with a space between every pair of adjacent nodes.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
 
 import { getSeparatedText } from "../src/content/text-content";
 
 function body(html: string) {
-  return parseHTML(`<html><body>${html}</body></html>`).document.querySelector("body")!;
+  return parseHTML(`<html><body>${html}</body></html>`).document.querySelector(
+    "body"
+  )!;
 }
 
 const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();
 
 describe("getSeparatedText", () => {
   test("separates sibling elements that .textContent glues together", () => {
-    const el = body("<span>Published</span><span>March 12, 2024</span>Read more");
+    const el = body(
+      "<span>Published</span><span>March 12, 2024</span>Read more"
+    );
 
     expect(el.textContent).toBe("PublishedMarch 12, 2024Read more");
-    expect(collapse(getSeparatedText(el))).toBe("Published March 12, 2024 Read more");
+    expect(collapse(getSeparatedText(el))).toBe(
+      "Published March 12, 2024 Read more"
+    );
   });
 
   test("separates block siblings and inline siblings alike", () => {
-    expect(collapse(getSeparatedText(body("<td>Author</td><td>undefined</td>")))).toBe(
-      "Author undefined",
+    expect(
+      collapse(getSeparatedText(body("<td>Author</td><td>undefined</td>")))
+    ).toBe("Author undefined");
+    expect(collapse(getSeparatedText(body("<p>a</p><b>b</b><i>c</i>d")))).toBe(
+      "a b c d"
     );
-    expect(collapse(getSeparatedText(body("<p>a</p><b>b</b><i>c</i>d")))).toBe("a b c d");
   });
 
   test("keeps the text of one text node whole", () => {
-    expect(getSeparatedText(body("<p>March 12, 2024</p>")).trim()).toBe("March 12, 2024");
+    expect(getSeparatedText(body("<p>March 12, 2024</p>")).trim()).toBe(
+      "March 12, 2024"
+    );
   });
 
   test("does not read script, style, noscript or template content", () => {
     const el = body(
       "<p>shown</p><script>var a = 1</script><style>.x{}</style>" +
-        "<noscript>fallback</noscript><template>inert</template><p>also</p>",
+        "<noscript>fallback</noscript><template>inert</template><p>also</p>"
     );
 
     expect(collapse(getSeparatedText(el))).toBe("shown also");

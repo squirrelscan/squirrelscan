@@ -3,14 +3,20 @@
 // The no-false-positive fixture carries more weight than the detection cases: a
 // tracking pixel, a lazy-loaded hero and descriptive alt text must all stay clean.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
 
-import { dataUriDimensions, isPlaceholderSource, placeholderMediaRule } from "../src/content/placeholder-media";
-import { imageRedundantAltRule } from "../src/a11y/image-redundant-alt";
 import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
-const GIF_1X1 = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+import { imageRedundantAltRule } from "../src/a11y/image-redundant-alt";
+import {
+  dataUriDimensions,
+  isPlaceholderSource,
+  placeholderMediaRule,
+} from "../src/content/placeholder-media";
+
+const GIF_1X1 =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const PNG_1X1 =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
@@ -18,7 +24,13 @@ async function runRule(rule: Rule, body: string) {
   const html = `<html><head><title>t</title></head><body>${body}</body></html>`;
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
-    page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document } as unknown as ParsedPage,
     options: {},
   };
@@ -61,51 +73,75 @@ describe("dataUriDimensions", () => {
 
 describe("placeholder-media outcomes", () => {
   test("skipped when the page has no images", async () => {
-    const [c] = (await run("<p>hi</p>"));
+    const [c] = await run("<p>hi</p>");
     expect(c!.status).toBe("skipped");
   });
 
   test("pass when images are real", async () => {
-    const [c] = (await run('<img src="/a.jpg" alt="Red running shoes on a track">'));
+    const [c] = await run(
+      '<img src="/a.jpg" alt="Red running shoes on a track">'
+    );
     expect(c!.status).toBe("pass");
   });
 
   test("fail on a placeholder source", async () => {
-    const [c] = (await run('<img src="https://via.placeholder.com/600x400" alt="Team photo at the offsite">'));
+    const [c] = await run(
+      '<img src="https://via.placeholder.com/600x400" alt="Team photo at the offsite">'
+    );
     expect(c!.status).toBe("fail");
     expect(c!.items?.[0]?.label).toBe("placeholder image");
   });
 
   test("fail on a placeholder in the filename", async () => {
-    expect((await run('<img src="/img/placeholder.png" alt="Our office">'))[0]!.status).toBe("fail");
+    expect(
+      (await run('<img src="/img/placeholder.png" alt="Our office">'))[0]!
+        .status
+    ).toBe("fail");
   });
 
   test("a placeholder data-src is flagged even when src is a real-looking stub", async () => {
-    const [c] = (await run(`<img src="${GIF_1X1}" data-src="https://dummyimage.com/800x600" alt="Hero banner for spring">`));
+    const [c] = await run(
+      `<img src="${GIF_1X1}" data-src="https://dummyimage.com/800x600" alt="Hero banner for spring">`
+    );
     expect(c!.status).toBe("fail");
   });
 
   test("fail on a 1x1 base64 GIF or PNG used as content", async () => {
-    expect((await run(`<img src="${GIF_1X1}" alt="Product shot of the blue kettle">`))[0]!.status).toBe("fail");
-    expect((await run(`<img src="${PNG_1X1}" alt="Product shot of the blue kettle">`))[0]!.status).toBe("fail");
+    expect(
+      (
+        await run(
+          `<img src="${GIF_1X1}" alt="Product shot of the blue kettle">`
+        )
+      )[0]!.status
+    ).toBe("fail");
+    expect(
+      (
+        await run(
+          `<img src="${PNG_1X1}" alt="Product shot of the blue kettle">`
+        )
+      )[0]!.status
+    ).toBe("fail");
   });
 
   test("warn on a camera-default alt alone", async () => {
     for (const alt of ["DSC_0001", "IMG_1234", "dscn0042.jpg"]) {
-      const [c] = (await run(`<img src="/uploads/team-lunch.jpg" alt="${alt}">`));
+      const [c] = await run(`<img src="/uploads/team-lunch.jpg" alt="${alt}">`);
       expect(c!.status).toBe("warn");
     }
   });
 
   test("source findings outrank an alt finding", async () => {
-    const [c] = (await run('<img src="/x/placeholder.jpg" alt="IMG_1234">'));
+    const [c] = await run('<img src="/x/placeholder.jpg" alt="IMG_1234">');
     expect(c!.status).toBe("fail");
     expect(c!.items).toHaveLength(2);
   });
 
   test("caps items and records the remainder", async () => {
-    const body = Array.from({ length: 14 }, (_, i) => `<img src="/p${i}/placeholder.png" alt="Real description ${i}">`).join("");
-    const [c] = (await run(body));
+    const body = Array.from(
+      { length: 14 },
+      (_, i) => `<img src="/p${i}/placeholder.png" alt="Real description ${i}">`
+    ).join("");
+    const [c] = await run(body);
     expect(c!.items).toHaveLength(10);
     expect(c!.details?.additional).toBe(4);
   });
@@ -113,17 +149,23 @@ describe("placeholder-media outcomes", () => {
 
 describe("placeholder-media src vs srcset and legitimate paths", () => {
   test("a placeholder src beside a real srcset is not flagged", async () => {
-    const [c] = (await run('<img src="/img/placeholder.png" srcset="/img/hero-1x.jpg 1x, /img/hero-2x.jpg 2x" alt="Hero shot of the lobby">'));
+    const [c] = await run(
+      '<img src="/img/placeholder.png" srcset="/img/hero-1x.jpg 1x, /img/hero-2x.jpg 2x" alt="Hero shot of the lobby">'
+    );
     expect(c!.status).toBe("pass");
   });
 
   test("a placeholder src beside a real <picture> source is not flagged", async () => {
-    const [c] = (await run('<picture><source srcset="/img/hero.webp" type="image/webp"><img src="/img/placeholder.png" alt="Hero shot of the lobby"></picture>'));
+    const [c] = await run(
+      '<picture><source srcset="/img/hero.webp" type="image/webp"><img src="/img/placeholder.png" alt="Hero shot of the lobby"></picture>'
+    );
     expect(c!.status).toBe("pass");
   });
 
   test("a placeholder srcset is flagged even when src looks real", async () => {
-    const [c] = (await run('<img src="/img/hero.jpg" srcset="/img/placeholder.png 1x" alt="Hero shot of the lobby">'));
+    const [c] = await run(
+      '<img src="/img/hero.jpg" srcset="/img/placeholder.png 1x" alt="Hero shot of the lobby">'
+    );
     expect(c!.status).toBe("fail");
   });
 
@@ -140,7 +182,9 @@ describe("placeholder-media src vs srcset and legitimate paths", () => {
 
 describe("placeholder-media other lazy-loaders and edge sources", () => {
   test("a 1x1 stub with the real URL in an unrecognised data-* attribute is not flagged", async () => {
-    const [c] = (await run(`<img src="${GIF_1X1}" data-echo="/img/team.jpg" alt="The team at work">`));
+    const [c] = await run(
+      `<img src="${GIF_1X1}" data-echo="/img/team.jpg" alt="The team at work">`
+    );
     expect(c!.status).toBe("pass");
   });
 
@@ -149,25 +193,29 @@ describe("placeholder-media other lazy-loaders and edge sources", () => {
   });
 
   test("a <picture> where every source is a placeholder is flagged", async () => {
-    const [c] = (await run('<picture><source srcset="/img/placeholder.webp"><img src="/img/placeholder.png" alt="Hero shot"></picture>'));
+    const [c] = await run(
+      '<picture><source srcset="/img/placeholder.webp"><img src="/img/placeholder.png" alt="Hero shot"></picture>'
+    );
     expect(c!.status).toBe("fail");
   });
 
   test("a 1x1 src inside a <picture> with a real <source srcset> is not flagged (#742)", async () => {
-    const [c] = (await run(
-      `<picture><source srcset="/img/real.jpg"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`,
-    ));
+    const [c] = await run(
+      `<picture><source srcset="/img/real.jpg"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`
+    );
     expect(c!.status).toBe("pass");
   });
 
   test("a lone 1x1 src with no srcset, <source> or lazy attribute is still flagged (#742)", async () => {
-    const [c] = (await run(`<img src="${GIF_1X1}" alt="Hero shot of the lobby">`));
+    const [c] = await run(
+      `<img src="${GIF_1X1}" alt="Hero shot of the lobby">`
+    );
     expect(c!.status).toBe("fail");
     expect(c!.items?.[0]?.label).toBe("blank 1x1 image used as content");
     // A <picture> whose <source> has no srcset gives the browser nothing else to show.
-    const [d] = (await run(
-      `<picture><source type="image/webp"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`,
-    ));
+    const [d] = await run(
+      `<picture><source type="image/webp"><img src="${GIF_1X1}" alt="Hero shot of the lobby"></picture>`
+    );
     expect(d!.status).toBe("fail");
   });
 
@@ -178,7 +226,7 @@ describe("placeholder-media other lazy-loaders and edge sources", () => {
 
 describe("placeholder-media no false positives", () => {
   test("a tracking pixel, a lazy-loaded hero and descriptive alt text stay clean", async () => {
-    const [c] = (await run(`
+    const [c] = await run(`
       <img src="https://analytics.example.com/pixel.gif" width="1" height="1" alt="">
       <img src="${GIF_1X1}" width="1" height="1" alt="" aria-hidden="true">
       <img src="${GIF_1X1}" data-src="/img/hero.jpg" alt="A squirrel carrying an acorn across a wire">
@@ -186,12 +234,18 @@ describe("placeholder-media no false positives", () => {
       <img src="${GIF_1X1}" srcset="/img/a-480.jpg 480w, /img/a-960.jpg 960w" alt="Mountain lake at dawn">
       <img src="/img/kettle.jpg" alt="Blue enamel kettle on a gas hob">
       <noscript><img src="/img/placeholder.png" alt="IMG_1234"></noscript>
-    `));
+    `);
     expect(c!.status).toBe("pass");
   });
 
   test("an alt that merely contains a camera-like fragment is not flagged", async () => {
-    expect((await run('<img src="/a.jpg" alt="Photo of IMG_1234 sculpture in the gallery">'))[0]!.status).toBe("pass");
+    expect(
+      (
+        await run(
+          '<img src="/a.jpg" alt="Photo of IMG_1234 sculpture in the gallery">'
+        )
+      )[0]!.status
+    ).toBe("pass");
   });
 });
 
@@ -200,12 +254,16 @@ describe("overlap with a11y/image-redundant-alt", () => {
     const body =
       '<img src="/a/team.jpg" alt="image"><img src="/a/photo.jpg" alt="photo"><img src="/a/DSC_0001.jpg" alt="DSC_0001">';
     expect((await run(body))[0]!.status).toBe("pass");
-    expect((await runRule(imageRedundantAltRule, body))[0]!.status).toBe("warn");
+    expect((await runRule(imageRedundantAltRule, body))[0]!.status).toBe(
+      "warn"
+    );
   });
 
   test("a camera-default alt on a differently named file is reported only here", async () => {
     const body = '<img src="/a/team-lunch.jpg" alt="IMG_1234">';
     expect((await run(body))[0]!.status).toBe("warn");
-    expect((await runRule(imageRedundantAltRule, body))[0]!.status).toBe("pass");
+    expect((await runRule(imageRedundantAltRule, body))[0]!.status).toBe(
+      "pass"
+    );
   });
 });

@@ -5,15 +5,18 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { detectTechnologies } from "../src/detect";
 import type { TechDetectInput } from "../src/types";
+
+import { detectTechnologies } from "../src/detect";
 
 const FINGERPRINTS = [
   {
     id: "proto-canary",
     name: "Proto Canary",
     category: "cms" as const,
-    detectors: [{ type: "meta" as const, name: "constructor", pattern: /canary/ }],
+    detectors: [
+      { type: "meta" as const, name: "constructor", pattern: /canary/ },
+    ],
   },
 ];
 
@@ -41,7 +44,8 @@ describe("tech-detect meta extraction over untrusted names", () => {
     const added = Object.getOwnPropertyNames(Object.prototype).filter(
       (key) => !before.includes(key)
     );
-    for (const key of added) delete (Object.prototype as Record<string, unknown>)[key];
+    for (const key of added)
+      delete (Object.prototype as Record<string, unknown>)[key];
     expect(added).toEqual([]);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });

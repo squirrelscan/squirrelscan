@@ -1,5 +1,9 @@
 // a11y/label-content-name-mismatch - Label text matches accessible name
 
+import { wcag } from "@squirrelscan/core-contracts/wcag";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import { elementSelector } from "../element-path";
 import {
   type ControlItem,
@@ -7,21 +11,53 @@ import {
   unconfirmedItem,
   unconfirmedRow,
 } from "../shared/static-hidden";
-import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Elements that render apart from their siblings, so text on either side is two words.
 const BLOCK_TAGS = new Set([
-  "address", "article", "aside", "blockquote", "br", "dd", "details", "div", "dl", "dt",
-  "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
-  "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "summary", "table",
-  "td", "th", "tr", "ul",
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "pre",
+  "section",
+  "summary",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
 ]);
-const INLINE_BLOCK_DISPLAY = /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
+const INLINE_BLOCK_DISPLAY =
+  /display\s*:\s*(?:block|flex|grid|table|list-item|flow-root)/i;
 
 // Items show both strings in full up to this many characters.
 const MAX_ITEM_TEXT = 120;
-const clip = (s: string) => (s.length > MAX_ITEM_TEXT ? `${s.slice(0, MAX_ITEM_TEXT)}...` : s);
+const clip = (s: string) =>
+  s.length > MAX_ITEM_TEXT ? `${s.slice(0, MAX_ITEM_TEXT)}...` : s;
 
 function getVisibleText(el: Element): string {
   // Get only visible text content (excluding aria-hidden)
@@ -117,8 +153,15 @@ export const labelContentNameMismatchRule: Rule = {
         const tagName = el.tagName.toLowerCase();
         const id = `${tagName}: visible="${clip(normalizedVisible)}" vs aria-label="${clip(normalizedAriaLabel)}"`;
         if (seen.state === "unknown") {
-          const item = unconfirmedItem(id, seen) as Exclude<ControlItem, string>;
-          unconfirmed.push(ctx.wantsItemSelectors ? { ...item, selector: elementSelector(el) } : item);
+          const item = unconfirmedItem(id, seen) as Exclude<
+            ControlItem,
+            string
+          >;
+          unconfirmed.push(
+            ctx.wantsItemSelectors
+              ? { ...item, selector: elementSelector(el) }
+              : item
+          );
           continue;
         }
         mismatches.push({
@@ -144,9 +187,19 @@ export const labelContentNameMismatchRule: Rule = {
       });
     }
     if (unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("label-content-name-mismatch", "control(s) with a mismatched name", unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "label-content-name-mismatch",
+          "control(s) with a mismatched name",
+          unconfirmed
+        )
+      );
     }
-    if (mismatches.length === 0 && unconfirmed.length === 0 && elementsWithAriaLabel.length > 0) {
+    if (
+      mismatches.length === 0 &&
+      unconfirmed.length === 0 &&
+      elementsWithAriaLabel.length > 0
+    ) {
       checks.push({
         name: "label-content-name-mismatch",
         status: "pass",

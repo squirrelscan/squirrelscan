@@ -5,8 +5,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { brokenLinksRule } from "../src/links/broken-links";
 import type { ParsedPage, RuleContext, SiteData } from "../src/types";
+
+import { brokenLinksRule } from "../src/links/broken-links";
 
 const BASE = "https://example.com";
 
@@ -18,10 +19,21 @@ interface Page {
 
 function ctx(
   pages: Page[],
-  site: Partial<Pick<SiteData, "linkTargetStatuses" | "fetchedTargets" | "internalLinkProbe">> = {},
+  site: Partial<
+    Pick<
+      SiteData,
+      "linkTargetStatuses" | "fetchedTargets" | "internalLinkProbe"
+    >
+  > = {}
 ): RuleContext {
   return {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: BASE,
@@ -31,7 +43,12 @@ function ctx(
         url: p.url,
         statusCode: p.statusCode,
         parsed: {
-          links: (p.internal ?? []).map((url) => ({ url, isInternal: true, text: "", rel: null })),
+          links: (p.internal ?? []).map((url) => ({
+            url,
+            isInternal: true,
+            text: "",
+            rel: null,
+          })),
         } as unknown as ParsedPage,
       })),
       ...site,
@@ -41,16 +58,19 @@ function ctx(
 }
 
 async function details(c: RuleContext) {
-  return (await brokenLinksRule
-    .run(c))
-    .checks.filter((check) => check.name === "broken-links")
+  return (await brokenLinksRule.run(c)).checks
+    .filter((check) => check.name === "broken-links")
     .map((check) => ({
-    status: check.status,
-    details: check.details as Record<string, unknown> | undefined,
-  }));
+      status: check.status,
+      details: check.details as Record<string, unknown> | undefined,
+    }));
 }
 
-const home = (internal: string[]): Page => ({ url: `${BASE}/`, statusCode: 200, internal });
+const home = (internal: string[]): Page => ({
+  url: `${BASE}/`,
+  statusCode: 200,
+  internal,
+});
 
 describe("links/broken-links: refusedTargets and rateLimitedTargets (pub#1679)", () => {
   test("a fixture with one 403, one 429 and one 404 reports 1, 1 and the 404 as before", async () => {
@@ -61,7 +81,7 @@ describe("links/broken-links: refusedTargets and rateLimitedTargets (pub#1679)",
         { url: `${BASE}/gone`, status: 404, error: null },
       ],
     });
-    const rows = (await details(c));
+    const rows = await details(c);
     const fail = rows.find((r) => r.status === "fail")!;
     expect(fail.details).toMatchObject({
       linkTargets: 3,
@@ -70,22 +90,29 @@ describe("links/broken-links: refusedTargets and rateLimitedTargets (pub#1679)",
       rateLimitedTargets: 1,
     });
     // The 404 is still the only finding.
-    const items = (await brokenLinksRule.run(c)).checks.find((x) => x.status === "fail")!.items!;
+    const items = (await brokenLinksRule.run(c)).checks.find(
+      (x) => x.status === "fail"
+    )!.items!;
     expect(items.map((i) => i.id)).toEqual([`${BASE}/gone`]);
   });
 
   test("every broken-links row carries both counts, as whole numbers, 0 when none", async () => {
-    const pass = (await details(ctx([home([`${BASE}/ok`]), { url: `${BASE}/ok`, statusCode: 200 }])));
+    const pass = await details(
+      ctx([home([`${BASE}/ok`]), { url: `${BASE}/ok`, statusCode: 200 }])
+    );
     expect(pass).toHaveLength(1);
-    expect(pass[0]!.details).toMatchObject({ refusedTargets: 0, rateLimitedTargets: 0 });
-    const mixed = (await details(
+    expect(pass[0]!.details).toMatchObject({
+      refusedTargets: 0,
+      rateLimitedTargets: 0,
+    });
+    const mixed = await details(
       ctx([home([`${BASE}/walled`, `${BASE}/gone`])], {
         linkTargetStatuses: [
           { url: `${BASE}/walled`, status: 401, error: null },
           { url: `${BASE}/gone`, status: 404, error: null },
         ],
-      }),
-    ));
+      })
+    );
     for (const row of mixed) {
       expect(Number.isInteger(row.details?.refusedTargets)).toBe(true);
       expect(Number.isInteger(row.details?.rateLimitedTargets)).toBe(true);
@@ -96,17 +123,25 @@ describe("links/broken-links: refusedTargets and rateLimitedTargets (pub#1679)",
     const c = ctx(
       [
         home([`${BASE}/walled`, `${BASE}/walled/`, `${BASE}/walled#x`]),
-        { url: `${BASE}/other`, statusCode: 200, internal: [`${BASE}/walled`, `${BASE}/slow`] },
+        {
+          url: `${BASE}/other`,
+          statusCode: 200,
+          internal: [`${BASE}/walled`, `${BASE}/slow`],
+        },
       ],
       {
         linkTargetStatuses: [
           { url: `${BASE}/walled`, status: 403, error: null },
           { url: `${BASE}/slow`, status: 429, error: null, rateLimited: true },
         ],
-      },
+      }
     );
     const row = (await details(c))[0]!;
-    expect(row.details).toMatchObject({ refusedTargets: 1, rateLimitedTargets: 1, linkTargets: 2 });
+    expect(row.details).toMatchObject({
+      refusedTargets: 1,
+      rateLimitedTargets: 1,
+      linkTargets: 2,
+    });
   });
 
   test("a bot-wall challenge and a throttled crawl answer count too", async () => {
@@ -116,17 +151,28 @@ describe("links/broken-links: refusedTargets and rateLimitedTargets (pub#1679)",
         { url: `${BASE}/throttled`, status: 429, rateLimited: true },
       ] as unknown as SiteData["fetchedTargets"],
     });
-    expect((await details(c))[0]!.details).toMatchObject({ refusedTargets: 1, rateLimitedTargets: 1 });
+    expect((await details(c))[0]!.details).toMatchObject({
+      refusedTargets: 1,
+      rateLimitedTargets: 1,
+    });
   });
 
   test("a rate-limit status that reached the rules as a crawled page counts", async () => {
-    const c = ctx([home([`${BASE}/crawled-429`]), { url: `${BASE}/crawled-429`, statusCode: 429 }]);
-    expect((await details(c))[0]!.details).toMatchObject({ rateLimitedTargets: 1, refusedTargets: 0 });
+    const c = ctx([
+      home([`${BASE}/crawled-429`]),
+      { url: `${BASE}/crawled-429`, statusCode: 429 },
+    ]);
+    expect((await details(c))[0]!.details).toMatchObject({
+      rateLimitedTargets: 1,
+      refusedTargets: 0,
+    });
   });
 
   test("a target that was only left unfetched is in neither count", async () => {
     const c = ctx([home([`${BASE}/never`])]);
-    const row = (await details(c)).find((r) => r.status === "pass" || r.status === "skipped")!;
+    const row = (await details(c)).find(
+      (r) => r.status === "pass" || r.status === "skipped"
+    )!;
     expect(row.details).toMatchObject({
       unfetchedTargets: 1,
       refusedTargets: 0,

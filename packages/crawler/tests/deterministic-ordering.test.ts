@@ -18,6 +18,7 @@ import type {
   SecurityHeaders,
   SitePageRecord,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -184,7 +185,9 @@ describe("deterministic read ordering (#150)", () => {
     const store = await freshStore();
     const crawlId = await freshCrawl(store);
     for (const s of SHUFFLED) {
-      await run(store.upsertImage(crawlId, image(`https://example.com/${s}.png`)));
+      await run(
+        store.upsertImage(crawlId, image(`https://example.com/${s}.png`))
+      );
     }
     const got = await run(store.getImages(crawlId));
     expect(got.map((i) => i.src)).toEqual(
@@ -198,11 +201,36 @@ describe("deterministic read ordering (#150)", () => {
     // Insert in a deliberately scrambled order across all four key columns.
     await run(
       store.upsertFindings([
-        finding({ normalizedUrl: `${SITE}/b`, ruleId: "r2", locator: "z", fingerprint: "1" }),
-        finding({ normalizedUrl: `${SITE}/a`, ruleId: "r2", locator: "a", fingerprint: "2" }),
-        finding({ normalizedUrl: `${SITE}/a`, ruleId: "r1", locator: "b", fingerprint: "3" }),
-        finding({ normalizedUrl: `${SITE}/a`, ruleId: "r1", locator: "a", fingerprint: "4" }),
-        finding({ normalizedUrl: `${SITE}/b`, ruleId: "r1", locator: "a", fingerprint: "5" }),
+        finding({
+          normalizedUrl: `${SITE}/b`,
+          ruleId: "r2",
+          locator: "z",
+          fingerprint: "1",
+        }),
+        finding({
+          normalizedUrl: `${SITE}/a`,
+          ruleId: "r2",
+          locator: "a",
+          fingerprint: "2",
+        }),
+        finding({
+          normalizedUrl: `${SITE}/a`,
+          ruleId: "r1",
+          locator: "b",
+          fingerprint: "3",
+        }),
+        finding({
+          normalizedUrl: `${SITE}/a`,
+          ruleId: "r1",
+          locator: "a",
+          fingerprint: "4",
+        }),
+        finding({
+          normalizedUrl: `${SITE}/b`,
+          ruleId: "r1",
+          locator: "a",
+          fingerprint: "5",
+        }),
       ])
     );
     const key = (f: PageFindingRecord) =>
@@ -250,7 +278,9 @@ describe("deterministic read ordering (#150)", () => {
       for (const s of order) {
         await run(store.upsertPage(crawlId, page(`https://example.com/${s}`)));
       }
-      const out = (await run(store.getPages(crawlId))).map((p) => p.normalizedUrl);
+      const out = (await run(store.getPages(crawlId))).map(
+        (p) => p.normalizedUrl
+      );
       await run(store.close());
       return out;
     }

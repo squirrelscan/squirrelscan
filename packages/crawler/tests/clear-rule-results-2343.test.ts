@@ -44,8 +44,12 @@ function check(name: string): CheckResult {
 }
 
 /** One batch of page results, shaped the way the rules-phase sink flushes them. */
-function batch(pageUrl: string): Map<string, { ruleId: string; checks: CheckResult[] }[]> {
-  return new Map([[pageUrl, [{ ruleId: "core/meta-title", checks: [check("meta-title")] }]]]);
+function batch(
+  pageUrl: string
+): Map<string, { ruleId: string; checks: CheckResult[] }[]> {
+  return new Map([
+    [pageUrl, [{ ruleId: "core/meta-title", checks: [check("meta-title")] }]],
+  ]);
 }
 
 describe("clearRuleResults (#2343)", () => {
@@ -55,15 +59,23 @@ describe("clearRuleResults (#2343)", () => {
     const crawlId = "crawl-killed";
 
     // A rules phase that died after flushing two batches.
-    await run(store.saveRuleResultsBatch(crawlId, batch("https://example.com/a")));
-    await run(store.saveRuleResultsBatch(crawlId, batch("https://example.com/b")));
+    await run(
+      store.saveRuleResultsBatch(crawlId, batch("https://example.com/a"))
+    );
+    await run(
+      store.saveRuleResultsBatch(crawlId, batch("https://example.com/b"))
+    );
     const partial = await run(store.getRuleResultsGrouped(crawlId));
     expect(partial.byPage.size).toBe(2);
 
     // The re-run clears first, then writes the same two pages again.
     await run(store.clearRuleResults(crawlId));
-    await run(store.saveRuleResultsBatch(crawlId, batch("https://example.com/a")));
-    await run(store.saveRuleResultsBatch(crawlId, batch("https://example.com/b")));
+    await run(
+      store.saveRuleResultsBatch(crawlId, batch("https://example.com/a"))
+    );
+    await run(
+      store.saveRuleResultsBatch(crawlId, batch("https://example.com/b"))
+    );
 
     const after = await run(store.getRuleResultsGrouped(crawlId));
     expect(after.byPage.size).toBe(2);
@@ -79,15 +91,23 @@ describe("clearRuleResults (#2343)", () => {
     const store = new SQLiteStorage(tmpDbPath());
     await run(store.init());
 
-    await run(store.saveRuleResultsBatch("crawl-old", batch("https://example.com/a")));
-    await run(store.saveRuleResultsBatch("crawl-new", batch("https://example.com/a")));
+    await run(
+      store.saveRuleResultsBatch("crawl-old", batch("https://example.com/a"))
+    );
+    await run(
+      store.saveRuleResultsBatch("crawl-new", batch("https://example.com/a"))
+    );
 
     await run(store.clearRuleResults("crawl-new"));
 
     // A project.db holds every audit of the site; the previous one is history a
     // diff and the findings store both read.
-    expect((await run(store.getRuleResultsGrouped("crawl-new"))).byPage.size).toBe(0);
-    expect((await run(store.getRuleResultsGrouped("crawl-old"))).byPage.size).toBe(1);
+    expect(
+      (await run(store.getRuleResultsGrouped("crawl-new"))).byPage.size
+    ).toBe(0);
+    expect(
+      (await run(store.getRuleResultsGrouped("crawl-old"))).byPage.size
+    ).toBe(1);
 
     await run(store.close());
   });
@@ -97,7 +117,9 @@ describe("clearRuleResults (#2343)", () => {
     await run(store.init());
     // The normal path: every run calls this, and on every run it finds nothing.
     await run(store.clearRuleResults("never-audited"));
-    expect((await run(store.getRuleResultsGrouped("never-audited"))).byPage.size).toBe(0);
+    expect(
+      (await run(store.getRuleResultsGrouped("never-audited"))).byPage.size
+    ).toBe(0);
     await run(store.close());
   });
 });

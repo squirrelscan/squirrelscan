@@ -76,7 +76,9 @@ function result(over: {
     status: over.status ?? 304,
     loadTime: 5,
     headers: { ...over.headers } as FetchResult["headers"],
-    securityHeaders: { ...over.securityHeaders } as FetchResult["securityHeaders"],
+    securityHeaders: {
+      ...over.securityHeaders,
+    } as FetchResult["securityHeaders"],
     contentType: null,
     body: "",
     sizeBytes: 0,
@@ -149,9 +151,14 @@ describe("revalidatedPage", () => {
 // probe is a full 200, so its headers are the page's current set.
 describe("conditional-render reuse takes the probe's headers (repo#4765)", () => {
   const ORIGIN = "http://shop.invalid";
-  const BODY = "<!doctype html><html><head><title>About</title></head><body>nuts</body></html>";
+  const BODY =
+    "<!doctype html><html><head><title>About</title></head><body>nuts</body></html>";
 
-  function response(url: string, headers: Record<string, string>, method?: string): FetchResponse {
+  function response(
+    url: string,
+    headers: Record<string, string>,
+    method?: string
+  ): FetchResponse {
     return {
       url,
       finalUrl: url,
@@ -175,7 +182,8 @@ describe("conditional-render reuse takes the probe's headers (repo#4765)", () =>
 
   test("render once with X-Robots-Tag, reuse after the site drops it: the reused page has none", async () => {
     let robots: string | null = NOINDEX;
-    const siteHeaders = (): Record<string, string> => (robots ? { "x-robots-tag": robots } : {});
+    const siteHeaders = (): Record<string, string> =>
+      robots ? { "x-robots-tag": robots } : {};
     let renders = 0;
     const gate = createConditionalRenderDocumentFetcher({
       http: {
@@ -212,9 +220,11 @@ describe("conditional-render reuse takes the probe's headers (repo#4765)", () =>
             allowedDomains: ["shop.invalid"],
             documentFetcher: gate,
           },
-        }),
+        })
       );
-      const crawlId = await Effect.runPromise(crawler.start(`${ORIGIN}/`, `${ORIGIN}/`));
+      const crawlId = await Effect.runPromise(
+        crawler.start(`${ORIGIN}/`, `${ORIGIN}/`)
+      );
       const stats = await Effect.runPromise(storage.getStats(crawlId));
       const [page] = await Effect.runPromise(storage.getPages(crawlId));
       return { stats, page };

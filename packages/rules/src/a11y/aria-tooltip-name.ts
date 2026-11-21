@@ -1,8 +1,10 @@
 // a11y/aria-tooltip-name - Tooltips have accessible names
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -69,7 +71,11 @@ export const ariaTooltipNameRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("aria-tooltip-name", "tooltip(s) without accessible content", unnamed.unconfirmed),
+        unconfirmedRow(
+          "aria-tooltip-name",
+          "tooltip(s) without accessible content",
+          unnamed.unconfirmed
+        )
       );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -81,7 +87,9 @@ export const ariaTooltipNameRule: Rule = {
             unnamed.hidden > 0
               ? "All tooltips in the accessibility tree have accessible names"
               : `${tooltips.length} tooltip(s) have accessible names`,
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

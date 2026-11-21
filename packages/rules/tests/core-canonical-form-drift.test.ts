@@ -10,16 +10,21 @@
 // Every fixture runs through `bothPaths`, so the legacy `ctx.site.pages` path and
 // the streaming `SiteQuery` path are asserted byte-identical on all of them.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   CANONICAL_FORM_MIN_PAGES,
   CANONICAL_FORM_MIN_SAMPLE,
   canonicalFormDriftRule,
 } from "../src/core/canonical-form-drift";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   /** The page's own crawled URL; defaults to `https://example.com/pNNN`. */
@@ -33,7 +38,10 @@ function url(i: number): string {
 }
 
 /** N pages whose canonical is `prefix + path`, self-referential in the given form. */
-function uniform(count: number, canonical: (i: number) => string | null): PageSpec[] {
+function uniform(
+  count: number,
+  canonical: (i: number) => string | null
+): PageSpec[] {
   return Array.from({ length: count }, (_, i) => ({ canonical: canonical(i) }));
 }
 
@@ -43,7 +51,13 @@ function healthy(i: number): string {
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -57,7 +71,9 @@ function legacyCtx(specs: PageSpec[]): RuleContext {
       pages: specs.map((spec, i) => ({
         url: spec.url ?? url(i),
         statusCode: spec.status ?? 200,
-        parsed: { meta: { canonical: spec.canonical } } as unknown as ParsedPage,
+        parsed: {
+          meta: { canonical: spec.canonical },
+        } as unknown as ParsedPage,
       })),
       robotsTxt: null,
       sitemaps: null,
@@ -130,7 +146,12 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
   return {
     ...baseCtx,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteQuery,
   };
 }
@@ -162,7 +183,9 @@ function mostly(
 
 describe("core/canonical-form-drift — silence guards", () => {
   test("skips a crawl below the site page floor", async () => {
-    const check = await bothPaths(uniform(CANONICAL_FORM_MIN_PAGES - 1, healthy));
+    const check = await bothPaths(
+      uniform(CANONICAL_FORM_MIN_PAGES - 1, healthy)
+    );
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${CANONICAL_FORM_MIN_PAGES} needed`);
   });
@@ -175,13 +198,12 @@ describe("core/canonical-form-drift — silence guards", () => {
   test("skips when too few pages carry a comparable canonical", async () => {
     // 20 pages crawled, but only 9 declare a canonical at all: no dimension
     // reaches its sample floor, so there is nothing to form a norm from.
-    const specs = [
-      ...uniform(9, healthy),
-      ...uniform(11, () => null),
-    ];
+    const specs = [...uniform(9, healthy), ...uniform(11, () => null)];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(`${CANONICAL_FORM_MIN_SAMPLE} comparable pages`);
+    expect(check.message).toContain(
+      `${CANONICAL_FORM_MIN_SAMPLE} comparable pages`
+    );
   });
 
   test("skips a site that genuinely mixes every form 50/50 — no dominant norm", async () => {
@@ -189,7 +211,9 @@ describe("core/canonical-form-drift — silence guards", () => {
     const specs = Array.from({ length: 20 }, (_, i) =>
       i % 2 === 0
         ? { canonical: url(i) }
-        : { canonical: `http://www.example.com/p${String(i).padStart(3, "0")}/?utm_source=x` }
+        : {
+            canonical: `http://www.example.com/p${String(i).padStart(3, "0")}/?utm_source=x`,
+          }
     );
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
@@ -236,7 +260,10 @@ describe("core/canonical-form-drift — validity belongs to core/canonical", () 
   });
 
   test("unparseable canonicals are not drift", async () => {
-    const specs = [...uniform(12, healthy), ...uniform(6, () => "https://[not a url")];
+    const specs = [
+      ...uniform(12, healthy),
+      ...uniform(6, () => "https://[not a url"),
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
     expect(check.details?.judgedPages).toBe(12);
@@ -271,14 +298,19 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
   test("a consistently param-bearing form is a form, not drift", async () => {
     // Every canonical keeps the same tracking parameter. Ugly, but the site is
     // not contradicting itself, and this rule only reports contradictions.
-    const check = await bothPaths(uniform(30, (i) => `${url(i)}?utm_source=newsletter`));
+    const check = await bothPaths(
+      uniform(30, (i) => `${url(i)}?utm_source=newsletter`)
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toContain("tracking params tracking params retained");
   });
 
   test("a consistently www + trailing-slash site is clean", async () => {
     const check = await bothPaths(
-      uniform(30, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}/`)
+      uniform(
+        30,
+        (i) => `https://www.example.com/p${String(i).padStart(3, "0")}/`
+      )
     );
     expect(check.status).toBe("pass");
     expect(check.message).toContain("host www");
@@ -289,15 +321,21 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     // "/" and "/feed.xml" have no trailing-slash choice to make, so they must not
     // be counted as deviants of a site that otherwise uses trailing slashes.
     const specs = [
-      ...uniform(12, (i) => `https://example.com/p${String(i).padStart(3, "0")}/`),
+      ...uniform(
+        12,
+        (i) => `https://example.com/p${String(i).padStart(3, "0")}/`
+      ),
       { url: "https://example.com/", canonical: "https://example.com/" },
-      { url: "https://example.com/feed.xml", canonical: "https://example.com/feed.xml" },
+      {
+        url: "https://example.com/feed.xml",
+        canonical: "https://example.com/feed.xml",
+      },
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
-    const slashNorm = (check.details?.norms as { dimension: string; pages: number }[]).find(
-      (n) => n.dimension === "trailing slash"
-    );
+    const slashNorm = (
+      check.details?.norms as { dimension: string; pages: number }[]
+    ).find((n) => n.dimension === "trailing slash");
     expect(slashNorm?.pages).toBe(12);
   });
 
@@ -318,7 +356,13 @@ describe("core/canonical-form-drift — template-uniform pages sit inside the no
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
     expect(
-      (check.details?.norms as { dimension: string; scope: string; form: string }[])
+      (
+        check.details?.norms as {
+          dimension: string;
+          scope: string;
+          form: string;
+        }[]
+      )
         .filter((n) => n.dimension === "trailing slash")
         .map((n) => [n.scope, n.form])
     ).toEqual([
@@ -378,7 +422,11 @@ describe("core/canonical-form-drift — drift", () => {
 
   test("catches www drift against an apex norm", async () => {
     const check = await bothPaths(
-      mostly(30, 4, (i) => `https://www.example.com/p${String(i).padStart(3, "0")}`)
+      mostly(
+        30,
+        4,
+        (i) => `https://www.example.com/p${String(i).padStart(3, "0")}`
+      )
     );
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.meta?.dimension).toBe("host");
@@ -395,7 +443,9 @@ describe("core/canonical-form-drift — drift", () => {
   });
 
   test("catches tracking parameters retained on a minority of canonicals", async () => {
-    const check = await bothPaths(mostly(30, 4, (i) => `${url(i)}?utm_campaign=spring`));
+    const check = await bothPaths(
+      mostly(30, 4, (i) => `${url(i)}?utm_campaign=spring`)
+    );
     expect(check.status).toBe("warn");
     expect(check.items?.[0]?.meta?.dimension).toBe("tracking params");
     expect(check.items?.[0]?.meta?.deviant).toBe("tracking params retained");
@@ -427,7 +477,11 @@ describe("core/canonical-form-drift — drift", () => {
 
   test("a page drifting on two axes counts once toward the drifted share", async () => {
     const check = await bothPaths(
-      mostly(30, 4, (i) => `http://www.example.com/p${String(i).padStart(3, "0")}`)
+      mostly(
+        30,
+        4,
+        (i) => `http://www.example.com/p${String(i).padStart(3, "0")}`
+      )
     );
     // Two drifts reported (scheme + host), but 4 drifted pages, not 8.
     expect(check.items).toHaveLength(2);
@@ -438,7 +492,10 @@ describe("core/canonical-form-drift — drift", () => {
   test("reports the widest drift first", async () => {
     const specs = Array.from({ length: 40 }, (_, i) => {
       if (i >= 34) return { canonical: `${url(i)}/` }; // 6 slash drifts
-      if (i >= 32) return { canonical: `http://example.com/p${String(i).padStart(3, "0")}` }; // 2 scheme drifts
+      if (i >= 32)
+        return {
+          canonical: `http://example.com/p${String(i).padStart(3, "0")}`,
+        }; // 2 scheme drifts
       return { canonical: healthy(i) };
     });
     const check = await bothPaths(specs);

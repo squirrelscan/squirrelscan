@@ -84,7 +84,7 @@ export function stripControlCharsPreservingSgr(text: string): string {
  */
 const UNSAFE_LINE_TEXT = new RegExp(
   "[\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]",
-  "g",
+  "g"
 );
 
 /**
@@ -114,13 +114,15 @@ const INVISIBLE_TEXT = new RegExp(INVISIBLE_SOURCE, "gu");
  * terminal prints and does not run.
  */
 export function stripUnsafeLineText(text: string, replacement = " "): string {
-  return text.replace(INVISIBLE_TEXT, "").replace(UNSAFE_LINE_TEXT, replacement);
+  return text
+    .replace(INVISIBLE_TEXT, "")
+    .replace(UNSAFE_LINE_TEXT, replacement);
 }
 
 /** Every character {@link stripUnsafeLineText} acts on, plus the joiners it leaves: what JSON output escapes. */
 const JSON_UNSAFE = new RegExp(
   `${INVISIBLE_SOURCE.slice(0, -1)}\\u007f-\\u009f\\u061c\\u200c-\\u200f\\u2028-\\u202e\\u2066-\\u2069]`,
-  "gu",
+  "gu"
 );
 
 /**

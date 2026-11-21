@@ -1,11 +1,19 @@
 // crawl/noindex-in-sitemap - Noindexed pages shouldn't be in sitemap
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { RobotsTxtData, SitemapDiscovery, SiteQuery } from "@squirrelscan/core-contracts";
+import type {
+  RobotsTxtData,
+  SitemapDiscovery,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
 import { isPageIndexable } from "@squirrelscan/utils";
 
-import { evaluateIndexSignals, type IndexSignalPage } from "./conflicting-index-signals";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  evaluateIndexSignals,
+  type IndexSignalPage,
+} from "./conflicting-index-signals";
 
 function collectSitemapUrls(sitemaps: SitemapDiscovery): Set<string> {
   const sitemapUrls = new Set<string>();
@@ -20,7 +28,10 @@ function collectSitemapUrls(sitemaps: SitemapDiscovery): Set<string> {
 // Shared output builder — identical CheckResult given the same collected list.
 // `consolidated` are the noindexed pages that crawl/conflicting-index-signals also reports (three or more
 // contradictory signals): this finding stays (it is true on its own) and points at the combined one.
-function buildCheck(noindexInSitemap: string[], consolidated: ReadonlySet<string>): CheckResult {
+function buildCheck(
+  noindexInSitemap: string[],
+  consolidated: ReadonlySet<string>
+): CheckResult {
   if (noindexInSitemap.length > 0) {
     const pointers = noindexInSitemap.filter((u) => consolidated.has(u));
     return {
@@ -50,16 +61,18 @@ function buildCheck(noindexInSitemap: string[], consolidated: ReadonlySet<string
 function consolidatedPages(
   rows: readonly IndexSignalPage[],
   sitemapUrls: ReadonlySet<string>,
-  robotsTxt: RobotsTxtData | null | undefined,
+  robotsTxt: RobotsTxtData | null | undefined
 ): Set<string> {
   const verdict = evaluateIndexSignals(rows, sitemapUrls, robotsTxt);
-  return new Set(verdict.kind === "conflicts" ? verdict.pages.map((p) => p.url) : []);
+  return new Set(
+    verdict.kind === "conflicts" ? verdict.pages.map((p) => p.url) : []
+  );
 }
 
 async function runViaSiteQuery(
   siteQuery: SiteQuery,
   sitemaps: SitemapDiscovery,
-  robotsTxt: RobotsTxtData | null | undefined,
+  robotsTxt: RobotsTxtData | null | undefined
 ): Promise<RuleResult> {
   const sitemapUrls = collectSitemapUrls(sitemaps);
   const noindexInSitemap: string[] = [];
@@ -78,7 +91,12 @@ async function runViaSiteQuery(
     }
   }
   return {
-    checks: [buildCheck(noindexInSitemap, consolidatedPages(signalRows, sitemapUrls, robotsTxt))],
+    checks: [
+      buildCheck(
+        noindexInSitemap,
+        consolidatedPages(signalRows, sitemapUrls, robotsTxt)
+      ),
+    ],
   };
 }
 
@@ -155,7 +173,7 @@ export const noindexInSitemapRule: Rule = {
       checks: [
         buildCheck(
           noindexInSitemap,
-          consolidatedPages(signalRows, sitemapUrls, ctx.site?.robotsTxt),
+          consolidatedPages(signalRows, sitemapUrls, ctx.site?.robotsTxt)
         ),
       ],
     };

@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -54,7 +55,10 @@ describe("renderJson failed/blocked status (#801)", () => {
                   name: "no-public-form",
                   status: "info",
                   message: "No public forms were observed",
-                  observation: { mode: "static", applicability: "not-applicable" },
+                  observation: {
+                    mode: "static",
+                    applicability: "not-applicable",
+                  },
                 },
               ],
             },
@@ -83,8 +87,8 @@ describe("renderJson failed/blocked status (#801)", () => {
               ],
             },
           },
-        }),
-      ),
+        })
+      )
     );
     expect(parsed.issues[0].checks[0].observation).toEqual({
       mode: "static",
@@ -107,13 +111,14 @@ describe("renderJson failed/blocked status (#801)", () => {
       renderJson(
         baseReport({
           status: "blocked",
-          statusReason: "Site blocked the crawler (bot protection / auth / rate limit)",
-        }),
-      ),
+          statusReason:
+            "Site blocked the crawler (bot protection / auth / rate limit)",
+        })
+      )
     );
     expect(parsed.status).toBe("blocked");
     expect(parsed.statusReason).toBe(
-      "Site blocked the crawler (bot protection / auth / rate limit)",
+      "Site blocked the crawler (bot protection / auth / rate limit)"
     );
     // A blocked run must not masquerade as a scored clean pass.
     expect(parsed.score.overall).toBeNull();
@@ -122,20 +127,35 @@ describe("renderJson failed/blocked status (#801)", () => {
 
   test("failed (unreachable) report serializes status + statusReason", () => {
     const parsed = JSON.parse(
-      renderJson(baseReport({ status: "failed", statusReason: "No pages were crawled" })),
+      renderJson(
+        baseReport({ status: "failed", statusReason: "No pages were crawled" })
+      )
     );
     expect(parsed.status).toBe("failed");
     expect(parsed.statusReason).toBe("No pages were crawled");
   });
 
   test("completed report: explicit status, no statusReason, shape otherwise unchanged", () => {
-    const parsed = JSON.parse(renderJson(baseReport({ totalPages: 5, passed: 10 })));
+    const parsed = JSON.parse(
+      renderJson(baseReport({ totalPages: 5, passed: 10 }))
+    );
     // status absent on the core report ⇒ explicit "completed" for consumers.
     expect(parsed.status).toBe("completed");
     expect("statusReason" in parsed).toBe(false);
     // Additive: the pre-#801 top-level keys are all still present.
-    expect(Object.keys(parsed)).toEqual(["meta", "status", "score", "summary", "issues"]);
+    expect(Object.keys(parsed)).toEqual([
+      "meta",
+      "status",
+      "score",
+      "summary",
+      "issues",
+    ]);
     // #518: `summary` gains `skipped` (0 with no skips); the rest keep their names.
-    expect(parsed.summary).toEqual({ passed: 10, warnings: 0, failed: 0, skipped: 0 });
+    expect(parsed.summary).toEqual({
+      passed: 10,
+      warnings: 0,
+      failed: 0,
+      skipped: 0,
+    });
   });
 });

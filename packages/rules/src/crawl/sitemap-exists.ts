@@ -51,7 +51,8 @@ export const sitemapExistsRule: Rule = {
       checks.push({
         name: "sitemap-exists",
         status: "info",
-        message: "Sitemap discovery did not complete, so no sitemap check was made",
+        message:
+          "Sitemap discovery did not complete, so no sitemap check was made",
         value: "Not all candidate locations were reached",
       });
       return { checks };
@@ -61,7 +62,9 @@ export const sitemapExistsRule: Rule = {
     // robots.txt names it or a sitemap on the site redirects there (#819), so with nothing found on the site itself it did not look:
     // "No XML sitemap found" would be a false statement about a site that
     // points at a sitemap it keeps elsewhere.
-    const offSite = (sitemaps.failed ?? []).filter((f) => f.error === SITEMAP_OFF_SITE_SKIPPED_ERROR);
+    const offSite = (sitemaps.failed ?? []).filter(
+      (f) => f.error === SITEMAP_OFF_SITE_SKIPPED_ERROR
+    );
     if (sitemaps.discovered.length === 0 && offSite.length > 0) {
       checks.push({
         name: "sitemap-exists",

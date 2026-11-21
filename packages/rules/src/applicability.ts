@@ -22,7 +22,8 @@ import type { RuleApplicability } from "./types";
  * returns `{ applies: true }` regardless of declaration (mitigates the
  * "misclassification silently suppresses real issues" risk).
  */
-export const APPLICABILITY_MIN_CONFIDENCE: SiteMetadata["confidence"] = "medium";
+export const APPLICABILITY_MIN_CONFIDENCE: SiteMetadata["confidence"] =
+  "medium";
 
 /** Confidence ordering — used to compare against the min threshold. */
 const CONFIDENCE_RANK: Record<SiteMetadata["confidence"], number> = {
@@ -31,7 +32,9 @@ const CONFIDENCE_RANK: Record<SiteMetadata["confidence"], number> = {
   high: 2,
 };
 
-export type ApplicabilityVerdict = { applies: true } | { applies: false; reason: string };
+export type ApplicabilityVerdict =
+  | { applies: true }
+  | { applies: false; reason: string };
 
 /**
  * Decide whether a rule with the given `appliesWhen` declaration applies to the
@@ -39,7 +42,7 @@ export type ApplicabilityVerdict = { applies: true } | { applies: false; reason:
  */
 export function ruleApplies(
   appliesWhen: RuleApplicability | undefined,
-  meta: SiteMetadata | undefined,
+  meta: SiteMetadata | undefined
 ): ApplicabilityVerdict {
   // No declaration → always applies (safety rules + unannotated rules).
   if (!appliesWhen) return { applies: true };
@@ -48,13 +51,19 @@ export function ruleApplies(
   if (!meta) return { applies: true };
 
   // Don't gate on a low-confidence classification.
-  if (CONFIDENCE_RANK[meta.confidence] < CONFIDENCE_RANK[APPLICABILITY_MIN_CONFIDENCE]) {
+  if (
+    CONFIDENCE_RANK[meta.confidence] <
+    CONFIDENCE_RANK[APPLICABILITY_MIN_CONFIDENCE]
+  ) {
     return { applies: true };
   }
 
   // Boolean requirements — gate when the flag is required but the site lacks it.
   if (appliesWhen.requiresYMYL && !meta.isYMYL) {
-    return { applies: false, reason: "site is not Your-Money-or-Your-Life (YMYL)" };
+    return {
+      applies: false,
+      reason: "site is not Your-Money-or-Your-Life (YMYL)",
+    };
   }
   if (appliesWhen.requiresLocalBusiness && !meta.isLocalBusiness) {
     return { applies: false, reason: "site is not a local business" };
@@ -75,7 +84,10 @@ export function ruleApplies(
     meta.businessCategory &&
     !appliesWhen.businessCategories.includes(meta.businessCategory)
   ) {
-    return { applies: false, reason: `business category is "${meta.businessCategory}"` };
+    return {
+      applies: false,
+      reason: `business category is "${meta.businessCategory}"`,
+    };
   }
 
   // Country — only gate when a primary country is known and it's excluded.
@@ -84,7 +96,10 @@ export function ruleApplies(
     meta.primaryCountry &&
     !appliesWhen.countries.includes(meta.primaryCountry)
   ) {
-    return { applies: false, reason: `primary country is "${meta.primaryCountry}"` };
+    return {
+      applies: false,
+      reason: `primary country is "${meta.primaryCountry}"`,
+    };
   }
 
   // Audience — gate when declared and there is NO overlap with the site's

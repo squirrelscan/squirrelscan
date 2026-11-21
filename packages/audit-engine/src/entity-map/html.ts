@@ -6,6 +6,8 @@
 //
 // One self-contained file: no network requests, no CDN, no build step.
 
+import type { EntityMap } from "@squirrelscan/core-contracts/entity-map";
+
 // Subpath, not the package root: the root re-exports the JSX report renderer
 // and this package does not compile with `--jsx`.
 import {
@@ -14,7 +16,6 @@ import {
   entityViewerMarkup,
   entityViewerScript,
 } from "@squirrelscan/report/entities-viewer";
-import type { EntityMap } from "@squirrelscan/core-contracts/entity-map";
 
 function escapeHtml(value: string): string {
   return value

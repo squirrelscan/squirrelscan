@@ -2,15 +2,19 @@
 // injectable page fetcher; globalThis.fetch is stubbed (robots.txt answers, everything else 404) so any
 // request the crawl makes outside the fetcher is recorded and can be asserted absent.
 
+import { MAX_TARGET_URLS } from "@squirrelscan/core-contracts/limits";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { MAX_TARGET_URLS } from "@squirrelscan/core-contracts/limits";
+import type { CrawlerConfig } from "../src/core/types";
+import type {
+  RedirectChain,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "../src/storage/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig } from "../src/core/types";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import type { RedirectChain, ResponseHeaders, SecurityHeaders } from "../src/storage/types";
 
 const ORIGIN = "https://example.com";
 
@@ -69,7 +73,9 @@ function buildFetcher(site: Site, fetched: string[]): CrawlFetcher {
       const body = page?.body ?? "";
       yield* applyStatusGuards(url, status, new Headers(), body);
       const finalUrl = page?.redirectTo ?? url;
-      const destinationBody = page?.redirectTo ? (site[page.redirectTo]?.body ?? "") : body;
+      const destinationBody = page?.redirectTo
+        ? (site[page.redirectTo]?.body ?? "")
+        : body;
       return {
         url,
         finalUrl,
@@ -77,7 +83,11 @@ function buildFetcher(site: Site, fetched: string[]): CrawlFetcher {
         loadTime: 1,
         ttfb: 1,
         downloadTime: 1,
-        headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html", setCookie: null },
+        headers: {
+          ...EMPTY_RESPONSE_HEADERS,
+          contentType: "text/html",
+          setCookie: null,
+        },
         securityHeaders: EMPTY_SECURITY_HEADERS,
         contentType: "text/html",
         body: destinationBody,
@@ -92,8 +102,13 @@ const page = (...paths: string[]): string =>
 
 /** A 20 page site: / links to /p/1 .. /p/19, and /redir redirects to /p/5. */
 function bigSite(): Site {
-  const site: Site = { [`${ORIGIN}/`]: { body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)) } };
-  for (let i = 1; i <= 19; i++) site[`${ORIGIN}/p/${i}`] = { body: page("/p/1", "/p/2") };
+  const site: Site = {
+    [`${ORIGIN}/`]: {
+      body: page(...Array.from({ length: 19 }, (_, i) => `/p/${i + 1}`)),
+    },
+  };
+  for (let i = 1; i <= 19; i++)
+    site[`${ORIGIN}/p/${i}`] = { body: page("/p/1", "/p/2") };
   site[`${ORIGIN}/redir`] = { redirectTo: `${ORIGIN}/p/5` };
   site[`${ORIGIN}/redir-away`] = { redirectTo: `${ORIGIN}/p/6` };
   return site;
@@ -122,16 +137,28 @@ interface Result {
   fetched: string[];
   /** Every URL requested through global fetch (robots.txt, sitemaps, probes). */
   other: string[];
-  frontier: Array<{ url: string; status: string; reason?: string; parent?: string }>;
+  frontier: Array<{
+    url: string;
+    status: string;
+    reason?: string;
+    parent?: string;
+  }>;
   stats: Record<string, unknown>;
 }
 
-async function run(config: Partial<CrawlerConfig>, site: Site, other: string[]): Promise<Result> {
+async function run(
+  config: Partial<CrawlerConfig>,
+  site: Site,
+  other: string[]
+): Promise<Result> {
   const fetched: string[] = [];
   const fetcher = buildFetcher(site, fetched);
   return Effect.runPromise(
     Effect.gen(function* () {
-      const crawler = yield* createCrawler({ fetcher, config: { ...BASE_CONFIG, ...config } });
+      const crawler = yield* createCrawler({
+        fetcher,
+        config: { ...BASE_CONFIG, ...config },
+      });
       const crawlId = yield* crawler.start(ORIGIN);
       const entries = yield* crawler.storage.getAllFrontierEntries(crawlId);
       const crawl = yield* crawler.storage.getCrawl(crawlId);
@@ -146,7 +173,7 @@ async function run(config: Partial<CrawlerConfig>, site: Site, other: string[]):
         })),
         stats: (crawl?.stats ?? {}) as Record<string, unknown>,
       };
-    }),
+    })
   );
 }
 
@@ -183,9 +210,13 @@ describe("targetUrls (#1777)", () => {
     const r = await run(
       { targetUrls: [`${ORIGIN}/p/1`, `${ORIGIN}/p/2`, `${ORIGIN}/p/3`] },
       bigSite(),
-      other,
+      other
     );
-    expect(r.fetched.sort()).toEqual([`${ORIGIN}/p/1`, `${ORIGIN}/p/2`, `${ORIGIN}/p/3`]);
+    expect(r.fetched.sort()).toEqual([
+      `${ORIGIN}/p/1`,
+      `${ORIGIN}/p/2`,
+      `${ORIGIN}/p/3`,
+    ]);
     // Outside the pages the crawl asks for robots.txt (honoured) and nothing else: not the start URL, no
     // sitemap, no discovery probe (llms.txt, well-known, ...).
     expect(other).toEqual([`${ORIGIN}/robots.txt`]);
@@ -200,7 +231,11 @@ describe("targetUrls (#1777)", () => {
   });
 
   test("a relative target resolves against the site; a duplicate is one", async () => {
-    const r = await run({ targetUrls: ["/p/1", `${ORIGIN}/p/1`, "/p/1/"] }, bigSite(), other);
+    const r = await run(
+      { targetUrls: ["/p/1", `${ORIGIN}/p/1`, "/p/1/"] },
+      bigSite(),
+      other
+    );
     expect(r.fetched).toContain(`${ORIGIN}/p/1`);
     expect(new Set(r.fetched).size).toBe(r.fetched.length);
   });
@@ -217,10 +252,14 @@ describe("targetUrls (#1777)", () => {
         ],
       },
       site,
-      other,
+      other
     );
     expect(r.fetched).toEqual([`${ORIGIN}/p/1`]);
-    const reasons = Object.fromEntries(r.frontier.filter((f) => f.status === "skipped").map((f) => [f.url, f.reason]));
+    const reasons = Object.fromEntries(
+      r.frontier
+        .filter((f) => f.status === "skipped")
+        .map((f) => [f.url, f.reason])
+    );
     expect(reasons[`${ORIGIN}/private/x`]).toBe("robots_disallowed");
     expect(Object.values(reasons)).toContain("invalid_url");
     // The off-site URL carries the scope reason.
@@ -231,28 +270,56 @@ describe("targetUrls (#1777)", () => {
     const targets = [1, 2, 3, 4, 5].map((i) => `${ORIGIN}/p/${i}`);
     const r = await run({ targetUrls: targets, maxPages: 2 }, bigSite(), other);
     expect(r.fetched).toEqual([`${ORIGIN}/p/1`, `${ORIGIN}/p/2`]);
-    const over = r.frontier.filter((f) => f.reason === "over_max_pages").map((f) => f.url);
-    expect(over.sort()).toEqual([`${ORIGIN}/p/3`, `${ORIGIN}/p/4`, `${ORIGIN}/p/5`]);
+    const over = r.frontier
+      .filter((f) => f.reason === "over_max_pages")
+      .map((f) => f.url);
+    expect(over.sort()).toEqual([
+      `${ORIGIN}/p/3`,
+      `${ORIGIN}/p/4`,
+      `${ORIGIN}/p/5`,
+    ]);
   });
 
   test("a redirecting target is a redirect; its destination is audited only when it is listed too", async () => {
     // /redir -> /p/5 (also listed): both fetched, /p/5 once. /redir-away -> /p/6 (not listed): not followed.
     const r = await run(
-      { targetUrls: [`${ORIGIN}/redir`, `${ORIGIN}/p/5`, `${ORIGIN}/redir-away`] },
+      {
+        targetUrls: [
+          `${ORIGIN}/redir`,
+          `${ORIGIN}/p/5`,
+          `${ORIGIN}/redir-away`,
+        ],
+      },
       bigSite(),
-      other,
+      other
     );
-    expect(r.fetched.sort()).toEqual([`${ORIGIN}/p/5`, `${ORIGIN}/redir`, `${ORIGIN}/redir-away`]);
+    expect(r.fetched.sort()).toEqual([
+      `${ORIGIN}/p/5`,
+      `${ORIGIN}/redir`,
+      `${ORIGIN}/redir-away`,
+    ]);
     expect(r.fetched).not.toContain(`${ORIGIN}/p/6`);
-    const skipped = r.frontier.find((f) => f.reason === "redirect_not_targeted");
-    expect(skipped).toMatchObject({ url: `${ORIGIN}/p/6`, parent: `${ORIGIN}/redir-away` });
+    const skipped = r.frontier.find(
+      (f) => f.reason === "redirect_not_targeted"
+    );
+    expect(skipped).toMatchObject({
+      url: `${ORIGIN}/p/6`,
+      parent: `${ORIGIN}/redir-away`,
+    });
   });
 
   test("the list is bounded: the excess is a count, not frontier rows, and an oversize raw URL is skipped unnormalised", async () => {
-    const targets = Array.from({ length: MAX_TARGET_URLS + 5 }, (_, i) => `${ORIGIN}/p/${(i % 19) + 1}?n=${i}`);
+    const targets = Array.from(
+      { length: MAX_TARGET_URLS + 5 },
+      (_, i) => `${ORIGIN}/p/${(i % 19) + 1}?n=${i}`
+    );
     // The oversize value goes first so it is inside the bounded part.
     const huge = `${ORIGIN}/${"x".repeat(5000)}`;
-    const r = await run({ targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] }, bigSite(), other);
+    const r = await run(
+      { targetUrls: [huge, ...targets], maxPages: 3, allowQueryParams: ["n"] },
+      bigSite(),
+      other
+    );
     expect(r.stats.targetsOverLimit).toBe(6);
     // Rows: at most MAX_TARGET_URLS, and the oversize one is stored cut short with its reason.
     expect(r.frontier.length).toBeLessThanOrEqual(MAX_TARGET_URLS);
@@ -264,7 +331,11 @@ describe("targetUrls (#1777)", () => {
 
   test("two oversize targets with the same prefix are two rows, not one", async () => {
     const prefix = `${ORIGIN}/${"y".repeat(3000)}`;
-    const r = await run({ targetUrls: [`${prefix}a`, `${prefix}b`, `${ORIGIN}/p/1`] }, bigSite(), other);
+    const r = await run(
+      { targetUrls: [`${prefix}a`, `${prefix}b`, `${ORIGIN}/p/1`] },
+      bigSite(),
+      other
+    );
     const tooLong = r.frontier.filter((f) => f.reason === "url_too_long");
     expect(tooLong).toHaveLength(2);
     expect(new Set(tooLong.map((f) => f.url)).size).toBe(2);
@@ -273,13 +344,21 @@ describe("targetUrls (#1777)", () => {
 
   test("a Cloudflare email-protection URL given as a target is a skipped row with a reason, not dropped", async () => {
     const r = await run(
-      { targetUrls: [`${ORIGIN}/cdn-cgi/l/email-protection#abc123`, `${ORIGIN}/p/1`] },
+      {
+        targetUrls: [
+          `${ORIGIN}/cdn-cgi/l/email-protection#abc123`,
+          `${ORIGIN}/p/1`,
+        ],
+      },
       bigSite(),
-      other,
+      other
     );
     expect(r.fetched).toEqual([`${ORIGIN}/p/1`]);
     const row = r.frontier.find((f) => f.url.includes("email-protection"));
-    expect(row).toMatchObject({ status: "skipped", reason: "email_protection" });
+    expect(row).toMatchObject({
+      status: "skipped",
+      reason: "email_protection",
+    });
   });
 
   test("without targetUrls the same crawl follows links and reads the sitemap as ever", async () => {

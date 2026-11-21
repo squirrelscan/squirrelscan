@@ -72,7 +72,11 @@ export const TEMPLATES: Template[] = [
  * key reads lives here: stylesheet hrefs, asset hosts, body classes, CSS custom
  * properties, nav and footer presence.
  */
-export function chrome(t: Template): { head: string; nav: string; foot: string } {
+export function chrome(t: Template): {
+  head: string;
+  nav: string;
+  foot: string;
+} {
   return {
     head:
       `<meta charset="utf-8">` +
@@ -111,17 +115,19 @@ export function body(t: Template, n: number): string {
     { length: n + 1 },
     (_, i) =>
       `<p>Paragraph ${i + 1} of the ${t.id} page number ${n}. ` +
-      "It carries enough prose that word count, reading level and text-to-html ratio move with n. ".repeat(n) +
-      "</p>",
+      "It carries enough prose that word count, reading level and text-to-html ratio move with n. ".repeat(
+        n
+      ) +
+      "</p>"
   ).join("");
   const images = Array.from({ length: n }, (_, i) =>
     i === 0 && n % 3 === 0
       ? `<img src="https://${t.imageHost}/${t.id}-${n}-${i}.jpg" width="800" height="600">`
-      : `<img src="https://${t.imageHost}/${t.id}-${n}-${i}.jpg" width="800" height="600" alt="${t.id} view ${i}">`,
+      : `<img src="https://${t.imageHost}/${t.id}-${n}-${i}.jpg" width="800" height="600" alt="${t.id} view ${i}">`
   ).join("");
   const links = Array.from(
     { length: n },
-    (_, i) => `<a href="/${t.id}/related-${i}">Related ${i}</a>`,
+    (_, i) => `<a href="/${t.id}/related-${i}">Related ${i}</a>`
   ).join(" ");
   const jsonLd = JSON.stringify({
     "@context": "https://schema.org",
@@ -176,7 +182,7 @@ export const CORPUS: Fixture[] = [
     (t.id === "landing" ? [1, 2, 3] : [1, 2, 3, 4]).map((n) => ({
       url: `${ORIGIN}/${t.id}/${n}`,
       html: pageHtml(t, n),
-    })),
+    }))
   ),
   { url: `${ORIGIN}/contact`, html: singletonHtml("contact") },
   { url: `${ORIGIN}/status`, html: singletonHtml("status") },

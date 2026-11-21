@@ -8,19 +8,21 @@ describe("stripUnsafeLineText", () => {
   test("removes C0, DEL, C1, bidi overrides and line separators; keeps ordinary text", () => {
     const hostile = `a${ESC}[2Jb\u009b31mc\u202ed\u2066e\u2069f\u2028g\u2029h\u007fi\u061cj\u200ek`;
     expect(stripUnsafeLineText(hostile, "")).toBe("a[2Jb31mcdefghijk");
-    expect(stripUnsafeLineText("plain text, with punctuation and \u00e9\u4e2d\u6587")).toBe(
-      "plain text, with punctuation and \u00e9\u4e2d\u6587",
-    );
+    expect(
+      stripUnsafeLineText("plain text, with punctuation and \u00e9\u4e2d\u6587")
+    ).toBe("plain text, with punctuation and \u00e9\u4e2d\u6587");
   });
 
   test("a newline, CR or tab becomes a space, so words stay apart and the value is one line", () => {
-    expect(stripUnsafeLineText("one\ntwo\r\nthree\tfour")).toBe("one two  three four");
+    expect(stripUnsafeLineText("one\ntwo\r\nthree\tfour")).toBe(
+      "one two  three four"
+    );
   });
 
   test("OSC 8 hyperlink and clear-screen sequences lose their ESC, so they are inert text", () => {
     const out = stripUnsafeLineText(
       `${ESC}]8;;https://evil.example${ESC}\\label${ESC}]8;;${ESC}\\${ESC}[2J${ESC}[1;1H`,
-      "",
+      ""
     );
     expect(out).not.toContain(ESC);
     expect(out).toBe("]8;;https://evil.example\\label]8;;\\[2J[1;1H");
@@ -28,10 +30,12 @@ describe("stripUnsafeLineText", () => {
 
   test("removes invisible characters without splitting the word, and keeps joiners that scripts need", () => {
     const tag = String.fromCodePoint(0xe0041, 0xe0042);
-    expect(stripUnsafeLineText(`a\u200bb\u2060c\ufeffd\u00ade${tag}f\u180eg`)).toBe("abcdefg");
-    expect(stripUnsafeLineText("\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645")).toBe(
-      "\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645",
-    );
+    expect(
+      stripUnsafeLineText(`a\u200bb\u2060c\ufeffd\u00ade${tag}f\u180eg`)
+    ).toBe("abcdefg");
+    expect(
+      stripUnsafeLineText("\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645")
+    ).toBe("\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645");
   });
 });
 
@@ -82,14 +86,14 @@ describe("stripUnsafeLineText leaves nothing that acts on a terminal or hides te
     expect(lost).toEqual([]);
     for (const cp of KEPT)
       expect(stripUnsafeLineText(`a${String.fromCodePoint(cp)}b`)).toContain(
-        String.fromCodePoint(cp),
+        String.fromCodePoint(cp)
       );
   });
 
   test("the replacement form leaves no banned character either", () => {
     for (let cp = 0; cp <= 0x9f; cp++)
       expect(stripUnsafeLineText(String.fromCodePoint(cp), "?")).toMatch(
-        /^[?]?$|^[\u0020-\u007e]$/,
+        /^[?]?$|^[\u0020-\u007e]$/
       );
   });
 
@@ -108,7 +112,9 @@ describe("stripUnsafeLineText leaves nothing that acts on a terminal or hides te
     ];
     for (const input of inputs) {
       const once = stripUnsafeLineText(input, "");
-      expect([...once].some((ch) => inRanges(ch.codePointAt(0)!, BANNED))).toBe(false);
+      expect([...once].some((ch) => inRanges(ch.codePointAt(0)!, BANNED))).toBe(
+        false
+      );
       // Idempotent: a second pass finds nothing the first one made.
       expect(stripUnsafeLineText(once, "")).toBe(once);
       expect(stripUnsafeLineText(input)).not.toContain(ESC);
@@ -149,7 +155,9 @@ describe("escapeJsonUnsafe", () => {
   });
 
   test("ordinary text, emoji and CJK are left as they are", () => {
-    const text = JSON.stringify({ v: "caf\u00e9 \u4e2d\u6587 \u{1f600} \u2764\ufe0f ok" });
+    const text = JSON.stringify({
+      v: "caf\u00e9 \u4e2d\u6587 \u{1f600} \u2764\ufe0f ok",
+    });
     expect(escapeJsonUnsafe(text)).toContain("\u00e9");
     expect(escapeJsonUnsafe(text)).toContain("\u{1f600}");
     expect(escapeJsonUnsafe(text)).toContain("\ufe0f");

@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -25,8 +26,11 @@ function countOccurrences(haystack: string, needle: string): number {
 
 describe("renderHtml failed/blocked statusReason (#802)", () => {
   test("blocked report renders the reason exactly once (FailureNotice)", () => {
-    const reason = "Site blocked the crawler (bot protection / auth / rate limit)";
-    const html = renderHtml(baseReport({ status: "blocked", statusReason: reason }));
+    const reason =
+      "Site blocked the crawler (bot protection / auth / rate limit)";
+    const html = renderHtml(
+      baseReport({ status: "blocked", statusReason: reason })
+    );
     expect(countOccurrences(html, reason)).toBe(1);
     // The ring slot keeps its label; the notice carries the explanation.
     expect(html).toContain("Blocked");
@@ -35,7 +39,9 @@ describe("renderHtml failed/blocked statusReason (#802)", () => {
 
   test("failed report renders the reason exactly once", () => {
     const reason = "No pages were crawled";
-    const html = renderHtml(baseReport({ status: "failed", statusReason: reason }));
+    const html = renderHtml(
+      baseReport({ status: "failed", statusReason: reason })
+    );
     expect(countOccurrences(html, reason)).toBe(1);
     expect(html).toContain("We couldn&#x27;t audit your site");
   });
@@ -48,22 +54,24 @@ describe("renderHtml failed/blocked statusReason (#802)", () => {
   test("blocked report keeps the CLI hint as the ul's 3rd item, verbatim", () => {
     const html = renderHtml(baseReport({ status: "blocked" }));
     expect(html).toContain(
-      "<li>Allowlist the squirrelscan crawler in your WAF or bot protection.</li>",
+      "<li>Allowlist the squirrelscan crawler in your WAF or bot protection.</li>"
     );
     expect(html).toContain(
-      "<li>Turn off bot fight mode (or the blocking rule) for the audit.</li>",
+      "<li>Turn off bot fight mode (or the blocking rule) for the audit.</li>"
     );
     expect(html).toMatch(
-      /<li>Run the audit from a trusted network with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\.<\/li>/,
+      /<li>Run the audit from a trusted network with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\.<\/li>/
     );
     // Exactly 3 items in the failure-notice list — no separate CLI paragraph.
-    expect(countOccurrences(html, "<li>Run the audit from a trusted network")).toBe(1);
+    expect(
+      countOccurrences(html, "<li>Run the audit from a trusted network")
+    ).toBe(1);
   });
 
   test("failed report merges the CLI hint into the 2nd paragraph, verbatim", () => {
     const html = renderHtml(baseReport({ status: "failed" }));
     expect(html).toMatch(
-      /Check that the site is reachable and try again, or run it locally with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\./,
+      /Check that the site is reachable and try again, or run it locally with <code[^>]*>squirrel audit https:\/\/example\.com<\/code>\./
     );
   });
 });

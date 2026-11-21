@@ -3,14 +3,21 @@
 // the comparison set, any other site rule stays skipped with `targeted-run`, and without a comparison set
 // nothing changes.
 
+import type { Config } from "@squirrelscan/config";
+
+import {
+  TARGETED_RUN_SKIP_REASON,
+  type CheckResult,
+} from "@squirrelscan/core-contracts";
+import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { Config } from "@squirrelscan/config";
-import { TARGETED_RUN_SKIP_REASON, type CheckResult } from "@squirrelscan/core-contracts";
-import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -33,11 +40,12 @@ function serve(): { origin: string; hits: string[] } {
     fetch(req) {
       const { pathname } = new URL(req.url);
       hits.push(pathname);
-      if (pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n");
+      if (pathname === "/robots.txt")
+        return new Response("User-agent: *\nAllow: /\n");
       const desc = DESCRIPTIONS[pathname] ?? "";
       return new Response(
         `<!doctype html><html lang="en"><head><title>${pathname}</title><meta name="description" content="${desc}"></head><body><h1>Page</h1><a href="/p/9">more</a></body></html>`,
-        { headers: { "content-type": "text/html; charset=utf-8" } },
+        { headers: { "content-type": "text/html; charset=utf-8" } }
       );
     },
   });
@@ -47,7 +55,13 @@ function serve(): { origin: string; hits: string[] } {
 
 const CONFIG = {
   rule_options: {},
-  rules: { enable: ["content/duplicate-description", "links/click-depth", "crawl/schema-noindex-conflict"] },
+  rules: {
+    enable: [
+      "content/duplicate-description",
+      "links/click-depth",
+      "crawl/schema-noindex-conflict",
+    ],
+  },
   crawler: { max_pages: 50, exclude: [] },
   external_links: { enabled: false },
   internal_links: { enabled: false },
@@ -56,7 +70,7 @@ const CONFIG = {
 async function audit(
   engine: "v1" | "v2",
   targets: string[],
-  compare: string[] | undefined,
+  compare: string[] | undefined
 ) {
   const { origin, hits } = serve();
   const crawler = await Effect.runPromise(
@@ -73,11 +87,15 @@ async function audit(
         incremental: false,
         useCacheControl: false,
         targetUrls: targets.map((t) => `${origin}${t}`),
-        ...(compare ? { compareUrls: compare.map((t) => `${origin}${t}`) } : {}),
+        ...(compare
+          ? { compareUrls: compare.map((t) => `${origin}${t}`) }
+          : {}),
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const ran = await Effect.runPromise(
@@ -85,12 +103,23 @@ async function audit(
       const pre = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
       if (engine === "v1") {
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, pre.assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          pre.assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, CONFIG, pre.assets);
-    }) as Effect.Effect<{ ruleResultsMap: Map<string, { checks: CheckResult[] }> }, never, never>,
+    }) as Effect.Effect<
+      { ruleResultsMap: Map<string, { checks: CheckResult[] }> },
+      never,
+      never
+    >
   );
-  const checks = (id: string) => (ran.ruleResultsMap.get(id)?.checks ?? []) as CheckResult[];
+  const checks = (id: string) =>
+    (ran.ruleResultsMap.get(id)?.checks ?? []) as CheckResult[];
   return { hits, checks };
 }
 
@@ -100,7 +129,12 @@ for (const engine of ["v1", "v2"] as const) {
       // /p/2 is in both lists: one fetch. /p/5 is in neither: never fetched, never part of the cluster.
       const r = await audit(engine, ["/p/1", "/p/2"], ["/p/2", "/p/3"]);
 
-      expect([...r.hits].sort()).toEqual(["/p/1", "/p/2", "/p/3", "/robots.txt"]);
+      expect([...r.hits].sort()).toEqual([
+        "/p/1",
+        "/p/2",
+        "/p/3",
+        "/robots.txt",
+      ]);
 
       const dup = r.checks("content/duplicate-description");
       const fail = dup.find((c) => c.status === "warn");
@@ -110,19 +144,31 @@ for (const engine of ["v1", "v2"] as const) {
         .map((u) => new URL(u).pathname)
         .sort();
       expect(clusterPaths).toEqual(["/p/1", "/p/2"]);
-      expect(dup.some((c) => c.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(false);
+      expect(dup.some((c) => c.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(
+        false
+      );
 
       // A site rule that judges the whole site is not given the set: not checked, never a pass.
       const depth = r.checks("links/click-depth");
       expect(depth.length).toBeGreaterThan(0);
-      expect(depth.every((c) => c.status === "skipped" && c.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(true);
+      expect(
+        depth.every(
+          (c) =>
+            c.status === "skipped" && c.skipReason === TARGETED_RUN_SKIP_REASON
+        )
+      ).toBe(true);
     });
 
     test("without a comparison set the same rule is not checked, never clean", async () => {
       const r = await audit(engine, ["/p/1", "/p/2"], undefined);
       const dup = r.checks("content/duplicate-description");
       expect(dup.length).toBeGreaterThan(0);
-      expect(dup.every((c) => c.status === "skipped" && c.skipReason === TARGETED_RUN_SKIP_REASON)).toBe(true);
+      expect(
+        dup.every(
+          (c) =>
+            c.status === "skipped" && c.skipReason === TARGETED_RUN_SKIP_REASON
+        )
+      ).toBe(true);
     });
   });
 }

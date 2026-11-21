@@ -14,9 +14,9 @@ import type {
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
-import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
+
 import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
-import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   judgeSuperseded,
@@ -31,9 +31,11 @@ import {
   resolutionUrlHash,
   RESOLUTION_ANY_CHECK,
 } from "@squirrelscan/core-contracts/resolution";
+import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+
+import type { PageUrlSet } from "./scoring";
 
 import { findingFingerprint } from "./fingerprint";
-import type { PageUrlSet } from "./scoring";
 
 const EMPTY_HASHES: readonly string[] = [];
 
@@ -58,11 +60,17 @@ const EMPTY_HASHES: readonly string[] = [];
 function resolutionHashes(normalizedUrl: string): readonly string[] {
   const q = normalizedUrl.indexOf("?");
   if (q === -1) return [resolutionUrlHash(normalizedUrl)];
-  return [resolutionUrlHash(normalizedUrl), resolutionUrlHash(normalizedUrl.slice(0, q))];
+  return [
+    resolutionUrlHash(normalizedUrl),
+    resolutionUrlHash(normalizedUrl.slice(0, q)),
+  ];
 }
 
 /** True when `set` holds any of `hashes` (see {@link resolutionHashes}). */
-function hasAnyHash(set: Set<string> | undefined, hashes: readonly string[]): boolean {
+function hasAnyHash(
+  set: Set<string> | undefined,
+  hashes: readonly string[]
+): boolean {
   if (!set) return false;
   for (const h of hashes) {
     if (set.has(h)) return true;
@@ -288,7 +296,9 @@ export interface NotEvaluatedEvidence {
  * own. A folded aggregate names its pages in `pages` and, when clipped past its
  * cap, marks the whole check.
  */
-export function createNotEvaluatedCollector(normalize: (url: string) => string): {
+export function createNotEvaluatedCollector(
+  normalize: (url: string) => string
+): {
   add(ruleId: string, check: CheckResult, pageUrl?: string): void;
   result(): NotEvaluatedEvidence;
 } {
@@ -304,26 +314,37 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
       // merge has no resolution signal to carry for it, so the whole rule carries
       // on the pages it names (every page when it names none). A replayed row
       // (carried or unrendered) is an earlier run's, not this one's.
-      const replayed = check.provenance === "carried" || check.provenance === "unrendered";
-      const timedOut = check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
-      const thrown = check.status === "fail" && check.name === `${ruleId}-error`;
+      const replayed =
+        check.provenance === "carried" || check.provenance === "unrendered";
+      const timedOut =
+        check.status === "skipped" && isRuleWideGapSkipReason(check.skipReason);
+      const thrown =
+        check.status === "fail" && check.name === `${ruleId}-error`;
       if ((timedOut || thrown) && !replayed) {
         const at = check.pageUrl ?? pageUrl;
-        const aggregate = !at && check.details?.aggregated === true && !!check.pages?.length;
+        const aggregate =
+          !at && check.details?.aggregated === true && !!check.pages?.length;
         if (at) pageRules.add(pageRuleKey(normalize(at), ruleId));
         else if (aggregate) {
-          for (const page of check.pages!) pageRules.add(pageRuleKey(normalize(page), ruleId));
+          for (const page of check.pages!)
+            pageRules.add(pageRuleKey(normalize(page), ruleId));
           const total = check.details?.pagesTruncated;
-          if (typeof total === "number" && total > check.pages!.length) rules.add(ruleId);
+          if (typeof total === "number" && total > check.pages!.length)
+            rules.add(ruleId);
         } else rules.add(ruleId);
       }
-      if (check.status === "pass" || check.status === "warn" || check.status === "fail") {
+      if (
+        check.status === "pass" ||
+        check.status === "warn" ||
+        check.status === "fail"
+      ) {
         evaluated.add(checkKey);
         return;
       }
       // (#1031) An `info` the rule marks inconclusive ("could not judge") is a gap like a skip: the
       // page is not evaluated for the check, so its old findings carry.
-      const inconclusive = check.status === "info" && check.details?.inconclusive === true;
+      const inconclusive =
+        check.status === "info" && check.details?.inconclusive === true;
       if (
         (check.status !== "skipped" && !inconclusive) ||
         isRuleNotApplicableReason(check.skipReason) ||
@@ -353,7 +374,8 @@ export function createNotEvaluatedCollector(normalize: (url: string) => string):
       }
       for (const page of check.pages ?? []) entry.pages.add(normalize(page));
       const total = check.details?.pagesTruncated;
-      if (typeof total === "number" && total > (check.pages?.length ?? 0)) entry.clipped = true;
+      if (typeof total === "number" && total > (check.pages?.length ?? 0))
+        entry.clipped = true;
     },
     result() {
       const pageChecks = new Set<string>();
@@ -443,7 +465,11 @@ export function findingKey(
 }
 
 /** Key for one check on one page (a {@link findingKey} without the locator). */
-export function pageCheckKey(normalizedUrl: string, ruleId: string, checkName: string): string {
+export function pageCheckKey(
+  normalizedUrl: string,
+  ruleId: string,
+  checkName: string
+): string {
   return [normalizedUrl, ruleId, checkName].join(KEY_SEP);
 }
 
@@ -504,13 +530,16 @@ export function itemListComplete(ruleId: string, check: CheckResult): boolean {
   const items = check.items;
   if (!items || items.length === 0) return false;
   const details = check.details;
-  if (details?.aggregated === true || details?.scanTruncated === true) return false;
+  if (details?.aggregated === true || details?.scanTruncated === true)
+    return false;
   // Any remainder that is not plainly zero counts, including a malformed one:
   // reading a sample as complete resolves real findings, the reverse only carries.
   const additional = details?.additional;
-  if (additional !== undefined && additional !== null && additional !== 0) return false;
+  if (additional !== undefined && additional !== null && additional !== 0)
+    return false;
   const key = `${ruleId}${KEY_SEP}${check.name}`;
-  if (SCAN_BUDGET_CHECKS.has(key) && details?.scanTruncated !== false) return false;
+  if (SCAN_BUDGET_CHECKS.has(key) && details?.scanTruncated !== false)
+    return false;
   const legacyCap = LEGACY_SILENT_ITEM_CAPS.get(key);
   return legacyCap === undefined || items.length < legacyCap;
 }
@@ -603,7 +632,10 @@ function sliceWholeChars(s: string, max: number): string {
  * in its message (a URL, a page title) would still split, which is a rule bug and
  * is what public #229 exists to catch.
  */
-export function itemFindingMessage(check: CheckResult, item: CheckItem): string {
+export function itemFindingMessage(
+  check: CheckResult,
+  item: CheckItem
+): string {
   const id = item.id.trim();
   // The ID is the discriminator, so it gets first claim on the store's
   // `maxMediumString` clamp: budget the prefix against what the id leaves behind,
@@ -616,7 +648,9 @@ export function itemFindingMessage(check: CheckResult, item: CheckItem): string 
   );
   // A message with no wording in it ("26") yields "" — fall back to the check
   // name, which is page-invariant too.
-  const text = pageInvariantCheckText(check.message, budget) || sliceWholeChars(check.name, budget);
+  const text =
+    pageInvariantCheckText(check.message, budget) ||
+    sliceWholeChars(check.name, budget);
   // An empty id makes the locator "" (colliding with a whole-check row) — a
   // degenerate case, but still never the parent's page-level message.
   if (id === "") return text;
@@ -660,7 +694,7 @@ export function itemFindingMessage(check: CheckResult, item: CheckItem): string 
  */
 function siteResourceFields(
   check: CheckResult,
-  owns: boolean,
+  owns: boolean
 ): {
   count: number;
   evidence: Record<string, unknown>;
@@ -679,7 +713,9 @@ function siteResourceFields(
   const marker = {
     siteResourceEvidence: {
       state: "omitted" as const,
-      reason: (owns ? "payload-limit" : "sibling-row") as "payload-limit" | "sibling-row",
+      reason: (owns ? "payload-limit" : "sibling-row") as
+        | "payload-limit"
+        | "sibling-row",
       occurrenceCount: count,
     },
   };
@@ -698,7 +734,7 @@ function itemFindingPayload(
   i: number,
   value: string | null,
   expected: string | null,
-  ownsComponentEvidence: boolean,
+  ownsComponentEvidence: boolean
 ): string {
   const base = {
     items: [item],
@@ -772,7 +808,9 @@ function itemFindingPayload(
       const withEvidence = JSON.stringify({
         ...stash,
         ...resource.evidence,
-        componentOccurrences: packComponentOccurrences(check.componentOccurrences!),
+        componentOccurrences: packComponentOccurrences(
+          check.componentOccurrences!
+        ),
       });
       if (fits(withEvidence)) return withEvidence;
       // Element evidence is the bulkier of the two by an order of magnitude, so
@@ -805,7 +843,11 @@ function itemFindingPayload(
       componentEvidence: evidence,
     });
     if (fits(baseWithMarker)) return baseWithMarker;
-    return JSON.stringify({ i, ...resource.marker, componentEvidence: evidence });
+    return JSON.stringify({
+      i,
+      ...resource.marker,
+      componentEvidence: evidence,
+    });
   }
 
   const withAggregate = JSON.stringify(stash);
@@ -850,10 +892,15 @@ function wholeCheckPayload(check: CheckResult): string | null {
     if (resource.count > 0) {
       const withResource = JSON.stringify({ ...base, ...resource.evidence });
       if (fits(withResource)) return withResource;
-      const withResourceMarker = JSON.stringify({ ...base, ...resource.marker });
+      const withResourceMarker = JSON.stringify({
+        ...base,
+        ...resource.marker,
+      });
       if (fits(withResourceMarker)) return withResourceMarker;
     }
-    return check.details || check.pages || resource.count > 0 ? JSON.stringify(base) : null;
+    return check.details || check.pages || resource.count > 0
+      ? JSON.stringify(base)
+      : null;
   }
 
   const withEvidence = JSON.stringify({
@@ -863,7 +910,11 @@ function wholeCheckPayload(check: CheckResult): string | null {
   });
   if (fits(withEvidence)) return withEvidence;
 
-  const evidence = { state: "omitted" as const, reason: "payload-limit" as const, occurrenceCount };
+  const evidence = {
+    state: "omitted" as const,
+    reason: "payload-limit" as const,
+    occurrenceCount,
+  };
   // Element evidence is far the bulkier of the two, so try dropping it alone
   // before giving up on the resource set as well.
   const resourceOnly = JSON.stringify({
@@ -946,7 +997,14 @@ export function flattenChecks(
           expected: null,
           // Last emission survives `buildStreamFindings` latest-wins dedupe if
           // duplicate item ids share a locator, so it is the sole evidence owner.
-          payload: itemFindingPayload(check, item, i, value, expected, i === items.length - 1),
+          payload: itemFindingPayload(
+            check,
+            item,
+            i,
+            value,
+            expected,
+            i === items.length - 1
+          ),
         });
       }
     } else {
@@ -1067,7 +1125,9 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
   // structure whose size is the prior count, and a store read cannot produce a
   // repeat because the key IS the primary key — so the dedupe lives here, where
   // the whole array is resident anyway.
-  session.addPriorFindings(dedupeByKey(input.priorFindings, freshKeysOf(input.freshFindings)));
+  session.addPriorFindings(
+    dedupeByKey(input.priorFindings, freshKeysOf(input.freshFindings))
+  );
   const fresh = session.finish();
   return {
     findings: [...fresh.active, ...priorActive],
@@ -1079,7 +1139,8 @@ export function computeMerge(input: ComputeMergeInput): MergedState {
 
 function freshKeysOf(fresh: readonly FlatFinding[]): Set<string> {
   const keys = new Set<string>();
-  for (const f of fresh) keys.add(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator));
+  for (const f of fresh)
+    keys.add(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator));
   return keys;
 }
 
@@ -1191,8 +1252,10 @@ export function createMergeSession(
   //
   // (#497) Read off the prior pages' index below rather than a set of its own:
   // its keys are exactly the prior pages.
-  const neverRendered = (normalizedUrl: string, renderedThisRun: boolean): boolean =>
-    !renderedThisRun && !known.index.has(normalizedUrl);
+  const neverRendered = (
+    normalizedUrl: string,
+    renderedThisRun: boolean
+  ): boolean => !renderedThisRun && !known.index.has(normalizedUrl);
 
   // 3) Site pages — active set (crawled non-removed) ∪ prior actives minus removed.
   //
@@ -1219,10 +1282,12 @@ export function createMergeSession(
     const i = known.index.get(url);
     return i === undefined ? undefined : known.pages[i];
   };
-  const priorActive = (url: string): boolean => priorOf(url)?.state === "active";
+  const priorActive = (url: string): boolean =>
+    priorOf(url)?.state === "active";
   /** Pages this run crawled or saw removed. Bounded by the run. */
   const thisRun = new Map<string, SitePageRecord>();
-  const pageOf = (url: string): SitePageRecord | undefined => thisRun.get(url) ?? priorOf(url);
+  const pageOf = (url: string): SitePageRecord | undefined =>
+    thisRun.get(url) ?? priorOf(url);
   // (pub#2099) What this run did not evaluate on each crawled page, recorded on its
   // row so a later run that carries the page scores it as this one did: read off
   // the published checks, and off the unsampled signal by the page's own hash. The
@@ -1253,12 +1318,19 @@ export function createMergeSession(
     const fromSignal = signalNotEvaluated?.get(resolutionUrlHash(url));
     if (!fromChecks && !fromSignal) return undefined;
     freshPageChecks ??= new Set(
-      Array.from(freshByKey.values(), (f) => pageCheckKey(f.normalizedUrl, f.ruleId, f.checkName)),
+      Array.from(freshByKey.values(), (f) =>
+        pageCheckKey(f.normalizedUrl, f.ruleId, f.checkName)
+      )
     );
     const keys = new Set<string>();
     for (const key of [...(fromChecks ?? []), ...(fromSignal ?? [])]) {
       const sep = key.indexOf(KEY_SEP);
-      if (freshPageChecks.has(pageCheckKey(url, key.slice(0, sep), key.slice(sep + 1)))) continue;
+      if (
+        freshPageChecks.has(
+          pageCheckKey(url, key.slice(0, sep), key.slice(sep + 1))
+        )
+      )
+        continue;
       keys.add(key);
     }
     return keys.size > 0 ? [...keys].sort() : undefined;
@@ -1282,7 +1354,8 @@ export function createMergeSession(
     // had one gets no `canonical` key at all (byte-identical rows).
     const was = priorOf(url)?.canonical;
     const canonical = canonicals
-      ? (canonicals.get(url) ?? (canonicalsComplete === false ? was : was ? null : undefined))
+      ? (canonicals.get(url) ??
+        (canonicalsComplete === false ? was : was ? null : undefined))
       : was;
     // A page this run evaluated in full gets no key at all (byte-identical rows),
     // and its new row drops any record an earlier crawl left.
@@ -1334,7 +1407,8 @@ export function createMergeSession(
       return p !== undefined && carriesPage(url, p);
     },
     *[Symbol.iterator]() {
-      for (const p of known.pages) if (carriesPage(p.normalizedUrl, p)) yield p.normalizedUrl;
+      for (const p of known.pages)
+        if (carriesPage(p.normalizedUrl, p)) yield p.normalizedUrl;
     },
   };
 
@@ -1353,7 +1427,10 @@ export function createMergeSession(
 
   /** This run's FRESH records — emitted by `finish()`, once every prior has had
    *  its chance to leave a `firstSeenAt` behind. */
-  const emitFresh = (): { persisted: PageFindingRecord[]; active: MergedFinding[] } => {
+  const emitFresh = (): {
+    persisted: PageFindingRecord[];
+    active: MergedFinding[];
+  } => {
     const persisted: PageFindingRecord[] = [];
     const active: MergedFinding[] = [];
     for (const [key, f] of freshByKey) {
@@ -1392,19 +1469,30 @@ export function createMergeSession(
    * its first-seen), carried unchanged when one could not be checked (#1765).
    */
   const addPrior = (prior: PageFindingRecord): void => {
-    const successors = supersededChecks?.get(resolutionCheckKey(prior.ruleId, prior.checkName));
+    const successors = supersededChecks?.get(
+      resolutionCheckKey(prior.ruleId, prior.checkName)
+    );
     // A superseded name can still be emitted for a case the successors do not cover (a MISSING title is still
     // `meta-title`, only a short or long one moved to `-too-short` / `-too-long`). When this run failed under the
     // old name itself, the prior is still failing: the ordinary logic keeps it open and keeps its first-seen,
     // instead of resolving it because no successor fired on a page that has no value to measure.
     if (
       !successors ||
-      freshByKey.has(findingKey(prior.normalizedUrl, prior.ruleId, prior.checkName, prior.locator))
+      freshByKey.has(
+        findingKey(
+          prior.normalizedUrl,
+          prior.ruleId,
+          prior.checkName,
+          prior.locator
+        )
+      )
     ) {
       return decidePrior(prior, sink);
     }
     const outcomes: SupersededOutcome[] = [];
-    let carried: { record: PageFindingRecord; merged?: MergedFinding } | undefined;
+    let carried:
+      | { record: PageFindingRecord; merged?: MergedFinding }
+      | undefined;
     for (const successor of successors) {
       const asSuccessor: PageFindingRecord = { ...prior, checkName: successor };
       const persisted: PageFindingRecord[] = [];
@@ -1425,13 +1513,17 @@ export function createMergeSession(
       if (freshHere) outcomes.push("failing");
       else if (merged && record) {
         outcomes.push("not-checked");
-        carried ??= { record: { ...record, checkName: prior.checkName }, merged };
+        carried ??= {
+          record: { ...record, checkName: prior.checkName },
+          merged,
+        };
       } else outcomes.push("passed");
     }
     const verdict = judgeSuperseded(outcomes);
     if (verdict === "not-checked" && carried) {
       sink.persist(carried.record);
-      if (carried.merged) sink.active({ ...carried.merged, checkName: prior.checkName });
+      if (carried.merged)
+        sink.active({ ...carried.merged, checkName: prior.checkName });
       return;
     }
     sink.persist({
@@ -1444,7 +1536,10 @@ export function createMergeSession(
   };
 
   /** Prior OPEN findings (we only ever load "open"): resolve, stale, or carry. */
-  const decidePrior = (prior: PageFindingRecord, sink: MergePriorSink): void => {
+  const decidePrior = (
+    prior: PageFindingRecord,
+    sink: MergePriorSink
+  ): void => {
     const key = findingKey(
       prior.normalizedUrl,
       prior.ruleId,
@@ -1465,7 +1560,8 @@ export function createMergeSession(
     // checks in the sampled payload (clean everywhere, or clipped from every
     // sample) so it's absent from the payload-derived `crawledUrls`.
     const signalCrawled =
-      !wasCrawled && (resolution?.crawledUrls.has(prior.normalizedUrl) ?? false);
+      !wasCrawled &&
+      (resolution?.crawledUrls.has(prior.normalizedUrl) ?? false);
     // (#1652) Same value for every carry branch below — computed once here so a
     // new branch can't silently forget it and default a never-rendered page back
     // to "carried".
@@ -1513,7 +1609,8 @@ export function createMergeSession(
       // pages only: for any other page its sets are silent, not evidence of clean.
       const signal =
         resolution &&
-        (resolution.crawledComplete !== false || resolution.crawledUrls.has(prior.normalizedUrl))
+        (resolution.crawledComplete !== false ||
+          resolution.crawledUrls.has(prior.normalizedUrl))
           ? resolution
           : undefined;
       // (repo#3376) The clipped-list and timeout-aggregate carries below are blunt:
@@ -1524,14 +1621,17 @@ export function createMergeSession(
         !!signal &&
         (signal.exactNotEvaluatedChecks
           ? signal.exactNotEvaluatedChecks.has(checkKey)
-          : signal.failingByCheck.has(checkKey) && !signal.truncatedChecks.has(checkKey));
+          : signal.failingByCheck.has(checkKey) &&
+            !signal.truncatedChecks.has(checkKey));
       if (
         notEvaluated?.pageChecks.has(
           pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName)
         ) ||
         (!signalCoversCheck && notEvaluated?.clippedChecks.has(checkKey)) ||
         (!signalCoversCheck && notEvaluated?.rules.has(prior.ruleId)) ||
-        notEvaluated?.pageRules.has(pageRuleKey(prior.normalizedUrl, prior.ruleId))
+        notEvaluated?.pageRules.has(
+          pageRuleKey(prior.normalizedUrl, prior.ruleId)
+        )
       ) {
         const carried: PageFindingRecord = { ...prior, provenance: "carried" };
         keepRowFor(prior);
@@ -1546,7 +1646,9 @@ export function createMergeSession(
       // → resolve, regardless of the #1167 sample guard below. A key marked
       // truncated (or absent — rule disabled, unknown shape, old CLI) gives no
       // authority and falls through to the pre-#1185 behavior.
-      const priorHashes = signal ? resolutionHashes(prior.normalizedUrl) : EMPTY_HASHES;
+      const priorHashes = signal
+        ? resolutionHashes(prior.normalizedUrl)
+        : EMPTY_HASHES;
       // The check produced NO evaluated result for this page this run (the rule
       // `skipped` it — perf/ttfb without timing data — or emitted nothing for
       // it). Its absence from the fresh findings is not evidence the finding is
@@ -1648,7 +1750,11 @@ export function createMergeSession(
         return;
       }
 
-      const pageCheck = pageCheckKey(prior.normalizedUrl, prior.ruleId, prior.checkName);
+      const pageCheck = pageCheckKey(
+        prior.normalizedUrl,
+        prior.ruleId,
+        prior.checkName
+      );
       // (#2658) A signal was sent but lost its say here: a count cap or the byte
       // budget truncated the key, or the page is off a clipped list. What it
       // would have said (still failing, not evaluated) is gone with it, so the
@@ -1659,10 +1765,15 @@ export function createMergeSession(
       if (resolution && (!signal || signal.truncatedChecks.has(checkKey))) {
         const clean =
           passedCheckPages?.has(pageCheck) ||
-          notApplicablePages?.has(pageRuleKey(prior.normalizedUrl, prior.ruleId)) ||
+          notApplicablePages?.has(
+            pageRuleKey(prior.normalizedUrl, prior.ruleId)
+          ) ||
           completeItemChecks?.has(pageCheck);
         if (!clean) {
-          const carried: PageFindingRecord = { ...prior, provenance: "carried" };
+          const carried: PageFindingRecord = {
+            ...prior,
+            provenance: "carried",
+          };
           keepRowFor(prior);
           sink.persist(carried);
           sink.active(toMerged(carried, unrendered));
@@ -1743,7 +1854,8 @@ function indexPriorPages(priorPages: readonly SitePageRecord[]): {
   active: number;
 } {
   const index = new Map<string, number>();
-  for (let i = 0; i < priorPages.length; i++) index.set(priorPages[i]!.normalizedUrl, i);
+  for (let i = 0; i < priorPages.length; i++)
+    index.set(priorPages[i]!.normalizedUrl, i);
   let pages = priorPages;
   if (index.size !== priorPages.length) {
     index.clear();
@@ -1764,10 +1876,7 @@ function indexPriorPages(priorPages: readonly SitePageRecord[]): {
   return { index, pages, active };
 }
 
-function toMerged(
-  r: PageFindingRecord,
-  neverRendered: boolean
-): MergedFinding {
+function toMerged(r: PageFindingRecord, neverRendered: boolean): MergedFinding {
   return {
     neverRendered,
     siteKey: r.siteKey,

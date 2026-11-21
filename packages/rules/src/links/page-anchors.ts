@@ -8,8 +8,9 @@
 // site pass reads the record. The v1 path has the DOM and calls this same
 // function, so both engines judge from identical records.
 
-import { SKIP_LINK_SELECTOR, hasSkipLinkText } from "../a11y/skip-link";
 import type { ParsedPage } from "../types";
+
+import { SKIP_LINK_SELECTOR, hasSkipLinkText } from "../a11y/skip-link";
 
 /**
  * Most distinct ids and `<a name>` values kept per page. A page over the cap is
@@ -35,7 +36,12 @@ const SELF_FRAGMENTS_CAP = 256;
  */
 const CLIENT_SHELL_TEXT_LIMIT = 200;
 
-const NON_VISIBLE_TEXT_TAGS = new Set(["script", "style", "noscript", "template"]);
+const NON_VISIBLE_TEXT_TAGS = new Set([
+  "script",
+  "style",
+  "noscript",
+  "template",
+]);
 
 /**
  * `body.textContent.length` less `el.textContent.length` for every script, style, noscript and template in it, as the
@@ -53,7 +59,11 @@ export function visibleTextLength(body: Element): number {
       } else if (child.nodeType === 1) {
         const name = (child as Element).localName;
         const counted = !inTemplate && NON_VISIBLE_TEXT_TAGS.has(name);
-        visit(child, hidden + (counted ? 1 : 0), inTemplate || name === "template");
+        visit(
+          child,
+          hidden + (counted ? 1 : 0),
+          inTemplate || name === "template"
+        );
       }
     }
   };
@@ -85,7 +95,8 @@ export const SCRIPT_IDS_CAP = 1024;
 const SCRIPT_TOKEN_RE = /(["'`])([^\s"'`\\<>]{1,64})\\?\1/g;
 
 /** `<script type>` values the browser runs as code. Anything else (JSON-LD, import maps, templates) is data. */
-const EXECUTABLE_SCRIPT_TYPE_RE = /^(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/i;
+const EXECUTABLE_SCRIPT_TYPE_RE =
+  /^(?:module|(?:text|application)\/(?:x-)?(?:java|ecma)script)$/i;
 
 export interface PageAnchorSignal {
   /** Distinct `id` attribute values and `<a name>` values, capped at {@link ANCHOR_IDS_CAP}. */
@@ -147,7 +158,10 @@ function inlineScriptIds(doc: NonNullable<ParsedPage["document"]>): string[] {
  * Whether an inline script on the page names `fragment` as a quoted string, so a script may create
  * it after load and a miss is not confirmed. It is a name match, not a creation test.
  */
-export function scriptMayCreateId(rec: PageAnchorSignal, fragment: string): boolean {
+export function scriptMayCreateId(
+  rec: PageAnchorSignal,
+  fragment: string
+): boolean {
   return rec.scriptIds?.includes(fragment) === true;
 }
 
@@ -208,7 +222,8 @@ export function buildPageAnchorSignal(input: {
     ids.push(value);
   };
   for (const el of doc.querySelectorAll("[id]")) add(el.getAttribute("id"));
-  for (const el of doc.querySelectorAll("a[name]")) add(el.getAttribute("name"));
+  for (const el of doc.querySelectorAll("a[name]"))
+    add(el.getAttribute("name"));
 
   // Skip links by class or target (the a11y/skip-link selector), or by the
   // skip-link text patterns a11y/skip-link also accepts.
@@ -216,11 +231,14 @@ export function buildPageAnchorSignal(input: {
   const pushSkip = (href: string | null): void => {
     if (!href || skipFragments.length >= SKIP_FRAGMENTS_CAP) return;
     const fragment = fragmentOf(href);
-    if (fragment && !skipFragments.includes(fragment)) skipFragments.push(fragment);
+    if (fragment && !skipFragments.includes(fragment))
+      skipFragments.push(fragment);
   };
-  for (const el of doc.querySelectorAll(SKIP_LINK_SELECTOR)) pushSkip(el.getAttribute("href"));
+  for (const el of doc.querySelectorAll(SKIP_LINK_SELECTOR))
+    pushSkip(el.getAttribute("href"));
   for (const el of doc.querySelectorAll("a[href^='#']")) {
-    if (hasSkipLinkText(el.textContent ?? "")) pushSkip(el.getAttribute("href"));
+    if (hasSkipLinkText(el.textContent ?? ""))
+      pushSkip(el.getAttribute("href"));
   }
 
   // Same-page links. The parser drops every `#`-prefixed href from parsed.links,

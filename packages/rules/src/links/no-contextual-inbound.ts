@@ -64,22 +64,25 @@
 // the emitted check is byte-identical regardless of how the counts were sourced
 // (`site-query-link-rules-golden.test.ts` is the gate).
 
-import { z } from "zod";
-
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import {
   CRAWL_CAPPED_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
   type LinkData,
 } from "@squirrelscan/core-contracts";
-
 import { matchesExcludePattern } from "@squirrelscan/utils";
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname, normalizeUrl } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
+import { z } from "zod";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { logger } from "../logger";
 import { frontDoorTest } from "../shared/front-door";
-import { chromeSectionPhrase, countSection, type SectionCounts } from "./link-section-label";
+import {
+  chromeSectionPhrase,
+  countSection,
+  type SectionCounts,
+} from "./link-section-label";
 
 const SKIP_CHECK: CheckResult = {
   name: "no-contextual-inbound",
@@ -88,7 +91,8 @@ const SKIP_CHECK: CheckResult = {
   observation: {
     mode: "crawl",
     applicability: "unknown",
-    uncertainty: "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
+    uncertainty:
+      "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
   },
 };
 
@@ -177,7 +181,8 @@ function buildCheck(
       observation: {
         mode: "crawl",
         applicability: "applicable",
-        uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+        uncertainty:
+          "Contextual inbound links are counted only in the observed crawl graph.",
       },
     };
   }
@@ -188,7 +193,8 @@ function buildCheck(
     observation: {
       mode: "crawl",
       applicability: "applicable",
-      uncertainty: "Contextual inbound links are counted only in the observed crawl graph.",
+      uncertainty:
+        "Contextual inbound links are counted only in the observed crawl graph.",
     },
   };
 }
@@ -200,7 +206,9 @@ interface PageFacts {
   redirectsTo?: string;
 }
 
-function pageFactsOf(pages: NonNullable<RuleContext["site"]>["pages"] | undefined): Map<string, PageFacts> {
+function pageFactsOf(
+  pages: NonNullable<RuleContext["site"]>["pages"] | undefined
+): Map<string, PageFacts> {
   const facts = new Map<string, PageFacts>();
   for (const page of pages ?? []) {
     const key = normalizeUrl(page.url);
@@ -210,7 +218,10 @@ function pageFactsOf(pages: NonNullable<RuleContext["site"]>["pages"] | undefine
       const finalKey = normalizeUrl(page.finalUrl);
       if (finalKey !== key) redirectsTo = finalKey;
     }
-    facts.set(key, { status: page.statusCode, ...(redirectsTo ? { redirectsTo } : {}) });
+    facts.set(key, {
+      status: page.statusCode,
+      ...(redirectsTo ? { redirectsTo } : {}),
+    });
   }
   return facts;
 }
@@ -233,7 +244,8 @@ function resolveEntries(
     keep: true,
   }));
   const firstByKey = new Map<string, (typeof rows)[number]>();
-  for (const row of rows) if (!firstByKey.has(row.key)) firstByKey.set(row.key, row);
+  for (const row of rows)
+    if (!firstByKey.has(row.key)) firstByKey.set(row.key, row);
   for (const row of rows) {
     const fact = facts.get(row.key);
     if (!fact) continue;
@@ -241,7 +253,9 @@ function resolveEntries(
       // Judged at its destination, whatever status the redirect row itself carries (a 3xx marker, #1762).
       row.keep = false;
       const dest = firstByKey.get(fact.redirectsTo);
-      const into = dest ? dest.counts : uncrawledCounts(uncrawled, fact.redirectsTo);
+      const into = dest
+        ? dest.counts
+        : uncrawledCounts(uncrawled, fact.redirectsTo);
       into.all += row.counts.all;
       into.contextual += row.counts.contextual;
     } else if (fact.status < 200 || fact.status > 299) {
@@ -251,7 +265,10 @@ function resolveEntries(
   return rows.filter((row) => row.keep).map((row) => [row.url, row.counts]);
 }
 
-function uncrawledCounts(map: Map<string, InboundCounts>, key: string): InboundCounts {
+function uncrawledCounts(
+  map: Map<string, InboundCounts>,
+  key: string
+): InboundCounts {
   let counts = map.get(key);
   if (!counts) map.set(key, (counts = { all: 0, contextual: 0 }));
   return counts;
@@ -297,9 +314,11 @@ function countUncrawledTargets(
   uncrawled: Map<string, InboundCounts>
 ): void {
   const answered = new Set<string>();
-  for (const fetched of site?.fetchedTargets ?? []) answered.add(normalizeUrl(fetched.url));
+  for (const fetched of site?.fetchedTargets ?? [])
+    answered.add(normalizeUrl(fetched.url));
   for (const probe of site?.linkTargetStatuses ?? []) {
-    if (typeof probe.status === "number" && probe.status >= 400) answered.add(normalizeUrl(probe.url));
+    if (typeof probe.status === "number" && probe.status >= 400)
+      answered.add(normalizeUrl(probe.url));
   }
   for (const page of site?.pages ?? []) {
     for (const link of page.parsed?.links ?? []) {
@@ -361,7 +380,9 @@ export const noContextualInboundRule: Rule = {
       excludePatterns: z
         .array(z.string())
         .default([])
-        .describe("URL patterns to exclude from contextual inbound link detection"),
+        .describe(
+          "URL patterns to exclude from contextual inbound link detection"
+        ),
     }),
   },
 
@@ -382,7 +403,8 @@ export const noContextualInboundRule: Rule = {
         observation: {
           mode: "crawl",
           applicability: "unknown",
-          uncertainty: "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
+          uncertainty:
+            "The observed crawl graph is incomplete, so missing contextual links cannot be established.",
         },
       });
       return { checks };
@@ -400,7 +422,10 @@ export const noContextualInboundRule: Rule = {
       const contextual = ctx.siteQuery.contextualIncomingLinkCounts();
       const entries: Array<[string, InboundCounts]> = [];
       for (const [url, count] of all) {
-        entries.push([url, { all: count, contextual: contextual.get(url) ?? count }]);
+        entries.push([
+          url,
+          { all: count, contextual: contextual.get(url) ?? count },
+        ]);
       }
       // #2307: where the counted inbound links sit. Optional on the query: one without section
       // data leaves the items bare, exactly as before.
@@ -414,12 +439,26 @@ export const noContextualInboundRule: Rule = {
       const entryUrls = ctx.site?.entryUrls ?? [];
       checks.push(
         buildCheck(
-          collectChromeOnlyPages(resolved, minInboundLinks, excludePatterns, baseUrl, entryUrls),
-          sections ? (url) => inboundSections(sections.get(url), totals.get(url) ?? 0) : undefined
+          collectChromeOnlyPages(
+            resolved,
+            minInboundLinks,
+            excludePatterns,
+            baseUrl,
+            entryUrls
+          ),
+          sections
+            ? (url) => inboundSections(sections.get(url), totals.get(url) ?? 0)
+            : undefined
         )
       );
       const gap = unjudgedCheck(
-        collectChromeOnlyPages(uncrawled, minInboundLinks, excludePatterns, baseUrl, entryUrls)
+        collectChromeOnlyPages(
+          uncrawled,
+          minInboundLinks,
+          excludePatterns,
+          baseUrl,
+          entryUrls
+        )
       );
       if (gap) checks.push(gap);
       return { checks };
@@ -489,7 +528,10 @@ export const noContextualInboundRule: Rule = {
         (page) =>
           [
             page.url,
-            counts.get(normalizedCache.get(page.url)!) ?? { all: 0, contextual: 0 },
+            counts.get(normalizedCache.get(page.url)!) ?? {
+              all: 0,
+              contextual: 0,
+            },
           ] as [string, InboundCounts]
       ),
       facts,
@@ -498,7 +540,13 @@ export const noContextualInboundRule: Rule = {
     const totals = new Map(resolved.map(([url, c]) => [url, c.all]));
     const baseUrl = ctx.site?.baseUrl || "";
     const entryUrls = ctx.site?.entryUrls ?? [];
-    const flagged = collectChromeOnlyPages(resolved, minInboundLinks, excludePatterns, baseUrl, entryUrls);
+    const flagged = collectChromeOnlyPages(
+      resolved,
+      minInboundLinks,
+      excludePatterns,
+      baseUrl,
+      entryUrls
+    );
 
     checks.push(
       buildCheck(flagged, (url) => {
@@ -509,7 +557,13 @@ export const noContextualInboundRule: Rule = {
       })
     );
     const gap = unjudgedCheck(
-      collectChromeOnlyPages(uncrawled, minInboundLinks, excludePatterns, baseUrl, entryUrls)
+      collectChromeOnlyPages(
+        uncrawled,
+        minInboundLinks,
+        excludePatterns,
+        baseUrl,
+        entryUrls
+      )
     );
     if (gap) checks.push(gap);
 

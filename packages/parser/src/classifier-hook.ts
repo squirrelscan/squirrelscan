@@ -53,7 +53,9 @@ export function setDocumentPlacer(document: object, placer: LinkPlacer): void {
 }
 
 /** The classifier's element placer for this document, or null when it was not classified. */
-export function getDocumentPlacer(document: object | null | undefined): LinkPlacer | null {
+export function getDocumentPlacer(
+  document: object | null | undefined
+): LinkPlacer | null {
   return document ? (PLACERS.get(document) ?? null) : null;
 }
 
@@ -62,7 +64,7 @@ export function runClassifier(
   hook: PageClassifierHook | undefined,
   document: Document,
   url: string,
-  html: string,
+  html: string
 ): PageClassifierOutput | null {
   if (!hook) return null;
   try {

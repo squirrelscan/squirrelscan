@@ -1,17 +1,24 @@
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parseRobotsTxt } from "@squirrelscan/utils/robots-txt";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { robotsTxtRule } from "../src/crawl/robots-txt";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const ROBOTS_URL = "https://example.com/robots.txt";
 
 async function run(content: string): Promise<CheckResult[]> {
   const robotsTxt = parseRobotsTxt(content, ROBOTS_URL);
   const ctx = {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: "https://example.com",
@@ -21,15 +28,17 @@ async function run(content: string): Promise<CheckResult[]> {
     },
     options: {},
   } as RuleContext;
-  return (await robotsTxtRule.run(ctx)).checks.filter((check) => check.name === "robots-txt-crawl-delay");
+  return (await robotsTxtRule.run(ctx)).checks.filter(
+    (check) => check.name === "robots-txt-crawl-delay"
+  );
 }
 
 describe("crawl/robots-txt crawl delay", () => {
   test("warns for a 10-second wildcard delay and states the daily cap", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Crawl-delay: 10
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -42,10 +51,10 @@ Crawl-delay: 10
   });
 
   test("explains Google and Bing behavior for a slow Bing-specific group", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: BingBot
 Crawl-delay: 12
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -58,10 +67,10 @@ Crawl-delay: 12
   });
 
   test("reports a short wildcard delay as information", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: *
 Crawl-delay: 2
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -72,19 +81,19 @@ Crawl-delay: 2
 
   test("does not report a delay limited to a non-search bot", async () => {
     expect(
-      (await run(`
+      await run(`
 User-agent: AhrefsBot
 Crawl-delay: 10
-`)),
+`)
     ).toEqual([]);
   });
 
   test("reports a search crawler in a stacked user-agent group", async () => {
-    const checks = (await run(`
+    const checks = await run(`
 User-agent: BingBot
 User-agent: AhrefsBot
 Crawl-delay: 10
-`));
+`);
 
     expect(checks).toHaveLength(1);
     expect(checks[0]).toMatchObject({
@@ -95,19 +104,19 @@ Crawl-delay: 10
 
   test("ignores a zero crawl delay", async () => {
     expect(
-      (await run(`
+      await run(`
 User-agent: *
 Crawl-delay: 0
-`)),
+`)
     ).toEqual([]);
   });
 
   test("adds no finding when robots.txt has no crawl delay", async () => {
     expect(
-      (await run(`
+      await run(`
 User-agent: *
 Disallow: /private/
-`)),
+`)
     ).toEqual([]);
   });
 });

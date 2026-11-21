@@ -219,7 +219,8 @@ export function stripNoscriptMarkup(html: string): string {
     }
 
     const close = findEndTag(html, name, afterTag);
-    const afterElement = close === -1 ? html.length : endOfTag(html, close + 2 + name.length);
+    const afterElement =
+      close === -1 ? html.length : endOfTag(html, close + 2 + name.length);
     if (name === "noscript") {
       out += html.slice(copyFrom, lt);
       copyFrom = afterElement;

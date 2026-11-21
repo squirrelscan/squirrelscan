@@ -1,9 +1,9 @@
 // adblock/privacy-blocked - resources/selectors matched by EasyPrivacy
 // (cloud-backed, site-scope — tracking-specific list, separate from EasyList)
 
-import { z } from "zod";
-
 import type { BlocklistCheckResponse } from "@squirrelscan/core-contracts";
+
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -34,17 +34,26 @@ export const privacyBlockedRule: Rule = {
     severity: "warning",
     weight: 2,
     optionsSchema,
-    cloud: { service: "blocklist-check", unit: "site", creditFeature: "adblock_detect" },
+    cloud: {
+      service: "blocklist-check",
+      unit: "site",
+      creditFeature: "adblock_detect",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<BlocklistCheckResponse>(ctx.cloudResults, "blocklist-check");
+    const envelope = readCloudResult<BlocklistCheckResponse>(
+      ctx.cloudResults,
+      "blocklist-check"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "privacy-blocked",
         status: "skipped",
@@ -54,7 +63,9 @@ export const privacyBlockedRule: Rule = {
       return { checks };
     }
 
-    const matches = envelope.data.matches.filter((m) => m.list === "easyprivacy");
+    const matches = envelope.data.matches.filter(
+      (m) => m.list === "easyprivacy"
+    );
 
     if (matches.length === 0) {
       checks.push({
@@ -70,7 +81,8 @@ export const privacyBlockedRule: Rule = {
         items: matches.slice(0, opts.maxMatchesToReport).map((m) => ({
           id: m.value,
           label: m.rule ? `${m.value} matches "${m.rule}"` : m.value,
-          sourcePages: m.kind === "url" ? findSourcePages(ctx, m.value) : undefined,
+          sourcePages:
+            m.kind === "url" ? findSourcePages(ctx, m.value) : undefined,
           meta: { rule: m.rule ?? null, list: m.list, kind: m.kind },
         })),
         details: { listsVersion: envelope.data.listsVersion },

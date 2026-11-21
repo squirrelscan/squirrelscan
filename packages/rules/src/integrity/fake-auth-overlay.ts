@@ -28,7 +28,11 @@ export const fakeAuthOverlayRule: Rule = {
     // Check names by outcome class (#1741).
     checks: [
       { name: "fake-auth-overlay", outcome: "problem" },
-      { name: "fake-auth-overlay", outcome: "clean", clears: ["fake-auth-overlay"] },
+      {
+        name: "fake-auth-overlay",
+        outcome: "clean",
+        clears: ["fake-auth-overlay"],
+      },
       { name: "fake-auth-overlay", outcome: "skipped" },
     ],
     // Compromise detection: an ignore could hide a compromised site (#1262).
@@ -55,7 +59,8 @@ export const fakeAuthOverlayRule: Rule = {
         checks.push({
           name: "fake-auth-overlay",
           status: "info",
-          message: "Some of the page's CSS was not applied to its iframes (it is long, or has more rules for the same iframes than squirrel reads); an overlay styled in the part that was not used would not be seen",
+          message:
+            "Some of the page's CSS was not applied to its iframes (it is long, or has more rules for the same iframes than squirrel reads); an overlay styled in the part that was not used would not be seen",
           pageUrl: ctx.page.url,
           details: { scanTruncated: true, ...notes },
         });
@@ -72,9 +77,7 @@ export const fakeAuthOverlayRule: Rule = {
 
     const signals = detectPageSignals(ctx);
     const escalate = shouldEscalate(signals, "fake-auth-overlay");
-    const corroborating = [...signals].filter(
-      (s) => s !== "fake-auth-overlay"
-    );
+    const corroborating = [...signals].filter((s) => s !== "fake-auth-overlay");
 
     checks.push({
       name: "fake-auth-overlay",

@@ -12,7 +12,10 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 export const WORD_COUNT_MIN_WORDS = 300;
 
 export const optionsSchema = z.object({
-  min_words: z.number().default(WORD_COUNT_MIN_WORDS).describe("Minimum word count"),
+  min_words: z
+    .number()
+    .default(WORD_COUNT_MIN_WORDS)
+    .describe("Minimum word count"),
   warn_threshold: z
     .number()
     .default(500)

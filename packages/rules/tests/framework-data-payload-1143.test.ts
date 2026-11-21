@@ -3,18 +3,26 @@
 // (sizes from the smoke run in the PR: Next.js app router flight chunks of
 // 120-460 KB on marketing and docs pages with 3-8 KB of text).
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { frameworkDataPayloadRule } from "../src/performance/framework-data-payload";
 import { findFrameworkPayloads } from "../src/shared/framework-payload";
-import type { ParsedPage, RuleContext } from "../src/types";
 
-const doc = (html: string) => parseHTML(html).document as unknown as NonNullable<ParsedPage["document"]>;
+const doc = (html: string) =>
+  parseHTML(html).document as unknown as NonNullable<ParsedPage["document"]>;
 
 async function run(html: string, options: Record<string, unknown> = {}) {
   const ctx: RuleContext = {
-    page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document: doc(html) } as unknown as ParsedPage,
     options,
   };
@@ -32,7 +40,10 @@ const prose = (words: number) =>
 /** `kb` kilobytes of Next.js app router flight chunks, as the real page streams them. */
 const nextFlight = (kb: number) => {
   const chunk = `self.__next_f.push([1,"${"a".repeat(2000)}"])`;
-  return Array.from({ length: Math.ceil((kb * 1024) / chunk.length) }, () => `<script>${chunk}</script>`).join("");
+  return Array.from(
+    { length: Math.ceil((kb * 1024) / chunk.length) },
+    () => `<script>${chunk}</script>`
+  ).join("");
 };
 
 const nextData = (kb: number) =>
@@ -50,12 +61,21 @@ describe("findFrameworkPayloads", () => {
            <script type="qwik/json">{"ctx":{}}</script>
            <astro-island props="{&quot;a&quot;:[0,1]}"></astro-island>
            <script>window.__sveltekit_abc = {};</script>
-           <script>window.__APOLLO_STATE__={};</script>`,
-        ),
-      ),
+           <script>window.__APOLLO_STATE__={};</script>`
+        )
+      )
     );
     const kinds = found.map((p) => p.kind).sort();
-    expect(kinds).toEqual(["astro", "global-state", "next-app", "next-pages", "nuxt", "qwik", "remix", "sveltekit"]);
+    expect(kinds).toEqual([
+      "astro",
+      "global-state",
+      "next-app",
+      "next-pages",
+      "nuxt",
+      "qwik",
+      "remix",
+      "sveltekit",
+    ]);
     const flight = found.find((p) => p.kind === "next-app")!;
     expect(flight.count).toBeGreaterThan(3);
     expect(flight.bytes).toBeGreaterThanOrEqual(10 * 1024);
@@ -67,23 +87,30 @@ describe("findFrameworkPayloads", () => {
         page(
           `<script type="application/ld+json">{"@context":"https://schema.org","name":"${"x".repeat(5000)}"}</script>
            <script type="importmap">{"imports":{}}</script>
-           <script>console.log("${"y".repeat(5000)}")</script>`,
-        ),
-      ),
+           <script>console.log("${"y".repeat(5000)}")</script>`
+        )
+      )
     );
     expect(found).toEqual([]);
   });
 
   test("a payload in noscript is not read, and the prefix test reads only the start of a script", () => {
-    const hidden = findFrameworkPayloads(doc(page(`<noscript><script id="__NEXT_DATA__">{}</script></noscript>`)));
+    const hidden = findFrameworkPayloads(
+      doc(page(`<noscript><script id="__NEXT_DATA__">{}</script></noscript>`))
+    );
     expect(hidden).toEqual([]);
     // The marker deep inside a script is ordinary code, not the state assignment.
-    const deep = findFrameworkPayloads(doc(page(`<script>${"x".repeat(500)};window.__NUXT__={}</script>`)));
+    const deep = findFrameworkPayloads(
+      doc(page(`<script>${"x".repeat(500)};window.__NUXT__={}</script>`))
+    );
     expect(deep).toEqual([]);
   });
 
   test("a page of thousands of scripts is read only to its cap", () => {
-    const scripts = Array.from({ length: 5000 }, () => `<script>self.__next_f.push([1,"a"])</script>`).join("");
+    const scripts = Array.from(
+      { length: 5000 },
+      () => `<script>self.__next_f.push([1,"a"])</script>`
+    ).join("");
     const [flight] = findFrameworkPayloads(doc(page(scripts)));
     expect(flight!.count).toBe(2000);
   });
@@ -91,16 +118,22 @@ describe("findFrameworkPayloads", () => {
 
 describe("perf/framework-data-payload", () => {
   test("a text page with 150 KB of flight data is flagged at info, with every number", async () => {
-    const [check] = await run(page(`<main><h1>Docs</h1><p>${prose(300)}</p></main>${nextFlight(150)}`));
+    const [check] = await run(
+      page(`<main><h1>Docs</h1><p>${prose(300)}</p></main>${nextFlight(150)}`)
+    );
     expect(check?.status).toBe("info");
     expect(check?.message).toContain("self.__next_f");
     expect(check?.items?.[0]?.id).toBe("self.__next_f");
     expect(check?.details).toMatchObject({ formFields: 0, embeddedMedia: 0 });
-    expect((check?.details as { ratio: number }).ratio).toBeGreaterThanOrEqual(20);
+    expect((check?.details as { ratio: number }).ratio).toBeGreaterThanOrEqual(
+      20
+    );
   });
 
   test("__NEXT_DATA__ on a static page is flagged too", async () => {
-    const [check] = await run(page(`<article><p>${prose(200)}</p></article>${nextData(120)}`));
+    const [check] = await run(
+      page(`<article><p>${prose(200)}</p></article>${nextData(120)}`)
+    );
     expect(check?.status).toBe("info");
   });
 
@@ -116,15 +149,25 @@ describe("perf/framework-data-payload", () => {
   });
 
   test("an interactive page (many form fields) is not flagged, however big the payload", async () => {
-    const fields = Array.from({ length: 12 }, (_, i) => `<input type="text" name="f${i}">`).join("");
-    const [check] = await run(page(`<main><form>${fields}</form><p>${prose(200)}</p></main>${nextFlight(300)}`));
+    const fields = Array.from(
+      { length: 12 },
+      (_, i) => `<input type="text" name="f${i}">`
+    ).join("");
+    const [check] = await run(
+      page(
+        `<main><form>${fields}</form><p>${prose(200)}</p></main>${nextFlight(300)}`
+      )
+    );
     expect(check?.status).toBe("pass");
     expect(check?.message).toContain("interactive");
   });
 
   test("a page with embedded media is not flagged", async () => {
-    const media = '<canvas></canvas><video></video><iframe></iframe><audio></audio><embed><object></object>';
-    const [check] = await run(page(`<p>${prose(200)}</p>${media}${nextFlight(300)}`));
+    const media =
+      "<canvas></canvas><video></video><iframe></iframe><audio></audio><embed><object></object>";
+    const [check] = await run(
+      page(`<p>${prose(200)}</p>${media}${nextFlight(300)}`)
+    );
     expect(check?.status).toBe("pass");
   });
 
@@ -144,7 +187,7 @@ describe("perf/framework-data-payload", () => {
 
   test("hidden inputs and submit buttons are not interactivity", async () => {
     const html = page(
-      `<p>${prose(200)}</p><form><input type="hidden" name="a"><input type="submit"></form>${nextFlight(150)}`,
+      `<p>${prose(200)}</p><form><input type="hidden" name="a"><input type="submit"></form>${nextFlight(150)}`
     );
     expect((await run(html))[0]?.status).toBe("info");
   });
@@ -156,7 +199,11 @@ describe("perf/framework-data-payload", () => {
   });
 
   test("a page with no document emits nothing", async () => {
-    const ctx = { page: {}, parsed: { document: null }, options: {} } as unknown as RuleContext;
+    const ctx = {
+      page: {},
+      parsed: { document: null },
+      options: {},
+    } as unknown as RuleContext;
     const result = await frameworkDataPayloadRule.run(ctx);
     expect(result.checks).toEqual([]);
   });

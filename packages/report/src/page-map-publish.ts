@@ -30,9 +30,12 @@ const clipList = (list: readonly string[] | undefined): string[] =>
   (list ?? []).slice(0, LIMITS.maxListItems).map(clip);
 
 const count = (value: number | null | undefined): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : null;
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : null;
 
-const countOr0 = (value: number | null | undefined): number => count(value) ?? 0;
+const countOr0 = (value: number | null | undefined): number =>
+  count(value) ?? 0;
 
 /** One row at its publish bound: strings clipped, lists cut, counts whole and non-negative. */
 export function publishPageMapRow(row: PageMapRow): PageMapPublishedRow {
@@ -71,11 +74,11 @@ export function publishPageMapRow(row: PageMapRow): PageMapPublishedRow {
  */
 export function buildPageMap(
   rows: readonly PageMapRow[],
-  meta: { site: string; generatedAt?: Date },
+  meta: { site: string; generatedAt?: Date }
 ): PageMap | null {
   if (rows.length === 0) return null;
   const ordered = [...rows].sort(
-    (a, b) => a.depth - b.depth || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0),
+    (a, b) => a.depth - b.depth || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
   );
   const kept = ordered.slice(0, LIMITS.maxRows).map(publishPageMapRow);
   return {
@@ -96,7 +99,9 @@ export function buildPageMap(
  * raised to the rows present, never lowered.
  */
 export function projectPageMap(map: PageMap): PageMap {
-  const kept = map.pages.slice(0, LIMITS.maxRows).map((row) => publishPageMapRow(row as PageMapRow));
+  const kept = map.pages
+    .slice(0, LIMITS.maxRows)
+    .map((row) => publishPageMapRow(row as PageMapRow));
   const total = Math.max(countOr0(map.total), map.pages.length);
   return {
     format: PAGE_MAP_FORMAT,

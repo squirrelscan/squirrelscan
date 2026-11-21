@@ -6,9 +6,10 @@
 // values: nothing here is a real credential, and every value is assembled from
 // parts at runtime so no line is a whole token-shaped literal.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../../src/types";
 
 import {
   leakedSecretsRule,
@@ -16,8 +17,13 @@ import {
   scanContent,
   unattributedKeyType,
 } from "../../src/security/leaked-secrets";
-import type { RuleContext } from "../../src/types";
-import { awsKeySuffix, githubToken, mixedRun, runOf, seededRng } from "./leaked-secrets/generators";
+import {
+  awsKeySuffix,
+  githubToken,
+  mixedRun,
+  runOf,
+  seededRng,
+} from "./leaked-secrets/generators";
 
 const PAGE_URL = "https://app.acme.test/";
 const HEX = "0123456789abcdef";
@@ -26,7 +32,9 @@ function ctx(html: string): RuleContext {
   return {
     site: {
       baseUrl: PAGE_URL,
-      pages: [{ url: PAGE_URL, statusCode: 200, parsed: parsePage(html, PAGE_URL) }],
+      pages: [
+        { url: PAGE_URL, statusCode: 200, parsed: parsePage(html, PAGE_URL) },
+      ],
       robotsTxt: null,
       sitemaps: null,
       scripts: [],
@@ -39,13 +47,16 @@ function ctx(html: string): RuleContext {
 async function reported(html: string): Promise<Array<[string, string]>> {
   const out: Array<[string, string]> = [];
   for (const check of (await leakedSecretsRule.run(ctx(html))).checks) {
-    for (const item of check.items ?? []) out.push([check.name, item.id.slice(0, item.id.lastIndexOf(": "))]);
+    for (const item of check.items ?? [])
+      out.push([check.name, item.id.slice(0, item.id.lastIndexOf(": "))]);
   }
   return out;
 }
 
-const script = (js: string) => `<!doctype html><html><body><script>${js}</script></body></html>`;
-const body = (html: string) => `<!doctype html><html><body>${html}</body></html>`;
+const script = (js: string) =>
+  `<!doctype html><html><body><script>${js}</script></body></html>`;
+const body = (html: string) =>
+  `<!doctype html><html><body>${html}</body></html>`;
 
 // A synthetic password: random, with digits and symbols, never a word.
 const PASSWORD = "K8#m" + "Z2!qX7vP"; // pragma: allowlist secret
@@ -65,7 +76,9 @@ describe("generic assignments: labels and expressions are not values", () => {
   test("random values under credential keys still report", async () => {
     const apiKey = mixedRun(seededRng(5100), 32);
     const token = runOf(seededRng(5101), HEX, 40);
-    expect(await reported(script(`{apiKey:"${apiKey}",accessToken:"${token}"}`))).toEqual([
+    expect(
+      await reported(script(`{apiKey:"${apiKey}",accessToken:"${token}"}`))
+    ).toEqual([
       ["leaked-secrets-medium", "Generic API Key Assignment"],
       ["leaked-secrets-medium", "Generic Token Assignment"],
     ]);
@@ -93,9 +106,15 @@ describe("generic assignments: labels and expressions are not values", () => {
   });
 
   test("a template expression standing in for the value is not a secret", async () => {
-    expect(await reported(body(`<input type="password" password="{form.password}">`))).toEqual([]);
-    expect(await reported(script(`{password:"{{ user.password }}"}`))).toEqual([]);
-    expect(await reported(script(`{secret_key:"<%= config.secret %>"}`))).toEqual([]);
+    expect(
+      await reported(body(`<input type="password" password="{form.password}">`))
+    ).toEqual([]);
+    expect(await reported(script(`{password:"{{ user.password }}"}`))).toEqual(
+      []
+    );
+    expect(
+      await reported(script(`{secret_key:"<%= config.secret %>"}`))
+    ).toEqual([]);
   });
 
   test("positive controls: real-shaped assignments beside labels, sampleRate and docs text still report", async () => {
@@ -104,22 +123,30 @@ describe("generic assignments: labels and expressions are not values", () => {
       // An HTML attribute after a closing quote is an assignment, not a label.
       body(`<x-login value="hello" password="${PASSWORD}"></x-login>`),
       // Real config beside telemetry options.
-      script(`Sentry.init({sampleRate:0.25,tracesSampleRate:1});var cfg={sampleRate:1,password:"${PASSWORD}"};`),
+      script(
+        `Sentry.init({sampleRate:0.25,tracesSampleRate:1});var cfg={sampleRate:1,password:"${PASSWORD}"};`
+      ),
       script(`var cfg={sampleRate:0.5,apiKey:"${apiKey}"};`),
       // Documentation prose next to a real assignment.
-      body(`<p>Documentation: set the password below before you deploy.</p><script>var c={password:"${PASSWORD}"}</script>`),
+      body(
+        `<p>Documentation: set the password below before you deploy.</p><script>var c={password:"${PASSWORD}"}</script>`
+      ),
       // A label in the same bundle does not hide the real value after it.
-      script(`a.jsx("label",{children:"Password:"});var c={password:"${PASSWORD}"};`),
+      script(
+        `a.jsx("label",{children:"Password:"});var c={password:"${PASSWORD}"};`
+      ),
       // One accented letter among digits and symbols is still a password.
       script(`var c={password:"Kä8#mZ2!qX"};`), // pragma: allowlist secret
       // A quote followed by a space closes an earlier string, not a label.
       script(`var c={name: "bob" password: "${PASSWORD}"};`),
     ];
     for (const html of pages) {
-      const found = (await reported(html));
+      const found = await reported(html);
       expect(found.length).toBe(1);
       expect((await found[0]!)[0]).toBe("leaked-secrets-medium");
-      expect((await found[0]!)[1]).toMatch(/^Generic (Secret|API Key) Assignment$/);
+      expect((await found[0]!)[1]).toMatch(
+        /^Generic (Secret|API Key) Assignment$/
+      );
     }
   });
 });
@@ -134,28 +161,54 @@ describe("connection strings: documentation placeholders are not credentials", (
       `<code>mongodb+srv://app:your_password@cluster0.mongo.acme.test/db</code>`, // pragma: allowlist secret
       `<code>postgresql://app@host/db?password=YOUR_PASSWORD</code>`,
     ];
-    for (const html of negatives) expect(await reported(body(html))).toEqual([]);
+    for (const html of negatives)
+      expect(await reported(body(html))).toEqual([]);
   });
 
   test("a real-looking password under a placeholder host or database is kept, at medium", async () => {
     const secret = mixedRun(seededRng(5102), 18);
-    const found = (await reported(body(`<code>postgresql://admin:${secret}@host:5432/dbname</code>`)));
-    expect(found).toEqual([["leaked-secrets-medium", "PostgreSQL Connection String"]]);
-    const raw = scanContent(`postgresql://admin:${secret}@host:5432/dbname`, "html");
+    const found = await reported(
+      body(`<code>postgresql://admin:${secret}@host:5432/dbname</code>`)
+    );
+    expect(found).toEqual([
+      ["leaked-secrets-medium", "PostgreSQL Connection String"],
+    ]);
+    const raw = scanContent(
+      `postgresql://admin:${secret}@host:5432/dbname`,
+      "html"
+    );
     expect(raw[0]?.extra).toEqual({ placeholder: "host" });
   });
 
   test("positive controls: a deployed connection string stays high", async () => {
     const secret = mixedRun(seededRng(5103), 18);
     // A symbol-only password is not a mask.
-    expect(await reported(body(`<pre>postgres://app:!!!!----@db.internal.acme.test:5432/app</pre>`))).toEqual([ // pragma: allowlist secret
+    expect(
+      await reported(
+        body(
+          `<pre>postgres://app:!!!!----@db.internal.acme.test:5432/app</pre>`
+        )
+      )
+    ).toEqual([
+      // pragma: allowlist secret
       ["leaked-secrets-high", "PostgreSQL Connection String"],
     ]);
-    expect(await reported(body(`<pre>DATABASE_URL=postgres://app:${secret}@db.internal.acme.test:5432/app</pre>`))).toEqual([
-      ["leaked-secrets-high", "PostgreSQL Connection String"],
-    ]);
+    expect(
+      await reported(
+        body(
+          `<pre>DATABASE_URL=postgres://app:${secret}@db.internal.acme.test:5432/app</pre>`
+        )
+      )
+    ).toEqual([["leaked-secrets-high", "PostgreSQL Connection String"]]);
     // A placeholder in the authority does not hide a real query password.
-    expect(await reported(body(`<pre>postgresql://app:password@db.acme.test/app?password=${secret}</pre>`))).toEqual([ // pragma: allowlist secret
+    expect(
+      await reported(
+        body(
+          `<pre>postgresql://app:password@db.acme.test/app?password=${secret}</pre>`
+        )
+      )
+    ).toEqual([
+      // pragma: allowlist secret
       ["leaked-secrets-high", "PostgreSQL Connection String"],
     ]);
   });
@@ -178,8 +231,14 @@ describe("provider tokens: a substring of a longer value is not the provider's t
     [`var t={text:"${github}Dashboard"};`, "GitHub Personal Access Token"],
     [`var t={text:"${github}42"};`, "GitHub Personal Access Token"],
     // A fixed-length shape grown by more of its own alphabet.
-    [`var asset={id:"key-${mailgunBody}${mixedRun(r, 12)}"};`, "Mailgun API Key"],
-    [`var asset={id:"AC${twilioBody}${runOf(r, HEX, 16)}"};`, "Twilio Account SID"],
+    [
+      `var asset={id:"key-${mailgunBody}${mixedRun(r, 12)}"};`,
+      "Mailgun API Key",
+    ],
+    [
+      `var asset={id:"AC${twilioBody}${runOf(r, HEX, 16)}"};`,
+      "Twilio Account SID",
+    ],
     // Glued to a `_` or `-` suffix.
     [`var env={id:"${awsKey}_PROD"};`, "AWS Access Key ID"],
     [`var css={cls:"key-${mailgunBody}-active"};`, "Mailgun API Key"],
@@ -188,13 +247,16 @@ describe("provider tokens: a substring of a longer value is not the provider's t
   test("negatives: a provider shape that runs on past its token is never reported under the provider's name", async () => {
     const providers = new Set(CONTINUED.map(([, resembles]) => resembles));
     for (const [js] of CONTINUED) {
-      for (const [, type] of (await reported(script(js)))) expect(providers.has(type)).toBe(false);
+      for (const [, type] of await reported(script(js)))
+        expect(providers.has(type)).toBe(false);
     }
   });
 
   test("positive controls: the whole continued token stays reviewable at medium, provider unknown", async () => {
     for (const [js, resembles] of CONTINUED) {
-      expect(await reported(script(js))).toEqual([["leaked-secrets-medium", unknown]]);
+      expect(await reported(script(js))).toEqual([
+        ["leaked-secrets-medium", unknown],
+      ]);
       const raw = scanContent(js, "inline-script");
       expect(raw[0]?.extra).toEqual({ provider: "unknown", resembles });
     }
@@ -203,15 +265,27 @@ describe("provider tokens: a substring of a longer value is not the provider's t
   test("negative: a continued shape its provider's own structure rules out is dropped", async () => {
     // `ghp_` + 36 random characters fails GitHub's CRC32 checksum, so the
     // matched part is not a GitHub token however the run continues.
-    expect(await reported(script(`var asset={id:"ghp_${mixedRun(r, 36)}${mixedRun(r, 12)}"};`))).toEqual([]);
+    expect(
+      await reported(
+        script(`var asset={id:"ghp_${mixedRun(r, 36)}${mixedRun(r, 12)}"};`)
+      )
+    ).toEqual([]);
   });
 
   test("positive controls: the same shapes delimited on both sides keep the provider's name", async () => {
-    expect(await reported(script(`var c={k:"key-${mailgunBody}"};`))).toEqual([["leaked-secrets-high", "Mailgun API Key"]]);
-    expect(await reported(script(`var c={sid:"AC${twilioBody}"};`))).toEqual([["leaked-secrets-high", "Twilio Account SID"]]);
+    expect(await reported(script(`var c={k:"key-${mailgunBody}"};`))).toEqual([
+      ["leaked-secrets-high", "Mailgun API Key"],
+    ]);
+    expect(await reported(script(`var c={sid:"AC${twilioBody}"};`))).toEqual([
+      ["leaked-secrets-high", "Twilio Account SID"],
+    ]);
     // Alone the id is the public half of the pair: medium, still in the output (#1294).
-    expect(await reported(script(`var c={id:"${awsKey}"};`))).toEqual([["leaked-secrets-medium", "AWS Access Key ID"]]);
-    expect(await reported(script(`var c={t:"${github}"};`))).toEqual([["leaked-secrets-high", "GitHub Personal Access Token"]]);
+    expect(await reported(script(`var c={id:"${awsKey}"};`))).toEqual([
+      ["leaked-secrets-medium", "AWS Access Key ID"],
+    ]);
+    expect(await reported(script(`var c={t:"${github}"};`))).toEqual([
+      ["leaked-secrets-high", "GitHub Personal Access Token"],
+    ]);
   });
 });
 
@@ -225,20 +299,36 @@ describe("provider attribution: an sk_live_ prefix alone does not make a key Str
       const html = body(
         `<script src="https://widgets.vendor.test/w.js" data-widget-key="${stripeShape}${suffix}"></script>`
       );
-      expect(await reported(html)).toEqual([["leaked-secrets-medium", unknownType]]);
-      const raw = scanContent(`var w={widgetKey:"${stripeShape}${suffix}"};`, "inline-script");
-      expect(raw.map((f) => [f.type, f.value])).toEqual([[unknownType, `${stripeShape}${suffix}`]]);
-      expect(raw[0]?.extra).toMatchObject({ prefix: "sk_live_", provider: "unknown", resembles: "Stripe Live Key" });
+      expect(await reported(html)).toEqual([
+        ["leaked-secrets-medium", unknownType],
+      ]);
+      const raw = scanContent(
+        `var w={widgetKey:"${stripeShape}${suffix}"};`,
+        "inline-script"
+      );
+      expect(raw.map((f) => [f.type, f.value])).toEqual([
+        [unknownType, `${stripeShape}${suffix}`],
+      ]);
+      expect(raw[0]?.extra).toMatchObject({
+        prefix: "sk_live_",
+        provider: "unknown",
+        resembles: "Stripe Live Key",
+      });
     }
   });
 
   test("an sk_test_ key with a suffix is qualified the same way", () => {
-    const raw = scanContent(`var w={key:"sk_test_${core}_widget"};`, "inline-script");
+    const raw = scanContent(
+      `var w={key:"sk_test_${core}_widget"};`,
+      "inline-script"
+    );
     expect(raw.map((f) => f.type)).toEqual([unattributedKeyType("sk_test_")]);
   });
 
   test("positive control: a delimited sk_live_ key is still Stripe's, critical in a script", async () => {
-    expect(await reported(script(`var s={stripeKey:"${stripeShape}"};`))).toEqual([["leaked-secrets-critical", "Stripe Live Key"]]);
+    expect(
+      await reported(script(`var s={stripeKey:"${stripeShape}"};`))
+    ).toEqual([["leaked-secrets-critical", "Stripe Live Key"]]);
   });
 });
 
@@ -259,19 +349,30 @@ describe("Statsig keys: a server secret is separated from a client SDK key", () 
   });
 
   test("the client key alone does not fail the rule", async () => {
-    const result = (await leakedSecretsRule.run(ctx(script(`Statsig.config={statsig:{clientSideApiKey:"${clientKey}"}};`))));
-    expect(result.checks.map((c) => c.name).sort()).toEqual(["leaked-secrets", "leaked-secrets-public"]);
+    const result = await leakedSecretsRule.run(
+      ctx(script(`Statsig.config={statsig:{clientSideApiKey:"${clientKey}"}};`))
+    );
+    expect(result.checks.map((c) => c.name).sort()).toEqual([
+      "leaked-secrets",
+      "leaked-secrets-public",
+    ]);
   });
 
   test("an env-style server secret names its provider in the variable", () => {
-    const raw = scanContent(`window.__ENV={STATSIG_SERVER_SECRET:"${serverKey}"};`, "inline-script");
+    const raw = scanContent(
+      `window.__ENV={STATSIG_SERVER_SECRET:"${serverKey}"};`,
+      "inline-script"
+    );
     expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([
       ["Statsig Server Secret Key", "high", false],
     ]);
   });
 
   test("output separates exposure from untested validity and scope", async () => {
-    const raw = scanContent(`var c={statsig:{serverSideApiKey:"${serverKey}"}};`, "inline-script");
+    const raw = scanContent(
+      `var c={statsig:{serverSideApiKey:"${serverKey}"}};`,
+      "inline-script"
+    );
     expect(raw[0]?.extra).toEqual({
       provider: "Statsig",
       keyKind: "server-secret",
@@ -280,19 +381,34 @@ describe("Statsig keys: a server secret is separated from a client SDK key", () 
       validity: "not tested",
       scope: "not tested",
     });
-    const result = (await leakedSecretsRule.run(ctx(script(`var c={statsig:{serverSideApiKey:"${serverKey}"}};`))));
+    const result = await leakedSecretsRule.run(
+      ctx(script(`var c={statsig:{serverSideApiKey:"${serverKey}"}};`))
+    );
     const high = result.checks.find((c) => c.name === "leaked-secrets-high");
-    expect(high?.items?.[0]?.meta).toMatchObject({ validity: "not tested", scope: "not tested" });
+    expect(high?.items?.[0]?.meta).toMatchObject({
+      validity: "not tested",
+      scope: "not tested",
+    });
   });
 
   test("a secret- prefix without Statsig named in front of the key keeps a qualified, unknown-provider label", () => {
     const unknown = unattributedKeyType("secret-");
     const far = `/* statsig */${"x".repeat(150)};var c={serverSideApiKey:"${serverKey}"};`;
-    const pages = [`var c={apiKey:"${serverKey}"};`, far, `var c={apiKey:"${serverKey}"}; /* statsig */`];
+    const pages = [
+      `var c={apiKey:"${serverKey}"};`,
+      far,
+      `var c={apiKey:"${serverKey}"}; /* statsig */`,
+    ];
     for (const js of pages) {
       const raw = scanContent(js, "inline-script");
-      expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([[unknown, "medium", false]]);
-      expect(raw[0]?.extra).toMatchObject({ prefix: "secret-", provider: "unknown", validity: "not tested" });
+      expect(raw.map((f) => [f.type, f.confidence, f.publicByDesign])).toEqual([
+        [unknown, "medium", false],
+      ]);
+      expect(raw[0]?.extra).toMatchObject({
+        prefix: "secret-",
+        provider: "unknown",
+        validity: "not tested",
+      });
     }
   });
 

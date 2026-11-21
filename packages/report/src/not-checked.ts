@@ -10,6 +10,8 @@
 // links" when nothing was checked. This turns each one into a visible "Not
 // checked" line with the reason and what to run instead.
 
+import type { LockedRuleReason } from "@squirrelscan/core-contracts";
+
 import {
   CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
@@ -25,10 +27,10 @@ import {
   STRICT_PROBE_UNANSWERED_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
-
-import { classifyRuleOutcome, type RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
-
-import type { LockedRuleReason } from "@squirrelscan/core-contracts";
+import {
+  classifyRuleOutcome,
+  type RuleOutcome,
+} from "@squirrelscan/core-contracts/rule-outcome";
 
 import type { CheckResult, ReportRuleResult } from "./types";
 
@@ -66,60 +68,61 @@ export interface NotCheckedReportShape {
   ruleResults: Record<string, ReportRuleResult>;
 }
 
-const HINTS: ReadonlyMap<string, string> = new Map(Object.entries({
-  // #1259: no handshake was made. The rule's message names why.
-  [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON]:
-    "Run the audit again from a network that can open a direct TLS connection to the host (with --offline it contacts the audited host only, and behind an HTTP proxy it needs one that allows CONNECT to the address), or check the certificate with a TLS tool.",
-  [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
-    "Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.",
-  [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
-    "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
-  [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
-    "Raise the limit with external_links.max_links, or audit more pages, to check them.",
-  [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
-    "Run the audit again to check them.",
-  [RULE_TIMED_OUT_SKIP_REASON]:
-    "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
-  // #1269: `squirrel analyze` makes no live request.
-  "headers-not-recorded":
-    "The stored pages carry no response headers, so a missing header proves nothing. Run the audit again to record them.",
-  // #704: reliability/js-errors on pages the cloud render recorded no runtime data for.
-  [RUNTIME_NOT_RECORDED_SKIP_REASON]:
-    "The cloud render recorded no runtime data (page errors, console errors or failed requests) for these pages, so a JavaScript error there would not be found. The check covers them once the renderer records it; run the audit again then.",
-  // pub#2035: no verdict on the home page this audit (not fetched, or failed for an unknown reason).
-  "entry-not-fetched":
-    "This audit has no result for the home page: it was not fetched, or it failed for a reason squirrel could not classify. Run a full audit of the site to check it.",
-  // repo#2036: crawl/server-errors when the crawl failed to fetch some pages.
-  "pages-not-fetched":
-    "The crawl could not fetch some pages (a timeout, a refused connection or a body it could not read), and any of them may still answer 5xx. Run the audit again to check them.",
-  // repo#1322: ax/markdown-response's strict Accept: text/markdown request got no answer.
-  [STRICT_PROBE_UNANSWERED_SKIP_REASON]:
-    "The homepage did not answer the strict Accept: text/markdown request (refused, throttled, timed out or out of probe budget), so it may still return a server error to agents that ask for Markdown. Run the audit again later, or allow the audit through the site's bot protection.",
-  "analyze-offline":
-    "Run `squirrel audit` to probe the live site.",
-  // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
-  "probe-level-too-low":
-    "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test.",
-  "probe-incomplete":
-    "The site throttled the probes, answered with a bot challenge, or the probe budget ran out, so the paths not reached may be exposed. Run the audit again later, or raise --probe-budget.",
-  // #1144: the inbound-link rules on a crawl that stopped at its page cap.
-  [CRAWL_CAPPED_SKIP_REASON]:
-    "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
-  // repo#2129: the cloud prefetch hit its time budget before this service answered.
-  [CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON]:
-    "The cloud analysis ran out of its time budget on this audit before this result came back. Run the audit again, or audit fewer pages, to check it.",
-  // #1794: a discovery probe that gave no verdict. The file may exist, so these never read as "checked, absent".
-  "discovery-probe-not-approved":
-    "Add the path to [crawler] discovery_probe_paths (or pass --discovery-probe-path) to check it.",
-  "discovery-probe-not-sent":
-    "Run the audit again with discovery probes on and enough time for the crawl preamble (the probe was not sent).",
-  "discovery-probe-refused":
-    "The site refused or throttled the request, so the file may exist. Allow the audit through the site's bot protection, or run the audit again later.",
-  "discovery-probe-no-answer":
-    "The request went out and nothing answered (a timeout or a refused connection). Run the audit again to check it.",
-  "discovery-probe-redirect-not-followed":
-    "The request was redirected off its approved path. Approve the destination path in [crawler] discovery_probe_paths to check it.",
-}));
+const HINTS: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    // #1259: no handshake was made. The rule's message names why.
+    [TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON]:
+      "Run the audit again from a network that can open a direct TLS connection to the host (with --offline it contacts the audited host only, and behind an HTTP proxy it needs one that allows CONNECT to the address), or check the certificate with a TLS tool.",
+    [EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON]:
+      "Turn external link checks on to check them: in the CLI pass --external-links (or drop --no-external-links, --offline, or external_links.enabled = false); in the cloud they are a website setting.",
+    [LINK_TARGETS_NOT_FETCHED_SKIP_REASON]:
+      "Turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false), raise internal_links.max_targets, or run a Surface or Full audit, which follows links, to check them.",
+    [EXTERNAL_LINKS_OVER_CAP_SKIP_REASON]:
+      "Raise the limit with external_links.max_links, or audit more pages, to check them.",
+    [EXTERNAL_LINKS_OUT_OF_TIME_SKIP_REASON]:
+      "Run the audit again to check them.",
+    [RULE_TIMED_OUT_SKIP_REASON]:
+      "A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.",
+    // #1269: `squirrel analyze` makes no live request.
+    "headers-not-recorded":
+      "The stored pages carry no response headers, so a missing header proves nothing. Run the audit again to record them.",
+    // #704: reliability/js-errors on pages the cloud render recorded no runtime data for.
+    [RUNTIME_NOT_RECORDED_SKIP_REASON]:
+      "The cloud render recorded no runtime data (page errors, console errors or failed requests) for these pages, so a JavaScript error there would not be found. The check covers them once the renderer records it; run the audit again then.",
+    // pub#2035: no verdict on the home page this audit (not fetched, or failed for an unknown reason).
+    "entry-not-fetched":
+      "This audit has no result for the home page: it was not fetched, or it failed for a reason squirrel could not classify. Run a full audit of the site to check it.",
+    // repo#2036: crawl/server-errors when the crawl failed to fetch some pages.
+    "pages-not-fetched":
+      "The crawl could not fetch some pages (a timeout, a refused connection or a body it could not read), and any of them may still answer 5xx. Run the audit again to check them.",
+    // repo#1322: ax/markdown-response's strict Accept: text/markdown request got no answer.
+    [STRICT_PROBE_UNANSWERED_SKIP_REASON]:
+      "The homepage did not answer the strict Accept: text/markdown request (refused, throttled, timed out or out of probe budget), so it may still return a server error to agents that ask for Markdown. Run the audit again later, or allow the audit through the site's bot protection.",
+    "analyze-offline": "Run `squirrel audit` to probe the live site.",
+    // #1932: a probing rule below its level, or one the site throttled or the budget cut short.
+    "probe-level-too-low":
+      "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test.",
+    "probe-incomplete":
+      "The site throttled the probes, answered with a bot challenge, or the probe budget ran out, so the paths not reached may be exposed. Run the audit again later, or raise --probe-budget.",
+    // #1144: the inbound-link rules on a crawl that stopped at its page cap.
+    [CRAWL_CAPPED_SKIP_REASON]:
+      "Raise the page limit (--max-pages, or crawler.max_pages) so the crawl reaches every page, to check them.",
+    // repo#2129: the cloud prefetch hit its time budget before this service answered.
+    [CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON]:
+      "The cloud analysis ran out of its time budget on this audit before this result came back. Run the audit again, or audit fewer pages, to check it.",
+    // #1794: a discovery probe that gave no verdict. The file may exist, so these never read as "checked, absent".
+    "discovery-probe-not-approved":
+      "Add the path to [crawler] discovery_probe_paths (or pass --discovery-probe-path) to check it.",
+    "discovery-probe-not-sent":
+      "Run the audit again with discovery probes on and enough time for the crawl preamble (the probe was not sent).",
+    "discovery-probe-refused":
+      "The site refused or throttled the request, so the file may exist. Allow the audit through the site's bot protection, or run the audit again later.",
+    "discovery-probe-no-answer":
+      "The request went out and nothing answered (a timeout or a refused connection). Run the audit again to check it.",
+    "discovery-probe-redirect-not-followed":
+      "The request was redirected off its approved path. Approve the destination path in [crawler] discovery_probe_paths to check it.",
+  })
+);
 
 // #3922: a hosted audit's user cannot change where it runs, so no advice about
 // networks, proxies or --offline.
@@ -154,13 +157,15 @@ function linkTargetsHint(details: Record<string, unknown> | undefined): string {
   const steps: string[] = [];
   if (causes.off) {
     steps.push(
-      "turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false)",
+      "turn internal link checks back on (they are off with --no-internal-links or internal_links.enabled = false)"
     );
   }
   if (causes.overLimit) steps.push("raise internal_links.max_targets");
   steps.push("run a Surface or Full audit, which follows links,");
   const text =
-    steps.length === 1 ? steps[0]! : `${steps.slice(0, -1).join(", ")}, or ${steps.at(-1)}`;
+    steps.length === 1
+      ? steps[0]!
+      : `${steps.slice(0, -1).join(", ")}, or ${steps.at(-1)}`;
   return `${text.charAt(0).toUpperCase()}${text.slice(1)} to check them.`;
 }
 
@@ -188,19 +193,35 @@ function causeOf(check: { details?: Record<string, unknown> }): {
   // escaped by each renderer, which already escapes the not-checked lines.
   // eslint-disable-next-line no-control-regex
   const detail =
-    typeof raw === "string" ? raw.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim() : "";
+    typeof raw === "string"
+      ? raw
+          .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
   return {
     cause,
     ...(detail
-      ? { causeDetail: detail.length > MAX_CAUSE_DETAIL ? `${detail.slice(0, MAX_CAUSE_DETAIL - 1)}…` : detail }
+      ? {
+          causeDetail:
+            detail.length > MAX_CAUSE_DETAIL
+              ? `${detail.slice(0, MAX_CAUSE_DETAIL - 1)}…`
+              : detail,
+        }
       : {}),
   };
 }
 
 /** The advice line for a not-checked check (exported for the own-property test, #3368). */
-export function hintFor(check: { skipReason?: string; details?: Record<string, unknown> }): string {
+export function hintFor(check: {
+  skipReason?: string;
+  details?: Record<string, unknown>;
+}): string {
   const { cause, causeDetail } = causeOf(check);
-  if (cause) return causeDetail ? `${CAUSE_HINTS[cause]} ${causeDetail}` : CAUSE_HINTS[cause];
+  if (cause)
+    return causeDetail
+      ? `${CAUSE_HINTS[cause]} ${causeDetail}`
+      : CAUSE_HINTS[cause];
   if (classifyRuleOutcome({ status: "skipped", ...check }) === "errored")
     return "This is a defect in squirrelscan, not a problem with your pages, and no finding there is not a clean result. Update squirrel and run the audit again, or report it at https://github.com/squirrelscan/squirrelscan/issues.";
   if (check.skipReason === LINK_TARGETS_NOT_FETCHED_SKIP_REASON)
@@ -248,13 +269,16 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
     const result = report.ruleResults[ruleId];
     if (!result) continue;
     const skipped = result.checks.filter(
-      (c) => c.status === "skipped" && c.skipReason === RULE_TIMED_OUT_SKIP_REASON,
+      (c) =>
+        c.status === "skipped" && c.skipReason === RULE_TIMED_OUT_SKIP_REASON
     );
     if (skipped.length === 0) continue;
     const num = (value: unknown): number | undefined =>
       typeof value === "number" && Number.isFinite(value) ? value : undefined;
     const errored = skipped.some((c) => classifyRuleOutcome(c) === "errored");
-    const summary = result.checks.find((c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`);
+    const summary = result.checks.find(
+      (c) => c.name === `${ruleId}-${errored ? "errors" : "timeouts"}`
+    );
     // The summary's count is final. Without it (a published report may have cut the
     // row) the most any skipped row says: a fold keeps the pages it covered in
     // `occurrences` / `pagesTruncated`, a live row its running `pages`, else the
@@ -268,9 +292,9 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
             num(c.details?.pages) ?? 0,
             num(c.details?.occurrences) ?? 0,
             num(c.details?.pagesTruncated) ?? 0,
-            c.pages?.length ?? 0,
-          ),
-        ),
+            c.pages?.length ?? 0
+          )
+        )
       );
     out.push({
       ruleId,
@@ -282,7 +306,9 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
         ? {
             errored: true,
             ...(summary?.details?.site === true ? { site: true } : {}),
-            ...(typeof skipped[0]!.details?.error === "string" ? { error: skipped[0]!.details.error } : {}),
+            ...(typeof skipped[0]!.details?.error === "string"
+              ? { error: skipped[0]!.details.error }
+              : {}),
           }
         : {}),
     });
@@ -294,10 +320,14 @@ export function timedOutRules(report: NotCheckedReportShape): TimedOutRule[] {
 export function timedOutMessage(rule: TimedOutRule): string {
   if (rule.errored) {
     const first = rule.error ? ` (first error: ${rule.error})` : "";
-    if (rule.site) return `${rule.name} hit an internal squirrelscan error and was not evaluated for the site${first}`;
+    if (rule.site)
+      return `${rule.name} hit an internal squirrelscan error and was not evaluated for the site${first}`;
     return `${rule.name} hit an internal squirrelscan error on ${rule.pages} page${rule.pages === 1 ? "" : "s"} and was not evaluated${first}`;
   }
-  const budget = rule.budgetMs !== undefined ? ` (exceeded its ${rule.budgetMs} ms time budget)` : "";
+  const budget =
+    rule.budgetMs !== undefined
+      ? ` (exceeded its ${rule.budgetMs} ms time budget)`
+      : "";
   return `${rule.name} timed out on ${rule.pages} page${rule.pages === 1 ? "" : "s"}${budget}`;
 }
 
@@ -313,7 +343,9 @@ function erroredPages(result: ReportRuleResult): string[] {
   return [...out].slice(0, MAX_NOT_CHECKED_PAGES);
 }
 
-export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[] {
+export function notCheckedRules(
+  report: NotCheckedReportShape
+): NotCheckedRule[] {
   const out: NotCheckedRule[] = [];
   for (const ruleId of Object.keys(report.ruleResults)) {
     const result = report.ruleResults[ruleId];
@@ -329,7 +361,7 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
         // consumer would resolve by absence.
         (!info ||
           isDiscoveryProbeSkipReason(c.skipReason) ||
-          c.skipReason === STRICT_PROBE_UNANSWERED_SKIP_REASON),
+          c.skipReason === STRICT_PROBE_UNANSWERED_SKIP_REASON)
     );
     if (!check || check.skipReason === undefined) continue;
     const timedOut =
@@ -347,10 +379,14 @@ export function notCheckedRules(report: NotCheckedReportShape): NotCheckedRule[]
       message: timedOut ? timedOutMessage(timedOut) : check.message,
       hint: hintFor(check),
       ...causeOf(check),
-      ...(timedOut?.errored && !timedOut.site ? { pages: erroredPages(result) } : {}),
+      ...(timedOut?.errored && !timedOut.site
+        ? { pages: erroredPages(result) }
+        : {}),
     });
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name) || a.ruleId.localeCompare(b.ruleId));
+  return out.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.ruleId.localeCompare(b.ruleId)
+  );
 }
 
 /** Ensure a sentence ends with a period, without doubling one. */

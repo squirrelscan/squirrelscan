@@ -1,20 +1,5 @@
 // Rule interface definitions for SquirrelScan linter-style architecture
 
-import type { Document } from "linkedom";
-
-import { z } from "zod";
-
-import type { PageType, Soft404Confirmation, Soft404Signal } from "@squirrelscan/parser";
-import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
-// Import and re-export RuleCategory from categories.ts (single source of truth)
-import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
-
-import type { RuleCategory } from "./categories";
-import type { CollectedSiteSignals } from "./collected-signals";
-import type { EndpointSurface } from "./endpoint-surface";
-import type { ProbeBudget } from "./probe-budget";
-import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
-import type { CloudResultStore, RuleCloudSpec } from "./cloud";
 import type {
   BusinessCategory,
   CheckItem,
@@ -53,6 +38,24 @@ import type {
   SitemapUrlStatusData,
   TwitterData,
 } from "@squirrelscan/core-contracts";
+// Import and re-export RuleCategory from categories.ts (single source of truth)
+import type { WcagCriterion } from "@squirrelscan/core-contracts/wcag";
+import type {
+  PageType,
+  Soft404Confirmation,
+  Soft404Signal,
+} from "@squirrelscan/parser";
+import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
+import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
+import type { Document } from "linkedom";
+
+import { z } from "zod";
+
+import type { RuleCategory } from "./categories";
+import type { CloudResultStore, RuleCloudSpec } from "./cloud";
+import type { CollectedSiteSignals } from "./collected-signals";
+import type { EndpointSurface } from "./endpoint-surface";
+import type { ProbeBudget } from "./probe-budget";
 export type { RuleCategory };
 export type { PageType };
 
@@ -382,7 +385,9 @@ export interface RuleMeta {
 }
 
 /** Whether findings of this rule may be collapsed across pages on their locator (repo#1885). */
-export function mayCollapseAcrossPages(meta: Pick<RuleMeta, "findingScope">): boolean {
+export function mayCollapseAcrossPages(
+  meta: Pick<RuleMeta, "findingScope">
+): boolean {
   return meta.findingScope === "resource";
 }
 
@@ -747,12 +752,20 @@ export interface SiteData {
     checked: number;
     cap: number;
     notRequested?: number;
-    notRequestedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    notRequestedLinks?: Array<{
+      href: string;
+      sourcePages: string[];
+      pageCount?: number;
+    }>;
     /** pub#770: links never requested because the egress policy refuses their address. */
     refused?: number;
     /** Of those, the ones refused on the URL alone, before any were selected under the limit. */
     refusedByUrl?: number;
-    refusedLinks?: Array<{ href: string; sourcePages: string[]; pageCount?: number }>;
+    refusedLinks?: Array<{
+      href: string;
+      sourcePages: string[];
+      pageCount?: number;
+    }>;
     /** repo#2613: of the `checked` links, the ones the check ran out of time on. */
     outOfTime?: number;
   };

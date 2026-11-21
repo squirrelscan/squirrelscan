@@ -4,11 +4,17 @@
 // create one, and only a MODEL label is trusted (a rules label is read from the
 // schema, so judging the schema against it is circular).
 
+import type {
+  CheckResult,
+  PageClassification,
+} from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageClassification } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
+import { loadAllRules } from "../src/loader";
 import { expectedTypeSchemaRule } from "../src/schema/expected-type";
 import {
   MAX_ANNOTATED_ELEMENTS,
@@ -20,20 +26,21 @@ import {
   jsonLdTypes,
   microdataAndRdfaTypes,
 } from "../src/schema/markup-types";
-import { loadAllRules } from "../src/loader";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function classification(
   label: string,
   confidence: number,
-  source: "model" | "rules" = "model",
+  source: "model" | "rules" = "model"
 ): PageClassification {
   return { pageType: { label, confidence, source }, degraded: "" };
 }
 
 function withSchema(...nodes: unknown[]): string {
   const scripts = nodes
-    .map((node) => `<script type="application/ld+json">${JSON.stringify(node)}</script>`)
+    .map(
+      (node) =>
+        `<script type="application/ld+json">${JSON.stringify(node)}</script>`
+    )
     .join("");
   return `<html><head><title>Page</title>${scripts}</head><body><p>content</p></body></html>`;
 }
@@ -42,7 +49,7 @@ function ctxFor(
   html: string,
   cls: PageClassification | undefined,
   options: Record<string, unknown> = {},
-  url = "https://example.com/page",
+  url = "https://example.com/page"
 ): RuleContext {
   const parsed = parsePage(html, url) as ParsedPage;
   return {
@@ -53,191 +60,317 @@ function ctxFor(
 }
 
 async function only(ctx: RuleContext): Promise<CheckResult> {
-  const checks = (await expectedTypeSchemaRule.run(ctx)).checks as CheckResult[];
+  const checks = (await expectedTypeSchemaRule.run(ctx))
+    .checks as CheckResult[];
   expect(checks).toHaveLength(1);
   expect(checks[0]!.name).toBe("expected-type");
   return checks[0]!;
 }
 
-const NOT_CONFIDENT = "Page type not classified with enough confidence to expect structured data";
+const NOT_CONFIDENT =
+  "Page type not classified with enough confidence to expect structured data";
 
 describe("schema/expected-type", () => {
   test("model product_detail 0.99 with no Product fails; confidence is in details, not the message", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "WebPage", name: "x" }), classification("product_detail", 0.99))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "WebPage", name: "x" }),
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("fail");
-    expect(check.message).toBe("Reads as a product page but declares no Product structured data");
-    expect(check.details).toMatchObject({ pageType: "product_detail", pageTypeSource: "model", confidence: 0.99, expected: "Product" });
+    expect(check.message).toBe(
+      "Reads as a product page but declares no Product structured data"
+    );
+    expect(check.details).toMatchObject({
+      pageType: "product_detail",
+      pageTypeSource: "model",
+      confidence: 0.99,
+      expected: "Product",
+    });
   });
 
   test("two pages of one page type at different confidences share one message", async () => {
     const html = "<html><body></body></html>";
-    const a = (await only(ctxFor(html, classification("docs", 0.93))));
-    const b = (await only(ctxFor(html, classification("docs", 0.98))));
+    const a = await only(ctxFor(html, classification("docs", 0.93)));
+    const b = await only(ctxFor(html, classification("docs", 0.98)));
     expect(a.message).toBe(b.message);
     expect(a.details).toMatchObject({ confidence: 0.93 });
     expect(b.details).toMatchObject({ confidence: 0.98 });
   });
 
   test("a page with no JSON-LD at all fails the same way", async () => {
-    const check = (await only(ctxFor("<html><body><p>hi</p></body></html>", classification("product_detail", 0.95))));
+    const check = await only(
+      ctxFor(
+        "<html><body><p>hi</p></body></html>",
+        classification("product_detail", 0.95)
+      )
+    );
     expect(check.status).toBe("fail");
   });
 
   test("ProductGroup satisfies product_detail", async () => {
-    const check = (await only(
-      ctxFor(withSchema({ "@type": "ProductGroup", name: "Parka" }), classification("product_detail", 0.99)),
-    ));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "ProductGroup", name: "Parka" }),
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Product page declares ProductGroup");
   });
 
   test("a Product inside an @graph is found", async () => {
-    const check = (await only(
+    const check = await only(
       ctxFor(
-        withSchema({ "@context": "https://schema.org", "@graph": [{ "@type": "WebPage" }, { "@type": "Product" }] }),
-        classification("product_detail", 0.99),
-      ),
-    ));
+        withSchema({
+          "@context": "https://schema.org",
+          "@graph": [{ "@type": "WebPage" }, { "@type": "Product" }],
+        }),
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("pass");
   });
 
   test("a URL-prefixed @type reads as its bare name", async () => {
-    const check = (await only(
-      ctxFor(withSchema({ "@type": "https://schema.org/Product" }), classification("product_detail", 0.99)),
-    ));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "https://schema.org/Product" }),
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("pass");
   });
 
   test("a Product declared as microdata counts: no JSON-LD is needed", async () => {
     const html =
       '<html><body><div itemscope itemtype="https://schema.org/Product"><span itemprop="name">Parka</span></div></body></html>';
-    const check = (await only(ctxFor(html, classification("product_detail", 0.99))));
+    const check = await only(
+      ctxFor(html, classification("product_detail", 0.99))
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Product page declares Product");
   });
 
   test("an Organization declared as RDFa counts for a contact page", async () => {
-    const html = '<html><body><div vocab="https://schema.org/" typeof="schema:Organization"></div></body></html>';
-    expect((await only(ctxFor(html, classification("contact", 0.99)))).status).toBe("pass");
+    const html =
+      '<html><body><div vocab="https://schema.org/" typeof="schema:Organization"></div></body></html>';
+    expect(
+      (await only(ctxFor(html, classification("contact", 0.99)))).status
+    ).toBe("pass");
   });
 
   test("a SoftwareApplication satisfies product_detail", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "SoftwareApplication" }), classification("product_detail", 0.99))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "SoftwareApplication" }),
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("pass");
   });
 
   test("a NaN or missing confidence reads as not confident", async () => {
     const html = "<html><body></body></html>";
-    expect((await only(ctxFor(html, classification("product_detail", Number.NaN)))).status).toBe("info");
-    const noConfidence = { pageType: { label: "product_detail", source: "model" }, degraded: "" } as unknown;
-    expect((await only(ctxFor(html, noConfidence as PageClassification))).status).toBe("info");
+    expect(
+      (await only(ctxFor(html, classification("product_detail", Number.NaN))))
+        .status
+    ).toBe("info");
+    const noConfidence = {
+      pageType: { label: "product_detail", source: "model" },
+      degraded: "",
+    } as unknown;
+    expect(
+      (await only(ctxFor(html, noConfidence as PageClassification))).status
+    ).toBe("info");
   });
 
   test("a Product nested as WebPage.mainEntity counts as declared", async () => {
-    const html = withSchema({ "@type": "WebPage", mainEntity: { "@type": "Product", name: "Parka" } });
-    const check = (await only(ctxFor(html, classification("product_detail", 0.99))));
+    const html = withSchema({
+      "@type": "WebPage",
+      mainEntity: { "@type": "Product", name: "Parka" },
+    });
+    const check = await only(
+      ctxFor(html, classification("product_detail", 0.99))
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Product page declares Product");
   });
 
   test("a nested type inside an array of nodes counts as declared", async () => {
-    const html = withSchema({ "@type": "WebPage", hasPart: [{ "@type": "Thing" }, { "@type": ["Product"] }] });
-    expect((await only(ctxFor(html, classification("product_detail", 0.99)))).status).toBe("pass");
+    const html = withSchema({
+      "@type": "WebPage",
+      hasPart: [{ "@type": "Thing" }, { "@type": ["Product"] }],
+    });
+    expect(
+      (await only(ctxFor(html, classification("product_detail", 0.99)))).status
+    ).toBe("pass");
   });
 
   test("a nested isPartOf Blog does not veto a post with no Article type", async () => {
-    const html = withSchema({ "@type": "WebPage", isPartOf: { "@type": "Blog", name: "Blog" } });
-    const check = (await only(ctxFor(html, classification("blog_post", 0.97))));
+    const html = withSchema({
+      "@type": "WebPage",
+      isPartOf: { "@type": "Blog", name: "Blog" },
+    });
+    const check = await only(ctxFor(html, classification("blog_post", 0.97)));
     expect(check.status).toBe("fail");
   });
 
   test("a top-level Blog still vetoes", async () => {
-    expect((await only(ctxFor(withSchema({ "@type": "Blog" }), classification("blog_post", 0.97)))).status).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "Blog" }),
+            classification("blog_post", 0.97)
+          )
+        )
+      ).status
+    ).toBe("pass");
   });
 
   test("an @context term definition is not read as a type", async () => {
     const html = withSchema({
-      "@context": { "@vocab": "https://schema.org/", url: { "@type": "Product" } },
+      "@context": {
+        "@vocab": "https://schema.org/",
+        url: { "@type": "Product" },
+      },
       "@type": "WebPage",
     });
-    expect((await only(ctxFor(html, classification("product_detail", 0.99)))).status).toBe("fail");
+    expect(
+      (await only(ctxFor(html, classification("product_detail", 0.99)))).status
+    ).toBe("fail");
   });
 
   test("markup too large to read is an info check, not a fail", async () => {
-    const filler = '<i itemtype="https://example.com/Thing"></i>'.repeat(MAX_ANNOTATED_ELEMENTS + 1);
-    const check = (await only(ctxFor(`<html><body>${filler}</body></html>`, classification("product_detail", 0.99))));
+    const filler = '<i itemtype="https://example.com/Thing"></i>'.repeat(
+      MAX_ANNOTATED_ELEMENTS + 1
+    );
+    const check = await only(
+      ctxFor(
+        `<html><body>${filler}</body></html>`,
+        classification("product_detail", 0.99)
+      )
+    );
     expect(check.status).toBe("info");
     expect(check.message).toBe(UNREADABLE_MESSAGE);
   });
 
   test("a found schema still passes when the rest of the markup is too large to read", async () => {
     const html = `<html><body><div itemtype="https://schema.org/Product"></div>${'<i itemtype="https://example.com/Thing"></i>'.repeat(
-      MAX_ANNOTATED_ELEMENTS + 1,
+      MAX_ANNOTATED_ELEMENTS + 1
     )}</body></html>`;
-    expect((await only(ctxFor(html, classification("product_detail", 0.99)))).status).toBe("pass");
+    expect(
+      (await only(ctxFor(html, classification("product_detail", 0.99)))).status
+    ).toBe("pass");
   });
 
   test("a page with no document cannot be judged", async () => {
-    const ctx = ctxFor("<html><body></body></html>", classification("product_detail", 0.99));
-    const unreadable = { ...ctx, parsed: { ...ctx.parsed, document: null } } as RuleContext;
-    const check = (await only(unreadable));
+    const ctx = ctxFor(
+      "<html><body></body></html>",
+      classification("product_detail", 0.99)
+    );
+    const unreadable = {
+      ...ctx,
+      parsed: { ...ctx.parsed, document: null },
+    } as RuleContext;
+    const check = await only(unreadable);
     expect(check.status).toBe("info");
     expect(check.message).toBe(UNREADABLE_MESSAGE);
   });
 
   test("missing ctx.options reads as the defaults", async () => {
-    const ctx = ctxFor("<html><body></body></html>", classification("product_detail", 0.95));
+    const ctx = ctxFor(
+      "<html><body></body></html>",
+      classification("product_detail", 0.95)
+    );
     const noOptions = { ...ctx, options: undefined } as unknown as RuleContext;
     expect((await only(noOptions)).status).toBe("fail");
   });
 
   test("blog_post that declares CollectionPage is vetoed: read as a listing, not flagged", async () => {
-    const check = (await only(
-      ctxFor(withSchema({ "@type": "CollectionPage", name: "Blog" }), classification("blog_post", 0.97)),
-    ));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "CollectionPage", name: "Blog" }),
+        classification("blog_post", 0.97)
+      )
+    );
     expect(check.status).toBe("pass");
-    expect(check.message).toBe("Page declares CollectionPage, read as a listing");
+    expect(check.message).toBe(
+      "Page declares CollectionPage, read as a listing"
+    );
   });
 
   test("blog_post that declares Blog is vetoed", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "Blog" }), classification("blog_post", 0.97))));
+    const check = await only(
+      ctxFor(withSchema({ "@type": "Blog" }), classification("blog_post", 0.97))
+    );
     expect(check.status).toBe("pass");
   });
 
   test("blog_post with BlogPosting passes on the family, not the veto", async () => {
-    const check = (await only(
-      ctxFor(withSchema({ "@type": "BlogPosting" }, { "@type": "ItemList" }), classification("blog_post", 0.97)),
-    ));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "BlogPosting" }, { "@type": "ItemList" }),
+        classification("blog_post", 0.97)
+      )
+    );
     expect(check.status).toBe("pass");
     expect(check.message).toBe("Blog post declares BlogPosting");
   });
 
   test("blog_post with no Article-family type fails", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "WebPage" }), classification("blog_post", 0.97))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "WebPage" }),
+        classification("blog_post", 0.97)
+      )
+    );
     expect(check.status).toBe("fail");
     expect(check.message).toBe(
-      "Reads as a blog post but declares no Article or BlogPosting structured data",
+      "Reads as a blog post but declares no Article or BlogPosting structured data"
     );
   });
 
   test("a JobPosting is not an article", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "JobPosting" }), classification("article", 0.97))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "JobPosting" }),
+        classification("article", 0.97)
+      )
+    );
     expect(check.status).toBe("fail");
   });
 
   test("a product_detail page is NOT vetoed by OfferCatalog, only by an index type", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "OfferCatalog" }), classification("product_detail", 0.97))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "OfferCatalog" }),
+        classification("product_detail", 0.97)
+      )
+    );
     expect(check.status).toBe("fail");
   });
 
   test("a rules-sourced article label is not applicable, even with no schema", async () => {
-    const check = (await only(ctxFor("<html><body></body></html>", classification("article", 0.99, "rules"))));
+    const check = await only(
+      ctxFor(
+        "<html><body></body></html>",
+        classification("article", 0.99, "rules")
+      )
+    );
     expect(check.status).toBe("info");
     expect(check.message).toBe(NOT_CONFIDENT);
   });
 
   test("model 0.85 is below the default 0.9 and not applicable", async () => {
-    const check = (await only(ctxFor("<html><body></body></html>", classification("product_detail", 0.85))));
+    const check = await only(
+      ctxFor(
+        "<html><body></body></html>",
+        classification("product_detail", 0.85)
+      )
+    );
     expect(check.status).toBe("info");
     expect(check.message).toBe(NOT_CONFIDENT);
   });
@@ -248,91 +381,228 @@ describe("schema/expected-type", () => {
     expect(check.skipReason).toBe("classifier-off");
     // The message is read on every surface, including hosts with no classifier at all, so it
     // names no CLI flag.
-    expect(check.message).toBe("Not checked: no page classifier ran on this page");
+    expect(check.message).toBe(
+      "Not checked: no page classifier ran on this page"
+    );
     expect(check.message).not.toContain("--no-classifier");
   });
 
   test("classifier on, below the confidence floor: still the info row (repo#3364)", async () => {
-    const check = await only(ctxFor("<html><body></body></html>", classification("product_detail", 0.5)));
+    const check = await only(
+      ctxFor(
+        "<html><body></body></html>",
+        classification("product_detail", 0.5)
+      )
+    );
     expect(check.status).toBe("info");
     expect(check.message).toBe(NOT_CONFIDENT);
   });
 
   test("contact with no ContactPage or Organization fails", async () => {
-    const check = (await only(ctxFor(withSchema({ "@type": "WebPage" }), classification("contact", 0.99))));
+    const check = await only(
+      ctxFor(
+        withSchema({ "@type": "WebPage" }),
+        classification("contact", 0.99)
+      )
+    );
     expect(check.status).toBe("fail");
-    expect(check.message).toBe("Reads as a contact page but declares no ContactPage or Organization structured data");
+    expect(check.message).toBe(
+      "Reads as a contact page but declares no ContactPage or Organization structured data"
+    );
   });
 
   test("contact is satisfied by ContactPage or by an Organization", async () => {
-    expect((await only(ctxFor(withSchema({ "@type": "ContactPage" }), classification("contact", 0.99)))).status).toBe("pass");
-    expect((await only(ctxFor(withSchema({ "@type": "Organization" }), classification("contact", 0.99)))).status).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "ContactPage" }),
+            classification("contact", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "Organization" }),
+            classification("contact", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
   });
 
   test("contact is satisfied by a LocalBusiness subtype that is not spelled Business", async () => {
-    expect((await only(ctxFor(withSchema({ "@type": "Restaurant" }), classification("contact", 0.99)))).status).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "Restaurant" }),
+            classification("contact", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
   });
 
   test("about with ProfessionalService passes; so does AboutPage and Person", async () => {
-    expect((await only(ctxFor(withSchema({ "@type": "ProfessionalService" }), classification("about", 0.99)))).status).toBe(
-      "pass",
-    );
-    expect((await only(ctxFor(withSchema({ "@type": "AboutPage" }), classification("about", 0.99)))).status).toBe("pass");
-    expect((await only(ctxFor(withSchema({ "@type": ["Person", "Thing"] }), classification("about", 0.99)))).status).toBe(
-      "pass",
-    );
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "ProfessionalService" }),
+            classification("about", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "AboutPage" }),
+            classification("about", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": ["Person", "Thing"] }),
+            classification("about", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
   });
 
   test("any type ending in Business or Organization counts as the organization family", async () => {
     expect(
-      (await only(ctxFor(withSchema({ "@type": "HomeAndConstructionBusiness" }), classification("about", 0.99)))).status,
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "HomeAndConstructionBusiness" }),
+            classification("about", 0.99)
+          )
+        )
+      ).status
     ).toBe("pass");
-    expect((await only(ctxFor(withSchema({ "@type": "NewsMediaOrganization" }), classification("about", 0.99)))).status).toBe(
-      "pass",
-    );
+    expect(
+      (
+        await only(
+          ctxFor(
+            withSchema({ "@type": "NewsMediaOrganization" }),
+            classification("about", 0.99)
+          )
+        )
+      ).status
+    ).toBe("pass");
   });
 
   test("docs with nothing fails; Article, HowTo and FAQPage each satisfy it", async () => {
-    const check = (await only(ctxFor("<html><body></body></html>", classification("docs", 0.93))));
+    const check = await only(
+      ctxFor("<html><body></body></html>", classification("docs", 0.93))
+    );
     expect(check.status).toBe("fail");
     expect(check.message).toBe(
-      "Reads as a documentation page but declares no Article, TechArticle, HowTo or FAQPage structured data",
+      "Reads as a documentation page but declares no Article, TechArticle, HowTo or FAQPage structured data"
     );
     for (const type of ["TechArticle", "HowTo", "FAQPage", "APIReference"]) {
-      expect((await only(ctxFor(withSchema({ "@type": type }), classification("docs", 0.93)))).status).toBe("pass");
+      expect(
+        (
+          await only(
+            ctxFor(withSchema({ "@type": type }), classification("docs", 0.93))
+          )
+        ).status
+      ).toBe("pass");
     }
   });
 
   test("listings are satisfied by CollectionPage, ItemList, SearchResultsPage, Blog or OfferCatalog", async () => {
     for (const label of ["product_listing", "listing_index"]) {
-      for (const type of ["CollectionPage", "ItemList", "SearchResultsPage", "Blog", "OfferCatalog"]) {
-        expect((await only(ctxFor(withSchema({ "@type": type }), classification(label, 0.95)))).status).toBe("pass");
+      for (const type of [
+        "CollectionPage",
+        "ItemList",
+        "SearchResultsPage",
+        "Blog",
+        "OfferCatalog",
+      ]) {
+        expect(
+          (
+            await only(
+              ctxFor(withSchema({ "@type": type }), classification(label, 0.95))
+            )
+          ).status
+        ).toBe("pass");
       }
-      expect((await only(ctxFor(withSchema({ "@type": "WebPage" }), classification(label, 0.95)))).status).toBe("fail");
+      expect(
+        (
+          await only(
+            ctxFor(
+              withSchema({ "@type": "WebPage" }),
+              classification(label, 0.95)
+            )
+          )
+        ).status
+      ).toBe("fail");
     }
   });
 
   test("labels with no expectation are not applicable", async () => {
-    for (const label of ["homepage", "legal", "pricing", "other", "unknown", "something_new"]) {
-      const check = (await only(ctxFor("<html><body></body></html>", classification(label, 0.99))));
+    for (const label of [
+      "homepage",
+      "legal",
+      "pricing",
+      "other",
+      "unknown",
+      "something_new",
+    ]) {
+      const check = await only(
+        ctxFor("<html><body></body></html>", classification(label, 0.99))
+      );
       expect(check.status).toBe("info");
     }
   });
 
   test("min_confidence 0.95 excludes a 0.92 page that the default 0.9 includes", async () => {
     const html = "<html><body></body></html>";
-    expect((await only(ctxFor(html, classification("product_detail", 0.92)))).status).toBe("fail");
-    const check = (await only(ctxFor(html, classification("product_detail", 0.92), { min_confidence: 0.95 })));
+    expect(
+      (await only(ctxFor(html, classification("product_detail", 0.92)))).status
+    ).toBe("fail");
+    const check = await only(
+      ctxFor(html, classification("product_detail", 0.92), {
+        min_confidence: 0.95,
+      })
+    );
     expect(check.status).toBe("info");
     expect(check.message).toBe(NOT_CONFIDENT);
   });
 
   test("a confidence exactly at the threshold is included", async () => {
-    expect((await only(ctxFor("<html><body></body></html>", classification("product_detail", 0.9)))).status).toBe("fail");
+    expect(
+      (
+        await only(
+          ctxFor(
+            "<html><body></body></html>",
+            classification("product_detail", 0.9)
+          )
+        )
+      ).status
+    ).toBe("fail");
   });
 
   test("an out-of-range min_confidence is rejected by the options schema", () => {
-    expect(() => only(ctxFor("<html></html>", classification("docs", 0.99), { min_confidence: 4 }))).toThrow();
+    expect(() =>
+      only(
+        ctxFor("<html></html>", classification("docs", 0.99), {
+          min_confidence: 4,
+        })
+      )
+    ).toThrow();
   });
 
   test("the rule is registered with the schema category, warning severity and its option", () => {
@@ -342,34 +612,47 @@ describe("schema/expected-type", () => {
     expect(rule!.meta.severity).toBe("warning");
     expect(rule!.meta.weight).toBe(5);
     expect(rule!.meta.verdictScope).toBe("page");
-    expect(Object.keys(rule!.meta.optionsSchema?.shape ?? {})).toEqual(["min_confidence"]);
+    expect(Object.keys(rule!.meta.optionsSchema?.shape ?? {})).toEqual([
+      "min_confidence",
+    ]);
   });
 });
 
 describe("markup-types scans are bounded", () => {
-  const parse = (html: string): Document => parsePage(html, "https://example.com/x").document as Document;
+  const parse = (html: string): Document =>
+    parsePage(html, "https://example.com/x").document as Document;
 
   test("microdata and RDFa types are read case-insensitively and split on whitespace", () => {
     const doc = parse(
-      '<html><body><div ITEMTYPE="https://schema.org/Product https://schema.org/Offer"></div><p typeof="schema:Person Organization"></p></body></html>',
+      '<html><body><div ITEMTYPE="https://schema.org/Product https://schema.org/Offer"></div><p typeof="schema:Person Organization"></p></body></html>'
     );
     const scan = microdataAndRdfaTypes(doc);
     expect(scan.complete).toBe(true);
-    expect(scan.types.sort()).toEqual(["Offer", "Organization", "Person", "Product"]);
+    expect(scan.types.sort()).toEqual([
+      "Offer",
+      "Organization",
+      "Person",
+      "Product",
+    ]);
   });
 
   test("a token at the cap is read, one past it is not and the scan is incomplete", () => {
-    const filler = Array.from({ length: MAX_TOKENS_PER_ATTRIBUTE - 1 }, (_, i) => `https://example.com/T${i}`);
+    const filler = Array.from(
+      { length: MAX_TOKENS_PER_ATTRIBUTE - 1 },
+      (_, i) => `https://example.com/T${i}`
+    );
     const atCap = microdataAndRdfaTypes(
-      parse(`<html><body><div itemtype="${[...filler, "https://schema.org/Product"].join(" ")}"></div></body></html>`),
+      parse(
+        `<html><body><div itemtype="${[...filler, "https://schema.org/Product"].join(" ")}"></div></body></html>`
+      )
     );
     expect(atCap.complete).toBe(true);
     expect(atCap.types).toContain("Product");
 
     const pastCap = microdataAndRdfaTypes(
       parse(
-        `<html><body><div itemtype="${[...filler, "https://example.com/Last", "https://schema.org/Product"].join(" ")}"></div></body></html>`,
-      ),
+        `<html><body><div itemtype="${[...filler, "https://example.com/Last", "https://schema.org/Product"].join(" ")}"></div></body></html>`
+      )
     );
     expect(pastCap.complete).toBe(false);
     expect(pastCap.types).not.toContain("Product");
@@ -386,7 +669,8 @@ describe("markup-types scans are bounded", () => {
 
   test("json-ld: nested types are read at the depth cap and not past it", () => {
     let node: Record<string, unknown> = { "@type": "Product" };
-    for (let i = 0; i < MAX_JSONLD_DEPTH; i++) node = { "@type": "Thing", child: node };
+    for (let i = 0; i < MAX_JSONLD_DEPTH; i++)
+      node = { "@type": "Thing", child: node };
     const atCap = jsonLdTypes([node]);
     expect(atCap.complete).toBe(true);
     expect(atCap.types).toContain("Product");
@@ -397,7 +681,13 @@ describe("markup-types scans are bounded", () => {
   });
 
   test("json-ld: a value budget stops the scan and reports it", () => {
-    const wide = { "@type": "ItemList", itemListElement: Array.from({ length: MAX_JSONLD_VALUES + 1 }, () => ({})) };
+    const wide = {
+      "@type": "ItemList",
+      itemListElement: Array.from(
+        { length: MAX_JSONLD_VALUES + 1 },
+        () => ({})
+      ),
+    };
     expect(jsonLdTypes([wide]).complete).toBe(false);
   });
 

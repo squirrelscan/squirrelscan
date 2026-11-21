@@ -38,11 +38,10 @@
 // warning on its own — origins stamp it at deploy time far more often than at
 // content-change time, so a disagreement there is not evidence of a defect.
 
-import { z } from "zod";
-
 import type { Document, Element } from "linkedom";
 
 import { flattenJsonLdNodes, getPathname } from "@squirrelscan/utils";
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -79,7 +78,7 @@ export const optionsSchema = z.object({
     .number()
     .default(1)
     .describe(
-      "Days the visible byline date may differ from the schema document date before warning",
+      "Days the visible byline date may differ from the schema document date before warning"
     ),
 });
 
@@ -96,18 +95,103 @@ export const optionsSchema = z.object({
  * are left out for the same reason).
  */
 const MONTHS_BY_INDEX: readonly (readonly string[])[] = [
-  ["january", "jan", "janvier", "janv", "januar", "jänner", "enero", "ene", "gennaio", "janeiro", "januari", "stycznia"],
-  ["february", "feb", "février", "févr", "fév", "februar", "febrero", "febbraio", "fevereiro", "fev", "februari", "lutego"],
-  ["march", "mar", "mars", "märz", "mär", "mrz", "marzo", "março", "maart", "mrt", "marca"],
+  [
+    "january",
+    "jan",
+    "janvier",
+    "janv",
+    "januar",
+    "jänner",
+    "enero",
+    "ene",
+    "gennaio",
+    "janeiro",
+    "januari",
+    "stycznia",
+  ],
+  [
+    "february",
+    "feb",
+    "février",
+    "févr",
+    "fév",
+    "februar",
+    "febrero",
+    "febbraio",
+    "fevereiro",
+    "fev",
+    "februari",
+    "lutego",
+  ],
+  [
+    "march",
+    "mar",
+    "mars",
+    "märz",
+    "mär",
+    "mrz",
+    "marzo",
+    "março",
+    "maart",
+    "mrt",
+    "marca",
+  ],
   ["april", "apr", "avril", "avr", "abril", "aprile", "abr", "kwietnia"],
   ["may", "mai", "mayo", "maggio", "maio", "mei", "maja"],
   ["june", "jun", "juin", "juni", "junio", "giugno", "giu", "junho", "czerwca"],
-  ["july", "jul", "juillet", "juil", "juli", "julio", "luglio", "lug", "julho", "lipca"],
+  [
+    "july",
+    "jul",
+    "juillet",
+    "juil",
+    "juli",
+    "julio",
+    "luglio",
+    "lug",
+    "julho",
+    "lipca",
+  ],
   ["august", "aug", "août", "aout", "agosto", "augustus", "sierpnia"],
-  ["september", "sep", "sept", "septembre", "septiembre", "setiembre", "settembre", "sett", "setembro", "wrzesnia", "września"],
-  ["october", "oct", "octobre", "oktober", "okt", "octubre", "ottobre", "ott", "outubro", "pazdziernika", "października"],
+  [
+    "september",
+    "sep",
+    "sept",
+    "septembre",
+    "septiembre",
+    "setiembre",
+    "settembre",
+    "sett",
+    "setembro",
+    "wrzesnia",
+    "września",
+  ],
+  [
+    "october",
+    "oct",
+    "octobre",
+    "oktober",
+    "okt",
+    "octubre",
+    "ottobre",
+    "ott",
+    "outubro",
+    "pazdziernika",
+    "października",
+  ],
   ["november", "nov", "novembre", "noviembre", "novembro", "listopada"],
-  ["december", "dec", "décembre", "déc", "dezember", "dez", "diciembre", "dic", "dicembre", "dezembro", "grudnia"],
+  [
+    "december",
+    "dec",
+    "décembre",
+    "déc",
+    "dezember",
+    "dez",
+    "diciembre",
+    "dic",
+    "dicembre",
+    "dezembro",
+    "grudnia",
+  ],
 ];
 
 /** Lowercase and drop diacritics, so "Février", "FEVRIER" and "février" are one key. */
@@ -122,7 +206,9 @@ for (const [index, names] of MONTHS_BY_INDEX.entries()) {
 
 // Longest first, so "mars" is not cut short to "mar" and "septembre" to "sep".
 const MONTH_NAMES = [
-  ...new Set(MONTHS_BY_INDEX.flat().flatMap((name) => [name, foldMonthName(name)])),
+  ...new Set(
+    MONTHS_BY_INDEX.flat().flatMap((name) => [name, foldMonthName(name)])
+  ),
 ]
   .sort((a, b) => b.length - a.length)
   .join("|");
@@ -144,17 +230,20 @@ const NOT_AFTER_LETTER_OR_DIGIT = "(?<![\\p{L}\\p{N}])";
 const NOT_BEFORE_DIGIT = "(?!\\d)";
 
 const ISO_DATE_RE = /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/;
-const YMD_SEPARATED_RE = /(?<![\d./-])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d./-])/;
-const CJK_DATE_RE = /(?<!\d)(\d{4})\s*[年년]\s*(\d{1,2})\s*[月월]\s*(\d{1,2})\s*[日일]/;
+const YMD_SEPARATED_RE =
+  /(?<![\d./-])(\d{4})([/.])(\d{1,2})\2(\d{1,2})(?![\d./-])/;
+const CJK_DATE_RE =
+  /(?<!\d)(\d{4})\s*[年년]\s*(\d{1,2})\s*[月월]\s*(\d{1,2})\s*[日일]/;
 const MONTH_FIRST_RE = new RegExp(
   `${NOT_AFTER_LETTER_OR_DIGIT}(${MONTH_NAMES})\\.?\\s+${OF}(\\d{1,2})${ORDINAL}\\s*,?\\s*${OF}(\\d{4})${NOT_BEFORE_DIGIT}`,
-  "iu",
+  "iu"
 );
 const DAY_FIRST_RE = new RegExp(
   `(?<!\\d)(\\d{1,2})${ORDINAL}\\s+${OF}(${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(\\d{4})${NOT_BEFORE_DIGIT}`,
-  "iu",
+  "iu"
 );
-const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-])/;
+const NUMERIC_DMY_RE =
+  /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-])/;
 
 /**
  * A date-shaped string that `matchDate` may refuse: a day, a month name and a
@@ -180,15 +269,15 @@ const NUMERIC_DMY_RE = /(?<![\d./-])(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?![\d./-]
 const DATE_SHAPED_RES: readonly RegExp[] = [
   new RegExp(
     `(?<!\\d)\\d{1,2}${ORDINAL_OR_DOT}\\s+${OF}(?:${MONTH_NAMES})\\.?\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
-    "iu",
+    "iu"
   ),
   new RegExp(
     `${NOT_AFTER_LETTER_OR_DIGIT}(?:${MONTH_NAMES})\\.?\\s+${OF}\\d{1,2}${ORDINAL_OR_DOT}\\s*,?\\s*${OF}(?:19|20)\\d{2}${NOT_BEFORE_DIGIT}`,
-    "iu",
+    "iu"
   ),
   new RegExp(
     `(?<!\\d)(?:19|20)\\d{2}\\.?\\s+(?:${MONTH_NAMES})\\.?\\s+\\d{1,2}(?!\\d)`,
-    "iu",
+    "iu"
   ),
   /(?<!\d)\d{4}\s*[年년]\s*\d{1,2}\s*[月월]/u,
   /(?<![\d./-])\d{1,2}\/\d{1,2}\/\d{2}(?!\d)/,
@@ -207,7 +296,12 @@ interface DateSignal {
 }
 
 function utcDay(year: number, month: number, day: number): number | null {
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  )
+    return null;
   if (year < MIN_YEAR || year > MAX_YEAR) return null;
   if (month < 0 || month > 11 || day < 1 || day > 31) return null;
   const ms = Date.UTC(year, month, day);
@@ -262,28 +356,41 @@ export function matchDate(text: string): DateMatch | null {
   if (monthFirst) {
     const month = monthFromName(monthFirst[1]);
     const ms =
-      month === undefined ? null : utcDay(Number(monthFirst[3]), month, Number(monthFirst[2]));
+      month === undefined
+        ? null
+        : utcDay(Number(monthFirst[3]), month, Number(monthFirst[2]));
     if (ms !== null) return { text: monthFirst[0], ms };
   }
 
   const dayFirst = DAY_FIRST_RE.exec(text);
   if (dayFirst) {
     const month = monthFromName(dayFirst[2]);
-    const ms = month === undefined ? null : utcDay(Number(dayFirst[3]), month, Number(dayFirst[1]));
+    const ms =
+      month === undefined
+        ? null
+        : utcDay(Number(dayFirst[3]), month, Number(dayFirst[1]));
     if (ms !== null) return { text: dayFirst[0], ms };
   }
 
   const numeric = NUMERIC_DMY_RE.exec(text);
   if (numeric) {
-    const [a, b, year] = [Number(numeric[1]), Number(numeric[3]), Number(numeric[4])];
+    const [a, b, year] = [
+      Number(numeric[1]),
+      Number(numeric[3]),
+      Number(numeric[4]),
+    ];
     const dayFirstReading = utcDay(year, b - 1, a);
     const monthFirstReading = utcDay(year, a - 1, b);
     const readings = [...new Set([dayFirstReading, monthFirstReading])].filter(
-      (ms): ms is number => ms !== null,
+      (ms): ms is number => ms !== null
     );
     const [ms, ...alternatives] = readings;
     if (ms !== undefined) {
-      return { text: numeric[0], ms, ...(alternatives.length > 0 ? { alternatives } : {}) };
+      return {
+        text: numeric[0],
+        ms,
+        ...(alternatives.length > 0 ? { alternatives } : {}),
+      };
     }
   }
 
@@ -292,7 +399,9 @@ export function matchDate(text: string): DateMatch | null {
 
 /** True when `text` contains something date-shaped, whether or not it can be read. */
 export function looksLikeDate(text: string): boolean {
-  return matchDate(text) !== null || DATE_SHAPED_RES.some((re) => re.test(text));
+  return (
+    matchDate(text) !== null || DATE_SHAPED_RES.some((re) => re.test(text))
+  );
 }
 
 /**
@@ -301,7 +410,10 @@ export function looksLikeDate(text: string): boolean {
  * timezone-safe path wins; `Date.parse` is the fallback for RFC-1123 and other
  * stamps, read back in UTC.
  */
-function parseDateValue(raw: string | null | undefined, source: string): DateSignal | null {
+function parseDateValue(
+  raw: string | null | undefined,
+  source: string
+): DateSignal | null {
   const value = (raw ?? "").trim();
   if (!value) return null;
 
@@ -318,7 +430,11 @@ function parseDateValue(raw: string | null | undefined, source: string): DateSig
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return null;
   const date = new Date(parsed);
-  const ms = utcDay(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const ms = utcDay(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate()
+  );
   return ms === null ? null : { value, ms, source };
 }
 
@@ -330,7 +446,8 @@ function readings(signal: DateSignal): number[] {
 /** Days between the closest readings of two signals. */
 function gapBetween(a: DateSignal, b: DateSignal): number {
   let gap = Infinity;
-  for (const x of readings(a)) for (const y of readings(b)) gap = Math.min(gap, deltaDays(x, y));
+  for (const x of readings(a))
+    for (const y of readings(b)) gap = Math.min(gap, deltaDays(x, y));
   return gap;
 }
 
@@ -345,7 +462,11 @@ function deltaDays(a: number, b: number): number {
 /** Dates read off the JSON-LD, split by whether their node describes the page. */
 interface SchemaDates {
   /** Date(s) from a document-describing node — the only ones that can warn. */
-  document: { type: string; published: DateSignal | null; modified: DateSignal | null } | null;
+  document: {
+    type: string;
+    published: DateSignal | null;
+    modified: DateSignal | null;
+  } | null;
   /** A date from some other node (sitewide app/product/org), source noted. */
   fallback: { type: string; field: string; value: string } | null;
 }
@@ -382,7 +503,11 @@ function collectSchemaDates(raw: string | null | undefined): SchemaDates {
       const modifiedSignal = parseDateValue(modified, "schema:dateModified");
       if (!publishedSignal && !modifiedSignal) continue;
 
-      const entry = { type: docType, published: publishedSignal, modified: modifiedSignal };
+      const entry = {
+        type: docType,
+        published: publishedSignal,
+        modified: modifiedSignal,
+      };
       if (isArticle) articleNode = entry;
       else pageNode = entry;
       continue;
@@ -431,7 +556,8 @@ const BYLINE_NOISE_RE =
   /\b(\d+\s*min(?:ute)?s?\s*read|read\s*time|published|posted|updated|last\s+modified|on|in|at)\b/gi;
 
 /** What is left of a byline once the date and its decorations are gone. */
-const BYLINE_RESIDUE_RE = /^[\s·|•\-–\u2014,.:;()]*(?:by\s+[^,|·•]{2,60}?)?[\s·|•\-–\u2014,.:;()]*$/i;
+const BYLINE_RESIDUE_RE =
+  /^[\s·|•\-–\u2014,.:;()]*(?:by\s+[^,|·•]{2,60}?)?[\s·|•\-–\u2014,.:;()]*$/i;
 
 function cleanText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -528,7 +654,8 @@ const NUMERIC_ONLY_RE = /^\d{1,2}([/.-])\d{1,2}\1\d{4}$/;
  * 3.4.2019` is a reference number, so the rest of the line must be bare too.
  */
 function isBylineLine(line: string, dateText: string): boolean {
-  if (!NUMERIC_ONLY_RE.test(dateText) && BYLINE_PREFIX_RE.test(line)) return true;
+  if (!NUMERIC_ONLY_RE.test(dateText) && BYLINE_PREFIX_RE.test(line))
+    return true;
   const residue = line.replace(dateText, " ").replace(BYLINE_NOISE_RE, " ");
   return BYLINE_RESIDUE_RE.test(cleanText(residue));
 }
@@ -650,7 +777,8 @@ export const dateAgreementRule: Rule = {
   meta: {
     id: "content/date-agreement",
     name: "Date Agreement",
-    description: "Checks the visible date, schema dates and URL/title year agree",
+    description:
+      "Checks the visible date, schema dates and URL/title year agree",
     solution:
       "A page states its date more than once - the visible byline, schema.org datePublished/dateModified, a year in the URL or title, the sitemap lastmod, the Last-Modified header - and readers and crawlers do not all read the same one. When they disagree, at least one is wrong, and presence checks cannot tell you which: they pass as soon as any single signal exists. Drive every date on the page from ONE content timestamp. If the visible byline disagrees with the schema, fix whichever renders from the wrong field (a common cause is the template printing a build-time or hardcoded value while the schema prints the CMS field). If the schema carries dates the reader never sees, render the date in the article header - Google asks for a visible date on dated content, and a date only crawlers can see is not one. Check the schema date is attached to the node describing the page (Article/BlogPosting/WebPage): a datePublished on a sitewide SoftwareApplication or Organization node is that entity's own date and says nothing about this page.",
     category: "content",
@@ -665,9 +793,22 @@ export const dateAgreementRule: Rule = {
       { name: "visible-date-missing", outcome: "problem" },
       { name: "url-title-year", outcome: "problem" },
       { name: "schema-date-source", outcome: "problem" },
-      { name: "byline-vs-schema-date", outcome: "clean", clears: ["byline-vs-schema-date"] },
+      {
+        name: "byline-vs-schema-date",
+        outcome: "clean",
+        clears: ["byline-vs-schema-date"],
+      },
       { name: "url-title-year", outcome: "clean", clears: ["url-title-year"] },
-      { name: "date-agreement", outcome: "clean", clears: ["byline-vs-schema-date", "visible-date-missing", "url-title-year", "schema-date-source"] },
+      {
+        name: "date-agreement",
+        outcome: "clean",
+        clears: [
+          "byline-vs-schema-date",
+          "visible-date-missing",
+          "url-title-year",
+          "schema-date-source",
+        ],
+      },
       { name: "date-agreement", outcome: "skipped" },
     ],
     optionsSchema,
@@ -696,7 +837,10 @@ export const dateAgreementRule: Rule = {
     const schema = collectSchemaDates(rawJsonLd(ctx, doc));
     const visibleDates = findVisibleDates(doc);
     const visible = visibleDates[0] ?? null;
-    const header = parseDateValue(ctx.page.headers["last-modified"], "header:last-modified");
+    const header = parseDateValue(
+      ctx.page.headers["last-modified"],
+      "header:last-modified"
+    );
 
     // No date attached to a node that describes this page: there is nothing to
     // hold the other signals against. Name the node the date DID come from when
@@ -735,7 +879,8 @@ export const dateAgreementRule: Rule = {
           {
             name: CLEAN_CHECK,
             status: "skipped",
-            message: "No schema date describes this page, so there is nothing to compare",
+            message:
+              "No schema date describes this page, so there is nothing to compare",
             pageUrl: ctx.page.url,
             skipReason: "not-applicable",
           },
@@ -745,7 +890,7 @@ export const dateAgreementRule: Rule = {
 
     const docNode = schema.document;
     const schemaDates = [docNode.published, docNode.modified].filter(
-      (d): d is DateSignal => d !== null,
+      (d): d is DateSignal => d !== null
     );
     const checks: CheckResult[] = [];
     const baseDetails = {
@@ -769,11 +914,15 @@ export const dateAgreementRule: Rule = {
       const best = visibleDates
         .map((shown) => {
           const nearest = schemaDates.reduce((closest, candidate) =>
-            gapBetween(shown, candidate) < gapBetween(shown, closest) ? candidate : closest,
+            gapBetween(shown, candidate) < gapBetween(shown, closest)
+              ? candidate
+              : closest
           );
           return { shown, nearest, gap: gapBetween(shown, nearest) };
         })
-        .reduce((closest, candidate) => (candidate.gap < closest.gap ? candidate : closest));
+        .reduce((closest, candidate) =>
+          candidate.gap < closest.gap ? candidate : closest
+        );
 
       checks.push(
         best.gap > opts.tolerance_days
@@ -786,15 +935,23 @@ export const dateAgreementRule: Rule = {
                 `${best.gap} day(s) apart, so readers and crawlers are being told different things`,
               value: best.shown.value,
               expected: best.nearest.value,
-              details: { ...baseDetails, visibleDate: best.shown.value, gapDays: best.gap },
+              details: {
+                ...baseDetails,
+                visibleDate: best.shown.value,
+                gapDays: best.gap,
+              },
             }
           : {
               name: BYLINE_CHECK,
               status: "pass",
               message: `Visible date ${best.shown.value} agrees with the ${docNode.type} schema dates`,
               value: best.shown.value,
-              details: { ...baseDetails, visibleDate: best.shown.value, gapDays: best.gap },
-            },
+              details: {
+                ...baseDetails,
+                visibleDate: best.shown.value,
+                gapDays: best.gap,
+              },
+            }
       );
     } else if (!visible && isArticleType(docNode.type) && !showsAnyDate(doc)) {
       // Dates in the markup and none on the page: the /learn/* half of #108.
@@ -817,11 +974,14 @@ export const dateAgreementRule: Rule = {
     // A year in the URL or the title is a date claim too, and it is the one
     // nobody updates when a post is re-dated.
     const pathYear = pathYearIn(getPathname(ctx.page.url) || ctx.page.url);
-    const titleYear = pathYear === null ? yearIn(ctx.parsed.meta?.title ?? "") : null;
+    const titleYear =
+      pathYear === null ? yearIn(ctx.parsed.meta?.title ?? "") : null;
     const claimedYear = pathYear ?? titleYear;
     if (claimedYear !== null) {
       const where = pathYear !== null ? "URL" : "title";
-      const schemaYears = schemaDates.map((d) => new Date(d.ms).getUTCFullYear());
+      const schemaYears = schemaDates.map((d) =>
+        new Date(d.ms).getUTCFullYear()
+      );
       checks.push(
         schemaYears.includes(claimedYear)
           ? {
@@ -829,7 +989,11 @@ export const dateAgreementRule: Rule = {
               status: "pass",
               message: `The ${where} year ${claimedYear} matches the ${docNode.type} schema dates`,
               value: claimedYear,
-              details: { ...baseDetails, claimedYear, claimedYearSource: where },
+              details: {
+                ...baseDetails,
+                claimedYear,
+                claimedYearSource: where,
+              },
             }
           : {
               name: URL_TITLE_CHECK,
@@ -839,8 +1003,12 @@ export const dateAgreementRule: Rule = {
                 `${[...new Set(schemaYears)].join("/")}`,
               value: claimedYear,
               expected: schemaYears[0] ?? null,
-              details: { ...baseDetails, claimedYear, claimedYearSource: where },
-            },
+              details: {
+                ...baseDetails,
+                claimedYear,
+                claimedYearSource: where,
+              },
+            }
       );
     }
 

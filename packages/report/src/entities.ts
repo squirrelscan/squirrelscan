@@ -11,6 +11,7 @@
 // renderer.
 
 import type { EntityMap, EntityMapEdge, EntityMapNode } from "./types";
+
 import { escapeMarkdownText, markdownCodeSpan } from "./output/markdown-escape";
 
 /** Entities listed in a format's entity table. */
@@ -46,7 +47,7 @@ export function entityLabel(node: EntityMapNode): string {
  */
 export function entitiesByReach(map: EntityMap): EntityMapNode[] {
   return [...map.nodes].sort(
-    (a, b) => b.occurrences - a.occurrences || byString(a.key, b.key),
+    (a, b) => b.occurrences - a.occurrences || byString(a.key, b.key)
   );
 }
 
@@ -74,7 +75,7 @@ export function danglingEdges(map: EntityMap): EntityMapEdge[] {
       (a, b) =>
         b.occurrences - a.occurrences ||
         byString(a.target, b.target) ||
-        byString(a.predicate, b.predicate),
+        byString(a.predicate, b.predicate)
     );
 }
 
@@ -86,7 +87,7 @@ export function danglingEdges(map: EntityMap): EntityMapEdge[] {
  */
 export function entitiesWithoutId(map: EntityMap): EntityMapNode[] {
   return entitiesByReach(map).filter(
-    (node) => node.id === null && entityPageTotal(node) > 1,
+    (node) => node.id === null && entityPageTotal(node) > 1
   );
 }
 
@@ -198,7 +199,10 @@ function clippedNote(total: number, singular: string, plural: string): string {
  * `heading` is the marker for the section title ("##" inside a report, "#" for
  * a standalone document); sub-headings nest one level below it.
  */
-export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] {
+export function entityMarkdownSection(
+  map: EntityMap,
+  heading = "##"
+): string[] {
   const sub = `${heading}#`;
   const lines: string[] = [`${heading} Entities`, ""];
 
@@ -218,7 +222,7 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
     `| Pages crawled | ${map.summary.pagesTotal} |`,
     `| Pages with no entities | ${map.summary.pagesWithoutEntities} |`,
     `| Entities with a stable @id | ${map.summary.nodesWithStableId} (${stableIdPercent(map)}%) |`,
-    "",
+    ""
   );
 
   const ranked = primaryEntities(map);
@@ -226,14 +230,20 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
     `${sub} Largest entities`,
     "",
     "| Type | Name | @id | Occurrences | Pages |",
-    "| --- | --- | --- | ---: | ---: |",
+    "| --- | --- | --- | ---: | ---: |"
   );
   for (const node of ranked.slice(0, ENTITY_TABLE_LIMIT)) {
     lines.push(
-      `| ${entityCell(node.types.join(", "))} | ${entityCell(entityLabel(node))} | ${entityCell(node.id) || "_none_"} | ${node.occurrences} | ${entityPageTotal(node)} |`,
+      `| ${entityCell(node.types.join(", "))} | ${entityCell(entityLabel(node))} | ${entityCell(node.id) || "_none_"} | ${node.occurrences} | ${entityPageTotal(node)} |`
     );
   }
-  lines.push(...tail(Math.min(ranked.length, ENTITY_TABLE_LIMIT), ranked.length, "entities"));
+  lines.push(
+    ...tail(
+      Math.min(ranked.length, ENTITY_TABLE_LIMIT),
+      ranked.length,
+      "entities"
+    )
+  );
   lines.push("");
 
   // Summarized copy (#407): groups are not entities, so they get their own
@@ -246,15 +256,22 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       "Each row is a group of structurally identical entities, not one entity. The count is the true number in the site.",
       "",
       "| Types | Entities in group | Shown as examples | Not listed |",
-      "| --- | ---: | ---: | ---: |",
+      "| --- | ---: | ---: | ---: |"
     );
     for (const group of groups.slice(0, ENTITY_TABLE_LIMIT)) {
       const label = `${group.types.join(", ")}${group.pageLocal ? " (page-local)" : ""}`;
       lines.push(
-        `| ${entityCell(label)} | ${group.count} | ${group.exemplars.length} | ${group.omitted} |`,
+        `| ${entityCell(label)} | ${group.count} | ${group.exemplars.length} | ${group.omitted} |`
       );
     }
-    lines.push(...tail(Math.min(groups.length, ENTITY_TABLE_LIMIT), groups.length, "groups"), "");
+    lines.push(
+      ...tail(
+        Math.min(groups.length, ENTITY_TABLE_LIMIT),
+        groups.length,
+        "groups"
+      ),
+      ""
+    );
   }
 
   // Counts come from the SUMMARY, not from the rows present: a map clipped for
@@ -271,27 +288,31 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
   } else {
     lines.push(
       "The same entity declares different values on different pages. Pick one and make every page agree.",
-      "",
+      ""
     );
     for (const node of conflicted.slice(0, ENTITY_FINDING_LIMIT)) {
       lines.push(
-        `- **${entityCell(entityLabel(node))}** (${entityCell(node.types.join(", "))}, ${node.occurrences}x)`,
+        `- **${entityCell(entityLabel(node))}** (${entityCell(node.types.join(", "))}, ${node.occurrences}x)`
       );
       for (const conflict of node.conflicts) {
         lines.push(
-          `  - ${markdownCodeSpan(clipCell(conflict.property))} has ${conflict.values.length} values:`,
+          `  - ${markdownCodeSpan(clipCell(conflict.property))} has ${conflict.values.length} values:`
         );
         for (const value of conflict.values) {
           const pages = value.pages.length + value.morePages;
           lines.push(
-            `    - ${entityCell(value.value) || "_empty_"} on ${pages} page(s), e.g. ${entityCell(value.pages[0])}`,
+            `    - ${entityCell(value.value) || "_empty_"} on ${pages} page(s), e.g. ${entityCell(value.pages[0])}`
           );
         }
       }
     }
     lines.push(
-      ...tail(Math.min(conflicted.length, ENTITY_FINDING_LIMIT), conflictTotal, "entities"),
-      "",
+      ...tail(
+        Math.min(conflicted.length, ENTITY_FINDING_LIMIT),
+        conflictTotal,
+        "entities"
+      ),
+      ""
     );
   }
 
@@ -299,7 +320,10 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
   const danglingTotal = Math.max(map.summary.danglingCount, dangling.length);
   lines.push(`${sub} Dangling references (${danglingTotal})`, "");
   if (danglingTotal === 0) {
-    lines.push("Every `@id` reference points at an entity some page declares.", "");
+    lines.push(
+      "Every `@id` reference points at an entity some page declares.",
+      ""
+    );
   } else if (dangling.length === 0) {
     lines.push(clippedNote(danglingTotal, "reference", "references"), "");
   } else {
@@ -307,24 +331,34 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       "A page references an entity by `@id` that no crawled page declares. Declare it, or drop the reference.",
       "",
       "| Predicate | Missing @id | Occurrences | Example page |",
-      "| --- | --- | ---: | --- |",
+      "| --- | --- | ---: | --- |"
     );
     for (const edge of dangling.slice(0, ENTITY_FINDING_LIMIT)) {
       lines.push(
-        `| ${entityCell(edge.predicate)} | ${entityCell(danglingTargetId(edge))} | ${edge.occurrences} | ${entityCell(edge.pages[0])} |`,
+        `| ${entityCell(edge.predicate)} | ${entityCell(danglingTargetId(edge))} | ${edge.occurrences} | ${entityCell(edge.pages[0])} |`
       );
     }
     lines.push(
-      ...tail(Math.min(dangling.length, ENTITY_FINDING_LIMIT), danglingTotal, "references"),
-      "",
+      ...tail(
+        Math.min(dangling.length, ENTITY_FINDING_LIMIT),
+        danglingTotal,
+        "references"
+      ),
+      ""
     );
   }
 
   const unstable = entitiesWithoutId(map);
-  const unstableTotal = Math.max(map.summary.nodesWithoutIdCount, unstable.length);
+  const unstableTotal = Math.max(
+    map.summary.nodesWithoutIdCount,
+    unstable.length
+  );
   lines.push(`${sub} Entities without an @id (${unstableTotal})`, "");
   if (unstableTotal === 0) {
-    lines.push("Every entity declared on more than one page carries an `@id`.", "");
+    lines.push(
+      "Every entity declared on more than one page carries an `@id`.",
+      ""
+    );
   } else if (unstable.length === 0) {
     lines.push(clippedNote(unstableTotal, "entity", "entities"), "");
   } else {
@@ -332,16 +366,20 @@ export function entityMarkdownSection(map: EntityMap, heading = "##"): string[] 
       "Declared on several pages with no `@id`, so a search engine has no way to tell they are one thing. Give each a stable `@id` such as `https://your.site/#organization` and reference that id everywhere else.",
       "",
       "| Type | Name | Occurrences | Pages |",
-      "| --- | --- | ---: | ---: |",
+      "| --- | --- | ---: | ---: |"
     );
     for (const node of unstable.slice(0, ENTITY_FINDING_LIMIT)) {
       lines.push(
-        `| ${entityCell(node.types.join(", "))} | ${entityCell(entityLabel(node))} | ${node.occurrences} | ${entityPageTotal(node)} |`,
+        `| ${entityCell(node.types.join(", "))} | ${entityCell(entityLabel(node))} | ${node.occurrences} | ${entityPageTotal(node)} |`
       );
     }
     lines.push(
-      ...tail(Math.min(unstable.length, ENTITY_FINDING_LIMIT), unstableTotal, "entities"),
-      "",
+      ...tail(
+        Math.min(unstable.length, ENTITY_FINDING_LIMIT),
+        unstableTotal,
+        "entities"
+      ),
+      ""
     );
   }
 

@@ -5,14 +5,23 @@
 // got nothing, and each has a control without the policy where it does get the
 // request, so the absence is the policy and not a mock miss.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import { parseDocument, parsePage } from "@squirrelscan/parser";
+import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
 import { createHeaderScope } from "@squirrelscan/utils/headers";
 import { ownSiteHostMatcher } from "@squirrelscan/utils/own-site";
-import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
-import { EgressRefusedError, type EgressPolicy } from "@squirrelscan/utils/public-egress";
+import {
+  EgressRefusedError,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { Effect } from "effect";
 
 import {
   absorbResourceOccurrences,
@@ -41,9 +50,13 @@ beforeAll(() => {
       const path = new URL(req.url).pathname;
       otherSeen.push({ path, host: req.headers.get("host") });
       if (path.endsWith(".css")) {
-        return new Response("body{}", { headers: { "content-type": "text/css" } });
+        return new Response("body{}", {
+          headers: { "content-type": "text/css" },
+        });
       }
-      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+      return new Response(SHELL_HTML, {
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   site = Bun.serve({
@@ -59,9 +72,13 @@ beforeAll(() => {
         });
       }
       if (path === "/own.css") {
-        return new Response("body{}", { headers: { "content-type": "text/css" } });
+        return new Response("body{}", {
+          headers: { "content-type": "text/css" },
+        });
       }
-      return new Response(SHELL_HTML, { headers: { "content-type": "text/html" } });
+      return new Response(SHELL_HTML, {
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   siteBase = `http://127.0.0.1:${site.port}`;
@@ -90,9 +107,9 @@ const onlinePolicy = (): EgressPolicy => {
 
 describe("probeFetch", () => {
   test("offline: a redirect to another host is refused and that host gets no request", async () => {
-    await expect(probeFetch(`${siteBase}/cross`, {}, offlinePolicy())).rejects.toBeInstanceOf(
-      EgressRefusedError,
-    );
+    await expect(
+      probeFetch(`${siteBase}/cross`, {}, offlinePolicy())
+    ).rejects.toBeInstanceOf(EgressRefusedError);
     expect(otherSeen).toEqual([]);
   });
 
@@ -117,14 +134,17 @@ describe("cloaking probe", () => {
   test("offline: nothing is sent to another host", async () => {
     const [probe] = await runCloakingProbe(
       [{ url: `${siteBase}/cross`, reason: "orphan" }],
-      opts(offlinePolicy()),
+      opts(offlinePolicy())
     );
     expect(probe?.defaultStatus).toBe(0);
     expect(otherSeen).toEqual([]);
   });
 
   test("control: without the policy it is", async () => {
-    await runCloakingProbe([{ url: `${siteBase}/cross`, reason: "orphan" }], opts(onlinePolicy()));
+    await runCloakingProbe(
+      [{ url: `${siteBase}/cross`, reason: "orphan" }],
+      opts(onlinePolicy())
+    );
     expect(otherSeen.length).toBeGreaterThan(0);
   });
 });
@@ -156,7 +176,10 @@ describe("soft-404 confirmation", () => {
 describe("asset checks", () => {
   test("offline: a first-party asset that redirects to another host is refused there", async () => {
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${siteBase}/off.css`], { egress: offlinePolicy(), statusOnly: true }),
+      checkResourceSizes([`${siteBase}/off.css`], {
+        egress: offlinePolicy(),
+        statusOnly: true,
+      })
     );
     expect(result?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
     expect(otherSeen).toEqual([]);
@@ -164,7 +187,10 @@ describe("asset checks", () => {
 
   test("control: without the policy the redirect is followed", async () => {
     const [result] = await Effect.runPromise(
-      checkResourceSizes([`${siteBase}/off.css`], { egress: onlinePolicy(), statusOnly: true }),
+      checkResourceSizes([`${siteBase}/off.css`], {
+        egress: onlinePolicy(),
+        statusOnly: true,
+      })
     );
     expect(result?.status).toBe(200);
     expect(otherSeen).toHaveLength(1);
@@ -183,7 +209,7 @@ describe("asset checks", () => {
           hasCsp: false,
         },
       ],
-      siteBase,
+      siteBase
     );
     occurrences.pageCount = 1;
     const storage = {
@@ -194,11 +220,15 @@ describe("asset checks", () => {
     } as never;
     const config = { rules: { enable: ["*"], disable: [] } } as never;
     const assets = await Effect.runPromise(
-      fetchAssetsFromOccurrences(storage, "crawl", occurrences, config, { ownSiteOnly: true }),
+      fetchAssetsFromOccurrences(storage, "crawl", occurrences, config, {
+        ownSiteOnly: true,
+      })
     );
     const css = assets.resourceSizes.css;
     expect(css.find((r) => r.url === `${siteBase}/own.css`)?.status).toBe(200);
-    expect(css.find((r) => r.url === `${siteBase}/off.css`)?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
+    expect(css.find((r) => r.url === `${siteBase}/off.css`)?.error).toBe(
+      ASSET_FETCH_REFUSED_ERROR
+    );
     expect(otherSeen).toEqual([]);
   });
 });
@@ -218,7 +248,11 @@ describe("what counts as an asset on the site", () => {
 
   test("by default the twin and a project domain are third parties, as before", () => {
     const occurrences = emptySiteAssetOccurrences();
-    absorbResourceOccurrences(occurrences, [page(html)], "https://www.example.com/");
+    absorbResourceOccurrences(
+      occurrences,
+      [page(html)],
+      "https://www.example.com/"
+    );
     expect([...occurrences.css.keys()]).toEqual([]);
     expect([...occurrences.externalCss.keys()].sort()).toEqual([
       "https://assets.brand.test/brand.css",
@@ -233,13 +267,18 @@ describe("what counts as an asset on the site", () => {
       occurrences,
       [page(html)],
       "https://www.example.com/",
-      ownSiteHostMatcher({ baseUrl: "https://www.example.com/", domains: ["brand.test"] }),
+      ownSiteHostMatcher({
+        baseUrl: "https://www.example.com/",
+        domains: ["brand.test"],
+      })
     );
     expect([...occurrences.css.keys()].sort()).toEqual([
       "https://assets.brand.test/brand.css",
       "https://example.com/twin.css",
     ]);
-    expect([...occurrences.externalCss.keys()]).toEqual(["https://cdn.other.test/other.css"]);
+    expect([...occurrences.externalCss.keys()]).toEqual([
+      "https://cdn.other.test/other.css",
+    ]);
   });
 });
 
@@ -247,7 +286,13 @@ describe("probeEgress", () => {
   const config = { project: { domains: ["brand.test"] } } as never;
 
   test("ownSiteOnly holds the end-of-crawl probes to the site and its project domains", () => {
-    const policy = probeEgress("https://example.com/", config, undefined, undefined, true);
+    const policy = probeEgress(
+      "https://example.com/",
+      config,
+      undefined,
+      undefined,
+      true
+    );
     expect(policy.allowHost?.("example.com")).toBe(true);
     expect(policy.allowHost?.("www.example.com")).toBe(true);
     expect(policy.allowHost?.("assets.brand.test")).toBe(true);
@@ -255,9 +300,12 @@ describe("probeEgress", () => {
   });
 
   test("it sets no host restriction otherwise", () => {
-    expect(probeEgress("https://example.com/", config).allowHost).toBeUndefined();
     expect(
-      probeEgress("https://example.com/", config, undefined, undefined, false).allowHost,
+      probeEgress("https://example.com/", config).allowHost
+    ).toBeUndefined();
+    expect(
+      probeEgress("https://example.com/", config, undefined, undefined, false)
+        .allowHost
     ).toBeUndefined();
   });
 });

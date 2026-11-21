@@ -25,15 +25,19 @@
 //   * TARGETS. Only pages that answered 2xx with HTML are judged; the homepage is linked as
 //     "Home", the brand and the logo, so it is never judged for divergent anchors.
 
+import type { AnchorGraph } from "@squirrelscan/core-contracts";
+
+import { getPathname } from "@squirrelscan/utils";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { AnchorGraph } from "@squirrelscan/core-contracts";
-import { getPathname } from "@squirrelscan/utils";
-import { normalizePageUrl } from "@squirrelscan/utils/url";
 
+import {
+  isConventionalLinkLabel,
+  normalizeLinkLabel,
+} from "../shared/conventional-link-labels";
 import { frontDoorTest } from "../shared/front-door";
-import { isConventionalLinkLabel, normalizeLinkLabel } from "../shared/conventional-link-labels";
 import { isGenericInPageLanguage } from "../shared/generic-link-phrases";
 import { AnchorGraphBuilder, meaningfulTokens } from "./anchor-mismatch";
 
@@ -63,19 +67,56 @@ const MAX_EXAMPLES = 5;
 // per-language phrase lists.
 const GENERIC_ENGLISH: ReadonlySet<string> = new Set(
   [
-    "click here", "here", "read more", "learn more", "more", "link", "this", "this link", "go",
-    "continue", "more info", "more information", "see more", "view more", "view all", "see all",
-    "details", "view details", "see details", "find out more", "read on", "read the article",
-    "read article", "read full article", "read the full story", "get started", "next", "previous",
-    "prev", "back",
-  ].map(normalizeLinkLabel),
+    "click here",
+    "here",
+    "read more",
+    "learn more",
+    "more",
+    "link",
+    "this",
+    "this link",
+    "go",
+    "continue",
+    "more info",
+    "more information",
+    "see more",
+    "view more",
+    "view all",
+    "see all",
+    "details",
+    "view details",
+    "see details",
+    "find out more",
+    "read on",
+    "read the article",
+    "read article",
+    "read full article",
+    "read the full story",
+    "get started",
+    "next",
+    "previous",
+    "prev",
+    "back",
+  ].map(normalizeLinkLabel)
 );
-const GENERIC_LANGS = ["es", "fr", "de", "pt", "it", "nl", "ru", "ja", "zh", "ko"] as const;
+const GENERIC_LANGS = [
+  "es",
+  "fr",
+  "de",
+  "pt",
+  "it",
+  "nl",
+  "ru",
+  "ja",
+  "zh",
+  "ko",
+] as const;
 
 function isGenericAnchor(text: string): boolean {
   const folded = normalizeLinkLabel(text);
   if (folded === "" || !/\p{L}/u.test(folded)) return true;
-  if (GENERIC_ENGLISH.has(folded) || isConventionalLinkLabel(folded)) return true;
+  if (GENERIC_ENGLISH.has(folded) || isConventionalLinkLabel(folded))
+    return true;
   return GENERIC_LANGS.some((lang) => isGenericInPageLanguage(text, lang));
 }
 
@@ -101,7 +142,8 @@ interface Conflict {
 
 function isJudgeableTarget(graph: AnchorGraph, target: string): boolean {
   const page = graph.pages.get(target);
-  if (!page || page.status === null || page.status < 200 || page.status > 299) return false;
+  if (!page || page.status === null || page.status < 200 || page.status > 299)
+    return false;
   return !page.contentType || /html/i.test(page.contentType);
 }
 
@@ -111,7 +153,9 @@ function clipPath(url: string): string {
 }
 
 /** Group texts that share a word; returns the clusters as lists of anchor keys. */
-function clusterByWord(texts: readonly { key: string; text: string }[]): string[][] {
+function clusterByWord(
+  texts: readonly { key: string; text: string }[]
+): string[][] {
   const parent = new Map<string, string>(texts.map((t) => [t.key, t.key]));
   const find = (k: string): string => {
     let root = k;
@@ -140,7 +184,7 @@ function clusterByWord(texts: readonly { key: string; text: string }[]): string[
 export function evaluateAnchorConflicts(
   graph: AnchorGraph,
   baseUrl: string,
-  entryUrls: readonly string[],
+  entryUrls: readonly string[]
 ): CheckResult {
   if (graph.pages.size < MIN_PAGES) return SKIP_CHECK;
   const isFrontDoor = frontDoorTest(baseUrl, entryUrls);
@@ -156,7 +200,10 @@ export function evaluateAnchorConflicts(
       const key = pair.textKeys[i]!;
       let use = byAnchor.get(key);
       if (!use) {
-        byAnchor.set(key, (use = { text, targets: new Map(), sources: new Set() }));
+        byAnchor.set(
+          key,
+          (use = { text, targets: new Map(), sources: new Set() })
+        );
         judgedAnchors += 1;
       }
       let srcs = use.targets.get(pair.target);
@@ -187,12 +234,15 @@ export function evaluateAnchorConflicts(
   for (const use of byAnchor.values()) {
     if (use.targets.size < 2) continue;
     const ranked = [...use.targets.entries()].sort(
-      (a, b) => b[1].size - a[1].size || (a[0] < b[0] ? -1 : 1),
+      (a, b) => b[1].size - a[1].size || (a[0] < b[0] ? -1 : 1)
     );
     const [norm, normSources] = ranked[0]!;
     if (normSources.size / use.sources.size < NORM_SHARE) continue;
     const deviants = ranked.slice(1);
-    const examples = [...new Set(deviants.flatMap(([, s]) => [...s]))].slice(0, MAX_EXAMPLES);
+    const examples = [...new Set(deviants.flatMap(([, s]) => [...s]))].slice(
+      0,
+      MAX_EXAMPLES
+    );
     conflicts.push({
       kind: "anchor",
       id: `anchor: ${use.text}`,
@@ -217,10 +267,16 @@ export function evaluateAnchorConflicts(
     const reps = clusters.map((keys) => {
       const best = keys
         .map((k) => tuse.anchors.get(k)!)
-        .sort((a, b) => b.sources.size - a.sources.size || (a.text < b.text ? -1 : 1))[0]!;
+        .sort(
+          (a, b) =>
+            b.sources.size - a.sources.size || (a.text < b.text ? -1 : 1)
+        )[0]!;
       return best;
     });
-    const examples = [...new Set(reps.flatMap((r) => [...r.sources]))].slice(0, MAX_EXAMPLES);
+    const examples = [...new Set(reps.flatMap((r) => [...r.sources]))].slice(
+      0,
+      MAX_EXAMPLES
+    );
     conflicts.push({
       kind: "target",
       id: `target: ${target}`,
@@ -245,7 +301,8 @@ export function evaluateAnchorConflicts(
     return {
       name: CHECK_NAME,
       status: "pass",
-      message: "Each anchor text points at one page and each page keeps a consistent anchor",
+      message:
+        "Each anchor text points at one page and each page keeps a consistent anchor",
       details,
     };
   }
@@ -305,7 +362,7 @@ export const anchorTargetConflictRule: Rule = {
     const builder = new AnchorGraphBuilder(
       undefined,
       undefined,
-      new Set(pages.map((page) => normalizePageUrl(page.url))),
+      new Set(pages.map((page) => normalizePageUrl(page.url)))
     );
     for (const page of pages) {
       builder.addPage(page.url, {
@@ -313,9 +370,12 @@ export const anchorTargetConflictRule: Rule = {
         h1: page.parsed.h1?.texts,
         links: page.parsed.links,
         status: page.statusCode,
-        contentType: page.headers?.["content-type"] ?? page.headers?.["Content-Type"],
+        contentType:
+          page.headers?.["content-type"] ?? page.headers?.["Content-Type"],
       });
     }
-    return { checks: [evaluateAnchorConflicts(builder.build(), baseUrl, entryUrls)] };
+    return {
+      checks: [evaluateAnchorConflicts(builder.build(), baseUrl, entryUrls)],
+    };
   },
 };

@@ -3,8 +3,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { renderJson } from "../src/output/json";
 import type { AuditReport } from "../src/types";
+
+import { renderJson } from "../src/output/json";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -28,7 +29,8 @@ describe("renderJson resume outcome (#1658)", () => {
             requested: true,
             resumed: false,
             reason: "crawl-finished",
-            message: "previous crawl c1 finished (analyzed), nothing left to resume",
+            message:
+              "previous crawl c1 finished (analyzed), nothing left to resume",
           },
         })
       )
@@ -42,7 +44,9 @@ describe("renderJson resume outcome (#1658)", () => {
   });
 
   test("a resume that happened has no reason", () => {
-    const parsed = JSON.parse(renderJson(report({ resume: { requested: true, resumed: true } })));
+    const parsed = JSON.parse(
+      renderJson(report({ resume: { requested: true, resumed: true } }))
+    );
     expect(parsed.meta.resume).toEqual({ requested: true, resumed: true });
   });
 

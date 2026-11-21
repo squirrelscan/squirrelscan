@@ -5,19 +5,27 @@
 // DOM-drop) changes memory/timing, not results. Also asserts DOM residency stays
 // batch-bounded (peakLiveDocs ≤ batch).
 
+import type { SQLiteStorage } from "@squirrelscan/crawler";
+
+import {
+  createRunner,
+  type RuleRunner,
+  type SiteData,
+} from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { createRunner, type RuleRunner, type SiteData } from "@squirrelscan/rules";
-import type { SQLiteStorage } from "@squirrelscan/crawler";
-
-import { buildSiteContext, buildHeadersMap, isRenderedFetch } from "../src/adapter";
-import { isAuditablePage } from "../src/page-features";
 import {
-  foldRuleResultIntoTallies,
-  type RuleTally,
-} from "../src/scoring";
+  buildSiteContext,
+  buildHeadersMap,
+  isRenderedFetch,
+} from "../src/adapter";
+import { isAuditablePage } from "../src/page-features";
+import { foldRuleResultIntoTallies, type RuleTally } from "../src/scoring";
 import { streamPageRules } from "../src/streaming";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -63,7 +71,8 @@ async function runResidentPageRules(
     );
     const pageUrl = page.normalizedUrl;
     for (const [ruleId, rr] of result.ruleResults) {
-      for (const check of rr.checks) if (!check.pageUrl) check.pageUrl = pageUrl;
+      for (const check of rr.checks)
+        if (!check.pageUrl) check.pageUrl = pageUrl;
       foldRuleResultIntoTallies(tallies, ruleId, rr);
     }
     pageResults.set(pageUrl, result.checks);
@@ -80,7 +89,12 @@ async function fixture(seed: number, pageCount: number) {
 // Page rules read only non-`pages` site fields; both paths get this identical
 // minimal SiteData (pages:[] for streaming, ignored by page rules).
 function siteData(): SiteData {
-  return { baseUrl: "http://synthetic.example.com", pages: [], robotsTxt: null, sitemaps: null };
+  return {
+    baseUrl: "http://synthetic.example.com",
+    pages: [],
+    robotsTxt: null,
+    sitemaps: null,
+  };
 }
 
 describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () => {
@@ -88,13 +102,22 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
     const { storage, crawlId } = await fixture(7, 40);
     const runner = createRunner(CONFIG);
 
-    const resident = await runResidentPageRules(storage, crawlId, runner, siteData());
+    const resident = await runResidentPageRules(
+      storage,
+      crawlId,
+      runner,
+      siteData()
+    );
     const streamed = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 8 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
+        batchSize: 8,
+      })
     );
 
     // Per-rule folded tallies must match exactly.
-    expect([...streamed.tallies.keys()].sort()).toEqual([...resident.tallies.keys()].sort());
+    expect([...streamed.tallies.keys()].sort()).toEqual(
+      [...resident.tallies.keys()].sort()
+    );
     for (const [ruleId, rt] of resident.tallies) {
       expect(streamed.tallies.get(ruleId)?.tally).toEqual(rt.tally);
     }
@@ -117,10 +140,14 @@ describe("streaming page-rule pass — GOLDEN INVARIANT vs resident loop", () =>
   test("batch size does not change results (batch 3 ≡ batch 200)", async () => {
     const { storage, crawlId } = await fixture(11, 25);
     const a = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 3 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
+        batchSize: 3,
+      })
     );
     const b = await run(
-      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), { batchSize: 200 })
+      streamPageRules(storage, crawlId, createRunner(CONFIG), siteData(), {
+        batchSize: 200,
+      })
     );
     for (const [ruleId, rt] of a.tallies) {
       expect(b.tallies.get(ruleId)?.tally).toEqual(rt.tally);

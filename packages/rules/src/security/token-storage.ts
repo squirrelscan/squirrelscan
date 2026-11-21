@@ -14,11 +14,16 @@
 // A finding names the script, the storage and the key, and NEVER the value: the
 // value is a live credential on a real site, and a report is shared and stored.
 
-import type { CheckItem, ScriptContentData } from "@squirrelscan/core-contracts";
+import type {
+  CheckItem,
+  ScriptContentData,
+} from "@squirrelscan/core-contracts";
+
 import { getDomain } from "tldts";
 
-import { sharedRegex } from "../shared-regex";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { sharedRegex } from "../shared-regex";
 
 export type StorageKind = "localStorage" | "sessionStorage";
 
@@ -153,7 +158,9 @@ export function isTokenKey(key: string): boolean {
   if (segments.some((s) => BENIGN_SEGMENTS.has(s))) return false;
   if (segments.some((s) => STRONG_SEGMENTS.has(s))) return true;
   if (!segments.some((s) => WEAK_SEGMENTS.has(s))) return false;
-  return segments.every((s) => WEAK_SEGMENTS.has(s) || COMPANIONS.has(s) || STRONG_SEGMENTS.has(s));
+  return segments.every(
+    (s) => WEAK_SEGMENTS.has(s) || COMPANIONS.has(s) || STRONG_SEGMENTS.has(s)
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -171,21 +178,23 @@ export const isJwtShaped = (value: string): boolean => JWT_SHAPE.test(value);
  * A value that holds no credential: a write that clears a key (`setItem("token", "")`,
  * `null`, `undefined`) or stores a flag (`"true"`, `"false"`, `"0"`, `"1"`).
  */
-const EMPTY_VALUE = /^\s*(?:(['"`])(?:|null|undefined|false|true|0|1)\1|null\b|undefined\b|void 0|!?[01]\b|!0|!1)/;
+const EMPTY_VALUE =
+  /^\s*(?:(['"`])(?:|null|undefined|false|true|0|1)\1|null\b|undefined\b|void 0|!?[01]\b|!0|!1)/;
 
 /* -------------------------------------------------------------------------- */
 /* Scanning                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const STORAGE = "(?<![\\w$])(?:window\\s*\\.\\s*|self\\s*\\.\\s*|globalThis\\s*\\.\\s*)?(localStorage|sessionStorage)";
+const STORAGE =
+  "(?<![\\w$])(?:window\\s*\\.\\s*|self\\s*\\.\\s*|globalThis\\s*\\.\\s*)?(localStorage|sessionStorage)";
 
 // `setItem("key", value)` with a string-literal key. The value is read from the
 // text after the comma by VALUE_WINDOW.
 const SET_ITEM_LITERAL = sharedRegex(
   new RegExp(
     `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*,`,
-    "g",
-  ),
+    "g"
+  )
 );
 // `setItem(computed, value)`: no literal key, only the value can be judged. The end
 // of the first argument is found by a bounded scan (200 characters, brackets
@@ -195,19 +204,19 @@ const SET_ITEM_LITERAL = sharedRegex(
 const SET_ITEM_DYNAMIC = sharedRegex(
   new RegExp(
     `${STORAGE}\\s*(?:\\?\\.|\\.)\\s*setItem\\s*\\(\\s*(?!['"\`])`,
-    "g",
-  ),
+    "g"
+  )
 );
 // `localStorage["key"] = value`
 const BRACKET_ASSIGN = sharedRegex(
   new RegExp(
     `${STORAGE}\\s*\\[\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\\\n\\r]){1,${MAX_KEY_CHARS}})\\2\\s*\\]\\s*=(?![=>])`,
-    "g",
-  ),
+    "g"
+  )
 );
 // `localStorage.key = value`
 const PROPERTY_ASSIGN = sharedRegex(
-  new RegExp(`${STORAGE}\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*=(?![=>])`, "g"),
+  new RegExp(`${STORAGE}\\s*\\.\\s*([A-Za-z_$][\\w$]*)\\s*=(?![=>])`, "g")
 );
 
 const STORAGE_API = new Set([
@@ -265,14 +274,26 @@ export function scanTokenStorage(text: string): TokenStorageScan {
   const scan = truncated ? text.slice(0, MAX_SCAN_CHARS) : text;
 
   const out = new Map<string, TokenStorageWrite>();
-  const add = (storage: StorageKind, key: string | null, reason: TokenStorageReason): void => {
+  const add = (
+    storage: StorageKind,
+    key: string | null,
+    reason: TokenStorageReason
+  ): void => {
     if (out.size >= MAX_WRITES_PER_SCRIPT) return;
     // A key that is itself JWT-shaped is a value in the wrong argument: do not echo it.
     const safeKey = key !== null && isJwtShaped(key) ? null : key;
-    out.set(`${storage}\u0000${safeKey ?? ""}\u0000${reason}`, { storage, key: safeKey, reason });
+    out.set(`${storage}\u0000${safeKey ?? ""}\u0000${reason}`, {
+      storage,
+      key: safeKey,
+      reason,
+    });
   };
 
-  const judge = (storage: StorageKind, key: string | null, after: number): void => {
+  const judge = (
+    storage: StorageKind,
+    key: string | null,
+    after: number
+  ): void => {
     const value = valueAfter(scan, after);
     if (JWT_AT_START.test(value)) {
       add(storage, key, "jwt-value");
@@ -293,7 +314,10 @@ export function scanTokenStorage(text: string): TokenStorageScan {
 
   SET_ITEM_DYNAMIC.lastIndex = 0;
   let d: RegExpExecArray | null;
-  while (out.size < MAX_WRITES_PER_SCRIPT && (d = SET_ITEM_DYNAMIC.exec(scan)) !== null) {
+  while (
+    out.size < MAX_WRITES_PER_SCRIPT &&
+    (d = SET_ITEM_DYNAMIC.exec(scan)) !== null
+  ) {
     // Skip to the comma that ends the first argument, at depth zero.
     const argText = valueAfter(scan, SET_ITEM_DYNAMIC.lastIndex);
     let depth = 0;
@@ -309,12 +333,16 @@ export function scanTokenStorage(text: string): TokenStorageScan {
         break;
       }
     }
-    if (comma >= 0) judge(d[1] as StorageKind, null, SET_ITEM_DYNAMIC.lastIndex + comma + 1);
+    if (comma >= 0)
+      judge(d[1] as StorageKind, null, SET_ITEM_DYNAMIC.lastIndex + comma + 1);
   }
 
   PROPERTY_ASSIGN.lastIndex = 0;
   let p: RegExpExecArray | null;
-  while (out.size < MAX_WRITES_PER_SCRIPT && (p = PROPERTY_ASSIGN.exec(scan)) !== null) {
+  while (
+    out.size < MAX_WRITES_PER_SCRIPT &&
+    (p = PROPERTY_ASSIGN.exec(scan)) !== null
+  ) {
     if (STORAGE_API.has(p[2]!)) continue;
     judge(p[1] as StorageKind, p[2]!, PROPERTY_ASSIGN.lastIndex);
   }
@@ -348,7 +376,10 @@ const registrable = (url: string): string | null => {
  * owner reads such a finding differently: it is labelled, not hidden, because an
  * auth SDK that persists the user's JWT is still an exposure the owner chose.
  */
-export function isThirdPartyScript(scriptUrl: string, pageUrl: string): boolean {
+export function isThirdPartyScript(
+  scriptUrl: string,
+  pageUrl: string
+): boolean {
   const script = registrable(scriptUrl);
   const page = registrable(pageUrl);
   return script !== null && page !== null && script !== page;
@@ -365,14 +396,19 @@ const describe = (w: Located): string =>
 const MAX_ITEMS = 20;
 
 /** The `type` of an inline script the browser runs as code; JSON data blocks and templates are not. */
-const EXECUTABLE_SCRIPT_TYPE = /^(?:text|application)\/(?:javascript|ecmascript)$|^module$/;
+const EXECUTABLE_SCRIPT_TYPE =
+  /^(?:text|application)\/(?:javascript|ecmascript)$|^module$/;
 
 /** One check for the writes found in one script (or in a page's inline scripts). */
 function findingCheck(found: Located[]): CheckResult {
   const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
     id: `${w.script}: ${describe(w)} (${w.reason})`,
     label: `${REASON_LABEL[w.reason]} written in ${
-      w.location === "inline-script" ? "an inline script" : w.thirdParty ? "third-party script" : "script"
+      w.location === "inline-script"
+        ? "an inline script"
+        : w.thirdParty
+          ? "third-party script"
+          : "script"
     } ${w.script}`,
     meta: {
       storage: w.storage,
@@ -400,7 +436,9 @@ function findingCheck(found: Located[]): CheckResult {
         ? { foldKey: `security/token-storage:${first.script}` }
         : {}),
       ...(first.thirdParty ? { thirdParty: true } : {}),
-      ...(found.length > MAX_ITEMS ? { additional: found.length - MAX_ITEMS } : {}),
+      ...(found.length > MAX_ITEMS
+        ? { additional: found.length - MAX_ITEMS }
+        : {}),
     },
   };
 }
@@ -422,11 +460,14 @@ function externalScan(script: { content: string | null }): TokenStorageScan {
  * inventory. A site-wide bundle lists every page in `sourcePages`, so testing
  * `sourcePages.includes(page)` per script on every page is quadratic in pages.
  */
-const scriptsByPageCache = new WeakMap<readonly ScriptContentData[], Map<string, ScriptContentData[]>>();
+const scriptsByPageCache = new WeakMap<
+  readonly ScriptContentData[],
+  Map<string, ScriptContentData[]>
+>();
 
 function scriptsLoadedBy(
   scripts: readonly ScriptContentData[],
-  pageUrl: string,
+  pageUrl: string
 ): readonly ScriptContentData[] {
   let index = scriptsByPageCache.get(scripts);
   if (!index) {
@@ -455,7 +496,10 @@ function truncationCheck(script: string): CheckResult {
     name: "token-storage-truncated",
     status: "info",
     message: `Script ${script} is longer than ${mb} MB: only the first ${mb} MB were scanned for token writes`,
-    details: { foldKey: `security/token-storage:truncated:${script}`, scanLimit: MAX_SCAN_CHARS },
+    details: {
+      foldKey: `security/token-storage:truncated:${script}`,
+      scanLimit: MAX_SCAN_CHARS,
+    },
   };
 }
 
@@ -463,7 +507,8 @@ export const tokenStorageRule: Rule = {
   meta: {
     id: "security/token-storage",
     name: "Auth Tokens in Web Storage",
-    description: "Flags JWTs and session or access tokens written to localStorage or sessionStorage",
+    description:
+      "Flags JWTs and session or access tokens written to localStorage or sessionStorage",
     solution:
       "Anything in localStorage or sessionStorage can be read by any script on the page, so one XSS bug or one compromised third-party script steals the session. Keep the credential in an httpOnly, Secure, SameSite cookie that the server sets, and send it automatically with requests. If a token must live in script memory, keep it in a closure for the life of the page rather than persisting it, use short lifetimes and rotate refresh tokens. Pair this with a strict Content-Security-Policy to limit what can run.",
     category: "security",
@@ -514,7 +559,10 @@ export const tokenStorageRule: Rule = {
     // depends on the script alone, so the copies are identical and report grouping
     // folds them into one issue. Judging it on one owner page would lose the
     // finding whenever that page is skipped (soft 404, filtered out of the run).
-    for (const script of scriptsLoadedBy(ctx.site?.scripts ?? [], ctx.page.url)) {
+    for (const script of scriptsLoadedBy(
+      ctx.site?.scripts ?? [],
+      ctx.page.url
+    )) {
       const { writes, truncated } = externalScan(script);
       if (truncated) checks.push(truncationCheck(script.url));
       if (writes.length === 0) continue;
@@ -525,8 +573,8 @@ export const tokenStorageRule: Rule = {
             location: "external-script" as const,
             script: script.url,
             thirdParty: isThirdPartyScript(script.url, ctx.page.url),
-          })),
-        ),
+          }))
+        )
       );
     }
 

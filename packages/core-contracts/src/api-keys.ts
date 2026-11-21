@@ -51,10 +51,13 @@ export const DEFAULT_KEY_ENV = "production" as const;
  * round-trip even for envs whose raw name contained `_` or was long. Empty after
  * sanitization → development.
  */
-export function normalizeServerEnv(serverEnv: string | undefined | null): string {
+export function normalizeServerEnv(
+  serverEnv: string | undefined | null
+): string {
   const e = (serverEnv ?? "").toLowerCase();
   if (e === "production" || e === "prod") return "production";
-  if (e === "" || e === "development" || e === "dev" || e === "local") return "development";
+  if (e === "" || e === "development" || e === "dev" || e === "local")
+    return "development";
   const sanitized = e
     .replace(/_/g, "-")
     .replace(/[^a-z0-9-]/g, "")
@@ -99,7 +102,11 @@ export function parseKeyEnv(token: string): string | null {
   // because the generator's base62 alphabet (0-9a-zA-Z, see lib/api-keys.ts)
   // excludes `_`. If that alphabet ever gains `_`, this heuristic breaks.
   const underscoreIdx = rest.indexOf("_");
-  if (underscoreIdx > 0 && underscoreIdx <= 16 && /^[a-z0-9-]+$/.test(rest.slice(0, underscoreIdx))) {
+  if (
+    underscoreIdx > 0 &&
+    underscoreIdx <= 16 &&
+    /^[a-z0-9-]+$/.test(rest.slice(0, underscoreIdx))
+  ) {
     return rest.slice(0, underscoreIdx);
   }
   return "production";
@@ -120,7 +127,9 @@ export const CLI_LOGIN_TOKEN_PREFIX = "sqcli_";
 /** All org API-key prefixes, longest-first. ORDER MATTERS: matchers must test
  * longest-first so `sq_dev_` is recognized before the bare `sq_`. Derived from
  * KEY_ENV_SEGMENTS so a new env automatically joins the routing table. */
-export const API_KEY_PREFIXES_LONGEST_FIRST: readonly string[] = Object.keys(KEY_ENV_SEGMENTS)
+export const API_KEY_PREFIXES_LONGEST_FIRST: readonly string[] = Object.keys(
+  KEY_ENV_SEGMENTS
+)
   .map((env) => keyPrefixForEnv(env))
   .sort((a, b) => b.length - a.length);
 
@@ -146,7 +155,10 @@ export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
  * Reserved scopes — accepted by the type system for forward-compat but NOT
  * grantable in v1. Requesting one on key creation is a 400.
  */
-export const RESERVED_API_KEY_SCOPES = ["keys:write", "webhooks:write"] as const;
+export const RESERVED_API_KEY_SCOPES = [
+  "keys:write",
+  "webhooks:write",
+] as const;
 export type ReservedApiKeyScope = (typeof RESERVED_API_KEY_SCOPES)[number];
 
 /** Is this a real, grantable scope? */
@@ -155,7 +167,9 @@ export function isApiKeyScope(value: string): value is ApiKeyScope {
 }
 
 /** Is this a reserved (not-yet-grantable) scope? */
-export function isReservedApiKeyScope(value: string): value is ReservedApiKeyScope {
+export function isReservedApiKeyScope(
+  value: string
+): value is ReservedApiKeyScope {
   return (RESERVED_API_KEY_SCOPES as readonly string[]).includes(value);
 }
 

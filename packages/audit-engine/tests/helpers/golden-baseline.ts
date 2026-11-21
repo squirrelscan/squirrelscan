@@ -23,10 +23,13 @@ import type {
   PreFetchedAssets,
   RuleExecutionResult,
 } from "@squirrelscan/audit-engine";
-import type { Config } from "@squirrelscan/config";
-import type { CheckStatus, CrawlStorage, PageRecord } from "@squirrelscan/core-contracts";
 import type { PageRuleLoopHooks } from "@squirrelscan/audit-engine";
-
+import type { Config } from "@squirrelscan/config";
+import type {
+  CheckStatus,
+  CrawlStorage,
+  PageRecord,
+} from "@squirrelscan/core-contracts";
 import type { IssueMixOptions, SiteModel } from "@squirrelscan/synthetic-site";
 
 import {
@@ -37,11 +40,14 @@ import {
 } from "@squirrelscan/audit-engine";
 import { getDefaultConfig } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect } from "effect";
 
 export function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff);
@@ -107,7 +113,7 @@ export async function runV1Pipeline(
   storage: CrawlStorage,
   crawlId: string,
   config: Config,
-  opts: RunV1PipelineOptions = {},
+  opts: RunV1PipelineOptions = {}
 ): Promise<V1PipelineResult> {
   opts.onPhase?.("get-pages:start");
   const pages = await run(storage.getPages(crawlId));
@@ -121,12 +127,22 @@ export async function runV1Pipeline(
 
   opts.onPhase?.("rules:start");
   const ruleResults = await run(
-    runRulesOnStorage(storage, crawlId, siteContext, config, assets, undefined, opts.pageLoopHooks),
+    runRulesOnStorage(
+      storage,
+      crawlId,
+      siteContext,
+      config,
+      assets,
+      undefined,
+      opts.pageLoopHooks
+    )
   );
   opts.onPhase?.("rules:end");
 
   opts.onPhase?.("report:start");
-  const report = await run(generateReportFromStorage(storage, crawlId, ruleResults));
+  const report = await run(
+    generateReportFromStorage(storage, crawlId, ruleResults)
+  );
   opts.onPhase?.("report:end");
 
   return { pages, ruleResults, report };
@@ -243,7 +259,7 @@ function statusBucket(tally: RuleTallySnapshot, status: CheckStatus): void {
 function buildSnapshot(
   pageCount: number,
   ruleResults: RuleExecutionResult,
-  report: FullAuditReport,
+  report: FullAuditReport
 ): EngineBaselineSnapshot {
   const findings: RuleFindingSnapshot[] = [];
   const tallyByRule = new Map<string, RuleTallySnapshot>();
@@ -266,7 +282,8 @@ function buildSnapshot(
         pageUrl: check.pageUrl ?? null,
         message: check.message,
         value: check.value === undefined ? null : JSON.stringify(check.value),
-        expected: check.expected === undefined ? null : JSON.stringify(check.expected),
+        expected:
+          check.expected === undefined ? null : JSON.stringify(check.expected),
       });
       statusBucket(tally, check.status);
     }
@@ -281,18 +298,24 @@ function buildSnapshot(
       (a.pageUrl ?? "").localeCompare(b.pageUrl ?? "") ||
       a.message.localeCompare(b.message) ||
       (a.value ?? "").localeCompare(b.value ?? "") ||
-      (a.expected ?? "").localeCompare(b.expected ?? ""),
+      (a.expected ?? "").localeCompare(b.expected ?? "")
   );
 
-  const perRuleTally = [...tallyByRule.values()].sort((a, b) => a.ruleId.localeCompare(b.ruleId));
+  const perRuleTally = [...tallyByRule.values()].sort((a, b) =>
+    a.ruleId.localeCompare(b.ruleId)
+  );
 
   const hs = report.healthScore!;
   return {
     meta: { pageCount },
     healthScore: {
       overall: hs.overall,
-      categories: [...hs.categories].sort((a, b) => a.category.localeCompare(b.category)),
-      groups: [...(hs.groups ?? [])].sort((a, b) => a.group.localeCompare(b.group)),
+      categories: [...hs.categories].sort((a, b) =>
+        a.category.localeCompare(b.category)
+      ),
+      groups: [...(hs.groups ?? [])].sort((a, b) =>
+        a.group.localeCompare(b.group)
+      ),
       errorCount: hs.errorCount,
       warningCount: hs.warningCount,
       passedCount: hs.passedCount,
@@ -306,7 +329,7 @@ function buildSnapshot(
       missingTwitterCards: [...report.summary.missingTwitterCards].sort(),
       missingSchemas: [...report.summary.missingSchemas].sort(),
       missingAltText: [...report.summary.missingAltText].sort(
-        (a, b) => a.page.localeCompare(b.page) || a.image.localeCompare(b.image),
+        (a, b) => a.page.localeCompare(b.page) || a.image.localeCompare(b.image)
       ),
       multipleH1s: [...report.summary.multipleH1s].sort(),
       thinContentPages: [...report.summary.thinContentPages].sort(),
@@ -327,7 +350,7 @@ function buildSnapshot(
  */
 export async function captureEngineBaseline(
   storagePath: string,
-  config: Config,
+  config: Config
 ): Promise<EngineBaselineSnapshot> {
   const storage = new SQLiteStorage(storagePath);
   try {
@@ -335,9 +358,15 @@ export async function captureEngineBaseline(
     const crawls = await run(storage.listCrawls(1));
     const crawlId = crawls[0]?.id;
     if (!crawlId) {
-      throw new Error(`captureEngineBaseline: no crawl found in storage at "${storagePath}"`);
+      throw new Error(
+        `captureEngineBaseline: no crawl found in storage at "${storagePath}"`
+      );
     }
-    const { pages, ruleResults, report } = await runV1Pipeline(storage, crawlId, config);
+    const { pages, ruleResults, report } = await runV1Pipeline(
+      storage,
+      crawlId,
+      config
+    );
     return buildSnapshot(pages.length, ruleResults, report);
   } finally {
     await run(storage.close());
@@ -354,7 +383,7 @@ export async function captureEngineBaseline(
  */
 export async function captureStreamingBaseline(
   storagePath: string,
-  config: Config,
+  config: Config
 ): Promise<EngineBaselineSnapshot> {
   const storage = new SQLiteStorage(storagePath);
   try {
@@ -362,13 +391,19 @@ export async function captureStreamingBaseline(
     const crawls = await run(storage.listCrawls(1));
     const crawlId = crawls[0]?.id;
     if (!crawlId) {
-      throw new Error(`captureStreamingBaseline: no crawl found in storage at "${storagePath}"`);
+      throw new Error(
+        `captureStreamingBaseline: no crawl found in storage at "${storagePath}"`
+      );
     }
     // Page count = the full stored set (incl. redirect hops), matching
     // runV1Pipeline's `pages.length`; meta.pageCount is provenance-only (not diffed).
     const pageCount = (await run(storage.getPages(crawlId))).length;
-    const ruleResults = await run(runStreamingRules(storage, crawlId, config, emptyAssets()));
-    const report = await run(generateReportFromStorage(storage, crawlId, ruleResults));
+    const ruleResults = await run(
+      runStreamingRules(storage, crawlId, config, emptyAssets())
+    );
+    const report = await run(
+      generateReportFromStorage(storage, crawlId, ruleResults)
+    );
     return buildSnapshot(pageCount, ruleResults, report);
   } finally {
     await run(storage.close());
@@ -479,8 +514,24 @@ function findingKey(f: RuleFindingSnapshot): string {
  * would otherwise false-positive as a divergence. */
 /* `name` is intentionally excluded: cosmetic display label, not a scoring output. */
 function scoreFieldsEqual(
-  a: { score: number; passed: number; warnings: number; failed: number; total: number } | undefined,
-  b: { score: number; passed: number; warnings: number; failed: number; total: number } | undefined,
+  a:
+    | {
+        score: number;
+        passed: number;
+        warnings: number;
+        failed: number;
+        total: number;
+      }
+    | undefined,
+  b:
+    | {
+        score: number;
+        passed: number;
+        warnings: number;
+        failed: number;
+        total: number;
+      }
+    | undefined
 ): boolean {
   if (!a || !b) return a === b;
   return (
@@ -492,7 +543,11 @@ function scoreFieldsEqual(
   );
 }
 
-function diffStringArray(label: string, a: string[], b: string[]): BaselineDivergence[] {
+function diffStringArray(
+  label: string,
+  a: string[],
+  b: string[]
+): BaselineDivergence[] {
   if (a.length === b.length && a.every((v, i) => v === b[i])) return [];
   return [
     {
@@ -512,7 +567,7 @@ function diffStringArray(label: string, a: string[], b: string[]): BaselineDiver
 export function diffBaselines(
   a: EngineBaselineSnapshot,
   b: EngineBaselineSnapshot,
-  opts: { maxDivergences?: number } = {},
+  opts: { maxDivergences?: number } = {}
 ): BaselineDiffResult {
   const maxDivergences = opts.maxDivergences ?? 50;
   const divergences: BaselineDivergence[] = [];
@@ -533,8 +588,12 @@ export function diffBaselines(
       });
     }
   }
-  const catByKeyA = new Map(a.healthScore.categories.map((c) => [c.category, c]));
-  const catByKeyB = new Map(b.healthScore.categories.map((c) => [c.category, c]));
+  const catByKeyA = new Map(
+    a.healthScore.categories.map((c) => [c.category, c])
+  );
+  const catByKeyB = new Map(
+    b.healthScore.categories.map((c) => [c.category, c])
+  );
   for (const key of new Set([...catByKeyA.keys(), ...catByKeyB.keys()])) {
     const ca = catByKeyA.get(key);
     const cb = catByKeyB.get(key);
@@ -590,7 +649,10 @@ export function diffBaselines(
   // field-by-field comparison as categories/groups instead.)
   const tallyByRuleA = new Map(a.perRuleTally.map((t) => [t.ruleId, t]));
   const tallyByRuleB = new Map(b.perRuleTally.map((t) => [t.ruleId, t]));
-  for (const ruleId of new Set([...tallyByRuleA.keys(), ...tallyByRuleB.keys()])) {
+  for (const ruleId of new Set([
+    ...tallyByRuleA.keys(),
+    ...tallyByRuleB.keys(),
+  ])) {
     const ta = tallyByRuleA.get(ruleId);
     const tb = tallyByRuleB.get(ruleId);
     if (JSON.stringify(ta) !== JSON.stringify(tb)) {
@@ -603,31 +665,60 @@ export function diffBaselines(
   }
 
   divergences.push(
-    ...diffStringArray("missingTitles", a.summary.missingTitles, b.summary.missingTitles),
+    ...diffStringArray(
+      "missingTitles",
+      a.summary.missingTitles,
+      b.summary.missingTitles
+    ),
     ...diffStringArray(
       "missingDescriptions",
       a.summary.missingDescriptions,
-      b.summary.missingDescriptions,
+      b.summary.missingDescriptions
     ),
-    ...diffStringArray("missingOgTags", a.summary.missingOgTags, b.summary.missingOgTags),
+    ...diffStringArray(
+      "missingOgTags",
+      a.summary.missingOgTags,
+      b.summary.missingOgTags
+    ),
     ...diffStringArray(
       "missingTwitterCards",
       a.summary.missingTwitterCards,
-      b.summary.missingTwitterCards,
+      b.summary.missingTwitterCards
     ),
-    ...diffStringArray("missingSchemas", a.summary.missingSchemas, b.summary.missingSchemas),
-    ...diffStringArray("multipleH1s", a.summary.multipleH1s, b.summary.multipleH1s),
-    ...diffStringArray("thinContentPages", a.summary.thinContentPages, b.summary.thinContentPages),
+    ...diffStringArray(
+      "missingSchemas",
+      a.summary.missingSchemas,
+      b.summary.missingSchemas
+    ),
+    ...diffStringArray(
+      "multipleH1s",
+      a.summary.multipleH1s,
+      b.summary.multipleH1s
+    ),
+    ...diffStringArray(
+      "thinContentPages",
+      a.summary.thinContentPages,
+      b.summary.thinContentPages
+    ),
     ...diffStringArray("urlIssues", a.summary.urlIssues, b.summary.urlIssues),
-    ...diffStringArray("redirectChains", a.summary.redirectChains, b.summary.redirectChains),
-    ...diffStringArray("securityIssues", a.summary.securityIssues, b.summary.securityIssues),
+    ...diffStringArray(
+      "redirectChains",
+      a.summary.redirectChains,
+      b.summary.redirectChains
+    ),
+    ...diffStringArray(
+      "securityIssues",
+      a.summary.securityIssues,
+      b.summary.securityIssues
+    )
   );
   // Field-by-field (not JSON.stringify) for the same reason as categories/
   // groups: these entries are built by the engine's own report generation
   // (packages/audit-engine/src/adapter.ts), not by this module, so a future
   // v2 implementation isn't guaranteed to construct the {page, image}
   // literal with the same key order even if the content is identical.
-  const altKey = (entry: { page: string; image: string }) => `${entry.page}\x1f${entry.image}`;
+  const altKey = (entry: { page: string; image: string }) =>
+    `${entry.page}\x1f${entry.image}`;
   const altA = new Set(a.summary.missingAltText.map(altKey));
   const altB = new Set(b.summary.missingAltText.map(altKey));
   const altMismatch =
@@ -668,7 +759,8 @@ export function diffBaselines(
 
 /** Recursive Object.freeze. Called once per memoized snapshot, never per read. */
 function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  if (value === null || typeof value !== "object" || Object.isFrozen(value))
+    return value;
   Object.freeze(value);
   for (const child of Object.values(value)) deepFreeze(child);
   return value;
@@ -682,12 +774,17 @@ let canonicalV2Promise: Promise<EngineBaselineSnapshot> | undefined;
 /** Path of the canonical crawl DB (written once per process, closed, safe to open from many connections). */
 export function canonicalFixtureDb(): Promise<string> {
   if (!canonicalDbPromise) {
-    canonicalDir = mkdtempSync(join(tmpdir(), "squirrelscan-golden-canonical-"));
+    canonicalDir = mkdtempSync(
+      join(tmpdir(), "squirrelscan-golden-canonical-")
+    );
     const dir = canonicalDir;
     process.once("exit", () => rmSync(dir, { recursive: true, force: true }));
     canonicalDbPromise = (async () => {
       const dbPath = join(dir, "canonical.sqlite");
-      const { storage } = await writeCrawlToStorage(buildGoldenBaselineModel(), dbPath);
+      const { storage } = await writeCrawlToStorage(
+        buildGoldenBaselineModel(),
+        dbPath
+      );
       await run(storage.close()); // each capture opens its own fresh connection
       return dbPath;
     })();

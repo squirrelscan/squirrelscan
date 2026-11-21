@@ -1,8 +1,8 @@
 // perf/js-redirects - JavaScript resources with redirects
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const jsRedirectsRule: Rule = {
   meta: {

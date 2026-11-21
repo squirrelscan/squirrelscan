@@ -2,9 +2,10 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
-import type { AuditReport } from "../src/types";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -32,8 +33,14 @@ describe("outcome in the JSON report", () => {
   });
 
   test("a skipped publish says why", () => {
-    const outcome = { exit_code: 0, status: "completed" as const, publish: { status: "skipped" as const, reason: "offline" } };
-    expect(JSON.parse(renderJson(report({ outcome }))).outcome).toEqual(outcome);
+    const outcome = {
+      exit_code: 0,
+      status: "completed" as const,
+      publish: { status: "skipped" as const, reason: "offline" },
+    };
+    expect(JSON.parse(renderJson(report({ outcome }))).outcome).toEqual(
+      outcome
+    );
   });
 
   test("a report with no outcome (read back from the store) has no outcome field", () => {
@@ -42,17 +49,28 @@ describe("outcome in the JSON report", () => {
 });
 
 describe("outcome in the LLM report", () => {
-  const render = (r: AuditReport) => renderLlm(r as Parameters<typeof renderLlm>[0], { version: "0.0.0", includePassed: false, includeInfo: false });
+  const render = (r: AuditReport) =>
+    renderLlm(r as Parameters<typeof renderLlm>[0], {
+      version: "0.0.0",
+      includePassed: false,
+      includeInfo: false,
+    });
 
   test("an <outcome> element with the exit code, status and publish result", () => {
     expect(render(report({ outcome: failedPublish }))).toContain(
-      '<outcome exit-code="1" status="completed" publish="failed" publish-reason="PAYLOAD_TOO_LARGE"/>',
+      '<outcome exit-code="1" status="completed" publish="failed" publish-reason="PAYLOAD_TOO_LARGE"/>'
     );
   });
 
   test("a published report has no publish reason", () => {
-    const outcome = { exit_code: 0, status: "completed" as const, publish: { status: "published" as const } };
-    expect(render(report({ outcome }))).toContain('<outcome exit-code="0" status="completed" publish="published"/>');
+    const outcome = {
+      exit_code: 0,
+      status: "completed" as const,
+      publish: { status: "published" as const },
+    };
+    expect(render(report({ outcome }))).toContain(
+      '<outcome exit-code="0" status="completed" publish="published"/>'
+    );
   });
 
   test("no outcome, no element", () => {

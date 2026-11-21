@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { brotliCompressSync, gzipSync } from "node:zlib";
+
 import { createFetchDocumentFetcher } from "./index";
 
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -22,7 +23,9 @@ describe("createFetchDocumentFetcher decompression resilience #292", () => {
       },
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     expect(res.status).toBe(200);
     // Page is kept (not dropped) and the real HTML is recovered via the identity refetch.
     expect(res.body).toBe(html);
@@ -33,19 +36,29 @@ describe("createFetchDocumentFetcher decompression resilience #292", () => {
     server = Bun.serve({
       port: 0,
       fetch: () =>
-        new Response(html, { headers: { "Content-Encoding": "gzip", "Content-Type": "text/html" } }),
+        new Response(html, {
+          headers: { "Content-Encoding": "gzip", "Content-Type": "text/html" },
+        }),
     });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     expect(res.status).toBe(200);
     expect(res.body).toBe(html);
   });
 
   it("returns valid bodies normally", async () => {
     const html = "<!doctype html><title>ok</title>";
-    server = Bun.serve({ port: 0, fetch: () => new Response(html, { headers: { "Content-Type": "text/html" } }) });
+    server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(html, { headers: { "Content-Type": "text/html" } }),
+    });
     const fetcher = createFetchDocumentFetcher();
-    const res = await fetcher.fetch({ url: `http://localhost:${server.port}/` });
+    const res = await fetcher.fetch({
+      url: `http://localhost:${server.port}/`,
+    });
     expect(res.body).toBe(html);
   });
 });
@@ -81,14 +94,17 @@ describe("createFetchDocumentFetcher undecoded fetches #2717", () => {
       (input: RequestInfo | URL, init?: RequestInit) => {
         sent.push({
           path: new URL(String(input)).pathname,
-          decompress: (init as { decompress?: unknown } | undefined)?.decompress,
+          decompress: (init as { decompress?: unknown } | undefined)
+            ?.decompress,
         });
         return real(input, init);
       },
-      { preconnect: real.preconnect },
+      { preconnect: real.preconnect }
     );
     try {
-      const res = await createFetchDocumentFetcher().fetch({ url: `http://localhost:${server.port}/a` });
+      const res = await createFetchDocumentFetcher().fetch({
+        url: `http://localhost:${server.port}/a`,
+      });
       expect(res.body).toBe(html);
       expect(res.headers["content-encoding"]).toBe("br");
     } finally {

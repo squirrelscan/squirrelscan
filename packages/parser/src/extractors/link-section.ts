@@ -19,7 +19,12 @@ import type { Element } from "linkedom";
 import type { LinkSection } from "./types";
 
 /** Sections that name sitewide furniture; once an ancestor is one, nothing inside can override it. */
-const CHROME: ReadonlySet<LinkSection> = new Set(["header", "footer", "navigation", "sidebar"]);
+const CHROME: ReadonlySet<LinkSection> = new Set([
+  "header",
+  "footer",
+  "navigation",
+  "sidebar",
+]);
 
 const ROLE_SECTION: Record<string, LinkSection> = {
   banner: "header",
@@ -47,13 +52,23 @@ const BREADCRUMB_STATE_TOKEN =
 
 // A page-level container or a wrapper around the page's landmarks is never the trail itself, so a
 // stray breadcrumb class on it must not turn the site header and footer into "breadcrumbs".
-const NEVER_TRAIL_TAGS: ReadonlySet<string> = new Set(["html", "body", "main", "article"]);
+const NEVER_TRAIL_TAGS: ReadonlySet<string> = new Set([
+  "html",
+  "body",
+  "main",
+  "article",
+]);
 const WRAPS_LANDMARK =
   'header, footer, main, article, [role="banner"], [role="contentinfo"], [role="main"]';
 
 function namesBreadcrumb(value: string): boolean {
   for (const token of value.split(/\s+/)) {
-    if (token && BREADCRUMB_PATTERN.test(token) && !BREADCRUMB_STATE_TOKEN.test(token)) return true;
+    if (
+      token &&
+      BREADCRUMB_PATTERN.test(token) &&
+      !BREADCRUMB_STATE_TOKEN.test(token)
+    )
+      return true;
   }
   return false;
 }
@@ -116,7 +131,8 @@ export function makeSectionResolver(): (element: Element) => LinkSection {
         if (own) {
           // A <header>/<footer> inside <main>/<article> or a comment is that block's own heading,
           // not the site's banner or contentinfo (HTML spec: they only scope to sectioning content).
-          const scoped = (own === "header" || own === "footer") && inherited !== "unknown";
+          const scoped =
+            (own === "header" || own === "footer") && inherited !== "unknown";
           if (!scoped) section = own;
         }
       }
@@ -217,7 +233,10 @@ const MARKUP_FINAL: ReadonlySet<LinkSection> = new Set([
  * block". Only a purpose does: a region answer never replaces them, and a comments answer is
  * ignored (a thread inside furniture is the furniture, as in the markup rule).
  */
-const MARKUP_REFINABLE: ReadonlySet<LinkSection> = new Set(["navigation", "sidebar"]);
+const MARKUP_REFINABLE: ReadonlySet<LinkSection> = new Set([
+  "navigation",
+  "sidebar",
+]);
 
 /**
  * Combine the markup's answer with the classifier's, for one anchor.
@@ -230,7 +249,7 @@ const MARKUP_REFINABLE: ReadonlySet<LinkSection> = new Set(["navigation", "sideb
  */
 export function mergeLinkSection(
   markup: LinkSection,
-  place: () => LinkPlacement | null,
+  place: () => LinkPlacement | null
 ): ResolvedLinkSection {
   if (MARKUP_FINAL.has(markup)) return { section: markup };
   let placement: LinkPlacement | null;
@@ -242,7 +261,8 @@ export function mergeLinkSection(
   if (!placement) return { section: markup };
   // Fail closed: an element in a thread of unknown extent reads "unknown", even where the markup
   // alone would have said "content".
-  if (placement.truncated) return { section: markup === "content" ? "unknown" : markup };
+  if (placement.truncated)
+    return { section: markup === "content" ? "unknown" : markup };
   const named = placement.section;
   if (MARKUP_REFINABLE.has(markup)) {
     const refined = named ? PURPOSE_SECTION[named.label] : undefined;
@@ -279,9 +299,10 @@ function answer(section: LinkSection, from: PlacedLabel): ResolvedLinkSection {
  * alone, bit for bit what `makeSectionResolver` gives.
  */
 export function makeLinkSectionResolver(
-  placeLink?: LinkPlacer,
+  placeLink?: LinkPlacer
 ): (element: Element) => ResolvedLinkSection {
   const markup = makeSectionResolver();
   if (!placeLink) return (element) => ({ section: markup(element) });
-  return (element) => mergeLinkSection(markup(element), () => placeLink(element));
+  return (element) =>
+    mergeLinkSection(markup(element), () => placeLink(element));
 }

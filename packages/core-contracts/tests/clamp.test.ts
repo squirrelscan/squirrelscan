@@ -101,20 +101,29 @@ describe("clampDetailsRecord", () => {
   });
 
   test("numbers/booleans/null pass through untouched, at any depth within bounds", () => {
-    const details = { additional: 5, occurrences: 12, pagesTruncated: 3, flag: true, empty: null };
+    const details = {
+      additional: 5,
+      occurrences: 12,
+      pagesTruncated: 3,
+      flag: true,
+      empty: null,
+    };
     // maxKeysPerLevel raised to 5 here — the point of this test is the scalar
     // pass-through, not the key-count cap (covered separately below).
-    const clamped = clampDetailsRecord(details, { ...limits, maxKeysPerLevel: 5 }) as Record<
-      string,
-      unknown
-    >;
+    const clamped = clampDetailsRecord(details, {
+      ...limits,
+      maxKeysPerLevel: 5,
+    }) as Record<string, unknown>;
     expect(clamped).toEqual(details);
   });
 
   test("string length cap+1: truncates to exactly maxStringLength, cap fits untouched", () => {
     const clamped = clampDetailsRecord(
-      { fits: "a".repeat(limits.maxStringLength), over: "a".repeat(limits.maxStringLength + 1) },
-      limits,
+      {
+        fits: "a".repeat(limits.maxStringLength),
+        over: "a".repeat(limits.maxStringLength + 1),
+      },
+      limits
     ) as Record<string, string>;
     expect(clamped.fits.length).toBe(limits.maxStringLength);
     expect(clamped.over.length).toBe(limits.maxStringLength);
@@ -122,7 +131,10 @@ describe("clampDetailsRecord", () => {
 
   test("object key-count cap+1: keeps exactly maxKeysPerLevel keys, drops the rest", () => {
     const details = { a: 1, b: 2, c: 3, d: 4 }; // 4 keys, cap is 3
-    const clamped = clampDetailsRecord(details, limits) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, limits) as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(clamped)).toHaveLength(limits.maxKeysPerLevel);
     expect(Object.keys(clamped)).toEqual(["a", "b", "c"]);
   });
@@ -138,13 +150,19 @@ describe("clampDetailsRecord", () => {
     // a naive insertion-order slice(0, maxKeysPerLevel) would drop it here
     // since it's ordered AFTER 3 string keys against a cap of 3.
     const details = { note1: "x", note2: "y", note3: "z", additional: 40 };
-    const clamped = clampDetailsRecord(details, limits) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, limits) as Record<
+      string,
+      unknown
+    >;
     expect(clamped.additional).toBe(40);
     expect(Object.keys(clamped)).toHaveLength(limits.maxKeysPerLevel);
   });
 
   test("array length cap+1: keeps exactly maxKeysPerLevel elements", () => {
-    const clamped = clampDetailsRecord({ list: ["a", "b", "c", "d"] }, limits) as {
+    const clamped = clampDetailsRecord(
+      { list: ["a", "b", "c", "d"] },
+      limits
+    ) as {
       list: string[];
     };
     expect(clamped.list).toEqual(["a", "b", "c"]);
@@ -153,7 +171,10 @@ describe("clampDetailsRecord", () => {
   test("depth cap+1: an over-deep CONTAINER is pruned; primitives at any depth survive", () => {
     // depth: details(0) -> a(1) -> b(2, at cap) -> c(3, OVER cap=2) -> d(4)
     const details = { a: { b: { c: { d: "too deep" } } } };
-    const clamped = clampDetailsRecord(details, limits) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, limits) as Record<
+      string,
+      unknown
+    >;
     // `c` (an object, depth 3 > maxDepth 2) is pruned entirely.
     expect((clamped.a as Record<string, unknown>).b).toEqual({});
   });
@@ -175,7 +196,10 @@ describe("clampDetailsRecord", () => {
     // it off, proving the budget is actually wired in, not just declared.
     const budgeted = { ...limits, maxKeysPerLevel: 10, maxNodes: 5 };
     const details = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7 }; // 7 top-level nodes > maxNodes=5
-    const clamped = clampDetailsRecord(details, budgeted) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, budgeted) as Record<
+      string,
+      unknown
+    >;
     expect(Object.keys(clamped).length).toBeLessThan(7);
   });
 
@@ -196,17 +220,26 @@ describe("clampDetailsRecord", () => {
     const buildDecoy = (depth: number, width: number): unknown => {
       if (depth === 0) return true; // scalar leaf: isolates the DFS-order interaction from string clamping
       const obj: Record<string, unknown> = {};
-      for (let i = 0; i < width; i++) obj[`k${i}`] = buildDecoy(depth - 1, width);
+      for (let i = 0; i < width; i++)
+        obj[`k${i}`] = buildDecoy(depth - 1, width);
       return obj;
     };
-    const budgeted = { ...limits, maxDepth: 3, maxKeysPerLevel: 20, maxNodes: 50 };
+    const budgeted = {
+      ...limits,
+      maxDepth: 3,
+      maxKeysPerLevel: 20,
+      maxNodes: 50,
+    };
     const details = {
       decoy: buildDecoy(2, 10),
       additional: 40,
       occurrences: 12,
       pagesTruncated: 1837,
     };
-    const clamped = clampDetailsRecord(details, budgeted) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, budgeted) as Record<
+      string,
+      unknown
+    >;
     expect(clamped).not.toBe(details); // the decoy really did trip the budget
     expect(clamped.additional).toBe(40);
     expect(clamped.occurrences).toBe(12);
@@ -227,12 +260,15 @@ describe("clampDetailsRecord", () => {
       big1: "x".repeat(60),
       big2: "y".repeat(60),
     };
-    const clamped = clampDetailsRecord(details, tinyLimits) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, tinyLimits) as Record<
+      string,
+      unknown
+    >;
     expect(clamped.additional).toBe(7);
     expect(clamped.occurrences).toBe(3);
-    expect(new TextEncoder().encode(JSON.stringify(clamped)).length).toBeLessThanOrEqual(
-      tinyLimits.maxBytes,
-    );
+    expect(
+      new TextEncoder().encode(JSON.stringify(clamped)).length
+    ).toBeLessThanOrEqual(tinyLimits.maxBytes);
   });
 
   test("byte-budget AT the limit: untouched", () => {
@@ -244,7 +280,10 @@ describe("clampDetailsRecord", () => {
 
   test("undefined/function values are stripped (not JSON-safe anyway)", () => {
     const details = { keep: 1, fn: () => {}, missing: undefined };
-    const clamped = clampDetailsRecord(details, limits) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(details, limits) as Record<
+      string,
+      unknown
+    >;
     expect(clamped).toEqual({ keep: 1 });
   });
 
@@ -292,7 +331,7 @@ describe("clampDetailsRecord prototype-pollution safety (#1288 review finding)",
     // state.changed becomes true and the WHOLE object rebuilds — including
     // the __proto__ entry, which must go through the vulnerable assignment.
     const raw = JSON.parse(
-      `{"__proto__":{"additional":999999},"big":"${"x".repeat(20)}"}`,
+      `{"__proto__":{"additional":999999},"big":"${"x".repeat(20)}"}`
     ) as Record<string, unknown>;
     expect(Object.hasOwn(raw, "__proto__")).toBe(true); // sanity: real delivery vector
     const injectedProto = raw["__proto__"]; // the {additional: 999999} the attacker is trying to install
@@ -304,7 +343,10 @@ describe("clampDetailsRecord prototype-pollution safety (#1288 review finding)",
       maxNodes: 100,
       maxBytes: 500,
     };
-    const clamped = clampDetailsRecord(raw, smallStrings) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(raw, smallStrings) as Record<
+      string,
+      unknown
+    >;
 
     // The clamped record's OWN prototype must NOT be the attacker-supplied
     // object — asserted against the injected value itself (not a specific
@@ -332,11 +374,14 @@ describe("clampDetailsRecord prototype-pollution safety (#1288 review finding)",
       maxBytes: 60,
     };
     const raw = JSON.parse(
-      `{"__proto__":{"additional":999999},"padding":"${"x".repeat(100)}"}`,
+      `{"__proto__":{"additional":999999},"padding":"${"x".repeat(100)}"}`
     ) as Record<string, unknown>;
     const injectedProto = raw["__proto__"];
 
-    const clamped = clampDetailsRecord(raw, tinyBudget) as Record<string, unknown>;
+    const clamped = clampDetailsRecord(raw, tinyBudget) as Record<
+      string,
+      unknown
+    >;
     expect(Object.getPrototypeOf(clamped)).not.toBe(injectedProto);
     expect(Object.hasOwn(clamped, "additional")).toBe(false);
     expect((clamped as { additional?: unknown }).additional).toBeUndefined();

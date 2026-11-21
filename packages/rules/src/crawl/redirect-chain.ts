@@ -1,12 +1,10 @@
 // crawl/redirect-chain - Multi-hop redirect chain detection
 
+import { formatRedirectHop } from "@squirrelscan/core-contracts";
+import { getPathname } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { formatRedirectHop } from "@squirrelscan/core-contracts";
-
-import { getPathname } from "@squirrelscan/utils";
 
 export const redirectChainRule: Rule = {
   meta: {

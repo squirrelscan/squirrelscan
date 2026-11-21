@@ -3,9 +3,8 @@
 // fetch stub (no network). The crawl/soft-404 RULE variants are covered in
 // packages/rules/tests/soft-404.test.ts.
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
 import {
   confirmSoft404Candidates,
@@ -62,7 +61,11 @@ function fixedFetch(status: number, body: string): ConfirmFetch {
 describe("confirmSoft404Candidates", () => {
   test("shell reproduces on re-fetch → confirmed", async () => {
     const pages = [shellPage("/blog/gone")];
-    const summary = await confirmSoft404Candidates(pages, OPTS, fixedFetch(200, SHELL_HTML));
+    const summary = await confirmSoft404Candidates(
+      pages,
+      OPTS,
+      fixedFetch(200, SHELL_HTML)
+    );
 
     expect(summary).toEqual({
       candidates: 1,
@@ -76,7 +79,11 @@ describe("confirmSoft404Candidates", () => {
 
   test("real content on re-fetch → intermittent (NOT confirmed)", async () => {
     const pages = [shellPage("/privacy")];
-    const summary = await confirmSoft404Candidates(pages, OPTS, fixedFetch(200, REAL_HTML));
+    const summary = await confirmSoft404Candidates(
+      pages,
+      OPTS,
+      fixedFetch(200, REAL_HTML)
+    );
 
     expect(summary).toEqual({
       candidates: 1,
@@ -90,7 +97,11 @@ describe("confirmSoft404Candidates", () => {
 
   test("network error (status 0) → unconfirmed, never dropped", async () => {
     const pages = [shellPage("/terms")];
-    const errFetch: ConfirmFetch = async () => ({ status: 0, body: "", error: "boom" });
+    const errFetch: ConfirmFetch = async () => ({
+      status: 0,
+      body: "",
+      error: "boom",
+    });
     const summary = await confirmSoft404Candidates(pages, OPTS, errFetch);
 
     expect(summary.unconfirmed).toBe(1);
@@ -99,7 +110,11 @@ describe("confirmSoft404Candidates", () => {
 
   test("WAF/bot-challenge served on re-fetch → unconfirmed, NOT intermittent", async () => {
     const pages = [shellPage("/blog/gone")];
-    const summary = await confirmSoft404Candidates(pages, OPTS, fixedFetch(200, WAF_CHALLENGE_HTML));
+    const summary = await confirmSoft404Candidates(
+      pages,
+      OPTS,
+      fixedFetch(200, WAF_CHALLENGE_HTML)
+    );
 
     // A 200 challenge page is not "real content" — must never read as intermittent.
     expect(summary.intermittent).toBe(0);
@@ -117,7 +132,7 @@ describe("confirmSoft404Candidates", () => {
     await confirmSoft404Candidates(
       pages,
       { userAgent: "SquirrelBot-Resolved/9.9" },
-      capturingFetch,
+      capturingFetch
     );
 
     expect(seenUserAgents).toEqual(["SquirrelBot-Resolved/9.9"]);
@@ -125,7 +140,11 @@ describe("confirmSoft404Candidates", () => {
 
   test("non-2xx re-fetch (real 404 now) → unconfirmed (can't re-verify the 2xx claim)", async () => {
     const pages = [shellPage("/gone")];
-    const summary = await confirmSoft404Candidates(pages, OPTS, fixedFetch(404, "Not Found"));
+    const summary = await confirmSoft404Candidates(
+      pages,
+      OPTS,
+      fixedFetch(404, "Not Found")
+    );
 
     expect(summary.unconfirmed).toBe(1);
     expect(pages[0]!.parsed.soft404Confirmation).toBe("unconfirmed");
@@ -170,7 +189,11 @@ describe("confirmSoft404Candidates", () => {
       parsed: parsePage(REAL_HTML, url),
       rendered: true,
     };
-    const summary = await confirmSoft404Candidates([page], OPTS, fixedFetch(200, SHELL_HTML));
+    const summary = await confirmSoft404Candidates(
+      [page],
+      OPTS,
+      fixedFetch(200, SHELL_HTML)
+    );
 
     expect(summary.candidates).toBe(0);
     expect(summary.renderedSkipped).toBe(0);
@@ -201,7 +224,7 @@ describe("confirmSoft404Candidates", () => {
     const summary = await confirmSoft404Candidates(
       pages,
       { ...OPTS, maxConfirmations: 2 },
-      countingFetch,
+      countingFetch
     );
 
     expect(fetches).toBe(2);
@@ -231,7 +254,11 @@ describe("confirmSoft404Candidates — config toggle", () => {
       fetched = true;
       return { status: 200, body: SHELL_HTML };
     };
-    const summary = await confirmSoft404Candidates(pages, { ...OPTS, enabled: false }, spyFetch);
+    const summary = await confirmSoft404Candidates(
+      pages,
+      { ...OPTS, enabled: false },
+      spyFetch
+    );
 
     expect(fetched).toBe(false);
     expect(summary).toEqual({
@@ -241,7 +268,10 @@ describe("confirmSoft404Candidates — config toggle", () => {
       unconfirmed: 2,
       renderedSkipped: 0,
     });
-    expect(pages.map((p) => p.parsed.soft404Confirmation)).toEqual(["unconfirmed", "unconfirmed"]);
+    expect(pages.map((p) => p.parsed.soft404Confirmation)).toEqual([
+      "unconfirmed",
+      "unconfirmed",
+    ]);
   });
 
   test("enabled:true (default) re-fetches and confirms", async () => {
@@ -249,7 +279,7 @@ describe("confirmSoft404Candidates — config toggle", () => {
     const summary = await confirmSoft404Candidates(
       pages,
       { ...OPTS, enabled: true },
-      fixedFetch(200, SHELL_HTML),
+      fixedFetch(200, SHELL_HTML)
     );
     expect(summary.confirmed).toBe(1);
     expect(pages[0]!.parsed.soft404Confirmation).toBe("confirmed");
@@ -267,8 +297,12 @@ describe("confirmSoft404Candidates — politeness", () => {
     };
     await confirmSoft404Candidates(
       pages,
-      { ...OPTS, perHostDelayMs: 500, sleep: async (ms) => void slept.push(ms) },
-      seqFetch,
+      {
+        ...OPTS,
+        perHostDelayMs: 500,
+        sleep: async (ms) => void slept.push(ms),
+      },
+      seqFetch
     );
 
     // 3 same-host candidates → 2 inter-request delays, all 500ms.
@@ -292,7 +326,7 @@ describe("confirmSoft404Candidates — politeness", () => {
     const summary = await confirmSoft404Candidates(
       pages,
       { ...OPTS, wallBudgetMs: 1000, now },
-      countingFetch,
+      countingFetch
     );
 
     // Only the first candidate is fetched; the rest are over-budget → unconfirmed.
@@ -306,8 +340,12 @@ describe("confirmSoft404Candidates — politeness", () => {
     const slept: number[] = [];
     await confirmSoft404Candidates(
       pages,
-      { ...OPTS, perHostDelayMs: 500, sleep: async (ms) => void slept.push(ms) },
-      fixedFetch(200, SHELL_HTML),
+      {
+        ...OPTS,
+        perHostDelayMs: 500,
+        sleep: async (ms) => void slept.push(ms),
+      },
+      fixedFetch(200, SHELL_HTML)
     );
     // Two different hosts, one candidate each → no intra-host delay incurred.
     expect(slept).toEqual([]);

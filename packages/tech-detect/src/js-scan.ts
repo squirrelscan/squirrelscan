@@ -82,14 +82,16 @@ export function scanJs(src: string): ScannedJs {
   // one scan serves every later comment, so a body of many comments is not quadratic.
   let nulAt = -2;
   const nextNul = (from: number): number => {
-    if (nulAt === -2 || (nulAt !== -1 && nulAt < from)) nulAt = src.indexOf("\0", from);
+    if (nulAt === -2 || (nulAt !== -1 && nulAt < from))
+      nulAt = src.indexOf("\0", from);
     return nulAt;
   };
   // The same for the next `*/`: a NUL ends a comment before its `*/`, so without this each
   // `/*` of a NUL-split body searched to the end of the file for a closer it never reached.
   let closeAt = -2;
   const nextClose = (from: number): number => {
-    if (closeAt === -2 || (closeAt !== -1 && closeAt < from)) closeAt = src.indexOf("*/", from);
+    if (closeAt === -2 || (closeAt !== -1 && closeAt < from))
+      closeAt = src.indexOf("*/", from);
     return closeAt;
   };
 
@@ -173,7 +175,11 @@ export function scanJs(src: string): ScannedJs {
     i++;
   }
   parts.push(src.slice(copied));
-  return { code: parts.length === 1 ? parts[0]! : parts.join(""), strings, skips };
+  return {
+    code: parts.length === 1 ? parts[0]! : parts.join(""),
+    strings,
+    skips,
+  };
 }
 
 /** Whether `index` falls inside one of the recorded string literals (binary search). */

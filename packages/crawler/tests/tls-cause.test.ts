@@ -3,12 +3,23 @@
 // crawler opens no socket of its own, and the CLI's real probe is tested in
 // apps/cli/tests/audit/tls-probe.test.ts.
 
+import type {
+  TlsProbe,
+  TlsProbeFn,
+  TlsTarget,
+} from "@squirrelscan/utils/tls-certificate";
+
+import {
+  auditFailureDetail,
+  type AuditFailureDetail,
+} from "@squirrelscan/core-contracts/failure-reason";
 import { describe, expect, test } from "bun:test";
 
-import { auditFailureDetail, type AuditFailureDetail } from "@squirrelscan/core-contracts/failure-reason";
-import type { TlsProbe, TlsProbeFn, TlsTarget } from "@squirrelscan/utils/tls-certificate";
-
-import { memoizeTlsProbe, TLS_CAUSE_TIMEOUT_MS, withTlsCause } from "../src/tls-cause";
+import {
+  memoizeTlsProbe,
+  TLS_CAUSE_TIMEOUT_MS,
+  withTlsCause,
+} from "../src/tls-cause";
 
 const DAY_MS = 86_400_000;
 
@@ -20,14 +31,25 @@ function tlsDetail(): AuditFailureDetail {
   });
 }
 
-function served(overrides: Partial<Extract<TlsProbe, { kind: "certificate" }>> & {
-  names?: string[];
-  validTo?: Date;
-} = {}): TlsProbe {
-  const { names = ["127.0.0.1"], validTo = new Date(Date.now() + 90 * DAY_MS), ...rest } = overrides;
+function served(
+  overrides: Partial<Extract<TlsProbe, { kind: "certificate" }>> & {
+    names?: string[];
+    validTo?: Date;
+  } = {}
+): TlsProbe {
+  const {
+    names = ["127.0.0.1"],
+    validTo = new Date(Date.now() + 90 * DAY_MS),
+    ...rest
+  } = overrides;
   return {
     kind: "certificate",
-    certificate: { names, issuer: "Test CA", validFrom: new Date(Date.now() - DAY_MS), validTo },
+    certificate: {
+      names,
+      issuer: "Test CA",
+      validFrom: new Date(Date.now() - DAY_MS),
+      validTo,
+    },
     trusted: true,
     ...rest,
   };
@@ -47,27 +69,41 @@ const SITE = "https://127.0.0.1:8443/";
 
 describe("withTlsCause", () => {
   test("an expired certificate names its end date", async () => {
-    const { probe } = recording(served({ validTo: new Date("2020-01-15T00:00:00Z"), trusted: false }));
+    const { probe } = recording(
+      served({ validTo: new Date("2020-01-15T00:00:00Z"), trusted: false })
+    );
     const out = await withTlsCause(tlsDetail(), SITE, probe);
     expect(out.detail).toBe("certificate has expired on 2020-01-15");
   });
 
   test("a certificate for another name names the hostname it does not cover", async () => {
     const { probe } = recording(
-      served({ names: ["other.test"], trusted: false, trustError: "ERR_TLS_CERT_ALTNAME_INVALID" }),
+      served({
+        names: ["other.test"],
+        trusted: false,
+        trustError: "ERR_TLS_CERT_ALTNAME_INVALID",
+      })
     );
     const out = await withTlsCause(tlsDetail(), SITE, probe);
     expect(out.detail).toContain("does not cover 127.0.0.1");
   });
 
   test("a self-signed certificate says so", async () => {
-    const { probe } = recording(served({ trusted: false, trustError: "DEPTH_ZERO_SELF_SIGNED_CERT" }));
-    expect((await withTlsCause(tlsDetail(), SITE, probe)).detail).toBe("self-signed certificate");
+    const { probe } = recording(
+      served({ trusted: false, trustError: "DEPTH_ZERO_SELF_SIGNED_CERT" })
+    );
+    expect((await withTlsCause(tlsDetail(), SITE, probe)).detail).toBe(
+      "self-signed certificate"
+    );
   });
 
   test("a server that omits its intermediate names the missing chain", async () => {
-    const { probe } = recording(served({ trusted: false, trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" }));
-    expect((await withTlsCause(tlsDetail(), SITE, probe)).detail).toContain("intermediate");
+    const { probe } = recording(
+      served({ trusted: false, trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" })
+    );
+    expect((await withTlsCause(tlsDetail(), SITE, probe)).detail).toContain(
+      "intermediate"
+    );
   });
 
   test("without an injected probe the fetch's detail stands", async () => {
@@ -76,11 +112,15 @@ describe("withTlsCause", () => {
   });
 
   test("a non-TLS failure and a plain http URL keep their detail and send nothing", async () => {
-    const { probe, targets } = recording(served({ trusted: false, trustError: "DEPTH_ZERO_SELF_SIGNED_CERT" }));
+    const { probe, targets } = recording(
+      served({ trusted: false, trustError: "DEPTH_ZERO_SELF_SIGNED_CERT" })
+    );
     const dns = auditFailureDetail({ code: "dns", host: "127.0.0.1" });
     expect(await withTlsCause(dns, SITE, probe)).toBe(dns);
     const detail = tlsDetail();
-    expect(await withTlsCause(detail, "http://127.0.0.1:8080/", probe)).toBe(detail);
+    expect(await withTlsCause(detail, "http://127.0.0.1:8080/", probe)).toBe(
+      detail
+    );
     expect(targets).toEqual([]);
   });
 
@@ -91,7 +131,9 @@ describe("withTlsCause", () => {
       { kind: "unavailable", reason: "proxy" },
     ] satisfies TlsProbe[]) {
       const detail = tlsDetail();
-      expect(await withTlsCause(detail, SITE, recording(result).probe)).toBe(detail);
+      expect(await withTlsCause(detail, SITE, recording(result).probe)).toBe(
+        detail
+      );
     }
   });
 
@@ -128,16 +170,18 @@ describe("memoizeTlsProbe", () => {
       once({ hostname: "example.com", port: 443 }),
     ]);
     await once({ hostname: "example.com", port: 8443 });
-    expect(targets.map((target) => `${target.hostname}:${target.port ?? 443}`)).toEqual([
-      "Example.com:443",
-      "example.com:8443",
-    ]);
+    expect(
+      targets.map((target) => `${target.hostname}:${target.port ?? 443}`)
+    ).toEqual(["Example.com:443", "example.com:8443"]);
   });
 
   test("a probe that throws is remembered as unreachable, not rethrown", async () => {
     const once = memoizeTlsProbe(async () => {
       throw new Error("boom");
     });
-    expect(await once({ hostname: "example.com" })).toMatchObject({ kind: "unreachable", message: "boom" });
+    expect(await once({ hostname: "example.com" })).toMatchObject({
+      kind: "unreachable",
+      message: "boom",
+    });
   });
 });

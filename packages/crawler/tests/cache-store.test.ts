@@ -8,6 +8,7 @@ import type {
   PageRecord,
   ResponseHeaders,
 } from "../src/storage/types";
+
 import { StorageCacheStore } from "../src/cache-store";
 
 const now = 1_000_000_000_000;
@@ -192,7 +193,9 @@ describe("StorageCacheStore.lookup", () => {
     const { storage } = fakeStorage(
       page({
         fetchedAt: now - 120 * 1000,
-        headers: headers({ cacheControl: "max-age=60, stale-while-revalidate=600" }),
+        headers: headers({
+          cacheControl: "max-age=60, stale-while-revalidate=600",
+        }),
       })
     );
     const store = new StorageCacheStore(storage);
@@ -213,11 +216,17 @@ describe("StorageCacheStore.lookup", () => {
     );
     const store = new StorageCacheStore(storage);
     const wideCap = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 30 * 24 * 3600 })
+      store.lookup("https://example.com/", ctx, {
+        now,
+        maxStalenessSeconds: 30 * 24 * 3600,
+      })
     );
     expect(wideCap.freshness?.state).toBe("fresh");
     const tightCap = await Effect.runPromise(
-      store.lookup("https://example.com/", ctx, { now, maxStalenessSeconds: 3600 })
+      store.lookup("https://example.com/", ctx, {
+        now,
+        maxStalenessSeconds: 3600,
+      })
     );
     // No stale-while-revalidate directive → the cap surfaces "stale", not "revalidate".
     expect(tightCap.freshness?.state).toBe("stale");

@@ -44,12 +44,13 @@
 // is byte-identical by construction (same shape as content/duplicate-title,
 // #1021/#1022). No storage schema change: all three columns already exist.
 
+import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
+
 import { getRichResultTypes } from "@squirrelscan/utils";
 
-import { noindexSource } from "../shared/noindex";
-
-import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { noindexSource } from "../shared/noindex";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const SCHEMA_NORM_MIN_PAGES = 10;
@@ -147,7 +148,13 @@ function accumulatePage(rollup: SchemaRollup, record: SchemaPageRecord): void {
   rollup.sampleCount += 1;
   let group = rollup.groups.get(pageType);
   if (!group) {
-    group = { pageType, urls: [], typeKeys: [], display: new Map(), richKeys: new Set() };
+    group = {
+      pageType,
+      urls: [],
+      typeKeys: [],
+      display: new Map(),
+      richKeys: new Set(),
+    };
     rollup.groups.set(pageType, group);
   }
 
@@ -183,7 +190,10 @@ function byString(a: string, b: string): number {
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the sampled subset.
  */
-function buildChecks(rollup: SchemaRollup, crawlPageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: SchemaRollup,
+  crawlPageCount: number
+): CheckResult[] {
   if (crawlPageCount > 0 && rollup.noindexCount >= crawlPageCount) {
     return [
       skip(

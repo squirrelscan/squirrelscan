@@ -23,15 +23,16 @@
 // CI's one-process run of the whole package, a stale conservative stack root
 // can pin a finished pass and fake (or, when it is released, hide) megabytes.
 
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
+import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { afterAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 
 import type { Residency } from "./helpers/residency-probe";
 
@@ -50,20 +51,25 @@ const PROBE = join(import.meta.dir, "helpers", "residency-probe.ts");
 
 /** One measurement, in a fresh process. Throws with the child's stderr on failure. */
 function probe(dbPath: string, retain: boolean): Residency {
-  const proc = Bun.spawnSync([process.execPath, PROBE, dbPath, retain ? "1" : "0"], {
-    cwd: import.meta.dir,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const proc = Bun.spawnSync(
+    [process.execPath, PROBE, dbPath, retain ? "1" : "0"],
+    {
+      cwd: import.meta.dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
   if (proc.exitCode !== 0) {
     throw new Error(
-      `residency probe exited ${proc.exitCode}: ${proc.stderr.toString().slice(-2000)}`,
+      `residency probe exited ${proc.exitCode}: ${proc.stderr.toString().slice(-2000)}`
     );
   }
-  const r = JSON.parse(proc.stdout.toString().trim().split("\n").pop()!) as Residency;
+  const r = JSON.parse(
+    proc.stdout.toString().trim().split("\n").pop()!
+  ) as Residency;
   if (process.env.RESIDENCY_DEBUG)
     console.log(
-      `db=${dbPath.slice(-12)} retain=${retain} delta=${(r.totalBytes / MB).toFixed(2)}MB pages=${r.pagesScored}`,
+      `db=${dbPath.slice(-12)} retain=${retain} delta=${(r.totalBytes / MB).toFixed(2)}MB pages=${r.pagesScored}`
     );
   return r;
 }
@@ -95,61 +101,68 @@ async function writeFixture(pageSizeBytes: number): Promise<string> {
       minPageSizeBytes: pageSizeBytes,
       maxPageSizeBytes: pageSizeBytes,
     }),
-    path,
+    path
   );
   await run(storage.close());
   return path;
 }
 
 describe("streamPageRules — per-page residency is independent of page size (#2343)", () => {
-  test(
-    "bounded mode holds the same heap at 32 KB and 384 KB pages",
-    async () => {
-      // Each probe runs a discarded warm-up pass first: the FIRST pass in a
-      // process pays module-load + JIT garbage that the next forced collection
-      // reclaims, so its delta comes out NEGATIVE, which would make the positive
-      // control below assert `> a negative number` and pass on anything.
-      const smallDb = await writeFixture(SMALL_BYTES);
-      const largeDb = await writeFixture(LARGE_BYTES);
+  test("bounded mode holds the same heap at 32 KB and 384 KB pages", async () => {
+    // Each probe runs a discarded warm-up pass first: the FIRST pass in a
+    // process pays module-load + JIT garbage that the next forced collection
+    // reclaims, so its delta comes out NEGATIVE, which would make the positive
+    // control below assert `> a negative number` and pass on anything.
+    const smallDb = await writeFixture(SMALL_BYTES);
+    const largeDb = await writeFixture(LARGE_BYTES);
 
-      const smallRetained = probe(smallDb, true);
-      const largeRetained = probe(largeDb, true);
-      const smallBounded = probe(smallDb, false);
-      const largeBounded = probe(largeDb, false);
+    const smallRetained = probe(smallDb, true);
+    const largeRetained = probe(largeDb, true);
+    const smallBounded = probe(smallDb, false);
+    const largeBounded = probe(largeDb, false);
 
-      // Non-vacuous: the pass really scored every page and the sink really got
-      // its checks, in both modes.
-      for (const r of [smallRetained, largeRetained, smallBounded, largeBounded]) {
-        expect(r.pagesScored).toBe(PAGE_COUNT);
-        expect(r.checksSunk).toBe(PAGE_COUNT);
-        expect(r.ruleIdsTallied).toBe(1);
-      }
-      // Bounded mode keeps no per-page map; retaining mode keeps two per page.
-      expect(smallBounded.retainedPageMaps).toBe(0);
-      expect(largeBounded.retainedPageMaps).toBe(0);
-      expect(largeRetained.retainedPageMaps).toBe(PAGE_COUNT * 2);
+    // Non-vacuous: the pass really scored every page and the sink really got
+    // its checks, in both modes.
+    for (const r of [
+      smallRetained,
+      largeRetained,
+      smallBounded,
+      largeBounded,
+    ]) {
+      expect(r.pagesScored).toBe(PAGE_COUNT);
+      expect(r.checksSunk).toBe(PAGE_COUNT);
+      expect(r.ruleIdsTallied).toBe(1);
+    }
+    // Bounded mode keeps no per-page map; retaining mode keeps two per page.
+    expect(smallBounded.retainedPageMaps).toBe(0);
+    expect(largeBounded.retainedPageMaps).toBe(0);
+    expect(largeRetained.retainedPageMaps).toBe(PAGE_COUNT * 2);
 
-      // POSITIVE CONTROL. 12x the page bytes has to show up as materially more
-      // retained heap when the maps are kept, or the instrument is blind and the
-      // real assertion below proves nothing. Measured: 1.01 MB at 32 KB pages vs
-      // 11.04 MB at 384 KB — 25 KB/page vs 276 KB/page, the defect this fixes.
-      expect(largeRetained.totalBytes).toBeGreaterThan(6 * MB);
-      expect(largeRetained.totalBytes - smallRetained.totalBytes).toBeGreaterThan(4 * MB);
+    // POSITIVE CONTROL. 12x the page bytes has to show up as materially more
+    // retained heap when the maps are kept, or the instrument is blind and the
+    // real assertion below proves nothing. Measured: 1.01 MB at 32 KB pages vs
+    // 11.04 MB at 384 KB — 25 KB/page vs 276 KB/page, the defect this fixes.
+    expect(largeRetained.totalBytes).toBeGreaterThan(6 * MB);
+    expect(largeRetained.totalBytes - smallRetained.totalBytes).toBeGreaterThan(
+      4 * MB
+    );
 
-      // THE INVARIANT. With the checks sunk, growing the pages 12x must not grow
-      // what the pass holds: measured 0.05 MB at 32 KB and 0.03 MB at 384 KB,
-      // against 1.01 MB / 11.04 MB retaining. NOISE_BYTES is a band 7x wider
-      // than any sample observed, and the term being guarded against is ten
-      // megabytes, so the slack costs no sensitivity — re-introducing ONLY the
-      // `ruleResultsMap` merge (leaving both per-page maps empty) puts
-      // largeBounded back at 10.96 MB and fails here.
-      expect(largeBounded.totalBytes - smallBounded.totalBytes).toBeLessThan(NOISE_BYTES);
-      expect(largeBounded.totalBytes).toBeLessThan(NOISE_BYTES);
+    // THE INVARIANT. With the checks sunk, growing the pages 12x must not grow
+    // what the pass holds: measured 0.05 MB at 32 KB and 0.03 MB at 384 KB,
+    // against 1.01 MB / 11.04 MB retaining. NOISE_BYTES is a band 7x wider
+    // than any sample observed, and the term being guarded against is ten
+    // megabytes, so the slack costs no sensitivity — re-introducing ONLY the
+    // `ruleResultsMap` merge (leaving both per-page maps empty) puts
+    // largeBounded back at 10.96 MB and fails here.
+    expect(largeBounded.totalBytes - smallBounded.totalBytes).toBeLessThan(
+      NOISE_BYTES
+    );
+    expect(largeBounded.totalBytes).toBeLessThan(NOISE_BYTES);
 
-      // ...and at the SAME page size, bounded holds a small fraction of what
-      // retaining does, which is the point of the whole exercise.
-      expect(largeBounded.totalBytes).toBeLessThan(largeRetained.totalBytes * 0.25);
-    },
-    180_000,
-  );
+    // ...and at the SAME page size, bounded holds a small fraction of what
+    // retaining does, which is the point of the whole exercise.
+    expect(largeBounded.totalBytes).toBeLessThan(
+      largeRetained.totalBytes * 0.25
+    );
+  }, 180_000);
 });

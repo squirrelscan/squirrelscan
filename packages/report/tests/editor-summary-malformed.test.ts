@@ -8,10 +8,12 @@
 // old renderers called `es.prose.split(...)` unguarded and died with
 // "undefined is not an object", discarding an audit that had already finished.
 
+import type { EditorSummary } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { EditorSummary } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../src/types";
+
 import { editorSummaryView, toEditorSummary } from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
@@ -44,11 +46,29 @@ const GOOD: EditorSummary = {
 
 /** Every malformed body a 2xx can plausibly hand us (issue repro: `{"ok":true}`). */
 const MALFORMED: Array<[string, unknown]> = [
-  ["missing prose", { bigTicket: [], verdict: "v", model: "m", generatedAt: "t" }],
+  [
+    "missing prose",
+    { bigTicket: [], verdict: "v", model: "m", generatedAt: "t" },
+  ],
   ["the whole body replaced by an envelope", { ok: true }],
-  ["prose is not a string", { prose: 42, bigTicket: [], verdict: "", model: "", generatedAt: "" }],
-  ["prose is blank", { prose: "   \n\n  ", bigTicket: [], verdict: "", model: "", generatedAt: "" }],
-  ["prose is null", { prose: null, bigTicket: [], verdict: "", model: "", generatedAt: "" }],
+  [
+    "prose is not a string",
+    { prose: 42, bigTicket: [], verdict: "", model: "", generatedAt: "" },
+  ],
+  [
+    "prose is blank",
+    {
+      prose: "   \n\n  ",
+      bigTicket: [],
+      verdict: "",
+      model: "",
+      generatedAt: "",
+    },
+  ],
+  [
+    "prose is null",
+    { prose: null, bigTicket: [], verdict: "", model: "", generatedAt: "" },
+  ],
 ];
 
 describe("toEditorSummary", () => {
@@ -78,19 +98,27 @@ describe("toEditorSummary", () => {
   });
 
   test("drops non-string big-ticket entries instead of rendering them", () => {
-    const summary = toEditorSummary({ prose: "Body.", bigTicket: ["keep", 7, null, "also"] });
+    const summary = toEditorSummary({
+      prose: "Body.",
+      bigTicket: ["keep", 7, null, "also"],
+    });
     expect(summary?.bigTicket).toEqual(["keep", "also"]);
   });
 });
 
 describe("editorSummaryView", () => {
   test("splits prose on blank lines and trims", () => {
-    expect(editorSummaryView(GOOD)?.paragraphs).toEqual(["First paragraph.", "Second paragraph."]);
+    expect(editorSummaryView(GOOD)?.paragraphs).toEqual([
+      "First paragraph.",
+      "Second paragraph.",
+    ]);
   });
 
   test("returns null for an absent or malformed summary", () => {
     expect(editorSummaryView(undefined)).toBeNull();
-    expect(editorSummaryView({ prose: undefined } as unknown as EditorSummary)).toBeNull();
+    expect(
+      editorSummaryView({ prose: undefined } as unknown as EditorSummary)
+    ).toBeNull();
   });
 });
 
@@ -160,7 +188,9 @@ describe("renderers with a well-formed summary still render it", () => {
     ].join("\n");
     expect(renderJson(report)).toContain(JSON_FIXTURE);
 
-    const parsed = JSON.parse(renderJson(report)) as { editorSummary?: EditorSummary };
+    const parsed = JSON.parse(renderJson(report)) as {
+      editorSummary?: EditorSummary;
+    };
     expect(parsed.editorSummary).toEqual(GOOD);
     // `paragraphs` is a rendering aid on the view; it must never reach the shape.
     expect(Object.keys(parsed.editorSummary as object)).toEqual([

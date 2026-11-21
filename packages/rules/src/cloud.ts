@@ -44,7 +44,10 @@ export interface CloudResultEnvelope<T = unknown> {
  * service is addressed by — a page URL (`unit: "page"`/`"link"`) or the literal
  * `"site"` for site-scoped services. Built by the prefetch phase.
  */
-export type CloudResultStore = Map<CloudServiceId, Map<string, CloudResultEnvelope>>;
+export type CloudResultStore = Map<
+  CloudServiceId,
+  Map<string, CloudResultEnvelope>
+>;
 
 /** Field added to `RuleMeta` for cloud-backed rules — declares the service it reads. */
 export interface RuleCloudSpec {
@@ -68,7 +71,8 @@ export const CLOUD_SITE_KEY = "site";
  * left this set — it now runs on raw-HTML crawls (skipped, not advertised-unwired,
  * on rendered crawls).
  */
-export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<CloudServiceId>([]);
+export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> =
+  new Set<CloudServiceId>([]);
 
 /**
  * Read a single prefetched cloud result from a per-run store. `key` is the page
@@ -85,7 +89,7 @@ export const UNWIRED_CLOUD_SERVICES: ReadonlySet<CloudServiceId> = new Set<Cloud
 export function readCloudResult<T>(
   store: CloudResultStore | undefined,
   service: CloudServiceId,
-  key: string = CLOUD_SITE_KEY,
+  key: string = CLOUD_SITE_KEY
 ): CloudResultEnvelope<T> | undefined {
   return store?.get(service)?.get(key) as CloudResultEnvelope<T> | undefined;
 }
@@ -129,7 +133,9 @@ export function humanizeCloudSkip(reason: CloudSkipReason): string {
  * string), so this is the single place that string is matched — producers and
  * this predicate both go through `humanizeCloudSkip`, keeping them in lockstep.
  */
-export function isNotApplicableCloudSkip(skipReason: string | undefined): boolean {
+export function isNotApplicableCloudSkip(
+  skipReason: string | undefined
+): boolean {
   return skipReason === humanizeCloudSkip("not-applicable");
 }
 
@@ -139,6 +145,8 @@ export function isNotApplicableCloudSkip(skipReason: string | undefined): boolea
  * choice, not something a paid run would unlock, so it must stay off the locked-rules
  * upsell. Same single-place matching of the humanized sentence as above.
  */
-export function isRenderDisabledCloudSkip(skipReason: string | undefined): boolean {
+export function isRenderDisabledCloudSkip(
+  skipReason: string | undefined
+): boolean {
   return skipReason === humanizeCloudSkip("render-disabled");
 }

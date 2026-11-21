@@ -53,7 +53,7 @@ function getModernPoolGenerator(): UserAgent | null {
   if (modernPoolGenerator !== undefined) return modernPoolGenerator;
   try {
     modernPoolGenerator = new UserAgent((data: { userAgent: string }) =>
-      isModernUserAgentString(data.userAgent),
+      isModernUserAgentString(data.userAgent)
     );
   } catch {
     // user-agents throws if a filter matches zero entries in its dataset snapshot.

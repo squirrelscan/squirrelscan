@@ -3,8 +3,9 @@
 import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 import type { CheckResult, RuleContext } from "../src/types";
+
+import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 
 function run(body: string): CheckResult[] {
   const html = `<!doctype html><html lang="en"><head><title>t</title></head><body><main>${body}</main></body></html>`;
@@ -19,7 +20,8 @@ function run(body: string): CheckResult[] {
   return result.checks;
 }
 
-const failing = (checks: CheckResult[]) => checks.find((c) => c.status === "fail");
+const failing = (checks: CheckResult[]) =>
+  checks.find((c) => c.status === "fail");
 
 describe("label-content-name-mismatch (#1876)", () => {
   test("two adjacent spans with a spaced aria-label pass", () => {
@@ -39,7 +41,9 @@ describe("label-content-name-mismatch (#1876)", () => {
       '<a href="/" aria-label="Saint John the Baptist Church">Saint John the Baptist Example Church</a>'
     );
     const item = failing(checks)?.items?.[0] as { id: string };
-    expect(item.id).toContain('visible="saint john the baptist example church"');
+    expect(item.id).toContain(
+      'visible="saint john the baptist example church"'
+    );
     expect(item.id).toContain('aria-label="saint john the baptist church"');
   });
 

@@ -21,7 +21,11 @@ import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
 
-import { runStreamingRules, type PreFetchedAssets, type StreamingRulePhase } from "../src/adapter";
+import {
+  runStreamingRules,
+  type PreFetchedAssets,
+  type StreamingRulePhase,
+} from "../src/adapter";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -73,33 +77,46 @@ async function main(): Promise<void> {
   let pagesDone = 0;
 
   const result = await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: BATCH,
-      onPhase: (phase, boundary) => {
-        if (boundary === "start") {
-          started.set(phase, rss());
-          return;
-        }
-        const from = started.get(phase) ?? base;
-        const to = rss();
-        peak.set(phase, to - from);
-        console.log(
-          `${phase.padEnd(12)} ${`${(from / MB).toFixed(0)}`.padStart(6)} -> ${`${(to / MB).toFixed(0)}`.padStart(6)} MB` +
-            `   delta ${((to - from) / MB).toFixed(0).padStart(6)} MB`,
-        );
-      },
-      pageLoopHooks: {
-        heartbeatEveryPages: 20,
-        onProgress: (done) => {
-          pagesDone = done;
-          console.log(`  page-rules heartbeat ${done} pages  rss=${(rss() / MB).toFixed(0)} MB`);
+    runStreamingRules(
+      storage,
+      crawlId,
+      benchConfig(),
+      EMPTY_ASSETS,
+      undefined,
+      {
+        batchSize: BATCH,
+        onPhase: (phase, boundary) => {
+          if (boundary === "start") {
+            started.set(phase, rss());
+            return;
+          }
+          const from = started.get(phase) ?? base;
+          const to = rss();
+          peak.set(phase, to - from);
+          console.log(
+            `${phase.padEnd(12)} ${`${(from / MB).toFixed(0)}`.padStart(6)} -> ${`${(to / MB).toFixed(0)}`.padStart(6)} MB` +
+              `   delta ${((to - from) / MB).toFixed(0).padStart(6)} MB`
+          );
         },
-      },
-    }),
+        pageLoopHooks: {
+          heartbeatEveryPages: 20,
+          onProgress: (done) => {
+            pagesDone = done;
+            console.log(
+              `  page-rules heartbeat ${done} pages  rss=${(rss() / MB).toFixed(0)} MB`
+            );
+          },
+        },
+      }
+    )
   );
 
-  console.log(`\npages scored=${pagesDone} findings-rules=${result.ruleResultsMap.size}`);
-  console.log(`final rss=${(rss() / MB).toFixed(0)} MB (baseline ${(base / MB).toFixed(0)} MB)`);
+  console.log(
+    `\npages scored=${pagesDone} findings-rules=${result.ruleResultsMap.size}`
+  );
+  console.log(
+    `final rss=${(rss() / MB).toFixed(0)} MB (baseline ${(base / MB).toFixed(0)} MB)`
+  );
   await run(storage.close());
 }
 

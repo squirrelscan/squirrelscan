@@ -71,12 +71,16 @@ describe("parseCacheControl", () => {
 describe("cacheControlLifetimeSeconds", () => {
   test("s-maxage takes precedence over max-age", () => {
     expect(
-      cacheControlLifetimeSeconds(parseCacheControl("max-age=10, s-maxage=1000"))
+      cacheControlLifetimeSeconds(
+        parseCacheControl("max-age=10, s-maxage=1000")
+      )
     ).toBe(1000);
   });
 
   test("falls back to max-age when no s-maxage", () => {
-    expect(cacheControlLifetimeSeconds(parseCacheControl("max-age=42"))).toBe(42);
+    expect(cacheControlLifetimeSeconds(parseCacheControl("max-age=42"))).toBe(
+      42
+    );
   });
 
   test("s-maxage=0 overrides max-age (no usable lifetime)", () => {
@@ -86,8 +90,12 @@ describe("cacheControlLifetimeSeconds", () => {
   });
 
   test("undefined when neither present", () => {
-    expect(cacheControlLifetimeSeconds(parseCacheControl("no-cache"))).toBeUndefined();
-    expect(cacheControlLifetimeSeconds(parseCacheControl(null))).toBeUndefined();
+    expect(
+      cacheControlLifetimeSeconds(parseCacheControl("no-cache"))
+    ).toBeUndefined();
+    expect(
+      cacheControlLifetimeSeconds(parseCacheControl(null))
+    ).toBeUndefined();
   });
 });
 

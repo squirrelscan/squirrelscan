@@ -29,7 +29,11 @@ export interface GroupInfo {
  */
 export const GROUPS = {
   seo: { code: "seo", name: "SEO", title: "SEO" },
-  performance: { code: "performance", name: "Performance", title: "Performance" },
+  performance: {
+    code: "performance",
+    name: "Performance",
+    title: "Performance",
+  },
   security: { code: "security", name: "Security", title: "Security" },
   ai: { code: "ai", name: "Agents", title: "Agent Experience" },
 } as const satisfies Record<RuleGroup, GroupInfo>;
@@ -202,7 +206,8 @@ export const CATEGORIES = {
   reliability: {
     code: "reliability",
     name: "Reliability",
-    description: "Runtime errors, broken resources, broken links and failed requests",
+    description:
+      "Runtime errors, broken resources, broken links and failed requests",
     priority: 72,
     group: "performance",
   },
@@ -290,7 +295,10 @@ export function isValidCategory(code: string): code is RuleCategory {
  * to the group of the `other` category.
  */
 export function getCategoryGroup(category: string): RuleGroup {
-  return (CATEGORIES as Record<string, CategoryInfo>)[category]?.group ?? CATEGORIES.other.group;
+  return (
+    (CATEGORIES as Record<string, CategoryInfo>)[category]?.group ??
+    CATEGORIES.other.group
+  );
 }
 
 /** Display name for a group code (e.g. "seo" → "SEO"); unknown → the raw code. */
@@ -353,7 +361,9 @@ export type SubcategoryCode = keyof typeof SUBCATEGORIES;
 
 /** Display name for a subcategory code; falls back to the raw code. */
 export function getSubcategoryName(code: string): string {
-  return (SUBCATEGORIES as Record<string, { name: string }>)[code]?.name ?? code;
+  return (
+    (SUBCATEGORIES as Record<string, { name: string }>)[code]?.name ?? code
+  );
 }
 
 /** Sort priority for a subcategory code (higher first); unknown → 0. */

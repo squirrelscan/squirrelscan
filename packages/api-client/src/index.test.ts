@@ -10,9 +10,14 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-function stubFetch(handler: (url: string, init: RequestInit) => Response): RequestInit[] {
+function stubFetch(
+  handler: (url: string, init: RequestInit) => Response
+): RequestInit[] {
   const calls: RequestInit[] = [];
-  globalThis.fetch = ((input: string | URL | Request, init: RequestInit = {}) => {
+  globalThis.fetch = ((
+    input: string | URL | Request,
+    init: RequestInit = {}
+  ) => {
     calls.push(init);
     return Promise.resolve(handler(String(input), init));
   }) as unknown as typeof fetch;
@@ -34,7 +39,9 @@ describe("createApiClient", () => {
       return Response.json({ id: "x" }, { status: 201 });
     });
 
-    const result = await client().request<{ id: string }>("/v1/thing", { body: { a: 1 } });
+    const result = await client().request<{ id: string }>("/v1/thing", {
+      body: { a: 1 },
+    });
 
     expect(result).toEqual({ ok: true, status: 201, data: { id: "x" } });
     const headers = calls[0]!.headers as Record<string, string>;
@@ -71,7 +78,8 @@ describe("createApiClient", () => {
   });
 
   test("a transport error resolves to status 0 (never throws)", async () => {
-    globalThis.fetch = (() => Promise.reject(new Error("boom"))) as unknown as typeof fetch;
+    globalThis.fetch = (() =>
+      Promise.reject(new Error("boom"))) as unknown as typeof fetch;
     const result = await client().request("/v1/x");
     expect(result).toEqual({ ok: false, status: 0, data: null });
   });
@@ -84,7 +92,11 @@ describe("createApiClient", () => {
       return Promise.resolve(new Response("ok"));
     }) as unknown as typeof fetch;
 
-    const response = await client().fetch("/v1/x", {}, { retries: 2, timeoutMs: 50 });
+    const response = await client().fetch(
+      "/v1/x",
+      {},
+      { retries: 2, timeoutMs: 50 }
+    );
     expect(response.ok).toBe(true);
     expect(attempts).toBe(2);
   });
@@ -92,9 +104,12 @@ describe("createApiClient", () => {
   test("send() never throws on a non-2xx and routes it to onDebug", async () => {
     stubFetch(() => new Response("bad", { status: 500 }));
     const debug: Array<{ msg: string; meta?: Record<string, unknown> }> = [];
-    await client({ onDebug: (msg, meta) => debug.push({ msg, meta }) }).send("/v1/x", {
-      method: "POST",
-    });
+    await client({ onDebug: (msg, meta) => debug.push({ msg, meta }) }).send(
+      "/v1/x",
+      {
+        method: "POST",
+      }
+    );
     expect(debug).toHaveLength(1);
     expect(debug[0]!.meta).toMatchObject({ status: 500 });
   });
@@ -122,7 +137,9 @@ describe("onUnauthorized (#1666)", () => {
   test("is told the token a 401 was sent with, and the result is unchanged", async () => {
     stubFetch(() => Response.json({ error: "no" }, { status: 401 }));
     const seen: string[] = [];
-    const result = await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    const result = await client({
+      onUnauthorized: (t) => void seen.push(t),
+    }).request("/v1/x");
     expect(seen).toEqual(["tok_123"]);
     expect(result).toEqual({ ok: false, status: 401, data: { error: "no" } });
   });
@@ -130,14 +147,20 @@ describe("onUnauthorized (#1666)", () => {
   test("an explicit token is the one reported", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x", { token: "tok_other" });
+    await client({ onUnauthorized: (t) => void seen.push(t) }).request(
+      "/v1/x",
+      { token: "tok_other" }
+    );
     expect(seen).toEqual(["tok_other"]);
   });
 
   test("send() reports it too", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ onUnauthorized: (t) => void seen.push(t) }).send("/v1/x", { method: "PATCH", body: {} });
+    await client({ onUnauthorized: (t) => void seen.push(t) }).send("/v1/x", {
+      method: "PATCH",
+      body: {},
+    });
     expect(seen).toEqual(["tok_123"]);
   });
 
@@ -145,7 +168,9 @@ describe("onUnauthorized (#1666)", () => {
     const seen: string[] = [];
     for (const status of [200, 403, 500]) {
       stubFetch(() => new Response(null, { status }));
-      await client({ onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+      await client({ onUnauthorized: (t) => void seen.push(t) }).request(
+        "/v1/x"
+      );
     }
     expect(seen).toEqual([]);
   });
@@ -153,7 +178,10 @@ describe("onUnauthorized (#1666)", () => {
   test("an anonymous request has no token to report", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: string[] = [];
-    await client({ getToken: () => null, onUnauthorized: (t) => void seen.push(t) }).request("/v1/x");
+    await client({
+      getToken: () => null,
+      onUnauthorized: (t) => void seen.push(t),
+    }).request("/v1/x");
     expect(seen).toEqual([]);
   });
 
@@ -170,7 +198,9 @@ describe("onUnauthorized (#1666)", () => {
   test("is told the request path too, so a caller can tell a token-death route from any other", async () => {
     stubFetch(() => new Response(null, { status: 401 }));
     const seen: Array<[string, string]> = [];
-    await client({ onUnauthorized: (t, p) => void seen.push([t, p]) }).request("/v1/auth/whoami");
+    await client({ onUnauthorized: (t, p) => void seen.push([t, p]) }).request(
+      "/v1/auth/whoami"
+    );
     expect(seen).toEqual([["tok_123", "/v1/auth/whoami"]]);
   });
 });

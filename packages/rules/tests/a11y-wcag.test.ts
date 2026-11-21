@@ -1,16 +1,17 @@
-import { describe, expect, test } from "bun:test";
-
 import {
   WCAG_CRITERIA,
   lowestWcagLevel,
   meetsWcagTarget,
   wcag,
 } from "@squirrelscan/core-contracts/wcag";
+import { describe, expect, test } from "bun:test";
 
 import { loadAllRules } from "../src/loader";
 import { wcagLevelDisablePatterns } from "../src/wcag-filter";
 
-const a11y = [...loadAllRules().values()].filter((r) => r.meta.category === "a11y");
+const a11y = [...loadAllRules().values()].filter(
+  (r) => r.meta.category === "a11y"
+);
 
 /** The a11y rules whose run() tests no WCAG success criterion (`wcagNone`). */
 const UNMAPPED = [
@@ -31,15 +32,22 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
   });
 
   test("every a11y rule declares exactly one of wcag or wcagNone", () => {
-    const neither = a11y.filter((r) => !r.meta.wcag && r.meta.wcagNone === undefined).map((r) => r.meta.id);
-    const both = a11y.filter((r) => r.meta.wcag && r.meta.wcagNone !== undefined).map((r) => r.meta.id);
+    const neither = a11y
+      .filter((r) => !r.meta.wcag && r.meta.wcagNone === undefined)
+      .map((r) => r.meta.id);
+    const both = a11y
+      .filter((r) => r.meta.wcag && r.meta.wcagNone !== undefined)
+      .map((r) => r.meta.id);
     expect(neither).toEqual([]);
     expect(both).toEqual([]);
   });
 
   test("a declared wcag list names criteria from the table with their level and version", () => {
     for (const r of a11y.filter((x) => x.meta.wcag)) {
-      expect(r.meta.wcag!.length, `${r.meta.id} declares an empty wcag list`).toBeGreaterThan(0);
+      expect(
+        r.meta.wcag!.length,
+        `${r.meta.id} declares an empty wcag list`
+      ).toBeGreaterThan(0);
       for (const c of r.meta.wcag!) {
         const entry = WCAG_CRITERIA[c.sc];
         expect(entry, `${r.meta.id} cites unknown ${c.sc}`).toBeDefined();
@@ -51,7 +59,10 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
 
   test("wcagRelated appears only beside wcagNone and names criteria from the table", () => {
     for (const r of a11y.filter((x) => x.meta.wcagRelated !== undefined)) {
-      expect(r.meta.wcagNone, `${r.meta.id} has wcagRelated without wcagNone`).toBeDefined();
+      expect(
+        r.meta.wcagNone,
+        `${r.meta.id} has wcagRelated without wcagNone`
+      ).toBeDefined();
       for (const c of r.meta.wcagRelated!) {
         const entry = WCAG_CRITERIA[c.sc];
         expect(entry, `${r.meta.id} relates unknown ${c.sc}`).toBeDefined();
@@ -62,7 +73,8 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
   });
 
   test("zoom-disabled does not present 500% as a WCAG requirement", () => {
-    const solution = a11y.find((r) => r.meta.id === "a11y/zoom-disabled")!.meta.solution!;
+    const solution = a11y.find((r) => r.meta.id === "a11y/zoom-disabled")!.meta
+      .solution!;
     expect(solution).toContain("200%");
     expect(solution).toContain("Lighthouse");
     expect(solution).not.toContain("500%");
@@ -71,9 +83,17 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
   test("a wcagNone reason is one non-empty sentence", () => {
     for (const r of a11y.filter((x) => x.meta.wcagNone !== undefined)) {
       const reason = r.meta.wcagNone!.trim();
-      expect(reason.length, `${r.meta.id} has an empty wcagNone`).toBeGreaterThan(20);
-      expect(reason.endsWith("."), `${r.meta.id} wcagNone is not a sentence`).toBe(true);
-      expect(reason, `${r.meta.id} wcagNone has an em dash`).not.toContain("\u2014");
+      expect(
+        reason.length,
+        `${r.meta.id} has an empty wcagNone`
+      ).toBeGreaterThan(20);
+      expect(
+        reason.endsWith("."),
+        `${r.meta.id} wcagNone is not a sentence`
+      ).toBe(true);
+      expect(reason, `${r.meta.id} wcagNone has an em dash`).not.toContain(
+        "\u2014"
+      );
     }
   });
 
@@ -93,14 +113,18 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
 
   test("every criterion any rule cites, in any category, is in the table (pub#2024 review)", () => {
     const missing = [...loadAllRules().values()].flatMap((r) =>
-      (r.meta.wcag ?? []).filter((c) => !WCAG_CRITERIA[c.sc]).map((c) => `${r.meta.id} ${c.sc}`),
+      (r.meta.wcag ?? [])
+        .filter((c) => !WCAG_CRITERIA[c.sc])
+        .map((c) => `${r.meta.id} ${c.sc}`)
     );
     expect(missing).toEqual([]);
   });
 
   test("the table has no 4.1.1, which WCAG 2.2 removed (pub#2024 review)", () => {
     expect(Object.keys(WCAG_CRITERIA)).not.toContain("4.1.1");
-    expect(() => wcag("4.1.1")).toThrow('Unknown WCAG success criterion "4.1.1"');
+    expect(() => wcag("4.1.1")).toThrow(
+      'Unknown WCAG success criterion "4.1.1"'
+    );
   });
 
   test("duplicate-id-aria cites 4.1.2 Name, Role, Value, not the obsolete 4.1.1", () => {
@@ -122,7 +146,9 @@ describe("a11y rules declare WCAG criteria (repo#3093)", () => {
 
   test("images/alt-text cites 1.1.1 Non-text Content at A; viewport-zoom and meta-title cite none (repo#3094)", () => {
     const all = loadAllRules();
-    expect(all.get("images/alt-text")!.meta.wcag).toEqual([{ sc: "1.1.1", level: "A", version: "2.0" }]);
+    expect(all.get("images/alt-text")!.meta.wcag).toEqual([
+      { sc: "1.1.1", level: "A", version: "2.0" },
+    ]);
     expect(all.get("mobile/viewport-zoom")!.meta.wcag).toBeUndefined();
     expect(all.get("core/meta-title")!.meta.wcag).toBeUndefined();
   });
@@ -159,7 +185,9 @@ describe("meetsWcagTarget / wcagLevelDisablePatterns", () => {
 describe("images/alt-text under --wcag-level (repo#3094)", () => {
   test("is never in a level's disables, nor are untagged non-a11y rules: the level filters a11y rules only", () => {
     const metas = [...loadAllRules().values()].map((r) => r.meta);
-    expect(metas.find((m) => m.id === "images/alt-text")!.wcag).toEqual([{ sc: "1.1.1", level: "A", version: "2.0" }]);
+    expect(metas.find((m) => m.id === "images/alt-text")!.wcag).toEqual([
+      { sc: "1.1.1", level: "A", version: "2.0" },
+    ]);
     for (const level of ["A", "AA", "AAA"] as const) {
       const out = wcagLevelDisablePatterns(metas, level);
       expect(out, level).not.toContain("images/alt-text");

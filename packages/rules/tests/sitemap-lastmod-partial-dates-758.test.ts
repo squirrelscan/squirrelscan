@@ -3,20 +3,26 @@
 // instant of that period, so a year-stamped sitemap looked months behind every
 // page dated later that year, and churn reported a day nobody wrote.
 
+import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
 import { describe, expect, test } from "bun:test";
 
-import { w3cDatePeriod } from "@squirrelscan/utils/date-period";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { sitemapLastmodChurnRule } from "../src/crawl/sitemap-lastmod-churn";
 import { sitemapLastmodDriftRule } from "../src/crawl/sitemap-lastmod-drift";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 function siteWith(
   pages: Array<{ url: string; dateModified?: string }>,
-  urls: Array<{ loc: string; lastmod?: string }>,
+  urls: Array<{ loc: string; lastmod?: string }>
 ): RuleContext {
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: "https://example.com",
@@ -64,12 +70,14 @@ function siteWith(
 }
 
 async function drift(lastmod: string, dateModified: string) {
-  return (await sitemapLastmodDriftRule.run(
-    siteWith(
-      [{ url: "https://example.com/a", dateModified }],
-      [{ loc: "https://example.com/a", lastmod }],
-    ),
-  )).checks;
+  return (
+    await sitemapLastmodDriftRule.run(
+      siteWith(
+        [{ url: "https://example.com/a", dateModified }],
+        [{ loc: "https://example.com/a", lastmod }]
+      )
+    )
+  ).checks;
 }
 
 describe("w3cDatePeriod", () => {
@@ -93,7 +101,9 @@ describe("w3cDatePeriod", () => {
     });
     // December rolls into the next year; a leap February ends on the 29th.
     expect(w3cDatePeriod("2024-12")?.end).toBe(Date.UTC(2025, 0, 1) - 1);
-    expect(w3cDatePeriod("2024-02")?.end).toBe(Date.UTC(2024, 1, 29, 23, 59, 59, 999));
+    expect(w3cDatePeriod("2024-02")?.end).toBe(
+      Date.UTC(2024, 1, 29, 23, 59, 59, 999)
+    );
     // Years below 100 are not read as 19xx.
     const early = w3cDatePeriod("0099")!;
     expect(new Date(early.start).getUTCFullYear()).toBe(99);
@@ -106,30 +116,49 @@ describe("w3cDatePeriod", () => {
 
 describe("crawl/sitemap-lastmod-drift with a year or year-month lastmod (#758)", () => {
   test("a page date inside the named year or month agrees with it", async () => {
-    expect((await drift("2024", "2024-09-10T00:00:00Z")).map((c) => c.status)).toEqual(["pass"]);
-    expect((await drift("2024-09", "2024-09-28T00:00:00Z")).map((c) => c.status)).toEqual(["pass"]);
+    expect(
+      (await drift("2024", "2024-09-10T00:00:00Z")).map((c) => c.status)
+    ).toEqual(["pass"]);
+    expect(
+      (await drift("2024-09", "2024-09-28T00:00:00Z")).map((c) => c.status)
+    ).toEqual(["pass"]);
   });
 
   test("a page date after the period is behind, measured from the period's end", async () => {
-    const [year] = (await drift("2023", "2024-09-10T00:00:00Z"));
-    expect(year).toMatchObject({ status: "warn", name: "sitemap-lastmod-behind-page" });
+    const [year] = await drift("2023", "2024-09-10T00:00:00Z");
+    expect(year).toMatchObject({
+      status: "warn",
+      name: "sitemap-lastmod-behind-page",
+    });
     // From 2023-12-31T23:59:59.999Z: 253 days, not the 618 from 2023-01-01.
-    expect(year!.items?.[0]?.meta).toMatchObject({ lastmod: "2023", deltaDays: 253 });
+    expect(year!.items?.[0]?.meta).toMatchObject({
+      lastmod: "2023",
+      deltaDays: 253,
+    });
 
-    const [month] = (await drift("2024-09", "2024-10-15T00:00:00Z"));
-    expect(month).toMatchObject({ status: "warn", name: "sitemap-lastmod-behind-page" });
+    const [month] = await drift("2024-09", "2024-10-15T00:00:00Z");
+    expect(month).toMatchObject({
+      status: "warn",
+      name: "sitemap-lastmod-behind-page",
+    });
     expect(month!.items?.[0]?.meta).toMatchObject({ deltaDays: 14 });
   });
 
   test("a page date before the period is ahead, measured from the period's start", async () => {
-    const [check] = (await drift("2025", "2024-09-10T00:00:00Z"));
-    expect(check).toMatchObject({ status: "warn", name: "sitemap-lastmod-ahead-of-page" });
+    const [check] = await drift("2025", "2024-09-10T00:00:00Z");
+    expect(check).toMatchObject({
+      status: "warn",
+      name: "sitemap-lastmod-ahead-of-page",
+    });
     expect(check!.items?.[0]?.meta).toMatchObject({ deltaDays: 113 });
   });
 
   test("a full datetime is still one instant", async () => {
-    const [check] = (await drift("2024-09-01T00:00:00Z", "2024-09-20T00:00:00Z"));
-    expect(check).toMatchObject({ status: "warn", name: "sitemap-lastmod-behind-page" });
+    const [check] = await drift("2024-09-01T00:00:00Z", "2024-09-20T00:00:00Z");
+    expect(check).toMatchObject({
+      status: "warn",
+      name: "sitemap-lastmod-behind-page",
+    });
     expect(check!.items?.[0]?.meta).toMatchObject({ deltaDays: 19 });
   });
 });
@@ -143,81 +172,113 @@ describe("crawl/sitemap-lastmod-churn with a year or year-month lastmod (#758)",
 
   test("a sitemap stamped with a bare year or year-month is not reported as churn on a day it never wrote", async () => {
     for (const stamp of ["2024", "2024-09"]) {
-      const { checks } = (await sitemapLastmodChurnRule.run(
+      const { checks } = await sitemapLastmodChurnRule.run(
         siteWith(
           [],
-          urls(() => stamp),
-        ),
-      ));
+          urls(() => stamp)
+        )
+      );
       expect(checks.map((c) => c.status)).toEqual(["skipped"]);
-      expect(checks[0]!.skipReason).toBe("Lastmod values name only a year or month");
-      expect(checks[0]!.details).toMatchObject({ coarseLastmods: 30, urlsWithLastmod: 0 });
+      expect(checks[0]!.skipReason).toBe(
+        "Lastmod values name only a year or month"
+      );
+      expect(checks[0]!.details).toMatchObject({
+        coarseLastmods: 30,
+        urlsWithLastmod: 0,
+      });
     }
   });
 
   test("too few lastmods in all is still too small, not too coarse", async () => {
-    const { checks } = (await sitemapLastmodChurnRule.run(
-      siteWith([], [...urls(() => "2024-09-10T04:00:00Z", 3), ...urls(() => "2024", 2)]),
-    ));
+    const { checks } = await sitemapLastmodChurnRule.run(
+      siteWith(
+        [],
+        [...urls(() => "2024-09-10T04:00:00Z", 3), ...urls(() => "2024", 2)]
+      )
+    );
     expect(checks[0]!.skipReason).toBe("Too few URLs with lastmod");
   });
 
   test("a news sitemap's year-month lastmods are counted as news, as before", async () => {
     const context = siteWith(
       [],
-      urls(() => "2024-09"),
+      urls(() => "2024-09")
     );
-    (context.site!.sitemaps!.discovered[0] as { isNewsSitemap?: boolean }).isNewsSitemap = true;
-    const { checks } = (await sitemapLastmodChurnRule.run(context));
+    (
+      context.site!.sitemaps!.discovered[0] as { isNewsSitemap?: boolean }
+    ).isNewsSitemap = true;
+    const { checks } = await sitemapLastmodChurnRule.run(context);
     expect(checks[0]!.skipReason).toBe("Only news-sitemap lastmod values");
-    expect(checks[0]!.details).toMatchObject({ newsUrlsExcluded: 30, coarseLastmods: 0 });
+    expect(checks[0]!.details).toMatchObject({
+      newsUrlsExcluded: 30,
+      coarseLastmods: 0,
+    });
   });
 
   test("a few coarse lastmods beside a news sitemap count as lastmods in the too-small message", async () => {
     const context = siteWith(
       [],
-      urls(() => "2024-09", 5),
+      urls(() => "2024-09", 5)
     );
     const discovered = context.site!.sitemaps!.discovered;
     discovered.push({
       ...discovered[0]!,
       url: "https://example.com/news-sitemap.xml",
-      urls: urls(() => "2024-09-10T04:00:00Z", 30).map((u) => ({ ...u, loc: `${u.loc}-news` })),
+      urls: urls(() => "2024-09-10T04:00:00Z", 30).map((u) => ({
+        ...u,
+        loc: `${u.loc}-news`,
+      })),
       isNewsSitemap: true,
     } as (typeof discovered)[number]);
-    const { checks } = (await sitemapLastmodChurnRule.run(context));
+    const { checks } = await sitemapLastmodChurnRule.run(context);
     expect(checks[0]!.skipReason).toBe("Too few URLs with lastmod");
     expect(checks[0]!.message).toBe(
-      "Only 5 sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn",
+      "Only 5 sitemap URL(s) carry a lastmod; sitemap is too small to judge lastmod churn"
     );
   });
 
   test("full datetimes still count, with the coarse ones left out of the sample", async () => {
-    const { checks } = (await sitemapLastmodChurnRule.run(
-      siteWith([], [...urls(() => "2024-09-10T04:00:00Z"), ...urls(() => "2024", 5)]),
-    ));
+    const { checks } = await sitemapLastmodChurnRule.run(
+      siteWith(
+        [],
+        [...urls(() => "2024-09-10T04:00:00Z"), ...urls(() => "2024", 5)]
+      )
+    );
     expect(checks[0]).toMatchObject({ status: "warn" });
     expect(checks[0]!.message).toContain("2024-09-10");
     expect(checks[0]!.message).not.toContain("2024-01-01");
-    expect(checks[0]!.details).toMatchObject({ urlsWithLastmod: 30, coarseLastmodsExcluded: 5 });
+    expect(checks[0]!.details).toMatchObject({
+      urlsWithLastmod: 30,
+      coarseLastmodsExcluded: 5,
+    });
   });
 });
 
 describe("crawl/sitemap-lastmod-drift: the page's date and a date-only lastmod are periods too (#772)", () => {
   test("a page dated with a bare year agrees with a lastmod inside it", async () => {
     // Read as 1 January, `2024` warned 253 days ahead of `2024-09-10`.
-    expect((await drift("2024-09-10", "2024")).map((c) => c.status)).toEqual(["pass"]);
+    expect((await drift("2024-09-10", "2024")).map((c) => c.status)).toEqual([
+      "pass",
+    ]);
     // Measured from the end of the page's year: 19 days ahead passes, 32 warns.
-    expect((await drift("2025-01-20", "2024")).map((c) => c.status)).toEqual(["pass"]);
-    expect((await drift("2025-02-02", "2024"))[0]!.name).toBe("sitemap-lastmod-ahead-of-page");
+    expect((await drift("2025-01-20", "2024")).map((c) => c.status)).toEqual([
+      "pass",
+    ]);
+    expect((await drift("2025-02-02", "2024"))[0]!.name).toBe(
+      "sitemap-lastmod-ahead-of-page"
+    );
   });
 
   test("a date-only lastmod and a month lastmod agree about the same page", async () => {
     // Against 2025-01-08T12:00Z, `2024-12-31` was 8 days behind and warned,
     // while `2024-12` was 7 and passed.
-    expect((await drift("2024-12-31", "2025-01-08T12:00:00Z")).map((c) => c.status)).toEqual(["pass"]);
-    expect((await drift("2024-12", "2025-01-08T12:00:00Z")).map((c) => c.status)).toEqual(["pass"]);
-    const late = (await drift("2024-12-31", "2025-01-10T12:00:00Z"));
+    expect(
+      (await drift("2024-12-31", "2025-01-08T12:00:00Z")).map((c) => c.status)
+    ).toEqual(["pass"]);
+    expect(
+      (await drift("2024-12", "2025-01-08T12:00:00Z")).map((c) => c.status)
+    ).toEqual(["pass"]);
+    const late = await drift("2024-12-31", "2025-01-10T12:00:00Z");
     expect(late[0]!.name).toBe("sitemap-lastmod-behind-page");
     expect((await late[0]!.items!)[0]!.meta).toMatchObject({ deltaDays: 9 });
   });
@@ -225,18 +286,32 @@ describe("crawl/sitemap-lastmod-drift: the page's date and a date-only lastmod a
   test("a lastmod outside the W3C format reads the same on every machine", async () => {
     // Bun keeps the last zone set when TZ is deleted, so it is put back by
     // assignment.
-    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const original =
+      process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     try {
-      for (const zone of ["UTC", "Asia/Tokyo", "America/New_York", "Pacific/Kiritimati"]) {
+      for (const zone of [
+        "UTC",
+        "Asia/Tokyo",
+        "America/New_York",
+        "Pacific/Kiritimati",
+      ]) {
         process.env.TZ = zone;
         // Read as written: the 10th, which agrees with a page dated that day.
-        expect((await drift("2024/09/10", "2024-09-10T12:00:00Z")).map((c) => c.status)).toEqual(["pass"]);
-        expect((await drift("Tue, 10 Sep 2024", "2024-09-10T12:00:00Z")).map((c) => c.status)).toEqual([
-          "pass",
-        ]);
+        expect(
+          (await drift("2024/09/10", "2024-09-10T12:00:00Z")).map(
+            (c) => c.status
+          )
+        ).toEqual(["pass"]);
+        expect(
+          (await drift("Tue, 10 Sep 2024", "2024-09-10T12:00:00Z")).map(
+            (c) => c.status
+          )
+        ).toEqual(["pass"]);
         // ISO-shaped but not a W3C form: not read, rather than guessed.
         for (const lastmod of ["2024-9", "2024-09-1"]) {
-          expect((await drift(lastmod, "2024-09-10T12:00:00Z"))[0]!.skipReason).toBe("No comparable dates");
+          expect(
+            (await drift(lastmod, "2024-09-10T12:00:00Z"))[0]!.skipReason
+          ).toBe("No comparable dates");
         }
       }
     } finally {
@@ -251,7 +326,7 @@ describe("crawl/sitemap-lastmod-churn counts the day the sitemap wrote (#772)", 
       loc: `https://example.com/p${i}`,
       lastmod: "2024-09-10T23:30:00-05:00",
     }));
-    const { checks } = (await sitemapLastmodChurnRule.run(siteWith([], urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(siteWith([], urls));
     expect(checks[0]).toMatchObject({ status: "warn" });
     expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"] });
   });
@@ -261,12 +336,18 @@ describe("crawl/sitemap-lastmod-churn counts the day the sitemap wrote (#772)", 
       loc: `https://example.com/p${i}`,
       lastmod: "2024/09/10",
     }));
-    const original = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const original =
+      process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     try {
       for (const zone of ["UTC", "Asia/Tokyo", "America/New_York"]) {
         process.env.TZ = zone;
-        const { checks } = (await sitemapLastmodChurnRule.run(siteWith([], urls)));
-        expect(checks[0]!.details).toMatchObject({ dates: ["2024-09-10"], urlsWithLastmod: 30 });
+        const { checks } = await sitemapLastmodChurnRule.run(
+          siteWith([], urls)
+        );
+        expect(checks[0]!.details).toMatchObject({
+          dates: ["2024-09-10"],
+          urlsWithLastmod: 30,
+        });
       }
     } finally {
       process.env.TZ = original;
@@ -280,7 +361,7 @@ describe("crawl/sitemap-lastmod-churn counts lastmods it cannot read (#780 revie
       loc: `https://example.com/p${i}`,
       lastmod: "2024-9-10",
     }));
-    const { checks } = (await sitemapLastmodChurnRule.run(siteWith([], urls)));
+    const { checks } = await sitemapLastmodChurnRule.run(siteWith([], urls));
     expect(checks[0]).toMatchObject({
       status: "skipped",
       skipReason: "Lastmod values are not readable dates",

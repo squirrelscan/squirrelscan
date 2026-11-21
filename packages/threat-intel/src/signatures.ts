@@ -37,8 +37,20 @@ export interface Signature {
   condition: Condition;
 }
 
-const VALID_TARGETS: SignatureTarget[] = ["title", "html", "text", "url", "scripts", "any"];
-const VALID_SEVERITIES: SignatureSeverity[] = ["critical", "high", "medium", "low"];
+const VALID_TARGETS: SignatureTarget[] = [
+  "title",
+  "html",
+  "text",
+  "url",
+  "scripts",
+  "any",
+];
+const VALID_SEVERITIES: SignatureSeverity[] = [
+  "critical",
+  "high",
+  "medium",
+  "low",
+];
 
 // ── condition parser (recursive descent over a tiny boolean grammar) ─
 
@@ -52,7 +64,9 @@ function tokenize(src: string): string[] {
     re.lastIndex = pos;
     const m = re.exec(src);
     if (!m || m.index !== pos) {
-      throw new Error(`signature condition: unexpected char at ${pos} in "${src}"`);
+      throw new Error(
+        `signature condition: unexpected char at ${pos} in "${src}"`
+      );
     }
     tokens.push(m[1]!);
     pos = re.lastIndex;
@@ -64,13 +78,15 @@ class ConditionParser {
   private i = 0;
   constructor(
     private readonly tokens: string[],
-    private readonly keys: Set<string>,
+    private readonly keys: Set<string>
   ) {}
 
   parse(): Condition {
     const c = this.parseOr();
     if (this.i < this.tokens.length) {
-      throw new Error(`signature condition: trailing token "${this.tokens[this.i]}"`);
+      throw new Error(
+        `signature condition: trailing token "${this.tokens[this.i]}"`
+      );
     }
     return c;
   }
@@ -119,7 +135,9 @@ class ConditionParser {
     // quantifier: (all | any | NUMBER) of (them | ( a, b, … ))
     if (
       t !== undefined &&
-      (t.toLowerCase() === "all" || t.toLowerCase() === "any" || /^\d+$/.test(t))
+      (t.toLowerCase() === "all" ||
+        t.toLowerCase() === "any" ||
+        /^\d+$/.test(t))
     ) {
       const save = this.i;
       const head = this.next()!;
@@ -137,7 +155,8 @@ class ConditionParser {
       this.i = save; // not a quantifier, fall through to identifier
     }
     const name = this.next();
-    if (name === undefined) throw new Error("signature condition: unexpected end");
+    if (name === undefined)
+      throw new Error("signature condition: unexpected end");
     if (!this.keys.has(name)) {
       throw new Error(`signature condition: unknown string "${name}"`);
     }
@@ -152,12 +171,15 @@ class ConditionParser {
     const keys: string[] = [];
     for (;;) {
       const k = this.next();
-      if (k === undefined) throw new Error("signature condition: unterminated list");
-      if (!this.keys.has(k)) throw new Error(`signature condition: unknown string "${k}"`);
+      if (k === undefined)
+        throw new Error("signature condition: unterminated list");
+      if (!this.keys.has(k))
+        throw new Error(`signature condition: unknown string "${k}"`);
       keys.push(k);
       const sep = this.next();
       if (sep === ")") break;
-      if (sep !== ",") throw new Error('signature condition: expected "," or ")"');
+      if (sep !== ",")
+        throw new Error('signature condition: expected "," or ")"');
     }
     return keys;
   }
@@ -193,7 +215,8 @@ function evalCondition(c: Condition, matched: Set<string>): boolean {
 // ── signature normalization ─────────────────────────────────────────
 
 function asRecord(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== "object") throw new Error("signature: expected an object");
+  if (!v || typeof v !== "object")
+    throw new Error("signature: expected an object");
   return v as Record<string, unknown>;
 }
 
@@ -234,18 +257,22 @@ export function parseSignature(raw: unknown): Signature {
     throw new Error(`signature "${id}": invalid severity "${severity}"`);
   }
   const stringsRaw = asRecord(obj.strings);
-  const strings = Object.entries(stringsRaw).map(([key, def]) => buildStringDef(key, def));
+  const strings = Object.entries(stringsRaw).map(([key, def]) =>
+    buildStringDef(key, def)
+  );
   if (strings.length === 0) {
     throw new Error(`signature "${id}": needs at least one string`);
   }
   const keys = new Set(strings.map((s) => s.key));
-  const conditionSrc = typeof obj.condition === "string" ? obj.condition : "all of them";
+  const conditionSrc =
+    typeof obj.condition === "string" ? obj.condition : "all of them";
   const condition = parseCondition(conditionSrc, keys);
   return {
     id,
     name,
     severity,
-    description: typeof obj.description === "string" ? obj.description : undefined,
+    description:
+      typeof obj.description === "string" ? obj.description : undefined,
     strings,
     condition,
   };
@@ -253,7 +280,10 @@ export function parseSignature(raw: unknown): Signature {
 
 // ── matching ────────────────────────────────────────────────────────
 
-function corpusFor(target: SignatureTarget, input: SignatureMatchInput): string {
+function corpusFor(
+  target: SignatureTarget,
+  input: SignatureMatchInput
+): string {
   switch (target) {
     case "title":
       return input.title ?? "";
@@ -279,7 +309,7 @@ function corpusFor(target: SignatureTarget, input: SignatureMatchInput): string 
 /** Match `input` against every signature; return those whose condition holds. */
 export function matchSignatures(
   signatures: Signature[],
-  input: SignatureMatchInput,
+  input: SignatureMatchInput
 ): SignatureMatch[] {
   const out: SignatureMatch[] = [];
   for (const sig of signatures) {

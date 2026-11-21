@@ -6,24 +6,25 @@
 // .rootFailure` carries that classification out of the crawl, so the report,
 // the failure email and Sentry can all branch on the cause.
 
-import { describe, expect, test } from "bun:test";
-import { Duration, Effect, Stream } from "effect";
-
 import type { CrawlStats } from "@squirrelscan/core-contracts";
+
 import {
   classifyFetchErrorCode,
   fetchErrorCode,
 } from "@squirrelscan/core-contracts/failure-reason";
+import { describe, expect, test } from "bun:test";
+import { Duration, Effect, Stream } from "effect";
+
+import type { CrawlerConfig } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import { createTestStorage } from "../src/storage";
 import {
   applyStatusGuards,
   crawlErrorToFailureDetail,
   CrawlError,
   type CrawlFetcher,
 } from "../src/fetcher";
-import type { CrawlerConfig } from "../src/core/types";
+import { createTestStorage } from "../src/storage";
 
 const ORIGIN = "https://example.com";
 const URL_ROOT = `${ORIGIN}/`;
@@ -31,7 +32,7 @@ const URL_ROOT = `${ORIGIN}/`;
 describe("crawlErrorToFailureDetail (#1822)", () => {
   test("DNS: a resolver failure is named, not reported as a generic network error", () => {
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND example.com"),
+      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND example.com")
     );
     expect(detail.code).toBe("dns");
     expect(detail.host).toBe("example.com");
@@ -40,12 +41,16 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
 
   test("DNS: an NXDOMAIN phrased by a different runtime classifies the same", () => {
     expect(
-      crawlErrorToFailureDetail(CrawlError.network(URL_ROOT, "DNS lookup failed: NXDOMAIN")).code,
+      crawlErrorToFailureDetail(
+        CrawlError.network(URL_ROOT, "DNS lookup failed: NXDOMAIN")
+      ).code
     ).toBe("dns");
   });
 
   test("TLS: the runtime message is kept but the doubled prefix is dropped", () => {
-    const detail = crawlErrorToFailureDetail(CrawlError.tls(URL_ROOT, "certificate has expired"));
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.tls(URL_ROOT, "certificate has expired")
+    );
     expect(detail.code).toBe("tls");
     expect(detail.detail).toBe("certificate has expired");
   });
@@ -53,23 +58,30 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
   test("connection: the ejconsultor.es case (socket closed after the handshake)", () => {
     // The exact message the failed production runs in #1822 carried.
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "The socket connection was closed unexpectedly"),
+      CrawlError.network(
+        URL_ROOT,
+        "The socket connection was closed unexpectedly"
+      )
     );
     expect(detail.code).toBe("connection");
   });
 
   test("connection: refused and reset sockets classify alongside it", () => {
     expect(
-      crawlErrorToFailureDetail(CrawlError.network(URL_ROOT, "connect ECONNREFUSED 10.0.0.1:443"))
-        .code,
+      crawlErrorToFailureDetail(
+        CrawlError.network(URL_ROOT, "connect ECONNREFUSED 10.0.0.1:443")
+      ).code
     ).toBe("connection");
-    expect(crawlErrorToFailureDetail(CrawlError.network(URL_ROOT, "read ECONNRESET")).code).toBe(
-      "connection",
-    );
+    expect(
+      crawlErrorToFailureDetail(CrawlError.network(URL_ROOT, "read ECONNRESET"))
+        .code
+    ).toBe("connection");
   });
 
   test("timeout: an aborted request is a timeout, not a connection failure", () => {
-    expect(crawlErrorToFailureDetail(CrawlError.timeout(URL_ROOT)).code).toBe("timeout");
+    expect(crawlErrorToFailureDetail(CrawlError.timeout(URL_ROOT)).code).toBe(
+      "timeout"
+    );
   });
 
   test("http_4xx: a refusal carries the status the guard saw", () => {
@@ -79,14 +91,16 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
   });
 
   test("http_4xx: a rate limit is a 429 refusal, not a server error", () => {
-    const detail = crawlErrorToFailureDetail(CrawlError.rateLimit(URL_ROOT, 30));
+    const detail = crawlErrorToFailureDetail(
+      CrawlError.rateLimit(URL_ROOT, 30)
+    );
     expect(detail.code).toBe("http_4xx");
     expect(detail.status).toBe(429);
   });
 
   test("http_5xx: a server error keeps its status and stays attributed to the origin", () => {
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "Server error: 503", 503),
+      CrawlError.network(URL_ROOT, "Server error: 503", 503)
     );
     expect(detail.code).toBe("http_5xx");
     expect(detail.status).toBe(503);
@@ -94,7 +108,7 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
 
   test("unknown: an unattributable message keeps its text rather than vanishing", () => {
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "something we have never seen"),
+      CrawlError.network(URL_ROOT, "something we have never seen")
     );
     expect(detail.code).toBe("unknown");
     // "unknown" must never read as "nothing failed": the text still travels.
@@ -104,7 +118,7 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
   test("origin-influenced text is stripped and capped before it reaches a reason", () => {
     const esc = String.fromCharCode(27);
     const detail = crawlErrorToFailureDetail(
-      CrawlError.tls(URL_ROOT, `bad${esc}[2Jcert ${"x".repeat(400)}`),
+      CrawlError.tls(URL_ROOT, `bad${esc}[2Jcert ${"x".repeat(400)}`)
     );
     expect(detail.detail).not.toContain(esc);
     expect(detail.detail!.length).toBeLessThanOrEqual(120);
@@ -114,7 +128,10 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
     // A reason is quoted in an email and a markdown report; the path and query
     // of a site-chosen URL have no business in either.
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "Failed to fetch https://evil.example/private?token=abc123"),
+      CrawlError.network(
+        URL_ROOT,
+        "Failed to fetch https://evil.example/private?token=abc123"
+      )
     );
     expect(detail.detail).toContain("evil.example");
     expect(detail.detail).not.toContain("/private");
@@ -123,7 +140,10 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
 
   test("markdown and HTML structure characters are dropped from the detail", () => {
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "bad [link](https://evil.example) <img> `code` a|b"),
+      CrawlError.network(
+        URL_ROOT,
+        "bad [link](https://evil.example) <img> `code` a|b"
+      )
     );
     for (const char of ["[", "]", "<", ">", "`", "|"]) {
       expect(detail.detail).not.toContain(char);
@@ -140,25 +160,35 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
         URL_ROOT,
         "Unable to connect. Is the computer able to access the url?",
         undefined,
-        "ENOTFOUND",
-      ),
+        "ENOTFOUND"
+      )
     );
     expect(detail.code).toBe("dns");
   });
 
   test("a code we do not recognize falls back to the message, not to unknown", () => {
     const detail = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND example.com", undefined, "SomethingNew"),
+      CrawlError.network(
+        URL_ROOT,
+        "getaddrinfo ENOTFOUND example.com",
+        undefined,
+        "SomethingNew"
+      )
     );
     expect(detail.code).toBe("dns");
   });
 
   test("Bun's PascalCase codes classify alongside the errno spellings", () => {
     const bun = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "Unable to connect", undefined, "ConnectionRefused"),
+      CrawlError.network(
+        URL_ROOT,
+        "Unable to connect",
+        undefined,
+        "ConnectionRefused"
+      )
     );
     const errno = crawlErrorToFailureDetail(
-      CrawlError.network(URL_ROOT, "connect failed", undefined, "ECONNREFUSED"),
+      CrawlError.network(URL_ROOT, "connect failed", undefined, "ECONNREFUSED")
     );
     expect(bun.code).toBe("connection");
     expect(errno.code).toBe(bun.code);
@@ -182,16 +212,22 @@ describe("crawlErrorToFailureDetail (#1822)", () => {
   });
 
   test("a sitemap URL's failure is marked as the weaker source", () => {
-    expect(crawlErrorToFailureDetail(CrawlError.timeout(URL_ROOT), "sitemap").source).toBe(
-      "sitemap",
-    );
+    expect(
+      crawlErrorToFailureDetail(CrawlError.timeout(URL_ROOT), "sitemap").source
+    ).toBe("sitemap");
   });
 });
 
 describe("applyStatusGuards carries the status for classification (#1822)", () => {
-  async function guard(status: number, body?: string, headers?: Record<string, string>) {
+  async function guard(
+    status: number,
+    body?: string,
+    headers?: Record<string, string>
+  ) {
     const result = await Effect.runPromise(
-      Effect.either(applyStatusGuards(URL_ROOT, status, new Headers(headers), body)),
+      Effect.either(
+        applyStatusGuards(URL_ROOT, status, new Headers(headers), body)
+      )
     );
     return result._tag === "Left" ? result.left : null;
   }
@@ -309,7 +345,10 @@ function statusFetcher(status: number, body = ""): CrawlFetcher {
 }
 
 /** Stub the root probes (robots.txt, llms.txt, sitemaps) so they cost nothing. */
-function withStubbedRootProbes<T>(robotsBody: string, run: () => Promise<T>): Promise<T> {
+function withStubbedRootProbes<T>(
+  robotsBody: string,
+  run: () => Promise<T>
+): Promise<T> {
   const original = globalThis.fetch;
   globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
     const url =
@@ -333,7 +372,7 @@ function withStubbedRootProbes<T>(robotsBody: string, run: () => Promise<T>): Pr
 
 function runCrawl(
   fetcher: CrawlFetcher,
-  config: Partial<CrawlerConfig> = {},
+  config: Partial<CrawlerConfig> = {}
 ): Promise<CrawlStats | null> {
   const program = Effect.gen(function* () {
     const storage = yield* createTestStorage();
@@ -343,13 +382,17 @@ function runCrawl(
       config: { ...BASE_CONFIG, ...config },
     });
     const drain = yield* Stream.runDrain(
-      crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
+      crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed"))
     ).pipe(Effect.fork);
     yield* Effect.yieldNow();
-    yield* crawler.start(ORIGIN).pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
+    yield* crawler
+      .start(ORIGIN)
+      .pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
     const crawlId = crawler.currentCrawlId!;
     yield* Effect.ignore(drain.await);
-    return yield* storage.getStats(crawlId).pipe(Effect.orElseSucceed(() => null));
+    return yield* storage
+      .getStats(crawlId)
+      .pipe(Effect.orElseSucceed(() => null));
   });
   return Effect.runPromise(program);
 }
@@ -359,9 +402,12 @@ describe("the classification reaches CrawlStats (#1822)", () => {
     const stats = await withStubbedRootProbes("", () =>
       runCrawl(
         failingFetcher(
-          CrawlError.network(URL_ROOT, "The socket connection was closed unexpectedly"),
-        ),
-      ),
+          CrawlError.network(
+            URL_ROOT,
+            "The socket connection was closed unexpectedly"
+          )
+        )
+      )
     );
     expect(stats?.pagesFetched).toBe(0);
     expect(stats?.rootFailure?.code).toBe("connection");
@@ -372,13 +418,17 @@ describe("the classification reaches CrawlStats (#1822)", () => {
   test("a 404 entry URL is a stored page, and is still recorded as a 4xx failure", async () => {
     // 404 passes applyStatusGuards, so it never reaches the fetch error path:
     // it is stored as a page and the stats are the only place the class lands.
-    const stats = await withStubbedRootProbes("", () => runCrawl(statusFetcher(404)));
+    const stats = await withStubbedRootProbes("", () =>
+      runCrawl(statusFetcher(404))
+    );
     expect(stats?.rootFailure?.code).toBe("http_4xx");
     expect(stats?.rootFailure?.status).toBe(404);
   });
 
   test("a 403 entry URL keeps its blocked accounting AND records the class", async () => {
-    const stats = await withStubbedRootProbes("", () => runCrawl(statusFetcher(403)));
+    const stats = await withStubbedRootProbes("", () =>
+      runCrawl(statusFetcher(403))
+    );
     // #792's signal is untouched, so the run still classifies as `blocked`.
     expect(stats?.pagesBlocked).toBe(1);
     expect(stats?.rootFailure?.code).toBe("http_4xx");
@@ -392,16 +442,25 @@ describe("the classification reaches CrawlStats (#1822)", () => {
     // recorded one. Here one sub-page 500s and several more succeed AFTER it,
     // each running its own read-modify-write at concurrency 4.
     const links = ["/p0", "/p1", "/p2", "/p3", "/p4"];
-    const anchors = links.map((h) => `<a href="${ORIGIN}${h}">${h}</a>`).join("");
+    const anchors = links
+      .map((h) => `<a href="${ORIGIN}${h}">${h}</a>`)
+      .join("");
     const fetcher: CrawlFetcher = (url, options) => {
       if (url === `${ORIGIN}/p0`) {
         return Effect.fail(CrawlError.network(url, "Server error: 500", 500));
       }
-      const body = url === URL_ROOT ? `<!doctype html><html><body>${anchors}</body></html>` : "";
+      const body =
+        url === URL_ROOT
+          ? `<!doctype html><html><body>${anchors}</body></html>`
+          : "";
       return htmlFetcher(body)(url, options);
     };
     const stats = await withStubbedRootProbes("", () =>
-      runCrawl(fetcher, { maxPages: 10, concurrency: 4, disableLinkDiscovery: false }),
+      runCrawl(fetcher, {
+        maxPages: 10,
+        concurrency: 4,
+        disableLinkDiscovery: false,
+      })
     );
     // The successful stores ran, and the one failure is still on the row.
     expect(stats?.pagesFetched).toBeGreaterThan(1);
@@ -410,8 +469,9 @@ describe("the classification reaches CrawlStats (#1822)", () => {
   });
 
   test("a robots.txt that disallows the seed is recorded before any fetch", async () => {
-    const stats = await withStubbedRootProbes("User-agent: *\nDisallow: /", () =>
-      runCrawl(statusFetcher(200), { respectRobots: true }),
+    const stats = await withStubbedRootProbes(
+      "User-agent: *\nDisallow: /",
+      () => runCrawl(statusFetcher(200), { respectRobots: true })
     );
     expect(stats?.rootFailure?.code).toBe("robots");
     expect(stats?.rootFailure?.host).toBe("example.com");

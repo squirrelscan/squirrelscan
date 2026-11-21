@@ -50,14 +50,19 @@ export function safeBlockedPage(page: WafBlockedPage): WafBlockedPage {
     provider: page.provider ? clean(page.provider, "") || null : null,
     providerId: providerId || null,
     signal: clean(page.signal, "challenge page"),
-    code: /^blocked_by_[a-z0-9_]{1,40}$/.test(page.code) ? page.code : "blocked_by_waf",
+    code: /^blocked_by_[a-z0-9_]{1,40}$/.test(page.code)
+      ? page.code
+      : "blocked_by_waf",
   };
 }
 
 /** The sanitised summary, or null when no page was blocked. */
-export function safeWafBlocked(report: Pick<AuditReport, "wafBlocked">): WafBlockedSummary | null {
+export function safeWafBlocked(
+  report: Pick<AuditReport, "wafBlocked">
+): WafBlockedSummary | null {
   const blocked = report.wafBlocked;
-  if (!blocked || blocked.total <= 0 || Number.isNaN(blocked.total)) return null;
+  if (!blocked || blocked.total <= 0 || Number.isNaN(blocked.total))
+    return null;
   return {
     total: Math.floor(blocked.total),
     seed: blocked.seed ? safeBlockedPage(blocked.seed) : undefined,
@@ -82,9 +87,12 @@ function safeSuspectPage(page: WafSuspectPage): WafSuspectPage {
 }
 
 /** The sanitised suspect summary, or null when no page looked like a refusal (#1258). */
-export function safeWafSuspect(report: Pick<AuditReport, "wafSuspect">): WafSuspectSummary | null {
+export function safeWafSuspect(
+  report: Pick<AuditReport, "wafSuspect">
+): WafSuspectSummary | null {
   const suspect = report.wafSuspect;
-  if (!suspect || suspect.total <= 0 || Number.isNaN(suspect.total)) return null;
+  if (!suspect || suspect.total <= 0 || Number.isNaN(suspect.total))
+    return null;
   return {
     total: Math.floor(suspect.total),
     pages: (suspect.pages ?? []).slice(0, 50).map(safeSuspectPage),
@@ -101,11 +109,12 @@ export function safeWafSuspect(report: Pick<AuditReport, "wafSuspect">): WafSusp
  * blocked run (whose notice says more).
  */
 export function wafSuspectLines(
-  report: Pick<AuditReport, "wafSuspect" | "status">,
+  report: Pick<AuditReport, "wafSuspect" | "status">
 ): string[] {
   const suspect = safeWafSuspect(report);
   if (!suspect || isAuditFailed(report.status)) return [];
-  const by = suspect.providers.length > 0 ? ` from ${suspect.providers.join(", ")}` : "";
+  const by =
+    suspect.providers.length > 0 ? ` from ${suspect.providers.join(", ")}` : "";
   const lines = [
     `${suspect.total} page${suspect.total === 1 ? "" : "s"} look${suspect.total === 1 ? "s" : ""} like a refusal${by} but carr${suspect.total === 1 ? "ies" : "y"} no block marker. ${suspect.total === 1 ? "It was" : "They were"} audited, so ${suspect.total === 1 ? "its findings" : "their findings"} may describe the provider's page, not the site's.`,
   ];
@@ -130,7 +139,7 @@ export interface WafBlockedSeedCopy {
 
 /** The copy for a run that failed because its seed page was blocked, or null. */
 export function wafBlockedSeedCopy(
-  report: Pick<AuditReport, "status" | "wafBlocked">,
+  report: Pick<AuditReport, "status" | "wafBlocked">
 ): WafBlockedSeedCopy | null {
   if (report.status !== "blocked") return null;
   const seed = safeWafBlocked(report)?.seed;
@@ -154,12 +163,13 @@ export function wafBlockedSteps(): string[] {
  * failure notice says everything) or when nothing was blocked.
  */
 export function wafBlockedPagesLines(
-  report: Pick<AuditReport, "wafBlocked" | "totalPages" | "status">,
+  report: Pick<AuditReport, "wafBlocked" | "totalPages" | "status">
 ): string[] {
   const blocked = safeWafBlocked(report);
-  if (!blocked || blocked.seed || isAuditFailed(report.status))
-    return [];
-  const lines = [wafBlockedPagesNotice(blocked, Math.max(0, report.totalPages))];
+  if (!blocked || blocked.seed || isAuditFailed(report.status)) return [];
+  const lines = [
+    wafBlockedPagesNotice(blocked, Math.max(0, report.totalPages)),
+  ];
   for (const page of blocked.pages.slice(0, MAX_LISTED)) {
     const by = page.provider ? `${page.provider}, ` : "";
     lines.push(`${page.url}: ${by}HTTP ${page.status} (${page.signal})`);

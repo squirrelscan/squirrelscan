@@ -4,20 +4,14 @@ import { filterRules, isRuleEnabled } from "../src/filter";
 
 describe("opt-in rule filtering", () => {
   test("the default wildcard does not select an opt-in rule", () => {
-    expect(
-      isRuleEnabled("gaps/keywords", ["*"], [], undefined, true)
-    ).toBe(false);
+    expect(isRuleEnabled("gaps/keywords", ["*"], [], undefined, true)).toBe(
+      false
+    );
   });
 
   test("a concrete rule or category pattern selects an opt-in rule", () => {
     expect(
-      isRuleEnabled(
-        "gaps/keywords",
-        ["gaps/keywords"],
-        [],
-        undefined,
-        true
-      )
+      isRuleEnabled("gaps/keywords", ["gaps/keywords"], [], undefined, true)
     ).toBe(true);
     expect(
       isRuleEnabled("gaps/keywords", ["gaps/*"], [], undefined, true)

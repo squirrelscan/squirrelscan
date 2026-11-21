@@ -42,13 +42,12 @@
 // --child and --probe-child are the inner halves; the parent re-invokes this
 // file with them.
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { getDefaultConfig, type Config } from "@squirrelscan/config";
 import { SQLiteStorage } from "@squirrelscan/crawler";
 import { Effect } from "effect";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildSiteContext,
@@ -96,7 +95,11 @@ async function openCrawl(): Promise<{
   await run(storage.init());
   const crawls = await run(storage.listCrawls(1));
   const crawlId = (crawls as Array<{ id: string }>)[0]!.id;
-  return { storage, crawlId, pageCount: await run(storage.getPageCount(crawlId)) };
+  return {
+    storage,
+    crawlId,
+    pageCount: await run(storage.getPageCount(crawlId)),
+  };
 }
 
 // ── child: one measured run of the pipeline ──────────────────────────────────
@@ -105,7 +108,7 @@ if (process.argv.includes("--child")) {
   const budgetBytes = Number.parseInt(arg("budget-bytes", "0"), 10);
   const { storage, crawlId, pageCount } = await openCrawl();
   const batch = await run(
-    resolveStreamBatch(storage, crawlId, pageCount, { byteBudget: budgetBytes }),
+    resolveStreamBatch(storage, crawlId, pageCount, { byteBudget: budgetBytes })
   );
 
   // Boundary RSS only — one read, no collect, no snapshot. The loop already
@@ -113,10 +116,17 @@ if (process.argv.includes("--child")) {
   // comes back after a batch that has just been collected.
   const boundaryRss: number[] = [];
   await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: batch.pages,
-      hooks: { onBatch: () => boundaryRss.push(process.memoryUsage().rss) },
-    }),
+    runStreamingRules(
+      storage,
+      crawlId,
+      benchConfig(),
+      EMPTY_ASSETS,
+      undefined,
+      {
+        batchSize: batch.pages,
+        hooks: { onBatch: () => boundaryRss.push(process.memoryUsage().rss) },
+      }
+    )
   );
   const endRss = process.memoryUsage().rss;
   await run(storage.close());
@@ -128,7 +138,7 @@ if (process.argv.includes("--child")) {
       pages: pageCount,
       boundaryRssMB: boundaryRss.map((r) => Math.round(r / MB)),
       endRssMB: Math.round(endRss / MB),
-    })}`,
+    })}`
   );
   process.exit(0);
 }
@@ -139,12 +149,14 @@ if (process.argv.includes("--probe-child")) {
   const budgetBytes = Number.parseInt(arg("budget-bytes", "0"), 10);
   const { storage, crawlId, pageCount } = await openCrawl();
   const batch = await run(
-    resolveStreamBatch(storage, crawlId, pageCount, { byteBudget: budgetBytes }),
+    resolveStreamBatch(storage, crawlId, pageCount, { byteBudget: budgetBytes })
   );
 
   // COLD: what one batch costs in fresh RSS from a standing start.
   const coldBefore = process.memoryUsage().rss;
-  let rows = await run(storage.getPages(crawlId, { limit: batch.pages, offset: 0 }));
+  let rows = await run(
+    storage.getPages(crawlId, { limit: batch.pages, offset: 0 })
+  );
   let parsed = await run(buildSiteContext(rows));
   const coldPeak = process.memoryUsage().rss;
   releaseSiteContextDocuments(parsed);
@@ -152,9 +164,16 @@ if (process.argv.includes("--probe-child")) {
 
   // Then the whole pipeline, so the process reaches its high-water.
   await run(
-    runStreamingRules(storage, crawlId, benchConfig(), EMPTY_ASSETS, undefined, {
-      batchSize: batch.pages,
-    }),
+    runStreamingRules(
+      storage,
+      crawlId,
+      benchConfig(),
+      EMPTY_ASSETS,
+      undefined,
+      {
+        batchSize: batch.pages,
+      }
+    )
   );
   Bun.gc(true);
 
@@ -169,7 +188,9 @@ if (process.argv.includes("--probe-child")) {
   // the run is far smaller than before it — and every one of those warm caches
   // is an alternative explanation for that on its own.
   const warmBefore = process.memoryUsage().rss;
-  rows = await run(storage.getPages(crawlId, { limit: batch.pages, offset: 0 }));
+  rows = await run(
+    storage.getPages(crawlId, { limit: batch.pages, offset: 0 })
+  );
   parsed = await run(buildSiteContext(rows));
   const warmPeak = process.memoryUsage().rss;
   releaseSiteContextDocuments(parsed);
@@ -182,7 +203,7 @@ if (process.argv.includes("--probe-child")) {
       batchPages: batch.pages,
       coldMB: Math.round((coldPeak - coldBefore) / MB),
       warmMB: Math.round((warmPeak - warmBefore) / MB),
-    })}`,
+    })}`
   );
   process.exit(0);
 }
@@ -202,7 +223,10 @@ if (process.argv.includes("--probe-child")) {
  * inner shell, leaving `time`'s output alone on the pipe. macOS `time` has no
  * `-o`, which is why this is done with a redirect rather than a flag.
  */
-const TIME = ((): { cmd: string[]; parse: (stderr: string) => number | null } => {
+const TIME = ((): {
+  cmd: string[];
+  parse: (stderr: string) => number | null;
+} => {
   if (process.platform === "darwin") {
     return {
       cmd: ["/usr/bin/time", "-l"],
@@ -223,7 +247,7 @@ const TIME = ((): { cmd: string[]; parse: (stderr: string) => number | null } =>
     };
   }
   console.error(
-    `batch-budget-sweep: no maxrss source on ${process.platform}; macOS or Linux only.`,
+    `batch-budget-sweep: no maxrss source on ${process.platform}; macOS or Linux only.`
   );
   process.exit(2);
 })();
@@ -243,7 +267,11 @@ interface ChildResult {
   maxRss: number | null;
 }
 
-function spawnChild(flag: string, budget: number, purge: string): ChildResult | null {
+function spawnChild(
+  flag: string,
+  budget: number,
+  purge: string
+): ChildResult | null {
   const env = { ...process.env } as Record<string, string>;
   if (purge === "purge0") env.MIMALLOC_PURGE_DELAY = "0";
   // A private directory, and the path is passed as a POSITIONAL ARGUMENT rather
@@ -266,7 +294,7 @@ function spawnUnder(
   childErrPath: string,
   flag: string,
   budget: number,
-  env: Record<string, string>,
+  env: Record<string, string>
 ): ChildResult | null {
   const proc = Bun.spawnSync({
     cmd: [
@@ -303,7 +331,7 @@ function spawnUnder(
   // Kept SEPARATE, and both printed on failure. Concatenating them and taking
   // a tail loses the error: `time -l` appends ~800 characters of statistics
   // after the child's message, so the last 500 are all statistics.
-  
+
   // A non-zero exit invalidates the run even when the child printed its line
   // first: a failure after the print is still a failure, and the maxrss of a
   // process that died early is a small and entirely plausible number.
@@ -314,7 +342,7 @@ function spawnUnder(
         // NOT truncated: a shell redirect failure prints one line and `time -l`
         // then appends ~800 characters of statistics, so any tail drops the
         // only sentence that says what went wrong.
-        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`,
+        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`
     );
     return null;
   }
@@ -327,11 +355,14 @@ function spawnUnder(
     console.error(
       `  ${flag} budget ${budget / MB} MB: no result line\n` +
         `  child stderr: ${childErr.trim().slice(-500) || "(empty)"}\n` +
-        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`,
+        `  time/shell stderr: ${timeErr.trim() || "(empty)"}`
     );
     return null;
   }
-  return { record: JSON.parse(line.slice(prefix.length)), maxRss: TIME.parse(timeErr) };
+  return {
+    record: JSON.parse(line.slice(prefix.length)),
+    maxRss: TIME.parse(timeErr),
+  };
 }
 
 interface Cell {
@@ -353,7 +384,9 @@ for (const budget of budgets) {
       if (!result || result.maxRss === null) {
         // A missing measurement is DROPPED, never folded in as a zero: a zero
         // wins every minimum and would read as the best result in the table.
-        console.error(`  budget ${budget / MB} MB (${purge}) run ${attempt + 1}: dropped`);
+        console.error(
+          `  budget ${budget / MB} MB (${purge}) run ${attempt + 1}: dropped`
+        );
         continue;
       }
       const peakMB = Math.round(result.maxRss / MB);
@@ -363,7 +396,7 @@ for (const budget of budgets) {
         `budget ${String(result.record.budgetMB).padStart(3)} MB -> batch ${String(batchPages).padStart(4)} pages ` +
           `(avg page ${result.record.avgPageKB} KB)  ${purge.padEnd(8)} run ${attempt + 1}  ` +
           `OS peak ${String(peakMB).padStart(5)} MB   end ${String(result.record.endRssMB).padStart(5)} MB   ` +
-          `boundaries [${(result.record.boundaryRssMB as number[]).join(" ")}]`,
+          `boundaries [${(result.record.boundaryRssMB as number[]).join(" ")}]`
       );
     }
     // One probe per cell, not per repeat: it is a separate process answering a
@@ -372,7 +405,7 @@ for (const budget of budgets) {
     if (probe) {
       console.log(
         `  reuse probe: one batch of ${probe.record.batchPages} pages costs ` +
-          `${probe.record.coldMB} MB cold, ${probe.record.warmMB} MB again after the run`,
+          `${probe.record.coldMB} MB cold, ${probe.record.warmMB} MB again after the run`
       );
     }
     if (peaks.length > 0) {
@@ -397,13 +430,16 @@ for (const budget of budgets) {
 // two adjacent budgets.
 console.log(
   `\n${"budget".padStart(7)} ${"batch".padStart(6)} ${"purge".padEnd(8)} ` +
-    `${"peaks (MB, per run)".padEnd(28)} ${"cold".padStart(7)} ${"warm".padStart(7)}`,
+    `${"peaks (MB, per run)".padEnd(28)} ${"cold".padStart(7)} ${"warm".padStart(7)}`
 );
 for (const cell of cells) {
   console.log(
     `${`${cell.budgetMB} MB`.padStart(7)} ${String(cell.batchPages).padStart(6)} ${cell.purge.padEnd(8)} ` +
-      `${[...cell.peaksMB].sort((a, b) => a - b).join(", ").padEnd(28)} ` +
+      `${[...cell.peaksMB]
+        .sort((a, b) => a - b)
+        .join(", ")
+        .padEnd(28)} ` +
       `${(cell.coldMB === null ? "-" : `${cell.coldMB} MB`).padStart(7)} ` +
-      `${(cell.warmMB === null ? "-" : `${cell.warmMB} MB`).padStart(7)}`,
+      `${(cell.warmMB === null ? "-" : `${cell.warmMB} MB`).padStart(7)}`
   );
 }

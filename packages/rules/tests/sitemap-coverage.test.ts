@@ -7,8 +7,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { sitemapCoverageRule } from "../src/crawl/sitemap-coverage";
 import type { ParsedPage, RuleContext, SiteData } from "../src/types";
+
+import { sitemapCoverageRule } from "../src/crawl/sitemap-coverage";
 
 const samplePage = {
   url: "https://example.com/blog",
@@ -23,7 +24,13 @@ function ctx(over: {
 }): RuleContext {
   const totalUrls = over.totalUrls ?? over.orphanPages.length + 1;
   return {
-    page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: "https://example.com",
@@ -54,42 +61,47 @@ function ctx(over: {
 
 describe("crawl/sitemap-coverage cap-aware orphan warning (#697)", () => {
   test("genuine gap (cap NOT hit) still warns", async () => {
-    const { checks } = (await sitemapCoverageRule.run(
+    const { checks } = await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a", "https://example.com/b"],
         crawlLimits: { pagesCrawled: 15, maxPages: 100 },
-      }),
-    ));
+      })
+    );
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
     expect(orphanCheck?.message).toContain("were not crawled");
   });
 
   test("crawl truncated by the coverage profile's page cap → downgraded to info, cap-aware message", async () => {
-    const { checks } = (await sitemapCoverageRule.run(
+    const { checks } = await sitemapCoverageRule.run(
       ctx({
-        orphanPages: Array.from({ length: 44 }, (_, i) => `https://example.com/p${i}`),
+        orphanPages: Array.from(
+          { length: 44 },
+          (_, i) => `https://example.com/p${i}`
+        ),
         crawlLimits: { pagesCrawled: 10, maxPages: 10 },
-      }),
-    ));
+      })
+    );
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("info");
     expect(orphanCheck?.message).toContain("capped at 10 pages");
   });
 
   test("no crawlLimits threaded (legacy/offline caller) → preserves prior warn behavior", async () => {
-    const { checks } = (await sitemapCoverageRule.run(ctx({ orphanPages: ["https://example.com/a"] })));
+    const { checks } = await sitemapCoverageRule.run(
+      ctx({ orphanPages: ["https://example.com/a"] })
+    );
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
 
   test("crawl stopped short of the cap (not truncated) → still warns despite the gap", async () => {
-    const { checks } = (await sitemapCoverageRule.run(
+    const { checks } = await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a"],
         crawlLimits: { pagesCrawled: 8, maxPages: 10 },
-      }),
-    ));
+      })
+    );
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
@@ -98,21 +110,21 @@ describe("crawl/sitemap-coverage cap-aware orphan warning (#697)", () => {
     // Crawl happened to stop exactly at maxPages, but the whole sitemap
     // (5 URLs) fits comfortably within that budget — the cap isn't why
     // this URL is missing, so it must NOT be downgraded to info.
-    const { checks } = (await sitemapCoverageRule.run(
+    const { checks } = await sitemapCoverageRule.run(
       ctx({
         orphanPages: ["https://example.com/a"],
         crawlLimits: { pagesCrawled: 5, maxPages: 5 },
         totalUrls: 5,
-      }),
-    ));
+      })
+    );
     const orphanCheck = checks.find((c) => c.name === "sitemap-orphans");
     expect(orphanCheck?.status).toBe("warn");
   });
 
   test("no orphan pages at all → no sitemap-orphans check emitted", async () => {
-    const { checks } = (await sitemapCoverageRule.run(
-      ctx({ orphanPages: [], crawlLimits: { pagesCrawled: 10, maxPages: 10 } }),
-    ));
+    const { checks } = await sitemapCoverageRule.run(
+      ctx({ orphanPages: [], crawlLimits: { pagesCrawled: 10, maxPages: 10 } })
+    );
     expect(checks.find((c) => c.name === "sitemap-orphans")).toBeUndefined();
   });
 });
@@ -134,14 +146,22 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
     siteIndexable?: boolean;
   }): RuleContext {
     return {
-      page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: `${BASE}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: {} as ParsedPage,
       site: {
         baseUrl: BASE,
         pages: opts.pages.map((p) => ({
           url: `${BASE}${p.path}`,
           statusCode: 200,
-          parsed: { meta: { robots: p.robots ?? null } } as unknown as ParsedPage,
+          parsed: {
+            meta: { robots: p.robots ?? null },
+          } as unknown as ParsedPage,
           headers: p.headers ?? {},
         })),
         robotsTxt: null,
@@ -170,8 +190,11 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
   }
 
   const coverage = async (ctx: RuleContext) =>
-    (await sitemapCoverageRule.run(ctx)).checks.find((c) => c.name === "sitemap-coverage")!;
-  const listed = async (ctx: RuleContext) => (await coverage(ctx)).items?.map((i) => i.id) ?? [];
+    (await sitemapCoverageRule.run(ctx)).checks.find(
+      (c) => c.name === "sitemap-coverage"
+    )!;
+  const listed = async (ctx: RuleContext) =>
+    (await coverage(ctx)).items?.map((i) => i.id) ?? [];
 
   const INDEXED = [
     { path: "/" },
@@ -211,14 +234,22 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
   });
 
   test("fallback path: a header-noindex page is not listed", async () => {
-    const ctx = noindexCtx({ pages: INDEXED, missingPages: [], siteIndexable: true });
+    const ctx = noindexCtx({
+      pages: INDEXED,
+      missingPages: [],
+      siteIndexable: true,
+    });
     expect((await coverage(ctx)).status).toBe("pass");
     expect(await listed(ctx)).toEqual([]);
   });
 
   test("an indexable page missing from the sitemap is still listed (both paths)", async () => {
     const pages = [...INDEXED, { path: "/about.html" }];
-    const fallback = noindexCtx({ pages, missingPages: [], siteIndexable: true });
+    const fallback = noindexCtx({
+      pages,
+      missingPages: [],
+      siteIndexable: true,
+    });
     expect(await listed(fallback)).toEqual([`${BASE}/about.html`]);
 
     const precomputed = noindexCtx({
@@ -238,7 +269,11 @@ describe("crawl/sitemap-coverage noindex pages (pub#488)", () => {
       });
       expect(await listed(precomputed)).toEqual([`${BASE}/campaign.html`]);
 
-      const fallback = noindexCtx({ pages: INDEXED, missingPages: [], siteIndexable });
+      const fallback = noindexCtx({
+        pages: INDEXED,
+        missingPages: [],
+        siteIndexable,
+      });
       // The fallback has always left meta-noindex pages out; header noindex is only
       // read once the site is known to be indexable.
       expect(await listed(fallback)).toEqual([`${BASE}/campaign-terms.html`]);

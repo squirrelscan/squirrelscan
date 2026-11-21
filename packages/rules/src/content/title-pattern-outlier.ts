@@ -52,12 +52,12 @@
 // it is emitted, so the output is byte-identical by construction and independent of
 // crawl order (same shape as content/duplicate-title, #1021/#1022).
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 
-import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { sharedRegex } from "../shared-regex";
+import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const TITLE_NORM_MIN_PAGES = 10;
 
@@ -97,9 +97,16 @@ const CHECK_NAME = "title-pattern-outlier";
  * look-behind sits on the whitespace alone, so a separator right after one a
  * previous match ended on (`:: >>`) still matches.
  */
-const SEPARATOR_RE = sharedRegex(/(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–\u2014·>]\s+|:\s+/g);
+const SEPARATOR_RE = sharedRegex(
+  /(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–\u2014·>]\s+|:\s+/g
+);
 /** Deviation classes, in the order they are reported. */
-const CLASSES = ["brand-only", "brand-missing", "brand-position", "separator"] as const;
+const CLASSES = [
+  "brand-only",
+  "brand-missing",
+  "brand-position",
+  "separator",
+] as const;
 type DeviationClass = (typeof CLASSES)[number];
 
 type BrandPosition = "prefix" | "suffix";
@@ -192,12 +199,19 @@ function segmentsOf(path: string): string[] {
  * `seps[i]` is the separator between `segments[i]` and `segments[i + 1]`.
  * Exported for tests/redos-recheck.test.ts.
  */
-export function splitTitle(title: string): { segments: string[]; seps: string[] } {
+export function splitTitle(title: string): {
+  segments: string[];
+  seps: string[];
+} {
   const segments: string[] = [];
   const seps: string[] = [];
   let last = 0;
   SEPARATOR_RE.lastIndex = 0;
-  for (let m = SEPARATOR_RE.exec(title); m !== null; m = SEPARATOR_RE.exec(title)) {
+  for (
+    let m = SEPARATOR_RE.exec(title);
+    m !== null;
+    m = SEPARATOR_RE.exec(title)
+  ) {
     // A separator with nothing before it is decoration, not a boundary.
     const segment = title.slice(last, m.index).trim();
     if (segment.length === 0) {
@@ -249,7 +263,11 @@ function candidateKey(position: BrandPosition, key: string): string {
 function displayForm(raws: Map<string, number>): string {
   let best: { raw: string; count: number } | null = null;
   for (const [raw, count] of raws) {
-    if (best === null || count > best.count || (count === best.count && raw < best.raw)) {
+    if (
+      best === null ||
+      count > best.count ||
+      (count === best.count && raw < best.raw)
+    ) {
       best = { raw, count };
     }
   }
@@ -261,21 +279,37 @@ function displayForm(raws: Map<string, number>): string {
  * evidenced inside one section of a multi-section crawl, which reads as a section
  * label rather than a brand).
  */
-function inferBrand(samples: TitleSample[], multiSection: boolean): BrandNorm | null {
+function inferBrand(
+  samples: TitleSample[],
+  multiSection: boolean
+): BrandNorm | null {
   const candidates = new Map<string, BrandCandidate>();
 
-  const vote = (position: BrandPosition, raw: string, sample: TitleSample): void => {
+  const vote = (
+    position: BrandPosition,
+    raw: string,
+    sample: TitleSample
+  ): void => {
     const key = normalizeKey(raw);
     if (key.length === 0) return;
     const id = candidateKey(position, key);
     let candidate = candidates.get(id);
     if (!candidate) {
-      candidate = { position, key, count: 0, sections: new Set(), raws: new Map() };
+      candidate = {
+        position,
+        key,
+        count: 0,
+        sections: new Set(),
+        raws: new Map(),
+      };
       candidates.set(id, candidate);
     }
     candidate.count += 1;
     candidate.sections.add(sample.section);
-    candidate.raws.set(collapse(raw), (candidate.raws.get(collapse(raw)) ?? 0) + 1);
+    candidate.raws.set(
+      collapse(raw),
+      (candidate.raws.get(collapse(raw)) ?? 0) + 1
+    );
   };
 
   for (const sample of samples) {
@@ -324,7 +358,10 @@ function brandSeparator(sample: TitleSample, brand: BrandNorm): string | null {
 }
 
 /** The modal separator sitting next to the brand, or null when there is no norm. */
-function inferSeparator(samples: TitleSample[], brand: BrandNorm): SeparatorNorm | null {
+function inferSeparator(
+  samples: TitleSample[],
+  brand: BrandNorm
+): SeparatorNorm | null {
   const votes = new Map<string, number>();
   let total = 0;
   for (const sample of samples) {
@@ -337,7 +374,11 @@ function inferSeparator(samples: TitleSample[], brand: BrandNorm): SeparatorNorm
 
   let best: { value: string; count: number } | null = null;
   for (const [value, count] of votes) {
-    if (best === null || count > best.count || (count === best.count && value < best.value)) {
+    if (
+      best === null ||
+      count > best.count ||
+      (count === best.count && value < best.value)
+    ) {
       best = { value, count };
     }
   }
@@ -353,7 +394,10 @@ function inferSeparator(samples: TitleSample[], brand: BrandNorm): SeparatorNorm
  * anywhere ("About Acme Deals", "Acme Deals Sydney | Acme Deals") is not a page that
  * forgot the brand, and accusing it would be the expensive kind of wrong.
  */
-function brandPlacement(sample: TitleSample, brand: BrandNorm): BrandPosition | "inline" | null {
+function brandPlacement(
+  sample: TitleSample,
+  brand: BrandNorm
+): BrandPosition | "inline" | null {
   const key = normalizeKey(sample.title);
   if (!key.includes(brand.key)) return null;
   if (key.startsWith(brand.key)) return "prefix";
@@ -429,7 +473,10 @@ function classLabel(
  * `siteQuery.pageCount()` (which includes rows this rule cannot sample), so the
  * site floor is judged on the crawl, not on the sampled subset.
  */
-function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] {
+function buildChecks(
+  rollup: TitleRollup,
+  sitePageCount: number
+): CheckResult[] {
   if (sitePageCount < TITLE_NORM_MIN_PAGES) {
     return [
       skip(
@@ -511,7 +558,10 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
 
   // Group by class (and, for the classes whose form varies, by that form) so one
   // finding names one root cause instead of one page.
-  const groups = new Map<string, { class: DeviationClass; value: string; urls: string[] }>();
+  const groups = new Map<
+    string,
+    { class: DeviationClass; value: string; urls: string[] }
+  >();
   for (const deviation of deviations) {
     const grouped =
       deviation.class === "brand-position" || deviation.class === "separator"
@@ -520,7 +570,12 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
     const id = `${deviation.class}:${grouped}`;
     const group = groups.get(id);
     if (group) group.urls.push(deviation.url);
-    else groups.set(id, { class: deviation.class, value: grouped, urls: [deviation.url] });
+    else
+      groups.set(id, {
+        class: deviation.class,
+        value: grouped,
+        urls: [deviation.url],
+      });
   }
 
   // Biggest group first; the class order breaks ties so the list never depends on
@@ -532,24 +587,26 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
       (a.value < b.value ? -1 : a.value > b.value ? 1 : 0)
   );
 
-  const items: CheckItem[] = ordered.slice(0, TITLE_NORM_MAX_ITEMS).map((group) => ({
-    id: `${group.class}:${group.value}`,
-    label: classLabel(
-      group.class,
-      group.urls.length,
-      samples.length,
-      brand,
-      separator,
-      group.value
-    ),
-    sourcePages: group.urls.sort().slice(0, TITLE_NORM_MAX_URLS),
-    meta: {
-      deviation: group.class,
-      value: group.value,
-      brand: brand.label,
-      pageCount: group.urls.length,
-    },
-  }));
+  const items: CheckItem[] = ordered
+    .slice(0, TITLE_NORM_MAX_ITEMS)
+    .map((group) => ({
+      id: `${group.class}:${group.value}`,
+      label: classLabel(
+        group.class,
+        group.urls.length,
+        samples.length,
+        brand,
+        separator,
+        group.value
+      ),
+      sourcePages: group.urls.sort().slice(0, TITLE_NORM_MAX_URLS),
+      meta: {
+        deviation: group.class,
+        value: group.value,
+        brand: brand.label,
+        pageCount: group.urls.length,
+      },
+    }));
 
   const share = deviations.length / samples.length;
   return [
@@ -574,7 +631,10 @@ function buildChecks(rollup: TitleRollup, sitePageCount: number): CheckResult[] 
  * That is a property of this seam shared with every site rule on it (see
  * content/duplicate-title), not something specific to this rule.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
@@ -592,7 +652,8 @@ export const titlePatternOutlierRule: Rule = {
   meta: {
     id: "content/title-pattern-outlier",
     name: "Title Template Consistency",
-    description: "Finds pages whose title breaks the template the rest of the site follows",
+    description:
+      "Finds pages whose title breaks the template the rest of the site follows",
     solution:
       "Most of your pages title themselves the same way - a page name, a separator, and your brand - and these pages do not. Inconsistent titles cost you brand recall in the search results and make templated pages look hand-edited or broken. Fix the template at its source (the layout or CMS field that builds the title) rather than page by page, keeping the brand on the same side with the same separator everywhere. A page that deliberately differs, like the homepage or a campaign landing page, is fine: the point is that a handful of pages should not be the exception.",
     category: "content",

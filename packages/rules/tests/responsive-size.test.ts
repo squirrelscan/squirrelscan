@@ -8,13 +8,14 @@
 // density the way Lighthouse does, and otherwise the byte size, against the raw
 // RGBA bitmap of that box.
 
+import type { ResourceSizeData } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { ResourceSizeData } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { responsiveSizeRule } from "../src/images/responsive-size";
-import type { CheckResult, RuleContext } from "../src/types";
 
 const PAGE = "https://example.com/gallery/";
 
@@ -68,7 +69,12 @@ function measured(
   naturalHeight: number,
   animated = false
 ): ResourceSizeData {
-  return { ...resource(path, sizeBytes), naturalWidth, naturalHeight, animated };
+  return {
+    ...resource(path, sizeBytes),
+    naturalWidth,
+    naturalHeight,
+    animated,
+  };
 }
 
 describe("images at their natural size are not reported", () => {
@@ -94,8 +100,18 @@ describe("images at their natural size are not reported", () => {
 
   test("a small image with no measured size is not reported", () => {
     // Third-party host, a check that was skipped, or one that failed.
-    expect(oversized(run(`<img src="https://cdn.example.net/a.jpg" width="64" height="64">`))).toBeUndefined();
-    expect(oversized(run(`<img src="a.jpg" width="64" height="64">`, [resource("a.jpg", null)]))).toBeUndefined();
+    expect(
+      oversized(
+        run(`<img src="https://cdn.example.net/a.jpg" width="64" height="64">`)
+      )
+    ).toBeUndefined();
+    expect(
+      oversized(
+        run(`<img src="a.jpg" width="64" height="64">`, [
+          resource("a.jpg", null),
+        ])
+      )
+    ).toBeUndefined();
   });
 });
 
@@ -125,8 +141,12 @@ describe("evidence of oversizing is still reported", () => {
 
   test("the budget plus Lighthouse's 4 KiB savings threshold is the line", () => {
     const img = `<img src="a.png" width="64" height="64">`;
-    expect(oversized(run(img, [resource("a.png", BUDGET_64 + 4095)]))).toBeUndefined();
-    expect(oversized(run(img, [resource("a.png", BUDGET_64 + 4096)]))?.status).toBe("warn");
+    expect(
+      oversized(run(img, [resource("a.png", BUDGET_64 + 4095)]))
+    ).toBeUndefined();
+    expect(
+      oversized(run(img, [resource("a.png", BUDGET_64 + 4096)]))?.status
+    ).toBe("warn");
   });
 
   test("relative sources resolve against the page URL", () => {
@@ -135,27 +155,37 @@ describe("evidence of oversizing is still reported", () => {
         resource("/img/a.png?v=2", 500_000),
       ])
     );
-    expect(check?.items?.map((i) => i.id)).toEqual(["a.png (40x40, no srcset)"]);
+    expect(check?.items?.map((i) => i.id)).toEqual([
+      "a.png (40x40, no srcset)",
+    ]);
   });
 
   test("a lazy-loaded image is looked up by the source the parser recorded", () => {
     // The resource check measures data-src, not the placeholder in src.
     const check = oversized(
-      run(`<img src="placeholder.png" data-src="full.jpg" width="64" height="64">`, [
-        resource("placeholder.png", 100),
-        resource("full.jpg", 400_000),
-      ])
+      run(
+        `<img src="placeholder.png" data-src="full.jpg" width="64" height="64">`,
+        [resource("placeholder.png", 100), resource("full.jpg", 400_000)]
+      )
     );
-    expect(check?.items?.map((i) => i.id)).toEqual(["full.jpg (64x64, no srcset)"]);
+    expect(check?.items?.map((i) => i.id)).toEqual([
+      "full.jpg (64x64, no srcset)",
+    ]);
   });
 
   test("a redirected page is matched under the URL its parse resolved against", () => {
     // Crawl-time parses resolve against the final URL, a re-parse against the
     // requested one; the measured entry carries whichever was used.
-    const page = { url: "https://example.com/old/", finalUrl: "https://example.com/new/" };
+    const page = {
+      url: "https://example.com/old/",
+      finalUrl: "https://example.com/new/",
+    };
     const img = `<img src="a.jpg" width="64" height="64">`;
     for (const base of [page.url, page.finalUrl]) {
-      const entry = { ...resource("a.jpg", 400_000), url: new URL("a.jpg", base).toString() };
+      const entry = {
+        ...resource("a.jpg", 400_000),
+        url: new URL("a.jpg", base).toString(),
+      };
       expect(oversized(run(img, [entry], page, base))?.status).toBe("warn");
     }
   });
@@ -163,8 +193,14 @@ describe("evidence of oversizing is still reported", () => {
   test("an entry another page recorded under the other base is not borrowed", () => {
     // This page parsed under /new/, so its image is /new/a.jpg, unmeasured.
     // /old/a.jpg belongs to some other page.
-    const page = { url: "https://example.com/old/", finalUrl: "https://example.com/new/" };
-    const entry = { ...resource("a.jpg", 400_000), url: "https://example.com/old/a.jpg" };
+    const page = {
+      url: "https://example.com/old/",
+      finalUrl: "https://example.com/new/",
+    };
+    const entry = {
+      ...resource("a.jpg", 400_000),
+      url: "https://example.com/old/a.jpg",
+    };
     const img = `<img src="a.jpg" width="64" height="64">`;
     expect(oversized(run(img, [entry], page, page.finalUrl))).toBeUndefined();
   });
@@ -173,7 +209,10 @@ describe("evidence of oversizing is still reported", () => {
     // Re-parsed under /old/: "a.jpg" is /old/a.jpg, while the second image IS
     // /new/a.jpg. Matching by URL alone would hand the first image the second
     // one's 400 KB.
-    const page = { url: "https://example.com/old/", finalUrl: "https://example.com/new/" };
+    const page = {
+      url: "https://example.com/old/",
+      finalUrl: "https://example.com/new/",
+    };
     const body = `<img src="a.jpg" width="64" height="64"><img src="/new/a.jpg" width="800" height="800">`;
     const images = [
       { ...resource("a.jpg", 168), url: "https://example.com/old/a.jpg" },
@@ -183,9 +222,15 @@ describe("evidence of oversizing is still reported", () => {
   });
 
   test("more than ten are capped with a remainder count", () => {
-    const body = Array.from({ length: 12 }, (_, i) => `<img src="p${i}.jpg" width="50" height="50">`).join("");
+    const body = Array.from(
+      { length: 12 },
+      (_, i) => `<img src="p${i}.jpg" width="50" height="50">`
+    ).join("");
     const check = oversized(
-      run(body, Array.from({ length: 12 }, (_, i) => resource(`p${i}.jpg`, 300_000)))
+      run(
+        body,
+        Array.from({ length: 12 }, (_, i) => resource(`p${i}.jpg`, 300_000))
+      )
     );
     expect(check?.items).toHaveLength(10);
     expect(check?.details).toEqual({ additional: 2 });
@@ -196,16 +241,48 @@ describe("images the rule does not judge", () => {
   const heavy = (path: string) => [resource(path, 2_000_000)];
 
   test.each([
-    ["a srcset", `<img src="a.jpg" srcset="a.jpg 1x, a@2x.jpg 2x" width="64" height="64">`, "a.jpg"],
-    ["a <picture> parent", `<picture><img src="a.jpg" width="64" height="64"></picture>`, "a.jpg"],
+    [
+      "a srcset",
+      `<img src="a.jpg" srcset="a.jpg 1x, a@2x.jpg 2x" width="64" height="64">`,
+      "a.jpg",
+    ],
+    [
+      "a <picture> parent",
+      `<picture><img src="a.jpg" width="64" height="64"></picture>`,
+      "a.jpg",
+    ],
     ["an SVG", `<img src="a.SVG" width="64" height="64">`, "a.SVG"],
-    ["an SVG with a fragment", `<img src="sprite.svg#icon" width="24" height="24">`, "sprite.svg#icon"],
-    ["a GIF with trailing whitespace", `<img src="spin.gif " width="40" height="40">`, "spin.gif"],
+    [
+      "an SVG with a fragment",
+      `<img src="sprite.svg#icon" width="24" height="24">`,
+      "sprite.svg#icon",
+    ],
+    [
+      "a GIF with trailing whitespace",
+      `<img src="spin.gif " width="40" height="40">`,
+      "spin.gif",
+    ],
     ["an ICO", `<img src="favicon.ico" width="32" height="32">`, "favicon.ico"],
-    ["a GIF, whose frames multiply its bytes", `<img src="spin.gif" width="40" height="40">`, "spin.gif"],
-    ["a display size over max_thumbnail_dimension", `<img src="a.jpg" width="101" height="64">`, "a.jpg"],
-    ["a percentage size", `<img src="a.jpg" width="50%" height="50%">`, "a.jpg"],
-    ["an image inside <noscript>", `<noscript><img src="a.jpg" width="64" height="64"></noscript>`, "a.jpg"],
+    [
+      "a GIF, whose frames multiply its bytes",
+      `<img src="spin.gif" width="40" height="40">`,
+      "spin.gif",
+    ],
+    [
+      "a display size over max_thumbnail_dimension",
+      `<img src="a.jpg" width="101" height="64">`,
+      "a.jpg",
+    ],
+    [
+      "a percentage size",
+      `<img src="a.jpg" width="50%" height="50%">`,
+      "a.jpg",
+    ],
+    [
+      "an image inside <noscript>",
+      `<noscript><img src="a.jpg" width="64" height="64"></noscript>`,
+      "a.jpg",
+    ],
   ])("%s", (_label, body, path) => {
     expect(oversized(run(body, heavy(path)))).toBeUndefined();
   });
@@ -239,40 +316,67 @@ describe("with a natural size, the test is in pixels (#470)", () => {
     // 300 KB of frames is over the 160 KB byte budget of a 100x100 box, which
     // is why the byte test reported it.
     const img = `<img src="spin.webp" width="100" height="100">`;
-    expect(oversized(run(img, [resource("spin.webp", 300_000)]))?.status).toBe("warn");
+    expect(oversized(run(img, [resource("spin.webp", 300_000)]))?.status).toBe(
+      "warn"
+    );
     const checks = run(img, [measured("spin.webp", 300_000, 100, 100, true)]);
     expect(oversized(checks)).toBeUndefined();
-    expect(checks[0]).toMatchObject({ name: "responsive-size", status: "pass" });
+    expect(checks[0]).toMatchObject({
+      name: "responsive-size",
+      status: "pass",
+    });
   });
 
   test("an image at up to twice its displayed size wastes nothing, however heavy", () => {
     const img = `<img src="a.png" width="64" height="64">`;
-    expect(oversized(run(img, [measured("a.png", 500_000, 128, 128)]))).toBeUndefined();
-    expect(oversized(run(img, [measured("a.png", 500_000, 64, 64)]))).toBeUndefined();
+    expect(
+      oversized(run(img, [measured("a.png", 500_000, 128, 128)]))
+    ).toBeUndefined();
+    expect(
+      oversized(run(img, [measured("a.png", 500_000, 64, 64)]))
+    ).toBeUndefined();
   });
 
   test("an animated image shown smaller than its frames is still reported", () => {
     const check = oversized(
-      run(`<img src="spin.gif" width="40" height="40">`, [measured("spin.gif", 300_000, 400, 400, true)])
+      run(`<img src="spin.gif" width="40" height="40">`, [
+        measured("spin.gif", 300_000, 400, 400, true),
+      ])
     );
     // GIFs were skipped by extension; a read header puts them in the pixel test.
-    expect(check?.items?.map((i) => i.id)).toEqual(["spin.gif (40x40, no srcset)"]);
+    expect(check?.items?.map((i) => i.id)).toEqual([
+      "spin.gif (40x40, no srcset)",
+    ]);
   });
 
   test("Lighthouse's 4 KiB savings threshold is the line", () => {
     // 256x256 natural at 64x64: a quarter of the pixels are drawn, so the
     // waste is three quarters of the file.
     const img = `<img src="a.png" width="64" height="64">`;
-    expect(oversized(run(img, [measured("a.png", 5_460, 256, 256)]))).toBeUndefined();
-    expect(oversized(run(img, [measured("a.png", 5_462, 256, 256)]))?.status).toBe("warn");
+    expect(
+      oversized(run(img, [measured("a.png", 5_460, 256, 256)]))
+    ).toBeUndefined();
+    expect(
+      oversized(run(img, [measured("a.png", 5_462, 256, 256)]))?.status
+    ).toBe("warn");
   });
 
   test("a size missing either side falls back to the byte budget", () => {
     const img = `<img src="a.jpg" width="64" height="64">`;
-    const half = { ...resource("a.jpg", 20_480), naturalWidth: 1200, naturalHeight: null };
+    const half = {
+      ...resource("a.jpg", 20_480),
+      naturalWidth: 1200,
+      naturalHeight: null,
+    };
     expect(oversized(run(img, [half]))).toBeUndefined();
-    const heavy = { ...resource("a.jpg", 400_000), naturalWidth: 1200, naturalHeight: null };
-    expect(oversized(run(img, [heavy]))?.items?.[0]?.meta).toMatchObject({ budgetBytes: BUDGET_64 });
+    const heavy = {
+      ...resource("a.jpg", 400_000),
+      naturalWidth: 1200,
+      naturalHeight: null,
+    };
+    expect(oversized(run(img, [heavy]))?.items?.[0]?.meta).toMatchObject({
+      budgetBytes: BUDGET_64,
+    });
   });
 
   test("an image known to be animated is never judged by its bytes", () => {

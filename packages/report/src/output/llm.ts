@@ -1,17 +1,22 @@
 // Compact LLM-optimized report
 
-import type { AuditReport, CheckItem } from "../types";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
-import { getScoreGrade } from "../scoring";
-import { javascriptXml } from "../javascript-shipped";
-import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
+
+import type { AuditReport, CheckItem } from "../types";
+
 import {
   affectedPages,
   ruleAffectedPages,
   ruleAffectedRollup,
   ruleCarriedPageCount,
 } from "../affected-pages";
+import { getGroupName } from "../categories";
+import { isVersionLike, partialAuditLine } from "../coverage";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  reportPassedRules,
+} from "../grouping";
 import {
   affectedPagesSuffix,
   hasItemSources,
@@ -19,25 +24,39 @@ import {
   moreSourcePages,
   sourceRowText,
 } from "../item-sources";
+import { javascriptXml } from "../javascript-shipped";
+import { hasCarriedPages } from "../page-type-scope";
 import {
   checkPagesScopedAway,
   checkScopeLine,
   itemLabel,
   regionScopeLine,
 } from "../region-scope";
-import { isVersionLike, partialAuditLine } from "../coverage";
-import { hasCarriedPages } from "../page-type-scope";
+import { getScoreGrade } from "../scoring";
 
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
-const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+const lowerFirst = (text: string): string =>
+  text.charAt(0).toLowerCase() + text.slice(1);
+import {
+  describeSlot,
+  fixRollupLine,
+  fixUnits,
+  ruleFixCoverage,
+} from "../component-presentation";
+import { uncoveredItems } from "../component-presentation";
+import {
+  followedStartRedirect,
+  publishedReportNote,
+  scanScopeErrorPages,
+  scanScopeUnfetched,
+  robotsScope,
+  robotsHonouredNote,
+  scanScopePageTypes,
+  seedRedirect,
+  seedRedirectFollowUp,
+} from "../coverage";
 import { getDocsUrl } from "../docs";
-import { domainAgeYears } from "../site-metadata";
-import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
-import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
-import { notCheckedLine, notCheckedRules } from "../not-checked";
-import { techOpenTag, techOriginAttr } from "../technologies";
 import { editorSummaryView } from "../editor-summary";
-import { collectInfoChecks } from "../info-checks";
 import {
   ENTITY_FINDING_LIMIT,
   ENTITY_TABLE_LIMIT,
@@ -50,6 +69,20 @@ import {
   primaryEntities,
   stableIdPercent,
 } from "../entities";
+import { ignoredLine, safeIgnored } from "../ignored";
+import { collectInfoChecks } from "../info-checks";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
+import {
+  privateTargetLine,
+  privateTargetSkippedRules,
+} from "../private-target";
+import { domainAgeYears } from "../site-metadata";
+import {
+  ruleSiteResourceCoverage,
+  siteResourceFixLine,
+  withSiteResourceCoverage,
+} from "../site-resource-presentation";
 import {
   structureChromeLine,
   structureDegradedLine,
@@ -58,41 +91,34 @@ import {
   structureSectionName,
   structureTotalsLine,
 } from "../structure";
-import { ignoredLine, safeIgnored } from "../ignored";
-import {
-  followedStartRedirect,
-  publishedReportNote,
-  scanScopeErrorPages,
-  scanScopeUnfetched,
-  robotsScope,
-  robotsHonouredNote,
-  scanScopePageTypes,
-  seedRedirect,
-  seedRedirectFollowUp,
-} from "../coverage";
-import { describeSlot, fixRollupLine, fixUnits, ruleFixCoverage } from "../component-presentation";
-import {
-  ruleSiteResourceCoverage,
-  siteResourceFixLine,
-  withSiteResourceCoverage,
-} from "../site-resource-presentation";
-
-import { uncoveredItems } from "../component-presentation";
+import { techOpenTag, techOriginAttr } from "../technologies";
 
 /** Bounded page sample per fix group in LLM output. */
 const LLM_FIX_GROUP_PAGES = 3;
-import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
-import { formatSiteWideItem, siteWideContext, siteWideItem } from "../site-wide-items";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP_THIRD } from "@squirrelscan/core-contracts/failure-reason";
+import { LLM_REPORT } from "@squirrelscan/core-contracts/limits";
+
 import { refusedFetchLines, reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked, safeWafSuspect, wafBlockedSeedCopy } from "../waf-blocked";
 import { scoreAdjustmentNoteFor } from "../score-adjustment";
+import {
+  formatSiteWideItem,
+  siteWideContext,
+  siteWideItem,
+} from "../site-wide-items";
+import {
+  safeWafBlocked,
+  safeWafSuspect,
+  wafBlockedSeedCopy,
+} from "../waf-blocked";
 
 function unverifiedExternalLinksNote(report: AuditReport): string | null {
-  const checks = report.ruleResults?.["links/broken-external-links"]?.checks ?? [];
+  const checks =
+    report.ruleResults?.["links/broken-external-links"]?.checks ?? [];
   const rows = checks.filter((check) =>
-    ["waf-blocked-external-links", "rate-limited-external-links"].includes(check.name),
+    ["waf-blocked-external-links", "rate-limited-external-links"].includes(
+      check.name
+    )
   );
   const items = rows.flatMap((row) => row.items ?? []);
   if (items.length === 0) return null;
@@ -100,15 +126,20 @@ function unverifiedExternalLinksNote(report: AuditReport): string | null {
   for (const item of items) {
     const status = item.meta?.status;
     const provider = item.meta?.wafProvider;
-    const key = typeof status === "number"
-      ? String(status)
-      : provider === "cloudflare" || provider === "akamai"
-        ? `${provider} block`
-        : "timeout";
+    const key =
+      typeof status === "number"
+        ? String(status)
+        : provider === "cloudflare" || provider === "akamai"
+          ? `${provider} block`
+          : "timeout";
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const statuses = [...counts]
-    .sort(([a], [b]) => (Number(a) || Number.MAX_SAFE_INTEGER) - (Number(b) || Number.MAX_SAFE_INTEGER))
+    .sort(
+      ([a], [b]) =>
+        (Number(a) || Number.MAX_SAFE_INTEGER) -
+        (Number(b) || Number.MAX_SAFE_INTEGER)
+    )
     .map(([status, count]) => `${status} x${count}`)
     .join(", ");
   return `note: ${items.length} external links are unverified (bot-protection status: ${statuses}); possible false positives; Perch in the cloud verifies them`;
@@ -147,7 +178,8 @@ function escapeXml(str: string): string {
 function compressUrl(url: string, baseOrigin: string): string {
   try {
     const parsed = new URL(url);
-    if (parsed.origin === baseOrigin) return parsed.pathname + parsed.search + parsed.hash;
+    if (parsed.origin === baseOrigin)
+      return parsed.pathname + parsed.search + parsed.hash;
   } catch {}
   return url;
 }
@@ -173,7 +205,7 @@ function getPathDepth(url: string, baseOrigin: string): number {
 export function sampleAffectedPagesBreadthFirst(
   pages: string[],
   baseOrigin: string,
-  maxPages: number = LLM_REPORT.maxAffectedPages,
+  maxPages: number = LLM_REPORT.maxAffectedPages
 ): string[] {
   const unique = Array.from(new Set(pages));
   unique.sort((a, b) => {
@@ -185,8 +217,10 @@ export function sampleAffectedPagesBreadthFirst(
 
 export function serializeMetaValue(value: unknown): string {
   if (value === null || value === undefined) return "";
-  if (typeof value === "string") return truncateText(value, LLM_REPORT.maxMetaValueLength);
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string")
+    return truncateText(value, LLM_REPORT.maxMetaValueLength);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   try {
     const json = JSON.stringify(value);
     if (!json) return "";
@@ -196,7 +230,10 @@ export function serializeMetaValue(value: unknown): string {
   }
 }
 
-export function renderLlm(report: AuditReport, options?: LlmRenderOptions): string {
+export function renderLlm(
+  report: AuditReport,
+  options?: LlmRenderOptions
+): string {
   const lines: string[] = [];
   const siteWide = siteWideContext(report, options?.siteWideCollapse !== false);
   // The report's own generator version wins: a report read back from storage or the cloud was written by
@@ -213,10 +250,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push(`<audit version="${escapeXml(version)}">`);
   lines.push(
-    `<site url="${escapeXml(report.baseUrl)}" crawled="${report.totalPages}" date="${escapeXml(report.timestamp)}"/>`,
+    `<site url="${escapeXml(report.baseUrl)}" crawled="${report.totalPages}" date="${escapeXml(report.timestamp)}"/>`
   );
   const externalLinksNote = unverifiedExternalLinksNote(report);
-  if (externalLinksNote) lines.push(`<note>${escapeXml(externalLinksNote)}</note>`);
+  if (externalLinksNote)
+    lines.push(`<note>${escapeXml(externalLinksNote)}</note>`);
 
   // Refused off-site seed redirect (#1418). Without this an agent reads the
   // scores as being about the URL it was handed, when the seed redirected to a
@@ -241,10 +279,12 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const startRedirect = followedStartRedirect(report);
   if (startRedirect) {
     lines.push(
-      `<start-redirect original-url="${escapeXml(startRedirect.originalUrl)}" final-url="${escapeXml(startRedirect.finalUrl)}" followed="true">`,
+      `<start-redirect original-url="${escapeXml(startRedirect.originalUrl)}" final-url="${escapeXml(startRedirect.finalUrl)}" followed="true">`
     );
     for (const hop of startRedirect.chain) {
-      lines.push(`${indent(1)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`);
+      lines.push(
+        `${indent(1)}<hop status="${hop.status}">${escapeXml(hop.url)}</hop>`
+      );
     }
     lines.push(`${indent(1)}${escapeXml(startRedirect.note)}`);
     lines.push("</start-redirect>");
@@ -255,16 +295,18 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const ignoredSummary = safeIgnored(report);
   if (ignoredSummary) {
     lines.push(
-      `<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`,
+      `<ignored items="${ignoredSummary.items}" pages="${ignoredSummary.pages}"${ignoredSummary.disabled ? ' disabled="true"' : ""}>`
     );
     const note = ignoredLine(report);
     if (note) lines.push(`${indent(1)}${escapeXml(note)}`);
     for (const [ruleId, counts] of Object.entries(ignoredSummary.byRule)) {
-      lines.push(`${indent(1)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`);
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(ruleId)}" items="${counts.items}" pages="${counts.pages}"/>`
+      );
     }
     for (const entry of ignoredSummary.entries) {
       lines.push(
-        `${indent(1)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`,
+        `${indent(1)}<entry index="${entry.index + 1}" rule="${escapeXml(entry.rule)}" items="${entry.items}" pages="${entry.pages}"${entry.reason ? ` reason="${escapeXml(entry.reason)}"` : ""}/>`
       );
     }
     lines.push("</ignored>");
@@ -282,14 +324,14 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const unfetched = report.rateLimited.unfetched ?? 0;
     const unfetchedAttr = unfetched > 0 ? ` unfetched="${unfetched}"` : "";
     lines.push(
-      `<rate-limited pages="${report.rateLimited.pages}"${unfetchedAttr} hosts="${escapeXml(hosts)}">`,
+      `<rate-limited pages="${report.rateLimited.pages}"${unfetchedAttr} hosts="${escapeXml(hosts)}">`
     );
     lines.push(
-      `${indent(1)}${report.rateLimited.pages} page(s) could not be verified because the host rate limited the crawler (429/430). Their status is UNKNOWN, not broken, and they were excluded from scoring. Do not report them as dead links.`,
+      `${indent(1)}${report.rateLimited.pages} page(s) could not be verified because the host rate limited the crawler (429/430). Their status is UNKNOWN, not broken, and they were excluded from scoring. Do not report them as dead links.`
     );
     if (unfetched > 0) {
       lines.push(
-        `${indent(1)}${unfetched} more URL(s) were discovered but never fetched. The pages above and these are missing from the audit, so the site is larger than the page count suggests.`,
+        `${indent(1)}${unfetched} more URL(s) were discovered but never fetched. The pages above and these are missing from the audit, so the site is larger than the page count suggests.`
       );
     }
     lines.push("</rate-limited>");
@@ -299,9 +341,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // the process to end to read it. Present on a report an audit just wrote.
   if (report.outcome) {
     const o = report.outcome;
-    const reasonAttr = o.publish.reason ? ` publish-reason="${escapeXml(o.publish.reason)}"` : "";
+    const reasonAttr = o.publish.reason
+      ? ` publish-reason="${escapeXml(o.publish.reason)}"`
+      : "";
     lines.push(
-      `<outcome exit-code="${o.exit_code}" status="${escapeXml(o.status)}" publish="${o.publish.status}"${reasonAttr}/>`,
+      `<outcome exit-code="${o.exit_code}" status="${escapeXml(o.status)}" publish="${o.publish.status}"${reasonAttr}/>`
     );
   }
 
@@ -309,65 +353,78 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // sees why a render fell back. Present on a report an audit just wrote.
   if (report.render) {
     const r = report.render;
-    const reasonAttr = r.fallbackReason ? ` fallback-reason="${escapeXml(r.fallbackReason)}"` : "";
+    const reasonAttr = r.fallbackReason
+      ? ` fallback-reason="${escapeXml(r.fallbackReason)}"`
+      : "";
     lines.push(
-      `<render requested="${r.requested}" mode="${r.mode}" pages-rendered="${r.pagesRendered}" pages-fetched-plain="${r.pagesFetchedPlain}"${reasonAttr}/>`,
+      `<render requested="${r.requested}" mode="${r.mode}" pages-rendered="${r.pagesRendered}" pages-fetched-plain="${r.pagesFetchedPlain}"${reasonAttr}/>`
     );
   }
 
   if (report.status === "partial" && report.statusReason) {
-    lines.push(`<status state="partial" reason="${escapeXml(report.statusReason)}">`);
     lines.push(
-      `${indent(1)}A real audit ran and the scores below are valid for the pages that were fetched, but the crawl did not cover the whole site. Treat missing pages as unaudited, not as passing.`,
+      `<status state="partial" reason="${escapeXml(report.statusReason)}">`
+    );
+    lines.push(
+      `${indent(1)}A real audit ran and the scores below are valid for the pages that were fetched, but the crawl did not cover the whole site. Treat missing pages as unaudited, not as passing.`
     );
     lines.push("</status>");
   }
 
   if (isAuditFailed(report.status)) {
-    const reasonAttr = report.statusReason ? ` reason="${escapeXml(report.statusReason)}"` : "";
+    const reasonAttr = report.statusReason
+      ? ` reason="${escapeXml(report.statusReason)}"`
+      : "";
     const throttled = !!report.rateLimited && report.rateLimited.pages > 0;
     lines.push(`<status state="${report.status}"${reasonAttr}>`);
     const wafSeed = wafBlockedSeedCopy(report);
     if (wafSeed) {
       // #1253: a perimeter provider served a challenge or block page instead of the site.
-      lines.push(`${indent(1)}${escapeXml(wafSeed.headline)} ${escapeXml(wafSeed.saw)} This is a block on the site side, NOT a squirrelscan outage, and the page that was served is not the site: do not report findings about it.`);
-      lines.push(`${indent(1)}To get a full audit, relay one of these to the user:`);
-      for (const remedy of wafSeed.remedies) lines.push(`${indent(2)}<remedy>${escapeXml(remedy)}</remedy>`);
-    } else if (report.status === "blocked" && throttled) {
       lines.push(
-        `${indent(1)}The host rate limited the crawler (429/430) before any pages could be read, so nothing was audited. This is throttling, NOT bot protection: allowlisting a crawler will not help.`,
+        `${indent(1)}${escapeXml(wafSeed.headline)} ${escapeXml(wafSeed.saw)} This is a block on the site side, NOT a squirrelscan outage, and the page that was served is not the site: do not report findings about it.`
       );
       lines.push(
-        `${indent(1)}To get a full audit: crawl more slowly with \`[crawler] per_host_concurrency = 1\` and \`per_host_delay_ms = 500\` in squirrel.toml, raise \`max_backoff_ms\`, or retry later with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`,
+        `${indent(1)}To get a full audit, relay one of these to the user:`
+      );
+      for (const remedy of wafSeed.remedies)
+        lines.push(`${indent(2)}<remedy>${escapeXml(remedy)}</remedy>`);
+    } else if (report.status === "blocked" && throttled) {
+      lines.push(
+        `${indent(1)}The host rate limited the crawler (429/430) before any pages could be read, so nothing was audited. This is throttling, NOT bot protection: allowlisting a crawler will not help.`
+      );
+      lines.push(
+        `${indent(1)}To get a full audit: crawl more slowly with \`[crawler] per_host_concurrency = 1\` and \`per_host_delay_ms = 500\` in squirrel.toml, raise \`max_backoff_ms\`, or retry later with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`
       );
     } else if (report.status === "blocked") {
       lines.push(
-        `${indent(1)}The site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting), so nothing was audited. This is a block on the site side, not a squirrelscan outage.`,
+        `${indent(1)}The site refused the crawler before any pages could be read (a 403 or 429 from bot protection, a firewall, an auth wall, or rate limiting), so nothing was audited. This is a block on the site side, not a squirrelscan outage.`
       );
       lines.push(
-        `${indent(1)}To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run the CLI from a trusted network with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`,
+        `${indent(1)}To get a full audit: allowlist the squirrelscan crawler, turn off bot fight mode for the audit, or run the CLI from a trusted network with \`squirrel audit ${escapeXml(report.baseUrl)}\`.`
       );
     } else {
       // #1822: `reason` on the tag is the one-line class; the body says what
       // that class means and what to do, third person for the agent surface.
       // `unknown` keeps the pre-#1822 sentence.
       const code = reportFailureReasonCode(report);
-      lines.push(`${indent(1)}${escapeXml(AUDIT_FAILURE_NEXT_STEP_THIRD[code])}`);
+      lines.push(
+        `${indent(1)}${escapeXml(AUDIT_FAILURE_NEXT_STEP_THIRD[code])}`
+      );
       // squirrelscan/repo#3480: retrying a URL that redirects off-site fails
       // the same way. The destination is the SITE's choice, so it is offered
       // for the user to confirm, never as a target to go and fetch unasked.
       const followUp = seedRedirectFollowUp(report);
       if (followUp?.kind === "audit") {
         lines.push(
-          `${indent(1)}The entry URL redirects to ${escapeXml(followUp.origin)}. If the user confirms that is the site they meant, audit it with \`${escapeXml(followUp.command)}\`.`,
+          `${indent(1)}The entry URL redirects to ${escapeXml(followUp.origin)}. If the user confirms that is the site they meant, audit it with \`${escapeXml(followUp.command)}\`.`
         );
       } else if (followUp?.kind === "sign_in") {
         lines.push(
-          `${indent(1)}${escapeXml(followUp.origin)} is a sign-in page: the site needs authentication before it can be audited. Do not audit the sign-in host. See ${followUp.docsUrl}.`,
+          `${indent(1)}${escapeXml(followUp.origin)} is a sign-in page: the site needs authentication before it can be audited. Do not audit the sign-in host. See ${followUp.docsUrl}.`
         );
       } else {
         lines.push(
-          `${indent(1)}Run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\` to retry locally.`,
+          `${indent(1)}Run the CLI with \`squirrel audit ${escapeXml(report.baseUrl)}\` to retry locally.`
         );
       }
     }
@@ -379,15 +436,21 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const wafBlocked = safeWafBlocked(report);
   if (wafBlocked) {
     const providers = escapeXml(wafBlocked.providers.join(", "));
-    const code = escapeXml(wafBlocked.seed?.code ?? wafBlocked.pages[0]?.code ?? "blocked_by_waf");
-    lines.push(`<waf-blocked pages="${wafBlocked.total}" providers="${providers}" code="${code}">`);
-    lines.push(
-      `${indent(1)}${wafBlocked.total} page(s) were answered with a challenge or block page by a WAF or bot manager. They were excluded from rule evaluation and scoring, so they carry no findings. Do not report them as broken pages.`,
+    const code = escapeXml(
+      wafBlocked.seed?.code ?? wafBlocked.pages[0]?.code ?? "blocked_by_waf"
     );
-    for (const page of wafBlocked.seed ? [wafBlocked.seed, ...wafBlocked.pages] : wafBlocked.pages) {
+    lines.push(
+      `<waf-blocked pages="${wafBlocked.total}" providers="${providers}" code="${code}">`
+    );
+    lines.push(
+      `${indent(1)}${wafBlocked.total} page(s) were answered with a challenge or block page by a WAF or bot manager. They were excluded from rule evaluation and scoring, so they carry no findings. Do not report them as broken pages.`
+    );
+    for (const page of wafBlocked.seed
+      ? [wafBlocked.seed, ...wafBlocked.pages]
+      : wafBlocked.pages) {
       const by = page.provider ? ` provider="${escapeXml(page.provider)}"` : "";
       lines.push(
-        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`,
+        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`
       );
     }
     lines.push("</waf-blocked>");
@@ -398,14 +461,16 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const wafSuspect = safeWafSuspect(report);
   if (wafSuspect && !isAuditFailed(report.status)) {
     const providers = escapeXml(wafSuspect.providers.join(", "));
-    lines.push(`<waf-suspect pages="${wafSuspect.total}" providers="${providers}">`);
     lines.push(
-      `${indent(1)}${wafSuspect.total} page(s) look like a refusal from a WAF or bot manager but carry no block marker. They were audited like any page, so check that a finding on them describes the site and not the provider's page before reporting it.`,
+      `<waf-suspect pages="${wafSuspect.total}" providers="${providers}">`
+    );
+    lines.push(
+      `${indent(1)}${wafSuspect.total} page(s) look like a refusal from a WAF or bot manager but carry no block marker. They were audited like any page, so check that a finding on them describes the site and not the provider's page before reporting it.`
     );
     for (const page of wafSuspect.pages) {
       const by = page.provider ? ` provider="${escapeXml(page.provider)}"` : "";
       lines.push(
-        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`,
+        `${indent(1)}<page url="${escapeXml(page.url)}" status="${page.status}"${by} signal="${escapeXml(page.signal)}"/>`
       );
     }
     lines.push("</waf-suspect>");
@@ -417,9 +482,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   if (refused.length > 0) {
     lines.push("<refused-fetches>");
     lines.push(
-      `${indent(1)}The site refused these requests, so whether the resources exist is UNKNOWN. Do not report them as missing.`,
+      `${indent(1)}The site refused these requests, so whether the resources exist is UNKNOWN. Do not report them as missing.`
     );
-    for (const line of refused) lines.push(`${indent(1)}<fetch>${escapeXml(line)}</fetch>`);
+    for (const line of refused)
+      lines.push(`${indent(1)}<fetch>${escapeXml(line)}</fetch>`);
     lines.push("</refused-fetches>");
   }
 
@@ -430,18 +496,23 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // Top-level group scores (#626), above the finer per-category scores.
   for (const g of report.healthScore?.groups ?? []) {
     lines.push(
-      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" scope="group" errors="${g.failed}" warnings="${g.warnings}"/>`,
+      `${indent(1)}<group name="${escapeXml(getGroupName(g.group))}" score="${g.score}" scope="group" errors="${g.failed}" warnings="${g.warnings}"/>`
     );
   }
   for (const cat of report.healthScore?.categories ?? []) {
-    lines.push(`${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}" scope="category"/>`);
+    lines.push(
+      `${indent(1)}<cat name="${escapeXml(cat.name)}" score="${cat.score}" scope="category"/>`
+    );
   }
   const adjustmentNote = scoreAdjustmentNoteFor(report.healthScore);
-  if (adjustmentNote) lines.push(`${indent(1)}<adjustment>${escapeXml(adjustmentNote)}</adjustment>`);
+  if (adjustmentNote)
+    lines.push(
+      `${indent(1)}<adjustment>${escapeXml(adjustmentNote)}</adjustment>`
+    );
   lines.push("</score>");
 
   lines.push(
-    `<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`,
+    `<summary passed="${report.passed}" warnings="${report.warnings}" failed="${report.failed}"/>`
   );
 
   // Smart audits (#110): coverage — audited N of M known pages; the rest of the
@@ -455,16 +526,21 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const unrendered = c.unrenderedFindings ?? 0;
     const unrenderedAttr = unrendered > 0 ? ` unrendered="${unrendered}"` : "";
     // Re-crawled pages that still carry earlier findings (#1031); omitted when none.
-    const stale = Number.isSafeInteger(c.pagesWithStaleCarry) && (c.pagesWithStaleCarry ?? 0) > 0 ? ` stale-carry-pages="${c.pagesWithStaleCarry}"` : "";
+    const stale =
+      Number.isSafeInteger(c.pagesWithStaleCarry) &&
+      (c.pagesWithStaleCarry ?? 0) > 0
+        ? ` stale-carry-pages="${c.pagesWithStaleCarry}"`
+        : "";
     lines.push(
-      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}/>`,
+      `<coverage audited="${c.auditedPages}" known="${c.knownPages}" carried="${c.carriedFindings}"${unrenderedAttr}${stale}/>`
     );
     // (#1759) Counts only, each a whole number: a stored report of any origin reaches this.
     const sv = c.seedVerification;
     if (sv && typeof sv === "object") {
-      const n = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0);
+      const n = (v: unknown) =>
+        typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0;
       lines.push(
-        `<seed-verification reverified="${n(sv.reverified)}" gone="${n(sv.gone)}" redirected="${n(sv.redirected)}" live="${n(sv.live)}" left-carried="${n(sv.leftCarried)}" skipped-by-budget="${n(sv.skippedByBudget)}" no-longer-linked="${n(sv.noLongerLinked)}" unverified="${n(sv.unverified)}"/>`,
+        `<seed-verification reverified="${n(sv.reverified)}" gone="${n(sv.gone)}" redirected="${n(sv.redirected)}" live="${n(sv.live)}" left-carried="${n(sv.leftCarried)}" skipped-by-budget="${n(sv.skippedByBudget)}" no-longer-linked="${n(sv.noLongerLinked)}" unverified="${n(sv.unverified)}"/>`
       );
     }
   }
@@ -475,7 +551,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const partialNote = partialAuditLine(report);
   if (partialNote && report.partialAudit) {
     lines.push(
-      `<partial-audit included-categories="${escapeXml((report.partialAudit.includedCategories ?? []).join(","))}">${escapeXml(partialNote)}</partial-audit>`,
+      `<partial-audit included-categories="${escapeXml((report.partialAudit.includedCategories ?? []).join(","))}">${escapeXml(partialNote)}</partial-audit>`
     );
   }
   if (report.scanScope) {
@@ -494,21 +570,29 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const left = scanScopeUnfetched(report);
     const unfetched = left > 0 ? ` unfetched="${left}"` : "";
     // Query-string variants counted with their canonical page (#858).
-    const variantCount = Number(report.canonicalVariants ?? s.canonicalVariants ?? 0);
-    const variants = Number.isSafeInteger(variantCount) && variantCount > 0 ? ` canonical-variants="${variantCount}"` : "";
+    const variantCount = Number(
+      report.canonicalVariants ?? s.canonicalVariants ?? 0
+    );
+    const variants =
+      Number.isSafeInteger(variantCount) && variantCount > 0
+        ? ` canonical-variants="${variantCount}"`
+        : "";
     // Whether robots.txt was honoured and how many pages it kept out (#1782).
     const robots = robotsScope(report);
     const robotsAttrs = robots
       ? ` respect-robots="${robots.respectRobots}" robots-blocked-pages="${robots.robotsBlockedPages}"`
       : "";
     lines.push(
-      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}${robotsAttrs}${scanScopeErrorPages(report) > 0 ? ` error-pages="${scanScopeErrorPages(report)}"` : ""}/>`,
+      `<scan-scope origin="${s.origin}" crawled="${s.pagesCrawled}"${cap}${requested} capped="${s.capped}"${stop}${unfetched}${variants}${robotsAttrs}${scanScopeErrorPages(report) > 0 ? ` error-pages="${scanScopeErrorPages(report)}"` : ""}/>`
     );
     const robotsNote = robotsHonouredNote(report);
-    if (robotsNote) lines.push(`<robots-note>${escapeXml(robotsNote)}</robots-note>`);
+    if (robotsNote)
+      lines.push(`<robots-note>${escapeXml(robotsNote)}</robots-note>`);
     // Pages known against pages audited, per URL-based page type (#1744).
     for (const t of scanScopePageTypes(report)) {
-      lines.push(`<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`);
+      lines.push(
+        `<page-type name="${escapeXml(t.type)}" discovered="${t.discovered}" audited="${t.audited}"/>`
+      );
     }
   }
 
@@ -516,7 +600,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // and items beside the true counts. Escaped like every other value here: the
   // numbers in it come off the report's own JSON.
   const capped = publishedReportNote(report);
-  if (capped) lines.push(`<published-summary>${escapeXml(capped)}</published-summary>`);
+  if (capped)
+    lines.push(`<published-summary>${escapeXml(capped)}</published-summary>`);
 
   // The audit level, so an agent knows what kind of audit the score rests on
   // and which settings were changed from the level (a custom audit). The
@@ -526,7 +611,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     // Escaped like every other attribute here: the snapshot can come from a
     // stored or fetched report, and this output is read by an agent.
     lines.push(
-      `<audit-level level="${escapeXml(String(a.level))}" based-on="${escapeXml(String(a.basedOn))}" changes="${escapeXml(a.changes.map(String).join(","))}" pages="${Number(a.settings.pages)}"${a.offline === true ? ` offline="true" cloud-checks="false" render="off" external-links="false"` : a.targeted === true ? ` targeted="true" external-links="false"` : ""}/>`,
+      `<audit-level level="${escapeXml(String(a.level))}" based-on="${escapeXml(String(a.basedOn))}" changes="${escapeXml(a.changes.map(String).join(","))}" pages="${Number(a.settings.pages)}"${a.offline === true ? ` offline="true" cloud-checks="false" render="off" external-links="false"` : a.targeted === true ? ` targeted="true" external-links="false"` : ""}/>`
     );
   }
 
@@ -536,14 +621,18 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // #1280: how many first-party scripts the script rules evaluated, so two
   // runs (or a run with and without store_scripts) compare.
   if (typeof report.scriptsEvaluated === "number") {
-    lines.push(`<scripts-evaluated count="${Math.trunc(report.scriptsEvaluated)}"/>`);
+    lines.push(
+      `<scripts-evaluated count="${Math.trunc(report.scriptsEvaluated)}"/>`
+    );
   }
 
   if (report.rulesCache) {
     const rc = report.rulesCache;
-    const why = rc.disabledReason ? ` disabled-reason="${rc.disabledReason}"` : "";
+    const why = rc.disabledReason
+      ? ` disabled-reason="${rc.disabledReason}"`
+      : "";
     lines.push(
-      `<rules-cache pages-replayed="${rc.pagesReplayed}" pages-evaluated="${rc.pagesEvaluated}"${why}/>`,
+      `<rules-cache pages-replayed="${rc.pagesReplayed}" pages-evaluated="${rc.pagesEvaluated}"${why}/>`
     );
   }
 
@@ -565,7 +654,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       }
       lines.push(`${indent(1)}</big-ticket>`);
     }
-    if (es.verdict) lines.push(`${indent(1)}<verdict>${escapeXml(es.verdict)}</verdict>`);
+    if (es.verdict)
+      lines.push(`${indent(1)}<verdict>${escapeXml(es.verdict)}</verdict>`);
     lines.push("</editor-summary>");
   }
 
@@ -574,8 +664,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push("<priorities>");
     for (const [i, p] of es.priorities.entries()) {
       const attrs = [`rank="${i + 1}"`, `effort="${escapeXml(p.effort)}"`];
-      if (p.ruleIds.length > 0) attrs.push(`rules="${escapeXml(p.ruleIds.join(" "))}"`);
-      if (p.technologies.length > 0) attrs.push(`tech="${escapeXml(p.technologies.join(" "))}"`);
+      if (p.ruleIds.length > 0)
+        attrs.push(`rules="${escapeXml(p.ruleIds.join(" "))}"`);
+      if (p.technologies.length > 0)
+        attrs.push(`tech="${escapeXml(p.technologies.join(" "))}"`);
       lines.push(`${indent(1)}<priority ${attrs.join(" ")}>`);
       lines.push(`${indent(2)}<title>${escapeXml(p.title)}</title>`);
       if (p.why) lines.push(`${indent(2)}<why>${escapeXml(p.why)}</why>`);
@@ -589,15 +681,20 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const meta = report.siteMetadata;
   if (meta) {
     const attrs: string[] = [`type="${escapeXml(meta.siteType)}"`];
-    if (meta.businessCategory) attrs.push(`category="${escapeXml(meta.businessCategory)}"`);
-    if (meta.audienceScope) attrs.push(`audience="${escapeXml(meta.audienceScope)}"`);
-    if (meta.primaryCountry) attrs.push(`country="${escapeXml(meta.primaryCountry)}"`);
+    if (meta.businessCategory)
+      attrs.push(`category="${escapeXml(meta.businessCategory)}"`);
+    if (meta.audienceScope)
+      attrs.push(`audience="${escapeXml(meta.audienceScope)}"`);
+    if (meta.primaryCountry)
+      attrs.push(`country="${escapeXml(meta.primaryCountry)}"`);
     attrs.push(`ymyl="${meta.isYMYL}"`);
     attrs.push(`local-business="${meta.isLocalBusiness}"`);
     attrs.push(`confidence="${escapeXml(meta.confidence)}"`);
     lines.push(`<site-profile ${attrs.join(" ")}>`);
     if (meta.languages && meta.languages.length > 0) {
-      lines.push(`${indent(1)}<languages>${escapeXml(meta.languages.join(", "))}</languages>`);
+      lines.push(
+        `${indent(1)}<languages>${escapeXml(meta.languages.join(", "))}</languages>`
+      );
     }
     const entityName = meta.entityName ?? meta.title;
     if (entityName) {
@@ -606,23 +703,29 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           ? ` kind="${escapeXml(meta.entityType)}"`
           : "";
       const eu = meta.entityUrl ? ` url="${escapeXml(meta.entityUrl)}"` : "";
-      lines.push(`${indent(1)}<identity name="${escapeXml(entityName)}"${et}${eu}/>`);
+      lines.push(
+        `${indent(1)}<identity name="${escapeXml(entityName)}"${et}${eu}/>`
+      );
     }
     for (const c of meta.contacts ?? []) {
       lines.push(
-        `${indent(1)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"/>`,
+        `${indent(1)}<contact kind="${escapeXml(c.kind)}" value="${escapeXml(c.value)}"/>`
       );
     }
     for (const s of meta.socials ?? []) {
       lines.push(
-        `${indent(1)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"/>`,
+        `${indent(1)}<social platform="${escapeXml(s.platform)}" url="${escapeXml(s.url)}"/>`
       );
     }
     const years = domainAgeYears(meta);
     if (years != null || meta.registeredAt) {
       const ya = years != null ? ` years="${years}"` : "";
-      const ra = meta.registeredAt ? ` registered="${escapeXml(meta.registeredAt)}"` : "";
-      const rg = meta.registrar ? ` registrar="${escapeXml(meta.registrar)}"` : "";
+      const ra = meta.registeredAt
+        ? ` registered="${escapeXml(meta.registeredAt)}"`
+        : "";
+      const rg = meta.registrar
+        ? ` registrar="${escapeXml(meta.registrar)}"`
+        : "";
       lines.push(`${indent(1)}<domain${ya}${ra}${rg}/>`);
     }
     lines.push("</site-profile>");
@@ -632,36 +735,52 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   if (report.host) {
     const h = report.host;
     const attrs = [`name="${escapeXml(h.host)}"`];
-    if (h.addresses.ipv4.length > 0) attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
-    if (h.addresses.ipv6.length > 0) attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
+    if (h.addresses.ipv4.length > 0)
+      attrs.push(`ipv4="${escapeXml(h.addresses.ipv4.join(" "))}"`);
+    if (h.addresses.ipv6.length > 0)
+      attrs.push(`ipv6="${escapeXml(h.addresses.ipv6.join(" "))}"`);
     if (h.country) {
-      attrs.push(`country="${escapeXml(h.country.code)}"`, `country-location="${h.country.location}"`);
-      if (h.country.edge) attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
+      attrs.push(
+        `country="${escapeXml(h.country.code)}"`,
+        `country-location="${h.country.location}"`
+      );
+      if (h.country.edge)
+        attrs.push(`edge="${escapeXml(h.country.edge.name)}"`);
     }
     if (h.edge) {
-      attrs.push(`edge-provider="${escapeXml(h.edge.name)}"`, `edge-source="${h.edge.source}"`, `edge-hosted="${h.edge.edgeHosted}"`, `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`);
+      attrs.push(
+        `edge-provider="${escapeXml(h.edge.name)}"`,
+        `edge-source="${h.edge.source}"`,
+        `edge-hosted="${h.edge.edgeHosted}"`,
+        `origin="${escapeXml(h.edge.origin.status === "identified" ? h.edge.origin.name : h.edge.origin.status)}"`
+      );
     }
-    if (h.cloudRange) attrs.push(`cloud-range="${escapeXml(h.cloudRange.name)}"`);
+    if (h.cloudRange)
+      attrs.push(`cloud-range="${escapeXml(h.cloudRange.name)}"`);
     if (h.latency) attrs.push(`connect-ms="${h.latency.ms}"`);
     lines.push(`<host ${attrs.join(" ")}/>`);
   }
 
   // Technologies — report-only context for the agent (does not affect the score).
-  if (report.technologies && (report.technologies.items.length > 0 || report.technologies.truncated)) {
+  if (
+    report.technologies &&
+    (report.technologies.items.length > 0 || report.technologies.truncated)
+  ) {
     const tech = report.technologies;
-    lines.push(
-      techOpenTag("technologies", tech, ""),
-    );
+    lines.push(techOpenTag("technologies", tech, ""));
     for (const t of tech.items) {
       const ver = t.version ? ` version="${escapeXml(t.version)}"` : "";
       lines.push(
-        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}${techOriginAttr(t)}/>`,
+        `${indent(1)}<tech name="${escapeXml(t.name)}" cat="${escapeXml(t.category)}"${ver}${techOriginAttr(t)}/>`
       );
     }
     lines.push("</technologies>");
   }
 
-  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
+  const categoryIssues = groupIssuesByCategory(
+    report.ruleResults,
+    report.checkTallies
+  );
 
   if (categoryIssues.length > 0) {
     lines.push("<issues>");
@@ -678,11 +797,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         }
         if (check.status === "warn") ruleStatus = "warn";
       }
-  
+
       // Smart audits (#110): a rule's findings are "carried" when every
       // surfaced check came from pages not re-crawled this run.
       const carriedChecks = rule.checks.filter(
-        (c) => c.carriedCount && c.carriedCount >= c.count,
+        (c) => c.carriedCount && c.carriedCount >= c.count
       ).length;
       const allPagesForRule = ruleAffectedPages(rule.checks);
       const carriedPageCount = ruleCarriedPageCount(rule.checks);
@@ -695,7 +814,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // have carried it). Mixed unrendered/fresh falls through to the carried
       // logic, which correctly reports no carry.
       const unrenderedChecks = rule.checks.filter(
-        (c) => c.unrenderedCount && c.unrenderedCount >= c.count,
+        (c) => c.unrenderedCount && c.unrenderedCount >= c.count
       ).length;
       const carriedAttr =
         unrenderedChecks > 0 && unrenderedChecks === rule.checks.length
@@ -705,39 +824,48 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
             : carriedPageCount > 0
               ? ` carried_pages="${carriedPageCount}/${allPagesForRule.size}"`
               : "";
-  
+
       const docsUrl = getDocsUrl(rule.id);
       lines.push(
-        `${indent(1)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""} status="${ruleStatus}"${carriedAttr} docs="${escapeXml(docsUrl)}">`,
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" severity="${rule.severity}" category="${escapeXml(rule.categoryName)}" group="${escapeXml(rule.group)}"${rule.subcategory ? ` subcategory="${escapeXml(rule.subcategory)}"` : ""} status="${ruleStatus}"${carriedAttr} docs="${escapeXml(docsUrl)}">`
       );
-  
+
       // pub#837: a check whose items are links says how many pages carry them.
       const messages = rule.checks
         .map((c) =>
           c.message && hasItemSources(c)
             ? c.message + affectedPagesSuffix(c, affectedPages(c).count)
-            : c.message,
+            : c.message
         )
         .filter((m) => m);
-      if (messages.length > 0) lines.push(`${indent(2)}${escapeXml(messages.join("; "))}`);
+      if (messages.length > 0)
+        lines.push(`${indent(2)}${escapeXml(messages.join("; "))}`);
       // Shared-resource units (#2341) narrow the coverage the component units
       // computed, so the page arithmetic below counts a page as accounted for
       // whichever kind of unit named it.
       const siteResources = ruleSiteResourceCoverage(rule);
-      const coverage = withSiteResourceCoverage(ruleFixCoverage(rule), siteResources, rule);
+      const coverage = withSiteResourceCoverage(
+        ruleFixCoverage(rule),
+        siteResources,
+        rule
+      );
       for (const group of siteResources.groups) {
         lines.push(
           `${indent(2)}<fix-once scope="site-resource" pages="${group.affectedPageCount}" resources="${group.resourceKeys.length}">${escapeXml(
             siteResourceFixLine(group, LLM_FIX_GROUP_PAGES, (page) =>
-              compressUrl(page, baseOrigin),
-            ),
-          )}</fix-once>`,
+              compressUrl(page, baseOrigin)
+            )
+          )}</fix-once>`
         );
       }
-      for (const rollup of fixUnits(coverage.groups, options?.componentRollup !== false)) {
+      for (const rollup of fixUnits(
+        coverage.groups,
+        options?.componentRollup !== false
+      )) {
         // One actionable line per REPAIR. No hashes, no signatures, no internal
         // keys: an agent cannot act on grouping mechanics.
-        const repeated = rollup.representative.attribution === "repeated-subtree";
+        const repeated =
+          rollup.representative.attribution === "repeated-subtree";
         const tag = repeated ? "likely-shared-block" : "fix-once";
         lines.push(
           `${indent(2)}<${tag} pages="${rollup.affectedPageCount}"${
@@ -748,9 +876,11 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
             `${fixRollupLine(rollup, LLM_FIX_GROUP_PAGES, (page) => compressUrl(page, baseOrigin), false)}${
               // One group is one element; its slot still locates the fix. For a
               // unit spanning several, the block anchor inside the line replaces it.
-              rollup.groups.length === 1 ? ` [${describeSlot(rollup.representative)}]` : ""
-            }`,
-          )}</${tag}>`,
+              rollup.groups.length === 1
+                ? ` [${describeSlot(rollup.representative)}]`
+                : ""
+            }`
+          )}</${tag}>`
         );
       }
       if (rule.mixedProvenanceNote) {
@@ -759,7 +889,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       if (rule.prevalenceNote) {
         lines.push(`${indent(2)}${escapeXml(rule.prevalenceNote)}`);
       }
-  
+
       // Union of check.pages + item-level sourcePages / page-URL ids so
       // site-scope rules (blocked-links, sitemap-*) report real page counts.
       const allPages = ruleAffectedPages(rule.checks);
@@ -770,12 +900,12 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
       // checks with possibly-disjoint hidden pages) → suffix "+".
       const rollup = ruleAffectedRollup(rule.checks);
       const totalLabel = `${rollup.count}${rollup.hasMore ? "+" : ""}`;
-  
+
       // pub#846/#857: a check that names its region or its page type lists no pages here: its own
       // line says where it is. The pages of the rule's other checks are still listed, so a
       // documentation check on all 9 pages and a contact check below the share both read right.
       const scopedChecks = rule.checks.filter((c) =>
-        checkPagesScopedAway(c, affectedPages(c).count, report.structure),
+        checkPagesScopedAway(c, affectedPages(c).count, report.structure)
       );
       const openChecks = rule.checks.filter((c) => !scopedChecks.includes(c));
       const openPages = ruleAffectedPages(openChecks);
@@ -788,12 +918,23 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         coverage.mode === "full"
           ? new Set<string>()
           : coverage.mode === "partial"
-            ? new Set([...openPages].filter((page) => coverage.uncoveredPages.includes(page)))
+            ? new Set(
+                [...openPages].filter((page) =>
+                  coverage.uncoveredPages.includes(page)
+                )
+              )
             : openPages;
-      if (coverage.mode !== "full" && allPages.size > 0 && openChecks.length === 0) {
+      if (
+        coverage.mode !== "full" &&
+        allPages.size > 0 &&
+        openChecks.length === 0
+      ) {
         lines.push(`${indent(2)}Pages (${totalLabel})`);
       } else if (legacyPages.size > 0) {
-        const sampledPages = sampleAffectedPagesBreadthFirst(Array.from(legacyPages), baseOrigin);
+        const sampledPages = sampleAffectedPagesBreadthFirst(
+          Array.from(legacyPages),
+          baseOrigin
+        );
         const pageList = sampledPages
           .map((p) => escapeXml(compressUrl(p, baseOrigin)))
           .join(", ");
@@ -801,16 +942,22 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           // Explicit: these pages were NOT attributed to a shared component, so
           // a reader never reads the absence of a group as "not affected".
           lines.push(
-            `${indent(2)}Pages not attributed to a shared component (${legacyPages.size}): ${pageList}`,
+            `${indent(2)}Pages not attributed to a shared component (${legacyPages.size}): ${pageList}`
           );
         } else if (sampledPages.length < openRollup.count) {
-          lines.push(`${indent(2)}Pages (${sampledPages.length}/${openLabel}): ${pageList}`);
+          lines.push(
+            `${indent(2)}Pages (${sampledPages.length}/${openLabel}): ${pageList}`
+          );
         } else {
           lines.push(`${indent(2)}Pages (${openLabel}): ${pageList}`);
         }
       }
       for (const c of scopedChecks) {
-        const scope = checkScopeLine(c, affectedPages(c).count, report.structure);
+        const scope = checkScopeLine(
+          c,
+          affectedPages(c).count,
+          report.structure
+        );
         if (scope) lines.push(`${indent(2)}${escapeXml(scope)}`);
       }
 
@@ -830,9 +977,10 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         // partially covered rule does not report the same pages twice.
         allItems.push(...uncoveredItems(check.items, coverage));
         const additional = check.details?.additional;
-        if (typeof additional === "number" && additional > 0) itemsLeftOut += Math.floor(additional);
+        if (typeof additional === "number" && additional > 0)
+          itemsLeftOut += Math.floor(additional);
       }
-  
+
       if (allItems.length > 0 && coverage.mode !== "full") {
         // Collapse first: an item that is the same resource on nearly every
         // page becomes ONE line with no page list, and does not consume a slot
@@ -842,10 +990,15 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         for (const item of allItems) {
           const info = siteWideItem(item, siteWide.total, siteWide.pageUrls);
           if (info) {
-            const label = item.label && item.label !== item.id ? item.label : item.id;
-            const shown = label.startsWith("http") ? compressUrl(label, baseOrigin) : label;
+            const label =
+              item.label && item.label !== item.id ? item.label : item.id;
+            const shown = label.startsWith("http")
+              ? compressUrl(label, baseOrigin)
+              : label;
             collapsed.push(
-              formatSiteWideItem(shown, info, (page) => compressUrl(page, baseOrigin)),
+              formatSiteWideItem(shown, info, (page) =>
+                compressUrl(page, baseOrigin)
+              )
             );
           } else {
             remaining.push(item);
@@ -855,33 +1008,43 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
         // Emitting them on top of it let a rule with many site-wide items grow
         // the output instead of shrinking it, which is the opposite of the point.
         const shownCollapsed = collapsed.slice(0, LLM_REPORT.maxItems);
-        for (const line of shownCollapsed) lines.push(`${indent(2)}${escapeXml(line)}`);
+        for (const line of shownCollapsed)
+          lines.push(`${indent(2)}${escapeXml(line)}`);
         if (collapsed.length > shownCollapsed.length) {
           lines.push(
-            `${indent(2)}Site-wide items (${shownCollapsed.length}/${collapsed.length} shown)`,
+            `${indent(2)}Site-wide items (${shownCollapsed.length}/${collapsed.length} shown)`
           );
         }
 
-        const itemBudget = Math.max(0, LLM_REPORT.maxItems - shownCollapsed.length);
+        const itemBudget = Math.max(
+          0,
+          LLM_REPORT.maxItems - shownCollapsed.length
+        );
         const sampledItems = remaining.slice(0, itemBudget);
         const itemsTotal = remaining.length + itemsLeftOut;
         if (sampledItems.length > 0) {
           lines.push(
             sampledItems.length < itemsTotal
               ? `${indent(2)}Items (${sampledItems.length}/${itemsTotal}):`
-              : `${indent(2)}Items (${itemsTotal}):`,
+              : `${indent(2)}Items (${itemsTotal}):`
           );
         } else if (itemsTotal > 0) {
           // The site-wide lines took the whole budget: say what is left out, never drop it.
           lines.push(`${indent(2)}Items (0/${itemsTotal}): none listed`);
         }
-  
+
         for (const item of sampledItems) {
-          const itemId = item.id.startsWith("http") ? compressUrl(item.id, baseOrigin) : item.id;
+          const itemId = item.id.startsWith("http")
+            ? compressUrl(item.id, baseOrigin)
+            : item.id;
           let itemLine = `${indent(3)}- ${escapeXml(itemId)}`;
           // pub#837/#846: the item's pages, and the region it is shown in; a scoped item's label
           // drops the section phrase the region says.
-          const view = itemSourceView(item, report.structure, ruleCarriesPages ? { provenance: "carried" } : undefined);
+          const view = itemSourceView(
+            item,
+            report.structure,
+            ruleCarriesPages ? { provenance: "carried" } : undefined
+          );
           const label = itemLabel(item, view.scope);
           if (label && label !== item.id) itemLine += ` (${escapeXml(label)})`;
           if (item.snippet) itemLine += ` | ${escapeXml(item.snippet)}`;
@@ -890,7 +1053,8 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
             for (const [k, v] of Object.entries(item.meta)) {
               if (v !== undefined && v !== null) {
                 const serialized = serializeMetaValue(v);
-                if (serialized) metaParts.push(`${k}: ${escapeXml(serialized)}`);
+                if (serialized)
+                  metaParts.push(`${k}: ${escapeXml(serialized)}`);
               }
             }
             if (metaParts.length > 0) itemLine += ` [${metaParts.join(", ")}]`;
@@ -900,12 +1064,19 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
           const shown = view.rows.slice(0, LLM_REPORT.maxItemSourcePages);
           const hidden = Math.max(0, view.total - shown.length);
           const sources = shown
-            .map((row) => escapeXml(sourceRowText(compressUrl(row.page, baseOrigin), row.detail)))
+            .map((row) =>
+              escapeXml(
+                sourceRowText(compressUrl(row.page, baseOrigin), row.detail)
+              )
+            )
             .join(", ");
           const more = hidden > 0 ? `; ${moreSourcePages(hidden)}` : "";
           if (view.scope) {
             const where = escapeXml(lowerFirst(regionScopeLine(view.scope)));
-            itemLine += shown.length > 0 ? ` (${where}; also from: ${sources}${more})` : ` (${where})`;
+            itemLine +=
+              shown.length > 0
+                ? ` (${where}; also from: ${sources}${more})`
+                : ` (${where})`;
           } else if (shown.length > 0) {
             itemLine += ` (from: ${sources}${more})`;
           }
@@ -928,7 +1099,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     lines.push(`<passed count="${passedRules.length}">`);
     for (const rule of passedRules) {
       lines.push(
-        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}"/>`,
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}" category="${escapeXml(rule.categoryName)}" scope="${rule.scope}" pages="${rule.pages}"/>`
       );
     }
     lines.push("</passed>");
@@ -940,10 +1111,14 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   const privateTarget = privateTargetLine(report);
   if (privateTarget) {
     const rules = privateTargetSkippedRules(report);
-    lines.push(`<not-applicable reason="private-target" count="${rules.length}">`);
+    lines.push(
+      `<not-applicable reason="private-target" count="${rules.length}">`
+    );
     lines.push(`${indent(1)}${escapeXml(privateTarget)}`);
     for (const rule of rules) {
-      lines.push(`${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`);
+      lines.push(
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"/>`
+      );
     }
     lines.push("</not-applicable>");
   }
@@ -951,17 +1126,21 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // Info checks (#669), opt-in with `includeInfo`: notes a rule recorded that are
   // neither findings nor skips. They never change the score. A few pages each,
   // with the true count.
-  const infoChecks = options?.includeInfo ? collectInfoChecks(report.ruleResults) : [];
+  const infoChecks = options?.includeInfo
+    ? collectInfoChecks(report.ruleResults)
+    : [];
   if (infoChecks.length > 0) {
     lines.push(`<info-checks count="${infoChecks.length}">`);
     for (const info of infoChecks.slice(0, INFO_CHECKS_LISTED)) {
       const shown = info.pages.slice(0, INFO_CHECK_PAGES);
       lines.push(
-        `${indent(1)}<check rule="${escapeXml(info.ruleId)}" name="${escapeXml(info.check)}" pages="${info.pagesCount}">${escapeXml(info.message)}${shown.length > 0 ? ` Pages: ${shown.map((p) => escapeXml(p)).join(", ")}${info.pagesCount > shown.length ? ", ..." : ""}` : ""}</check>`,
+        `${indent(1)}<check rule="${escapeXml(info.ruleId)}" name="${escapeXml(info.check)}" pages="${info.pagesCount}">${escapeXml(info.message)}${shown.length > 0 ? ` Pages: ${shown.map((p) => escapeXml(p)).join(", ")}${info.pagesCount > shown.length ? ", ..." : ""}` : ""}</check>`
       );
     }
     if (infoChecks.length > INFO_CHECKS_LISTED) {
-      lines.push(`${indent(1)}<more count="${infoChecks.length - INFO_CHECKS_LISTED}">Listed in full in the JSON report (infoChecks).</more>`);
+      lines.push(
+        `${indent(1)}<more count="${infoChecks.length - INFO_CHECKS_LISTED}">Listed in full in the JSON report (infoChecks).</more>`
+      );
     }
     lines.push("</info-checks>");
   }
@@ -971,18 +1150,20 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
   // complete. Audience logic is shared with the HTML report (#368/#747/#792).
   const locked = lockedRulesMessage(report);
   if (locked) {
-    lines.push(`<locked-rules count="${locked.count}" audience="${locked.audience}">`);
+    lines.push(
+      `<locked-rules count="${locked.count}" audience="${locked.audience}">`
+    );
     lines.push(`${indent(1)}${escapeXml(locked.action)}`);
     if (locked.cta) {
       lines.push(
-        `${indent(1)}<cta label="${escapeXml(locked.cta.label)}" url="${escapeXml(locked.cta.url)}"/>`,
+        `${indent(1)}<cta label="${escapeXml(locked.cta.label)}" url="${escapeXml(locked.cta.url)}"/>`
       );
     }
     for (const rule of locked.rules.map(lockedRuleView)) {
       const reason = rule.reason ? ` reason="${rule.reason}"` : "";
       const detail = rule.detail ? ` detail="${escapeXml(rule.detail)}"` : "";
       lines.push(
-        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`,
+        `${indent(1)}<rule id="${escapeXml(rule.id)}" name="${escapeXml(rule.name)}"${reason}${detail}/>`
       );
     }
     lines.push("</locked-rules>");
@@ -1040,7 +1221,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     detail.push(`<not-checked count="${notChecked.length}">`);
     for (const rule of notChecked) {
       detail.push(
-        `${indent(1)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}">${escapeXml(notCheckedLine(rule))}</rule>`,
+        `${indent(1)}<rule id="${escapeXml(rule.ruleId)}" name="${escapeXml(rule.name)}" check="${escapeXml(rule.check)}" reason="${escapeXml(rule.reason)}">${escapeXml(notCheckedLine(rule))}</rule>`
       );
     }
     detail.push("</not-checked>");
@@ -1053,7 +1234,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     const structure = report.structure;
     const share = structure.chrome.share;
     detail.push(
-      `<page-structure pages="${structureAttr(structure.pages)}" links="${structureAttr(structure.totalLinks)}"${typeof share === "number" ? ` chrome-share="${structureAttr(share)}"` : ""}>`,
+      `<page-structure pages="${structureAttr(structure.pages)}" links="${structureAttr(structure.totalLinks)}"${typeof share === "number" ? ` chrome-share="${structureAttr(share)}"` : ""}>`
     );
     for (const line of [
       structurePageTypesLine(structure),
@@ -1067,7 +1248,7 @@ export function renderLlm(report: AuditReport, options?: LlmRenderOptions): stri
     for (const row of structure.sections) {
       if (structureSectionName(row.section) === undefined) continue;
       detail.push(
-        `${indent(1)}<section name="${escapeXml(row.section)}" pages="${structureAttr(row.pages)}" links="${structureAttr(row.links)}"/>`,
+        `${indent(1)}<section name="${escapeXml(row.section)}" pages="${structureAttr(row.pages)}" links="${structureAttr(row.links)}"/>`
       );
     }
     detail.push("</page-structure>");

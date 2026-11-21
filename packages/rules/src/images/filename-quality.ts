@@ -1,8 +1,8 @@
 // images/filename-quality - Image filename quality check
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const filenameQualityRule: Rule = {
   meta: {

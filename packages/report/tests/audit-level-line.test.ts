@@ -3,11 +3,14 @@
 // Reports written before audit levels have no `auditLevel` and render exactly
 // as they did.
 
+import {
+  offlineAuditSettings,
+  resolveAuditSettings,
+} from "@squirrelscan/core-contracts/audit-levels";
 import { describe, expect, test } from "bun:test";
 
-import { offlineAuditSettings, resolveAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
-
 import type { AuditReport } from "../src/types";
+
 import { auditLevelLine } from "../src/coverage";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -32,12 +35,14 @@ const CUSTOM = resolveAuditSettings("surface", { pages: 200, render: "off" });
 
 describe("auditLevelLine", () => {
   test("a level reads as its label", () => {
-    expect(auditLevelLine(baseReport({ auditLevel: SURFACE }))).toBe("Audit level: Surface.");
+    expect(auditLevelLine(baseReport({ auditLevel: SURFACE }))).toBe(
+      "Audit level: Surface."
+    );
   });
 
   test("custom names the level it started from and what changed", () => {
     expect(auditLevelLine(baseReport({ auditLevel: CUSTOM }))).toBe(
-      "Audit level: Custom, based on Surface (changed: Pages, Rendering).",
+      "Audit level: Custom, based on Surface (changed: Pages, Rendering)."
     );
   });
 
@@ -57,16 +62,18 @@ describe("renderers", () => {
       changes: ["pages", "render"],
       settings: CUSTOM.settings,
     });
-    const old = JSON.parse(renderJson(baseReport())) as { meta: Record<string, unknown> };
+    const old = JSON.parse(renderJson(baseReport())) as {
+      meta: Record<string, unknown>;
+    };
     expect("auditLevel" in old.meta).toBe(false);
   });
 
   test("llm has an <audit-level> element", () => {
     expect(renderLlm(baseReport({ auditLevel: CUSTOM }))).toContain(
-      '<audit-level level="custom" based-on="surface" changes="pages,render" pages="200"/>',
+      '<audit-level level="custom" based-on="surface" changes="pages,render" pages="200"/>'
     );
     expect(renderLlm(baseReport({ auditLevel: SURFACE }))).toContain(
-      '<audit-level level="surface" based-on="surface" changes="" pages="100"/>',
+      '<audit-level level="surface" based-on="surface" changes="" pages="100"/>'
     );
     expect(renderLlm(baseReport())).not.toContain("<audit-level");
   });
@@ -92,13 +99,14 @@ describe("renderers", () => {
       changes: ["pages", "<script>"],
     } as unknown as NonNullable<Parameters<typeof baseReport>[0]>["auditLevel"];
     expect(renderMarkdown(baseReport({ auditLevel: oddChange }))).toContain(
-      "(changed: Pages).",
+      "(changed: Pages)."
     );
   });
 
   test("markdown and text print the line", () => {
     const report = baseReport({ auditLevel: CUSTOM });
-    const line = "Audit level: Custom, based on Surface (changed: Pages, Rendering).";
+    const line =
+      "Audit level: Custom, based on Surface (changed: Pages, Rendering).";
     expect(renderMarkdown(report)).toContain(line);
     expect(renderText(report)).toContain(line);
     expect(renderMarkdown(baseReport())).not.toContain("Audit level:");
@@ -107,11 +115,15 @@ describe("renderers", () => {
 
 // #1275: an offline run says so on every surface that renders the level.
 describe("an offline audit level", () => {
-  const OFFLINE = offlineAuditSettings(resolveAuditSettings("surface", { pages: 30, probe: "passive" }));
+  const OFFLINE = offlineAuditSettings(
+    resolveAuditSettings("surface", { pages: 30, probe: "passive" })
+  );
   const report = baseReport({ auditLevel: OFFLINE });
 
   test("json carries the settings that ran", () => {
-    const meta = (JSON.parse(renderJson(report)) as { meta: { auditLevel: typeof OFFLINE } }).meta;
+    const meta = (
+      JSON.parse(renderJson(report)) as { meta: { auditLevel: typeof OFFLINE } }
+    ).meta;
     expect(meta.auditLevel.settings).toMatchObject({
       cloudChecks: false,
       render: "off",
@@ -122,15 +134,21 @@ describe("an offline audit level", () => {
 
   test("llm, markdown and text say the cloud and link checks did not run", () => {
     expect(renderLlm(report)).toContain(
-      'pages="30" offline="true" cloud-checks="false" render="off" external-links="false"/>',
+      'pages="30" offline="true" cloud-checks="false" render="off" external-links="false"/>'
     );
-    expect(auditLevelLine(report)).toContain("Offline: cloud checks, rendering and external link checks did not run.");
+    expect(auditLevelLine(report)).toContain(
+      "Offline: cloud checks, rendering and external link checks did not run."
+    );
     expect(renderMarkdown(report)).toContain("did not run.");
     expect(renderText(report)).toContain("did not run.");
   });
 
   test("a cloud run carries none of it", () => {
-    expect(auditLevelLine(baseReport({ auditLevel: SURFACE }))).toBe("Audit level: Surface.");
-    expect(renderLlm(baseReport({ auditLevel: SURFACE }))).not.toContain("offline");
+    expect(auditLevelLine(baseReport({ auditLevel: SURFACE }))).toBe(
+      "Audit level: Surface."
+    );
+    expect(renderLlm(baseReport({ auditLevel: SURFACE }))).not.toContain(
+      "offline"
+    );
   });
 });

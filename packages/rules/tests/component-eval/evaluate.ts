@@ -8,13 +8,23 @@
 
 import { parseHTML } from "@squirrelscan/parser/dom";
 
+import type { AuditReport, ReportRuleResult } from "../../../report/src/types";
+import type {
+  CheckResult,
+  ParsedPage,
+  Rule,
+  RuleContext,
+  RuleRunResult,
+} from "../../src/types";
+
 import { calculateHealthScore } from "../../../audit-engine/src/scoring";
 import { componentFixRollups } from "../../../report/src/component-fix-rollup";
-import { groupIssuesByCategory, type GroupedRule } from "../../../report/src/grouping";
-import type { AuditReport, ReportRuleResult } from "../../../report/src/types";
+import {
+  groupIssuesByCategory,
+  type GroupedRule,
+} from "../../../report/src/grouping";
 import { linkTextRule } from "../../src/a11y/link-text";
 import { staleCopyrightRule } from "../../src/content/stale-copyright";
-import type { CheckResult, ParsedPage, Rule, RuleContext, RuleRunResult } from "../../src/types";
 import {
   EVAL_CURRENT_YEAR,
   EVAL_ORIGIN,
@@ -63,8 +73,12 @@ function pathOf(url: string): string {
 /** Runs both rules over every page in `order`. Checks carry their pageUrl. */
 export async function runCaseRules(
   evalCase: EvalCase,
-  order: EvalOrder,
-): Promise<{ checks: Record<EvalRuleId, CheckResult[]>; ruleMs: number; pagesRun: number }> {
+  order: EvalOrder
+): Promise<{
+  checks: Record<EvalRuleId, CheckResult[]>;
+  ruleMs: number;
+  pagesRun: number;
+}> {
   const checks: Record<EvalRuleId, CheckResult[]> = {
     "a11y/link-text": [],
     "content/stale-copyright": [],
@@ -80,12 +94,16 @@ export async function runCaseRules(
       const ctx: RuleContext = {
         page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
         parsed: { document } as unknown as ParsedPage,
-        options: id === "content/stale-copyright" ? { current_year: EVAL_CURRENT_YEAR } : {},
+        options:
+          id === "content/stale-copyright"
+            ? { current_year: EVAL_CURRENT_YEAR }
+            : {},
       };
       const start = performance.now();
       const result = await rule.run(ctx);
       ruleMs += performance.now() - start;
-      for (const check of result.checks) checks[id].push({ ...check, pageUrl: check.pageUrl ?? url });
+      for (const check of result.checks)
+        checks[id].push({ ...check, pageUrl: check.pageUrl ?? url });
     }
   }
   return { checks, ruleMs, pagesRun };
@@ -99,7 +117,7 @@ export function stripEvidence(check: CheckResult): CheckResult {
 
 export function ruleResults(
   checks: Record<EvalRuleId, CheckResult[]>,
-  strip: boolean,
+  strip: boolean
 ): Record<string, ReportRuleResult> {
   const out: Record<string, ReportRuleResult> = {};
   for (const { id, rule } of EVAL_RULES) {
@@ -114,11 +132,11 @@ export function ruleResults(
 /** A minimal report around the rule results, enough for every text renderer. */
 export function buildReport(
   evalCase: EvalCase,
-  results: Record<string, ReportRuleResult>,
+  results: Record<string, ReportRuleResult>
 ): AuditReport {
   const warnings = Object.values(results).reduce(
     (sum, rule) => sum + rule.checks.filter((c) => c.status === "warn").length,
-    0,
+    0
   );
   return {
     baseUrl: EVAL_ORIGIN,
@@ -158,7 +176,9 @@ export interface CaseResult {
   /** Non-pass checks per rule. */
   detections: Record<string, { checks: number; items: number }>;
   /** Warn/fail checks per rule as `[path, status, message, itemsJson]`, sorted. Compared to the case golden. */
-  detectionRows: Partial<Record<string, Array<[string, string, string, string]>>>;
+  detectionRows: Partial<
+    Record<string, Array<[string, string, string, string]>>
+  >;
   /** The grouped message view (checks, counts, pages, items) is identical with and without evidence. */
   presentationOnly: boolean;
   healthScoreOn: number | null;
@@ -182,7 +202,12 @@ export interface CaseResult {
   /** One entry per page that has a detection but no observation or fallback. */
   pagesSkipped: string[];
   groups: GroupSummary[];
-  rollupSummary: Array<{ level: string; variants: number; groupIds: string[]; pages: number }>;
+  rollupSummary: Array<{
+    level: string;
+    variants: number;
+    groupIds: string[];
+    pages: number;
+  }>;
   ruleMs: number;
   groupingMsOn: number;
   groupingMsOff: number;
@@ -199,11 +224,19 @@ function isDetection(check: CheckResult): boolean {
 
 function detection(checks: CheckResult[]) {
   const hit = checks.filter(isDetection);
-  return { checks: hit.length, items: hit.reduce((sum, c) => sum + itemCount(c), 0) };
+  return {
+    checks: hit.length,
+    items: hit.reduce((sum, c) => sum + itemCount(c), 0),
+  };
 }
 
 /** Region-relative locators repeat inside a page, so the nesting disambiguates them. */
-function labelKey(page: string, rule: string, locator: string, nestedIn = "none"): string {
+function labelKey(
+  page: string,
+  rule: string,
+  locator: string,
+  nestedIn = "none"
+): string {
   return `${page}|${rule}|${nestedIn}|${locator}`;
 }
 
@@ -218,9 +251,7 @@ function bestMs<T>(repeats: number, fn: () => T): { ms: number; value: T } {
   return { ms, value };
 }
 
-function scoreOf(
-  results: Record<string, ReportRuleResult>,
-): number | null {
+function scoreOf(results: Record<string, ReportRuleResult>): number | null {
   const map = new Map<string, RuleRunResult>();
   for (const [id, result] of Object.entries(results)) {
     map.set(id, result as unknown as RuleRunResult);
@@ -230,7 +261,7 @@ function scoreOf(
 
 export async function evaluateCase(
   evalCase: EvalCase,
-  options: { order?: EvalOrder; repeats?: number } = {},
+  options: { order?: EvalOrder; repeats?: number } = {}
 ): Promise<CaseResult> {
   const order = options.order ?? "forward";
   const repeats = options.repeats ?? 1;
@@ -247,7 +278,10 @@ export async function evaluateCase(
 
   const labels = new Map<string, EvalLabel>();
   for (const label of evalCase.labels) {
-    labels.set(labelKey(label.page, label.rule, label.locator, label.nestedIn), label);
+    labels.set(
+      labelKey(label.page, label.rule, label.locator, label.nestedIn),
+      label
+    );
   }
   const used = new Set<string>();
   const unlabeled: string[] = [];
@@ -255,7 +289,7 @@ export async function evaluateCase(
     page: string,
     rule: string,
     locator: string,
-    nestedIn: string,
+    nestedIn: string
   ): EvalLabel | undefined => {
     const key = labelKey(pathOf(page), rule, locator, nestedIn);
     const label = labels.get(key);
@@ -278,9 +312,21 @@ export async function evaluateCase(
       for (const check of checks[id]) {
         for (const occurrence of check.componentOccurrences ?? []) {
           const nestedIn = occurrence.region.nestedIn;
-          const label = labelOf(occurrence.pageUrl, id, occurrence.element.locator, nestedIn);
+          const label = labelOf(
+            occurrence.pageUrl,
+            id,
+            occurrence.element.locator,
+            nestedIn
+          );
           if (!label) {
-            unlabeled.push(labelKey(pathOf(occurrence.pageUrl), id, occurrence.element.locator, nestedIn));
+            unlabeled.push(
+              labelKey(
+                pathOf(occurrence.pageUrl),
+                id,
+                occurrence.element.locator,
+                nestedIn
+              )
+            );
           }
           observations.push({
             page: pathOf(occurrence.pageUrl),
@@ -294,29 +340,52 @@ export async function evaluateCase(
       }
     }
   }
-  const observationAt = new Map(observations.map((o) => [labelKey(o.page, o.rule, o.locator, o.nestedIn), o]));
+  const observationAt = new Map(
+    observations.map((o) => [
+      labelKey(o.page, o.rule, o.locator, o.nestedIn),
+      o,
+    ])
+  );
 
   const groups: GroupSummary[] = [];
-  const rawGroups: Array<{ rule: GroupedRule; group: NonNullable<GroupedRule["componentFixGroups"]>[number] }> = [];
+  const rawGroups: Array<{
+    rule: GroupedRule;
+    group: NonNullable<GroupedRule["componentFixGroups"]>[number];
+  }> = [];
   for (const rule of rulesOn) {
-    for (const group of rule.componentFixGroups ?? []) rawGroups.push({ rule, group });
+    for (const group of rule.componentFixGroups ?? [])
+      rawGroups.push({ rule, group });
   }
   let incorrectMerges = 0;
   let overclaims = 0;
-  const groupOfObservation = new Map<string, { id: string; attribution: string }>();
+  const groupOfObservation = new Map<
+    string,
+    { id: string; attribution: string }
+  >();
   for (const { rule, group } of rawGroups) {
     const fixKeys = new Set<string>();
     const members: string[] = [];
     for (const occurrence of group.occurrences) {
       const path = pathOf(occurrence.pageUrl);
-      const key = labelKey(path, rule.id, occurrence.element.locator, occurrence.region.nestedIn);
+      const key = labelKey(
+        path,
+        rule.id,
+        occurrence.element.locator,
+        occurrence.region.nestedIn
+      );
       members.push(key);
       const observation = observationAt.get(key);
       if (observation) {
         observation.grouped = true;
-        groupOfObservation.set(key, { id: group.id, attribution: group.attribution });
+        groupOfObservation.set(key, {
+          id: group.id,
+          attribution: group.attribution,
+        });
         if (observation.label) fixKeys.add(observation.label.fixKey);
-        if (group.attribution === "observed-component-evidence" && observation.label?.expectObserved === false) {
+        if (
+          group.attribution === "observed-component-evidence" &&
+          observation.label?.expectObserved === false
+        ) {
           overclaims++;
         }
       }
@@ -345,9 +414,13 @@ export async function evaluateCase(
   for (const list of byFix.values()) {
     const buckets = new Set(
       list.map((o) => {
-        const hit = groupOfObservation.get(labelKey(o.page, o.rule, o.locator, o.nestedIn));
-        return hit && hit.attribution === "observed-component-evidence" ? hit.id : "ungrouped";
-      }),
+        const hit = groupOfObservation.get(
+          labelKey(o.page, o.rule, o.locator, o.nestedIn)
+        );
+        return hit && hit.attribution === "observed-component-evidence"
+          ? hit.id
+          : "ungrouped";
+      })
     );
     if (buckets.size !== 1 || buckets.has("ungrouped")) missedMerges++;
   }
@@ -356,19 +429,25 @@ export async function evaluateCase(
   // ungrouped observation, or (legacy / evidence-less) the check's own page.
   const detectionPages = new Set<string>();
   const coveredPages = new Set<string>();
-  for (const group of groups) for (const page of group.pages) coveredPages.add(page);
-  for (const observation of observations) if (!observation.grouped) coveredPages.add(observation.page);
+  for (const group of groups)
+    for (const page of group.pages) coveredPages.add(page);
+  for (const observation of observations)
+    if (!observation.grouped) coveredPages.add(observation.page);
   for (const { id } of EVAL_RULES) {
     for (const check of checks[id]) {
       if (!isDetection(check) || !check.pageUrl) continue;
       const page = pathOf(check.pageUrl);
       detectionPages.add(page);
-      if (evalCase.legacy || (check.componentOccurrences?.length ?? 0) === 0) coveredPages.add(page);
+      if (evalCase.legacy || (check.componentOccurrences?.length ?? 0) === 0)
+        coveredPages.add(page);
     }
   }
-  const pagesSkipped = [...detectionPages].filter((page) => !coveredPages.has(page)).sort();
+  const pagesSkipped = [...detectionPages]
+    .filter((page) => !coveredPages.has(page))
+    .sort();
   const coverageOk =
-    pagesSkipped.length === 0 && [...coveredPages].every((page) => detectionPages.has(page));
+    pagesSkipped.length === 0 &&
+    [...coveredPages].every((page) => detectionPages.has(page));
 
   const detections: CaseResult["detections"] = {};
   const detectionRows: CaseResult["detectionRows"] = {};
@@ -389,8 +468,15 @@ export async function evaluateCase(
     JSON.stringify(
       rules.map((rule) => ({
         id: rule.id,
-        checks: rule.checks.map((c) => [c.name, c.status, c.message, c.count, c.pages, c.items]),
-      })),
+        checks: rule.checks.map((c) => [
+          c.name,
+          c.status,
+          c.message,
+          c.count,
+          c.pages,
+          c.items,
+        ]),
+      }))
     );
   const presentationOnly = messages(rulesOn) === messages(rulesOff);
 
@@ -408,8 +494,11 @@ export async function evaluateCase(
     healthScoreOff: scoreOf(off),
     beforeGroups: rulesOff.reduce((sum, rule) => sum + rule.checks.length, 0),
     afterGroups: groups.length,
-    observedGroups: groups.filter((g) => g.attribution === "observed-component-evidence").length,
-    promotedGroups: groups.filter((g) => g.attribution === "repeated-subtree").length,
+    observedGroups: groups.filter(
+      (g) => g.attribution === "observed-component-evidence"
+    ).length,
+    promotedGroups: groups.filter((g) => g.attribution === "repeated-subtree")
+      .length,
     rollups: rollups.length,
     affectedPages: coveredPages.size,
     coverageOk,

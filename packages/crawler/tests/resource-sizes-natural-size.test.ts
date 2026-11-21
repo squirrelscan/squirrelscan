@@ -7,18 +7,18 @@
 // reconcile (a DB stamped at the current version without the columns, the
 // version-collision case that has bitten six other tables).
 
+import type { ResourceSizeRecord } from "@squirrelscan/core-contracts";
+
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Effect } from "effect";
-
-import type { ResourceSizeRecord } from "@squirrelscan/core-contracts";
+import type { CrawlMetadata } from "../src/storage/types";
 
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
-import type { CrawlMetadata } from "../src/storage/types";
 
 const STATS = {
   pagesTotal: 0,
@@ -42,7 +42,10 @@ const crawlMeta = (startedAt: number): Omit<CrawlMetadata, "id"> => ({
 
 const run = <A, E>(e: Effect.Effect<A, E, never>) => Effect.runPromise(e);
 
-function image(path: string, overrides: Partial<ResourceSizeRecord> = {}): ResourceSizeRecord {
+function image(
+  path: string,
+  overrides: Partial<ResourceSizeRecord> = {}
+): ResourceSizeRecord {
   return {
     type: "image",
     url: `http://x.test/${path}`,
@@ -57,19 +60,47 @@ function image(path: string, overrides: Partial<ResourceSizeRecord> = {}): Resou
 }
 
 const RECORDS: ResourceSizeRecord[] = [
-  image("photo.jpg", { naturalWidth: 1200, naturalHeight: 1200, animated: false }),
-  image("spin.webp", { contentType: "image/webp", naturalWidth: 100, naturalHeight: 100, animated: true }),
-  image("exif.jpg", { naturalWidth: null, naturalHeight: null, animated: null }),
-  { type: "css", url: "http://x.test/app.css", status: 200, error: null, contentType: "text/css", sizeBytes: 900, sourcePages: [] },
+  image("photo.jpg", {
+    naturalWidth: 1200,
+    naturalHeight: 1200,
+    animated: false,
+  }),
+  image("spin.webp", {
+    contentType: "image/webp",
+    naturalWidth: 100,
+    naturalHeight: 100,
+    animated: true,
+  }),
+  image("exif.jpg", {
+    naturalWidth: null,
+    naturalHeight: null,
+    animated: null,
+  }),
+  {
+    type: "css",
+    url: "http://x.test/app.css",
+    status: 200,
+    error: null,
+    contentType: "text/css",
+    sizeBytes: 900,
+    sourcePages: [],
+  },
 ];
 
-function header(record: { naturalWidth?: number | null; naturalHeight?: number | null; animated?: boolean | null }) {
+function header(record: {
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
+  animated?: boolean | null;
+}) {
   return [record.naturalWidth, record.naturalHeight, record.animated];
 }
 
 describe("natural size in resource_sizes (#470)", () => {
   test("round-trips, and a later crawl's cache lookup hands it back", async () => {
-    const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-rs-")), "store.sqlite");
+    const path = join(
+      mkdtempSync(join(tmpdir(), "squirrelscan-rs-")),
+      "store.sqlite"
+    );
     const storage = new SQLiteStorage(path);
     try {
       await run(storage.init());
@@ -78,24 +109,55 @@ describe("natural size in resource_sizes (#470)", () => {
 
       const stored = await run(storage.getResourceSizes(first));
       const byUrl = new Map(stored.map((r) => [r.url, r]));
-      expect(header(byUrl.get("http://x.test/photo.jpg")!)).toEqual([1200, 1200, false]);
-      expect(header(byUrl.get("http://x.test/spin.webp")!)).toEqual([100, 100, true]);
-      expect(header(byUrl.get("http://x.test/exif.jpg")!)).toEqual([null, null, null]);
-      expect(header(byUrl.get("http://x.test/app.css")!)).toEqual([null, null, null]);
+      expect(header(byUrl.get("http://x.test/photo.jpg")!)).toEqual([
+        1200,
+        1200,
+        false,
+      ]);
+      expect(header(byUrl.get("http://x.test/spin.webp")!)).toEqual([
+        100,
+        100,
+        true,
+      ]);
+      expect(header(byUrl.get("http://x.test/exif.jpg")!)).toEqual([
+        null,
+        null,
+        null,
+      ]);
+      expect(header(byUrl.get("http://x.test/app.css")!)).toEqual([
+        null,
+        null,
+        null,
+      ]);
 
       // What the resource checker reuses on the next audit.
       const second = await run(storage.createCrawl(crawlMeta(2_000)));
-      const cached = new Map((await run(storage.getCachedResources(second))).map((r) => [r.url, r]));
-      expect(header(cached.get("http://x.test/photo.jpg")!)).toEqual([1200, 1200, false]);
-      expect(header(cached.get("http://x.test/spin.webp")!)).toEqual([100, 100, true]);
+      const cached = new Map(
+        (await run(storage.getCachedResources(second))).map((r) => [r.url, r])
+      );
+      expect(header(cached.get("http://x.test/photo.jpg")!)).toEqual([
+        1200,
+        1200,
+        false,
+      ]);
+      expect(header(cached.get("http://x.test/spin.webp")!)).toEqual([
+        100,
+        100,
+        true,
+      ]);
     } finally {
       await run(storage.close());
       rmSync(join(path, ".."), { recursive: true, force: true });
     }
   });
 
-  async function storeWithoutHeaderColumns(version: number): Promise<{ path: string; crawlId: string }> {
-    const path = join(mkdtempSync(join(tmpdir(), "squirrelscan-rs-")), "store.sqlite");
+  async function storeWithoutHeaderColumns(
+    version: number
+  ): Promise<{ path: string; crawlId: string }> {
+    const path = join(
+      mkdtempSync(join(tmpdir(), "squirrelscan-rs-")),
+      "store.sqlite"
+    );
     const storage = new SQLiteStorage(path);
     await run(storage.init());
     const crawlId = await run(storage.createCrawl(crawlMeta(1_000)));
@@ -129,12 +191,24 @@ describe("natural size in resource_sizes (#470)", () => {
 
         // The write is what fails loudly on a missing column.
         await run(storage.saveResourceSizes(crawlId, RECORDS));
-        const after = new Map((await run(storage.getResourceSizes(crawlId))).map((r) => [r.url, r]));
-        expect(header(after.get("http://x.test/photo.jpg")!)).toEqual([1200, 1200, false]);
-        expect(header(after.get("http://x.test/old.jpg")!)).toEqual([null, null, null]);
+        const after = new Map(
+          (await run(storage.getResourceSizes(crawlId))).map((r) => [r.url, r])
+        );
+        expect(header(after.get("http://x.test/photo.jpg")!)).toEqual([
+          1200,
+          1200,
+          false,
+        ]);
+        expect(header(after.get("http://x.test/old.jpg")!)).toEqual([
+          null,
+          null,
+          null,
+        ]);
 
         const db = new Database(path, { readonly: true });
-        const version = db.prepare("SELECT version FROM schema_version").get() as { version: number };
+        const version = db
+          .prepare("SELECT version FROM schema_version")
+          .get() as { version: number };
         db.close();
         expect(version.version).toBe(SCHEMA_VERSION);
       } finally {

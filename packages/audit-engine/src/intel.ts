@@ -42,7 +42,10 @@ export function mapIntelConfig(config: Config): IntelConfig | null {
 }
 
 /** Candidate URLs for on-demand lookups — the site's own pages (not externals). */
-export function collectIntelUrls(siteContext: SiteContextPage[], baseUrl?: string): string[] {
+export function collectIntelUrls(
+  siteContext: SiteContextPage[],
+  baseUrl?: string
+): string[] {
   const urls = new Set<string>();
   if (baseUrl) urls.add(baseUrl);
   for (const { page } of siteContext) {
@@ -65,7 +68,7 @@ export function localIntelContext(): IntelContext {
  */
 export async function buildFullIntelContext(
   config: Config,
-  input: { siteContext: SiteContextPage[]; baseUrl?: string; kv?: KvStore },
+  input: { siteContext: SiteContextPage[]; baseUrl?: string; kv?: KvStore }
 ): Promise<IntelContext> {
   return buildFullIntelContextFromUrls(config, {
     urls: collectIntelUrls(input.siteContext, input.baseUrl),
@@ -81,10 +84,13 @@ export async function buildFullIntelContext(
  */
 export async function buildFullIntelContextFromUrls(
   config: Config,
-  input: { urls: string[]; kv?: KvStore },
+  input: { urls: string[]; kv?: KvStore }
 ): Promise<IntelContext> {
   const intelConfig = mapIntelConfig(config);
   if (!intelConfig) return buildIntelContext();
-  const resolved = await prefetchIntel(intelConfig, { urls: input.urls, kv: input.kv });
+  const resolved = await prefetchIntel(intelConfig, {
+    urls: input.urls,
+    kv: input.kv,
+  });
   return buildIntelContext({ resolved });
 }

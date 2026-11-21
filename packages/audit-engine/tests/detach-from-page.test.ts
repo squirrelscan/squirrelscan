@@ -28,11 +28,14 @@ import { compareRetention, expectDetached, MB } from "./helpers/retention";
  * ropes share backing storage, so a corpus made with `.repeat()` is nearly free
  * to hold and the attached arm would look detached.
  */
-function pageAndSlice(i: number, bytes: number): { page: string; slice: string } {
+function pageAndSlice(
+  i: number,
+  bytes: number
+): { page: string; slice: string } {
   const chunk = 20_000;
   const body = Array.from(
     { length: Math.max(1, Math.ceil(bytes / chunk)) },
-    (_, k) => `${i}-${k} `.padEnd(chunk, "abcdefghij"),
+    (_, k) => `${i}-${k} `.padEnd(chunk, "abcdefghij")
   ).join("");
   const page = `<html><body>${body}</body></html>`;
   return { page, slice: page.slice(120, 180) };
@@ -53,7 +56,11 @@ describe("detachFromPage", () => {
       // only its length: the allocation is identical, the retention is not.
       control: (i) => pageAndSlice(i, SOURCE_BYTES).slice.length,
       attached: (i) => ({ text: pageAndSlice(i, SOURCE_BYTES).slice }),
-      detached: (i) => detachFromPage({ text: pageAndSlice(i, SOURCE_BYTES).slice }, "page-rules"),
+      detached: (i) =>
+        detachFromPage(
+          { text: pageAndSlice(i, SOURCE_BYTES).slice },
+          "page-rules"
+        ),
     });
 
     // Attached holds something on the order of the source; detached, of the
@@ -104,7 +111,10 @@ describe("detachFromPage", () => {
     // check objects. One clone of the container keeps that sharing; cloning each
     // consumer separately would triple the findings instead of detaching them.
     const shared = { name: "check" };
-    const copy = detachFromPage({ flat: [shared], byRule: { r: [shared] } }, "page-rules");
+    const copy = detachFromPage(
+      { flat: [shared], byRule: { r: [shared] } },
+      "page-rules"
+    );
     expect(copy.flat[0]).toBe(copy.byRule.r[0]);
   });
 

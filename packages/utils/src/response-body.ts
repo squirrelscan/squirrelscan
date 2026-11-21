@@ -1,4 +1,5 @@
 import type { Transform } from "node:stream";
+
 // A namespace import: a runtime whose node:zlib lacks a decoder (zstd is the
 // newest) still loads this module, and that coding fails to decode instead.
 import * as zlib from "node:zlib";
@@ -54,7 +55,9 @@ export class ContentDecodingError extends Error {
   constructor(coding: string, cause: unknown) {
     const code = (cause as { code?: unknown } | null)?.code;
     const detail =
-      typeof code === "string" ? code : (cause as Error | null)?.message || "corrupt data";
+      typeof code === "string"
+        ? code
+        : (cause as Error | null)?.message || "corrupt data";
     super(`${coding} body does not decode (${detail})`, { cause });
   }
 }
@@ -93,12 +96,22 @@ export function isDecompressionError(error: unknown): boolean {
  * (`.text()`, `.json()`, `.arrayBuffer()`, a reader on `.body`, a `clone()`)
  * gets the bytes still encoded, with no error to say so.
  */
-export async function fetchUndecoded(input: string, init: RequestInit = {}): Promise<Response> {
+export async function fetchUndecoded(
+  input: string,
+  init: RequestInit = {}
+): Promise<Response> {
   if (!FETCH_RETURNS_RAW_BODY) return fetch(input, init);
   const headers = new Headers(init.headers);
-  if (!headers.has("accept-encoding")) headers.set("accept-encoding", ACCEPT_ENCODING);
-  const response = await fetch(input, { ...init, headers, decompress: false } as RequestInit);
-  const coding = CODINGS.get(response.headers.get("content-encoding")?.trim().toLowerCase() ?? "");
+  if (!headers.has("accept-encoding"))
+    headers.set("accept-encoding", ACCEPT_ENCODING);
+  const response = await fetch(input, {
+    ...init,
+    headers,
+    decompress: false,
+  } as RequestInit);
+  const coding = CODINGS.get(
+    response.headers.get("content-encoding")?.trim().toLowerCase() ?? ""
+  );
   if (coding) stillEncoded.set(response, coding);
   return response;
 }
@@ -121,7 +134,8 @@ const MAX_GZIP_HEADER_BYTES = 128 * 1024;
  * `head` is too short to say, or `-1` when it is not a gzip header.
  */
 function gzipDataOffset(head: Uint8Array): number | null {
-  if (head.byteLength < 10) return head.byteLength >= 1 && head[0] !== 0x1f ? -1 : null;
+  if (head.byteLength < 10)
+    return head.byteLength >= 1 && head[0] !== 0x1f ? -1 : null;
   if (head[0] !== 0x1f || head[1] !== 0x8b || head[2] !== 8) return -1;
   const flags = head[3]!;
   if (flags & 0xe0) return -1;
@@ -162,7 +176,9 @@ function createDecoder(coding: Coding, opening: Uint8Array): Transform {
     case "gzip":
       return zlib.createInflateRaw();
     case "deflate":
-      return isZlibHeader(opening) ? zlib.createInflate() : zlib.createInflateRaw();
+      return isZlibHeader(opening)
+        ? zlib.createInflate()
+        : zlib.createInflateRaw();
     case "br":
       return zlib.createBrotliDecompress();
     case "zstd":
@@ -180,7 +196,7 @@ function createDecoder(coding: Coding, opening: Uint8Array): Transform {
  */
 function decodingStream(
   raw: ReadableStream<Uint8Array>,
-  coding: Coding,
+  coding: Coding
 ): ReadableStream<Uint8Array> {
   const source = raw.getReader();
   let sourceFailure: { error: unknown } | null = null;
@@ -286,7 +302,8 @@ function decodingStream(
           for (;;) {
             const out = decoder.read() as Uint8Array | null;
             if (out) return controller.enqueue(out);
-            if (decodeFailure) throw new ContentDecodingError(coding, decodeFailure.error);
+            if (decodeFailure)
+              throw new ContentDecodingError(coding, decodeFailure.error);
             if (finished) {
               // Complete: whatever else the body holds is not read.
               controller.close();
@@ -306,13 +323,13 @@ function decodingStream(
               ? sourceFailure.error
               : error instanceof ContentDecodingError
                 ? error
-                : new ContentDecodingError(coding, error),
+                : new ContentDecodingError(coding, error)
           );
         }
       },
       cancel: stop,
     },
-    { highWaterMark: 0 },
+    { highWaterMark: 0 }
   );
 }
 
@@ -337,7 +354,10 @@ export function decodedBody(res: Response): ReadableStream<Uint8Array> | null {
  * caller aborts it once the read returns (#766); for a body read to the end
  * that is a no-op and the connection stays pooled.
  */
-export async function readBodyCapped(res: Response, maxBytes: number): Promise<string> {
+export async function readBodyCapped(
+  res: Response,
+  maxBytes: number
+): Promise<string> {
   const stream = decodedBody(res);
   if (!stream || typeof stream.getReader !== "function") {
     // No stream to meter (some runtimes and mocks): a partial read is not

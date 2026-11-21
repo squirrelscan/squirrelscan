@@ -30,7 +30,8 @@ function segment(el: Element): string {
   if (known !== undefined) return known;
   let out = el.tagName.toLowerCase().slice(0, MAX_TOKEN_CHARS);
   const id = el.getAttribute("id");
-  if (id && id.length <= MAX_TOKEN_CHARS && TOKEN_CHARS.test(id)) out += `#${id}`;
+  if (id && id.length <= MAX_TOKEN_CHARS && TOKEN_CHARS.test(id))
+    out += `#${id}`;
   const classes = el.getAttribute("class");
   if (classes) {
     let kept = 0;

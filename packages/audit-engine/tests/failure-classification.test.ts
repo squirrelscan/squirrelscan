@@ -7,10 +7,13 @@
 // that reaches `agent_runs.error`, the failure email and the report, plus the
 // machine-readable `statusReasonCode` the email and MCP branch on.
 
-import { describe, expect, test } from "bun:test";
-
 import type { AuditFailureReasonCode } from "@squirrelscan/core-contracts";
-import { CrawlError, crawlErrorToFailureDetail } from "@squirrelscan/crawler/fetcher";
+
+import {
+  CrawlError,
+  crawlErrorToFailureDetail,
+} from "@squirrelscan/crawler/fetcher";
+import { describe, expect, test } from "bun:test";
 
 import { deriveAuditStatus, deriveAuditStatusFromPages } from "../src/scoring";
 
@@ -30,7 +33,7 @@ function zeroPageRun(error: CrawlError) {
 describe("deriveAuditStatus names the root failure class (#1822)", () => {
   test("dns: the reason names DNS and the host", () => {
     const result = zeroPageRun(
-      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND ejconsultor.es"),
+      CrawlError.network(URL_ROOT, "getaddrinfo ENOTFOUND ejconsultor.es")
     );
     expect(result.status).toBe("failed");
     expect(result.reasonCode).toBe("dns");
@@ -39,7 +42,9 @@ describe("deriveAuditStatus names the root failure class (#1822)", () => {
   });
 
   test("tls: the reason names the handshake and carries the certificate detail", () => {
-    const result = zeroPageRun(CrawlError.tls(URL_ROOT, "certificate has expired"));
+    const result = zeroPageRun(
+      CrawlError.tls(URL_ROOT, "certificate has expired")
+    );
     expect(result.status).toBe("failed");
     expect(result.reasonCode).toBe("tls");
     expect(result.reason).toContain("TLS handshake");
@@ -50,7 +55,10 @@ describe("deriveAuditStatus names the root failure class (#1822)", () => {
     // The production case in #1822: the handshake completes, then the origin
     // closes the connection with no HTTP response.
     const result = zeroPageRun(
-      CrawlError.network(URL_ROOT, "The socket connection was closed unexpectedly"),
+      CrawlError.network(
+        URL_ROOT,
+        "The socket connection was closed unexpectedly"
+      )
     );
     expect(result.status).toBe("failed");
     expect(result.reasonCode).toBe("connection");
@@ -65,7 +73,9 @@ describe("deriveAuditStatus names the root failure class (#1822)", () => {
   });
 
   test("http_5xx: the reason names the status the origin returned", () => {
-    const result = zeroPageRun(CrawlError.network(URL_ROOT, "Server error: 503", 503));
+    const result = zeroPageRun(
+      CrawlError.network(URL_ROOT, "Server error: 503", 503)
+    );
     expect(result.status).toBe("failed");
     expect(result.reasonCode).toBe("http_5xx");
     expect(result.reason).toContain("503 Service Unavailable");
@@ -110,7 +120,9 @@ describe("deriveAuditStatus names the root failure class (#1822)", () => {
   });
 
   test("unknown: an unattributed failure still reads as a failure, with its detail", () => {
-    const result = zeroPageRun(CrawlError.network(URL_ROOT, "something we have never seen"));
+    const result = zeroPageRun(
+      CrawlError.network(URL_ROOT, "something we have never seen")
+    );
     expect(result.status).toBe("failed");
     // Never absent, never silently `completed`.
     expect(result.reasonCode).toBe("unknown");
@@ -118,7 +130,11 @@ describe("deriveAuditStatus names the root failure class (#1822)", () => {
   });
 
   test("a crawl that recorded nothing keeps the pre-#1822 reason and classifies unknown", () => {
-    const result = deriveAuditStatus({ pagesCrawled: 0, contentPages: 0, blockedPages: 0 });
+    const result = deriveAuditStatus({
+      pagesCrawled: 0,
+      contentPages: 0,
+      blockedPages: 0,
+    });
     expect(result.status).toBe("failed");
     expect(result.reason).toBe("No pages were crawled");
     expect(result.reasonCode).toBe("unknown");
@@ -157,7 +173,11 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
       blockedPages: 0,
       blockedErrors: 1,
       rootFailure: crawlErrorToFailureDetail(
-        CrawlError.blocked("https://example.com/", "Blocked by Cloudflare challenge (503)", 503),
+        CrawlError.blocked(
+          "https://example.com/",
+          "Blocked by Cloudflare challenge (503)",
+          503
+        )
       ),
     });
     expect(result.status).toBe("blocked");
@@ -178,7 +198,9 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
       blockedErrors: 0,
       rateLimitedErrors: 1,
       rateLimitedHosts: ["example.com"],
-      rootFailure: crawlErrorToFailureDetail(CrawlError.rateLimit("https://example.com/", 30_000)),
+      rootFailure: crawlErrorToFailureDetail(
+        CrawlError.rateLimit("https://example.com/", 30_000)
+      ),
     });
     expect(result.status).toBe("blocked");
     expect(result.reason).toContain("Rate limited by example.com");
@@ -192,14 +214,17 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
     // not follow that status into http_5xx, which would send the owner to their
     // application logs for a throttle.
     const detail = crawlErrorToFailureDetail(
-      CrawlError.rateLimit("https://example.com/", 30_000, 503),
+      CrawlError.rateLimit("https://example.com/", 30_000, 503)
     );
     expect(detail.code).toBe("http_4xx");
     expect(detail.status).toBe(429);
   });
 
   test("stored 401/403 pages with no content still classify as blocked", () => {
-    const result = deriveAuditStatusFromPages([{ status: 403 }, { status: 401 }]);
+    const result = deriveAuditStatusFromPages([
+      { status: 403 },
+      { status: 401 },
+    ]);
     expect(result.status).toBe("blocked");
     expect(result.reasonCode).toBe("http_4xx");
   });
@@ -216,7 +241,7 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
           code: "unknown",
           detail: "got no response from the billing service",
         },
-      }).reasonCode,
+      }).reasonCode
     ).toBe("unknown");
   });
 
@@ -231,7 +256,8 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
       blockedPages: 0,
       rootFailure: {
         code: "unknown",
-        detail: "Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)",
+        detail:
+          "Callback 'mark-completed' failed after 3 attempts (HTTP 500: internal error)",
       },
     });
     expect(result.reasonCode).toBe("unknown");
@@ -243,8 +269,11 @@ describe("existing classifications are unchanged (#792, #1829)", () => {
         pagesCrawled: 0,
         contentPages: 0,
         blockedPages: 0,
-        rootFailure: { code: "unknown", detail: "upload failed, HTTP 503 from storage" },
-      }).reasonCode,
+        rootFailure: {
+          code: "unknown",
+          detail: "upload failed, HTTP 503 from storage",
+        },
+      }).reasonCode
     ).toBe("unknown");
   });
 

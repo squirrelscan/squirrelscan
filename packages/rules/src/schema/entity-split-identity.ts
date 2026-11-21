@@ -1,8 +1,8 @@
 // schema/entity-split-identity — one thing declared under two or more `@id`s.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { splitIdentityGroups } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -65,7 +65,9 @@ export const entitySplitIdentityRule: Rule = {
     // sides of each pair and can tell which to keep from the page counts.
     const { items, hidden } = cappedItems(
       splits.flatMap((split) =>
-        split.nodes.map((node) => entityItem(node, { sharesIdentityWith: split.ids }))
+        split.nodes.map((node) =>
+          entityItem(node, { sharesIdentityWith: split.ids })
+        )
       )
     );
     const worst = splits[0]!;
@@ -76,7 +78,9 @@ export const entitySplitIdentityRule: Rule = {
           name: CHECK,
           status: "fail",
           message: `${splits.length} ${splits.length === 1 ? "entity is" : "entities are"} declared under more than one @id${moreSuffix(hidden, "declarations")}`,
-          value: clipValue(`${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`),
+          value: clipValue(
+            `${entityLabel(worst.nodes[0]!)} under ${worst.ids.length}: ${worst.ids.join(", ")}`
+          ),
           expected: "one @id per entity",
           items,
         },

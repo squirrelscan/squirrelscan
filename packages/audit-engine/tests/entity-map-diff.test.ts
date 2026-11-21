@@ -6,9 +6,7 @@
 // crawled again. Everything else is set arithmetic; that one is the difference
 // between a useful diff and one that cries wolf every time a crawl is smaller.
 
-import { describe, expect, test } from "bun:test";
 import { Value } from "@sinclair/typebox/value";
-
 import {
   ENTITY_MAP_DIFF_PAGES_CAP,
   ENTITY_MAP_FORMAT,
@@ -18,6 +16,7 @@ import {
   type EntityMapEdge,
   type EntityMapNode,
 } from "@squirrelscan/core-contracts/entity-map";
+import { describe, expect, test } from "bun:test";
 
 import { diffEntityMaps } from "../src/entity-map";
 
@@ -53,7 +52,11 @@ function edge(overrides: Partial<EntityMapEdge> = {}): EntityMapEdge {
   };
 }
 
-function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageUrls: string[]): EntityMap {
+function map(
+  nodes: EntityMapNode[],
+  edges: EntityMapEdge[],
+  pageUrls: string[]
+): EntityMap {
   return {
     format: ENTITY_MAP_FORMAT,
     version: ENTITY_MAP_VERSION,
@@ -66,15 +69,25 @@ function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageUrls: string[])
       pagesTotal: pageUrls.length,
       pagesWithoutEntities: 0,
       nodesWithStableId: nodes.filter((n) => n.id !== null).length,
-      stableIdShare: nodes.length === 0 ? 0 : nodes.filter((n) => n.id !== null).length / nodes.length,
+      stableIdShare:
+        nodes.length === 0
+          ? 0
+          : nodes.filter((n) => n.id !== null).length / nodes.length,
       pageLocalCount: nodes.filter((n) => n.pageLocal).length,
-      nodesWithoutIdCount: nodes.filter((n) => n.id === null && n.pages.length > 1).length,
+      nodesWithoutIdCount: nodes.filter(
+        (n) => n.id === null && n.pages.length > 1
+      ).length,
       conflictCount: nodes.filter((n) => n.conflicts.length > 0).length,
       countsByType: {},
     },
     nodes,
     edges,
-    pages: pageUrls.map((url) => ({ url, declares: [], references: [], entityCount: 0 })),
+    pages: pageUrls.map((url) => ({
+      url,
+      declares: [],
+      references: [],
+      entityCount: 0,
+    })),
   };
 }
 
@@ -83,12 +96,15 @@ function mapWith(
   nodes: EntityMapNode[],
   edges: EntityMapEdge[],
   declaresByPage: Record<string, string[]>,
-  pagesTotal?: number,
+  pagesTotal?: number
 ): EntityMap {
   const base = map(nodes, edges, Object.keys(declaresByPage));
   return {
     ...base,
-    summary: { ...base.summary, pagesTotal: pagesTotal ?? Object.keys(declaresByPage).length },
+    summary: {
+      ...base.summary,
+      pagesTotal: pagesTotal ?? Object.keys(declaresByPage).length,
+    },
     pages: Object.entries(declaresByPage).map(([url, declares]) => ({
       url,
       declares,
@@ -113,19 +129,39 @@ describe("diffEntityMaps", () => {
   });
 
   test("added: declared in the newer map only", () => {
-    const extra = node({ key: "id:https://example.com/#person", id: "https://example.com/#person", types: ["Person"], name: "Ada" });
-    const result = diff(map([node()], [], PAGES), map([node(), extra], [], PAGES));
+    const extra = node({
+      key: "id:https://example.com/#person",
+      id: "https://example.com/#person",
+      types: ["Person"],
+      name: "Ada",
+    });
+    const result = diff(
+      map([node()], [], PAGES),
+      map([node(), extra], [], PAGES)
+    );
 
-    expect(result.added.map((n) => n.key)).toEqual(["id:https://example.com/#person"]);
+    expect(result.added.map((n) => n.key)).toEqual([
+      "id:https://example.com/#person",
+    ]);
     expect(result.removed).toHaveLength(0);
     expect(result.notCrawled).toHaveLength(0);
   });
 
   test("removed: gone, and every declaring page was crawled again", () => {
-    const gone = node({ key: "id:https://example.com/#gone", id: "https://example.com/#gone", name: "Gone", pages: ["https://example.com/a"] });
-    const result = diff(map([node(), gone], [], PAGES), map([node()], [], PAGES));
+    const gone = node({
+      key: "id:https://example.com/#gone",
+      id: "https://example.com/#gone",
+      name: "Gone",
+      pages: ["https://example.com/a"],
+    });
+    const result = diff(
+      map([node(), gone], [], PAGES),
+      map([node()], [], PAGES)
+    );
 
-    expect(result.removed.map((n) => n.key)).toEqual(["id:https://example.com/#gone"]);
+    expect(result.removed.map((n) => n.key)).toEqual([
+      "id:https://example.com/#gone",
+    ]);
     expect(result.notCrawled).toHaveLength(0);
   });
 
@@ -140,10 +176,12 @@ describe("diffEntityMaps", () => {
     });
     const result = diff(
       map([node(), onlyOnB], [], PAGES),
-      map([node()], [], ["https://example.com/a"]),
+      map([node()], [], ["https://example.com/a"])
     );
 
-    expect(result.notCrawled.map((n) => n.key)).toEqual(["id:https://example.com/#onb"]);
+    expect(result.notCrawled.map((n) => n.key)).toEqual([
+      "id:https://example.com/#onb",
+    ]);
     expect(result.removed).toHaveLength(0);
     expect(result.pagesOnlyInOlder).toEqual(["https://example.com/b"]);
   });
@@ -158,15 +196,28 @@ describe("diffEntityMaps", () => {
       name: "On B",
       pages: ["https://example.com/b"],
     });
-    const result = diff(map([node(), onlyOnB], [], PAGES), map([node()], [], PAGES));
+    const result = diff(
+      map([node(), onlyOnB], [], PAGES),
+      map([node()], [], PAGES)
+    );
 
-    expect(result.removed.map((n) => n.key)).toEqual(["id:https://example.com/#onb"]);
+    expect(result.removed.map((n) => n.key)).toEqual([
+      "id:https://example.com/#onb",
+    ]);
     expect(result.notCrawled).toHaveLength(0);
   });
 
   test("gainedId: matched across the key change, and not double-counted", () => {
-    const before = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
-    const after = node({ key: "id:https://example.com/#org", id: "https://example.com/#org", name: "Acme" });
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+    });
+    const after = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
     expect(result.gainedId).toHaveLength(1);
@@ -201,7 +252,7 @@ describe("diffEntityMaps", () => {
     });
     const result = diff(
       map([before], [], ["https://example.com/a", "https://example.com/b"]),
-      map([after], [], ["https://example.com/c", "https://example.com/d"]),
+      map([after], [], ["https://example.com/c", "https://example.com/d"])
     );
 
     expect(result.gainedId).toHaveLength(1);
@@ -269,7 +320,10 @@ describe("diffEntityMaps", () => {
       "https://example.com/a": ["id:https://example.com/#org"],
       "https://example.com/b": ["id:https://example.com/#org"],
     };
-    const result = diff(mapWith([before], [], declares), mapWith([after], [], fixed));
+    const result = diff(
+      mapWith([before], [], declares),
+      mapWith([after], [], fixed)
+    );
 
     expect(result.gainedId).toHaveLength(1);
     expect(result.gainedId[0]!.coverage).toBe("proven");
@@ -296,8 +350,16 @@ describe("diffEntityMaps", () => {
   });
 
   test("lostId: the same match in reverse", () => {
-    const before = node({ key: "id:https://example.com/#org", id: "https://example.com/#org", name: "Acme" });
-    const after = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
+    const before = node({
+      key: "id:https://example.com/#org",
+      id: "https://example.com/#org",
+      name: "Acme",
+    });
+    const after = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
     expect(result.lostId).toHaveLength(1);
@@ -321,7 +383,8 @@ describe("diffEntityMaps", () => {
       },
     ]);
     expect(
-      diffEntityMaps(older, newer, { generatedAt: AT, occurrenceThreshold: 6 }).occurrenceDeltas,
+      diffEntityMaps(older, newer, { generatedAt: AT, occurrenceThreshold: 6 })
+        .occurrenceDeltas
     ).toHaveLength(0);
   });
 
@@ -379,16 +442,33 @@ describe("diffEntityMaps", () => {
   });
 
   test("summaryDelta carries every numeric metric", () => {
-    const result = diff(map([node()], [], PAGES), map([node(), node({ key: "b", id: null })], [], PAGES));
-    expect(result.summaryDelta.nodeCount).toEqual({ before: 1, after: 2, delta: 1 });
+    const result = diff(
+      map([node()], [], PAGES),
+      map([node(), node({ key: "b", id: null })], [], PAGES)
+    );
+    expect(result.summaryDelta.nodeCount).toEqual({
+      before: 1,
+      after: 2,
+      delta: 1,
+    });
     expect(result.summaryDelta.countsByType).toBeUndefined();
     expect(typeof result.summaryDelta.stableIdShare?.delta).toBe("number");
   });
 
   test("is deterministic", () => {
-    const older = map([node(), node({ key: "b", id: null, name: "B" })], [edge()], PAGES);
-    const newer = map([node({ occurrences: 9 })], [], ["https://example.com/a"]);
-    expect(JSON.stringify(diff(older, newer))).toBe(JSON.stringify(diff(older, newer)));
+    const older = map(
+      [node(), node({ key: "b", id: null, name: "B" })],
+      [edge()],
+      PAGES
+    );
+    const newer = map(
+      [node({ occurrences: 9 })],
+      [],
+      ["https://example.com/a"]
+    );
+    expect(JSON.stringify(diff(older, newer))).toBe(
+      JSON.stringify(diff(older, newer))
+    );
   });
 });
 
@@ -397,7 +477,10 @@ describe("diffEntityMaps", () => {
 // never applied.
 describe("the coverage page lists are capped", () => {
   const urls = (prefix: string, n: number) =>
-    Array.from({ length: n }, (_, i) => `https://example.com/${prefix}/${String(i).padStart(5, "0")}`);
+    Array.from(
+      { length: n },
+      (_, i) => `https://example.com/${prefix}/${String(i).padStart(5, "0")}`
+    );
 
   test("samples each side and counts the rest", () => {
     const older = map([], [], urls("old", 5_000));
@@ -415,11 +498,16 @@ describe("the coverage page lists are capped", () => {
   test("keeps the sample sorted, so which URLs survive is not iteration order", () => {
     const shuffled = [...urls("old", 200)].reverse();
     const result = diff(map([], [], shuffled), map([], [], []));
-    expect(result.pagesOnlyInOlder).toEqual(urls("old", 200).slice(0, ENTITY_MAP_DIFF_PAGES_CAP));
+    expect(result.pagesOnlyInOlder).toEqual(
+      urls("old", 200).slice(0, ENTITY_MAP_DIFF_PAGES_CAP)
+    );
   });
 
   test("reports zero extra when both sides fit", () => {
-    const result = diff(map([], [], urls("old", 3)), map([], [], urls("new", 2)));
+    const result = diff(
+      map([], [], urls("old", 3)),
+      map([], [], urls("new", 2))
+    );
     expect(result.pagesOnlyInOlder).toHaveLength(3);
     expect(result.morePagesOnlyInOlder).toBe(0);
     expect(result.morePagesOnlyInNewer).toBe(0);
@@ -449,7 +537,9 @@ describe("coverage is proven, not sampled", () => {
     const newer = mapWith([], [], { "https://example.com/a": [] });
 
     const result = diff(older, newer);
-    expect(result.notCrawled.map((n) => n.key)).toEqual(["id:https://example.com/#wide"]);
+    expect(result.notCrawled.map((n) => n.key)).toEqual([
+      "id:https://example.com/#wide",
+    ]);
     expect(result.removed).toHaveLength(0);
   });
 
@@ -483,7 +573,12 @@ describe("coverage is proven, not sampled", () => {
     // the crawl's own page count is what distinguishes them.
     // The clipped index lists only /a, and /a was recrawled. Trusting it would
     // read as full coverage of an entity the crawl saw on 40 pages.
-    const older = mapWith([WIDE], [], { "https://example.com/a": ["id:https://example.com/#wide"] }, 40);
+    const older = mapWith(
+      [WIDE],
+      [],
+      { "https://example.com/a": ["id:https://example.com/#wide"] },
+      40
+    );
     const newer = mapWith([], [], { "https://example.com/a": [] }, 40);
 
     expect(diff(older, newer).notCrawled).toHaveLength(1);
@@ -559,36 +654,72 @@ describe("identity matching is one-to-one", () => {
   test("two same-named candidates stay unmatched rather than guess", () => {
     // One anonymous "Acme" and two new "Acme"s with ids. Any pairing is a
     // guess, and a wrong one invents a rename AND a deletion at once.
-    const before = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
-    const afterA = node({ key: "id:https://example.com/#a", id: "https://example.com/#a", name: "Acme" });
-    const afterB = node({ key: "id:https://example.com/#b", id: "https://example.com/#b", name: "Acme" });
-    const result = diff(map([before], [], PAGES), map([afterA, afterB], [], PAGES));
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+    });
+    const afterA = node({
+      key: "id:https://example.com/#a",
+      id: "https://example.com/#a",
+      name: "Acme",
+    });
+    const afterB = node({
+      key: "id:https://example.com/#b",
+      id: "https://example.com/#b",
+      name: "Acme",
+    });
+    const result = diff(
+      map([before], [], PAGES),
+      map([afterA, afterB], [], PAGES)
+    );
 
     expect(result.gainedId).toHaveLength(0);
     expect(result.added.map((n) => n.key)).toEqual([
       "id:https://example.com/#a",
       "id:https://example.com/#b",
     ]);
-    expect(result.removed.map((n) => n.key)).toEqual(["syn:Organization|name:acme"]);
+    expect(result.removed.map((n) => n.key)).toEqual([
+      "syn:Organization|name:acme",
+    ]);
   });
 
   test("an entity that survived under its own key is never consumed as a match", () => {
     // The unchanged `id:…#org` shares a name with the entity that gained an id.
     // Pairing against it would report a change that did not happen.
     const survivor = node({ key: "id:https://example.com/#org", name: "Acme" });
-    const before = node({ key: "syn:Organization|name:acme", id: null, name: "Acme" });
-    const result = diff(map([survivor, before], [], PAGES), map([survivor], [], PAGES));
+    const before = node({
+      key: "syn:Organization|name:acme",
+      id: null,
+      name: "Acme",
+    });
+    const result = diff(
+      map([survivor, before], [], PAGES),
+      map([survivor], [], PAGES)
+    );
 
     expect(result.gainedId).toHaveLength(0);
     expect(result.lostId).toHaveLength(0);
-    expect(result.removed.map((n) => n.key)).toEqual(["syn:Organization|name:acme"]);
+    expect(result.removed.map((n) => n.key)).toEqual([
+      "syn:Organization|name:acme",
+    ]);
   });
 
   test("a type set cannot be forged with a separator", () => {
     // `@type` is site-controlled. Joining the sorted set with "+" makes
     // ["A+B"] and ["A","B"] the same signature and pairs two unrelated things.
-    const before = node({ key: "syn:x", id: null, types: ["A+B"], name: "Acme" });
-    const after = node({ key: "id:https://example.com/#z", id: "https://example.com/#z", types: ["A", "B"], name: "Acme" });
+    const before = node({
+      key: "syn:x",
+      id: null,
+      types: ["A+B"],
+      name: "Acme",
+    });
+    const after = node({
+      key: "id:https://example.com/#z",
+      id: "https://example.com/#z",
+      types: ["A", "B"],
+      name: "Acme",
+    });
     const result = diff(map([before], [], PAGES), map([after], [], PAGES));
 
     expect(result.gainedId).toHaveLength(0);
@@ -604,7 +735,7 @@ describe("the docs.squirrelscan.com before/after", () => {
   // here — which is also what `squirrel entities --input` does.
   const load = async (name: string): Promise<EntityMap> => {
     const raw = (await Bun.file(
-      `${import.meta.dir}/fixtures/entity-map/${name}.json`,
+      `${import.meta.dir}/fixtures/entity-map/${name}.json`
     ).json()) as EntityMap;
     return {
       ...raw,
@@ -619,14 +750,21 @@ describe("the docs.squirrelscan.com before/after", () => {
   };
 
   test("reports 183 additions and nothing removed", async () => {
-    const result = diff(await load("docs-before-jsonld"), await load("docs-after-jsonld"));
+    const result = diff(
+      await load("docs-before-jsonld"),
+      await load("docs-after-jsonld")
+    );
 
     expect(result.older.nodeCount).toBe(0);
     expect(result.newer.nodeCount).toBe(183);
     expect(result.added).toHaveLength(183);
     expect(result.removed).toHaveLength(0);
     expect(result.notCrawled).toHaveLength(0);
-    expect(result.summaryDelta.nodeCount).toEqual({ before: 0, after: 183, delta: 183 });
+    expect(result.summaryDelta.nodeCount).toEqual({
+      before: 0,
+      after: 183,
+      delta: 183,
+    });
     // The site went from nothing to every entity carrying a stable `@id`.
     expect(result.summaryDelta.stableIdShare!.after).toBe(1);
     expect(Value.Check(EntityMapDiffSchema, result)).toBe(true);

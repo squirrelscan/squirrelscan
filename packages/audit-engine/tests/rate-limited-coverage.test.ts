@@ -2,14 +2,17 @@
 // lost, and must not read as a complete run. Driven through both report
 // assemblers over real crawl storage, plus the coverage the cloud merge reports.
 
+import type { PageRecord, SitePageRecord } from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import type { PageRecord, SitePageRecord } from "@squirrelscan/core-contracts";
-
 import { generateReportFromStorage } from "../src/adapter";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import {
   buildV2Report,
   emptyRuleExecutionResult,
@@ -100,7 +103,8 @@ async function throttledCrawl(opts: { rateLimited: number; pending: number }) {
           pagesRateLimited: opts.rateLimited,
         },
       });
-      for (const path of ["/", "/a", "/b"]) yield* storage.upsertPage(crawlId, pageRow(path));
+      for (const path of ["/", "/a", "/b"])
+        yield* storage.upsertPage(crawlId, pageRow(path));
       for (let i = 0; i < opts.pending; i++) {
         yield* storage.upsertFrontier(crawlId, {
           normalizedUrl: `${BASE}/queued/${i}`,
@@ -113,11 +117,18 @@ async function throttledCrawl(opts: { rateLimited: number; pending: number }) {
           retryCount: 0,
         });
       }
-      const input: StreamingReportInput = { ...emptyRuleExecutionResult(), tallies: new Map() };
-      const v1 = yield* generateReportFromStorage(storage, crawlId, emptyRuleExecutionResult());
+      const input: StreamingReportInput = {
+        ...emptyRuleExecutionResult(),
+        tallies: new Map(),
+      };
+      const v1 = yield* generateReportFromStorage(
+        storage,
+        crawlId,
+        emptyRuleExecutionResult()
+      );
       const v2 = yield* buildV2Report(storage, crawlId, input);
       return { v1, v2 };
-    }),
+    })
   );
 }
 
@@ -133,8 +144,12 @@ describe("rate-limited crawl summary", () => {
         // The abandoned URLs and the still-queued ones, which are disjoint.
         unfetched: 437 + 918,
       });
-      expect(report.statusReason).toContain("437 pages rate limited by shop.example.com");
-      expect(report.statusReason).toContain("1355 more discovered but not fetched");
+      expect(report.statusReason).toContain(
+        "437 pages rate limited by shop.example.com"
+      );
+      expect(report.statusReason).toContain(
+        "1355 more discovered but not fetched"
+      );
     }
   });
 
@@ -169,7 +184,10 @@ class EmptyStore implements SmartAuditStore {
 }
 
 describe("coverage of a rate-limited run", () => {
-  const crawled = ["/", "/a", "/b"].map((path) => ({ url: `${BASE}${path}`, status: 200 }));
+  const crawled = ["/", "/a", "/b"].map((path) => ({
+    url: `${BASE}${path}`,
+    status: 200,
+  }));
   const run = (unfetchedPages?: number) =>
     runCloudSmartAudits({
       store: new EmptyStore(),
@@ -190,9 +208,16 @@ describe("coverage of a rate-limited run", () => {
   test("without a throttle the coverage is unchanged", async () => {
     for (const none of [undefined, 0]) {
       const { coverage } = await run(none);
-      expect(coverage).toEqual({ auditedPages: 3, knownPages: 3, carriedFindings: 0 });
+      expect(coverage).toEqual({
+        auditedPages: 3,
+        knownPages: 3,
+        carriedFindings: 0,
+      });
     }
   });
 });
 
-describeSitePagesContract("rate-limited-coverage.test.ts EmptyStore", () => new EmptyStore());
+describeSitePagesContract(
+  "rate-limited-coverage.test.ts EmptyStore",
+  () => new EmptyStore()
+);

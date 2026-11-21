@@ -1,12 +1,17 @@
 // links/generic-anchor-density: generic anchors as a site-wide ratio (repo#1387).
 
-import { describe, expect, test } from "bun:test";
 import type { LinkData } from "@squirrelscan/core-contracts";
 
-import { genericAnchorDensityRule } from "../src/links/generic-anchor-density";
-import { GENERIC_LINK_TEXT } from "../src/a11y/link-text";
-import { CORE_GENERIC_ANCHORS, countGenericAnchors } from "../src/shared/generic-anchor-phrases";
+import { describe, expect, test } from "bun:test";
+
 import type { CheckResult, ParsedPage, RuleContext } from "../src/types";
+
+import { GENERIC_LINK_TEXT } from "../src/a11y/link-text";
+import { genericAnchorDensityRule } from "../src/links/generic-anchor-density";
+import {
+  CORE_GENERIC_ANCHORS,
+  countGenericAnchors,
+} from "../src/shared/generic-anchor-phrases";
 
 const BASE = "https://example.com/";
 
@@ -14,7 +19,10 @@ function a(text: string, extra: Partial<LinkData> = {}): LinkData {
   return { url: "/x", text, isInternal: true, isChrome: false, ...extra };
 }
 
-function ctx(pages: Record<string, LinkData[]>, options: Record<string, unknown> = {}): RuleContext {
+function ctx(
+  pages: Record<string, LinkData[]>,
+  options: Record<string, unknown> = {}
+): RuleContext {
   return {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
@@ -48,7 +56,11 @@ function mix(generic: number, descriptive: number): LinkData[] {
 describe("links/generic-anchor-density", () => {
   test("fail: a mostly generic site reports the ratio and the worst pages", async () => {
     const c = await run(
-      ctx({ [`${BASE}a`]: mix(30, 5), [`${BASE}b`]: mix(10, 15), [`${BASE}c`]: mix(0, 10) })
+      ctx({
+        [`${BASE}a`]: mix(30, 5),
+        [`${BASE}b`]: mix(10, 15),
+        [`${BASE}c`]: mix(0, 10),
+      })
     );
     expect(c.status).toBe("fail");
     expect(c.message).toContain("of internal anchors are generic (40 of 70)");
@@ -62,7 +74,9 @@ describe("links/generic-anchor-density", () => {
   });
 
   test("pass (no false positive): occasional generic anchors below the threshold", async () => {
-    const c = await run(ctx({ [`${BASE}a`]: mix(3, 40), [`${BASE}b`]: mix(2, 40) }));
+    const c = await run(
+      ctx({ [`${BASE}a`]: mix(3, 40), [`${BASE}b`]: mix(2, 40) })
+    );
     expect(c.status).toBe("pass");
     expect(c.items).toBeUndefined();
   });
@@ -89,13 +103,15 @@ describe("links/generic-anchor-density", () => {
 
   test("worst pages are capped at ten and ordered by generic count then url", async () => {
     const pages: Record<string, LinkData[]> = {};
-    for (let i = 0; i < 12; i++) pages[`${BASE}p${String(i).padStart(2, "0")}`] = mix(i + 1, 0);
+    for (let i = 0; i < 12; i++)
+      pages[`${BASE}p${String(i).padStart(2, "0")}`] = mix(i + 1, 0);
     const c = await run(ctx(pages));
     expect(c.items).toHaveLength(10);
     expect(c.items![0]!.id).toBe(`${BASE}p11`);
   });
 
   test("the phrase list agrees with links/anchor-text and a11y/link-text", () => {
-    for (const phrase of CORE_GENERIC_ANCHORS) expect(GENERIC_LINK_TEXT).toContain(phrase);
+    for (const phrase of CORE_GENERIC_ANCHORS)
+      expect(GENERIC_LINK_TEXT).toContain(phrase);
   });
 });

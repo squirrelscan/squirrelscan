@@ -3,9 +3,11 @@
 // crawler-level Disallow rules.
 
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
 import { ROBOTS_MAX_BYTES } from "@squirrelscan/utils/constants";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import { type CrawlerClass, evaluateAiCrawlers } from "./ai-crawlers";
 
 /** The three defined content signals (contentsignals.org) and what each governs. */
@@ -85,7 +87,9 @@ export function parseContentSignals(content: string): ParsedContentSignal[] {
   return out;
 }
 
-function parseSignalValue(value: string): Omit<ParsedContentSignal, "userAgents"> {
+function parseSignalValue(
+  value: string
+): Omit<ParsedContentSignal, "userAgents"> {
   const signals: ParsedContentSignal["signals"] = [];
   const aux: ParsedContentSignal["aux"] = [];
   const unknownKeys: string[] = [];
@@ -100,7 +104,10 @@ function parseSignalValue(value: string): Omit<ParsedContentSignal, "userAgents"
       continue;
     }
     const key = token.slice(0, eq).trim().toLowerCase();
-    const val = token.slice(eq + 1).trim().toLowerCase();
+    const val = token
+      .slice(eq + 1)
+      .trim()
+      .toLowerCase();
     const auxValues = AUX_SIGNALS[key];
     if (auxValues) {
       if (auxValues.includes(val)) aux.push({ key, value: val });
@@ -133,24 +140,29 @@ export interface ContentSignalContradiction {
  * crawler, while one under a named group speaks only for those agents. */
 export function findContradictions(
   signals: ParsedContentSignal[],
-  robotsTxt: RobotsTxtData,
+  robotsTxt: RobotsTxtData
 ): ContentSignalContradiction[] {
   const blocked = evaluateAiCrawlers(robotsTxt).filter((v) => v.blocked);
   const out: ContentSignalContradiction[] = [];
   const seen = new Set<KnownSignal>();
   for (const directive of signals) {
-    const global = directive.userAgents.length === 0 || directive.userAgents.includes("*");
+    const global =
+      directive.userAgents.length === 0 || directive.userAgents.includes("*");
     for (const s of directive.signals) {
       if (s.value !== "yes" || seen.has(s.key)) continue;
       const cls = SIGNAL_TO_CLASS[s.key];
       const blockedInScope = blocked.filter(
         (b) =>
           b.crawlerClass === cls &&
-          (global || directive.userAgents.includes(b.token.toLowerCase())),
+          (global || directive.userAgents.includes(b.token.toLowerCase()))
       );
       if (blockedInScope.length > 0) {
         seen.add(s.key);
-        out.push({ signal: s.key, crawlerClass: cls, blockedTokens: blockedInScope.map((b) => b.token) });
+        out.push({
+          signal: s.key,
+          crawlerClass: cls,
+          blockedTokens: blockedInScope.map((b) => b.token),
+        });
       }
     }
   }
@@ -172,7 +184,9 @@ export const ROBOTS_CAP_MARGIN_BYTES = 4;
  * as exists:false with no error. A refused, failed or budget-cut read records an
  * error, and a read that reached the cap may hide a directive past it.
  */
-export function robotsNotReadReason(robotsTxt: RobotsTxtData | null | undefined): string | null {
+export function robotsNotReadReason(
+  robotsTxt: RobotsTxtData | null | undefined
+): string | null {
   if (!robotsTxt) return "robots.txt was not read in this audit";
   const error = robotsTxt.errors[0];
   if (error) return `robots.txt could not be read (${error})`;
@@ -227,7 +241,8 @@ export const contentSignalsRule: Rule = {
       checks.push({
         name: "content-signals",
         status: "info",
-        message: "No Content-Signal declared in robots.txt (optional per-purpose AI policy)",
+        message:
+          "No Content-Signal declared in robots.txt (optional per-purpose AI policy)",
         value: "absent",
         details: { state: "absent" },
       });
@@ -236,12 +251,14 @@ export const contentSignalsRule: Rule = {
 
     // Declared policy summary (info).
     const declared = new Map<KnownSignal, "yes" | "no">();
-    for (const d of directives) for (const s of d.signals) declared.set(s.key, s.value);
+    for (const d of directives)
+      for (const s of d.signals) declared.set(s.key, s.value);
     const policyParts = KNOWN_SIGNALS.filter((k) => declared.has(k)).map(
-      (k) => `${k}=${declared.get(k)} (${SIGNAL_DESCRIPTION[k]})`,
+      (k) => `${k}=${declared.get(k)} (${SIGNAL_DESCRIPTION[k]})`
     );
     const declaredAux = new Map<string, string>();
-    for (const d of directives) for (const a of d.aux) declaredAux.set(a.key, a.value);
+    for (const d of directives)
+      for (const a of d.aux) declaredAux.set(a.key, a.value);
     for (const [k, v] of declaredAux) policyParts.push(`${k}=${v}`);
     checks.push({
       name: "content-signals-policy",
@@ -263,8 +280,10 @@ export const contentSignalsRule: Rule = {
     const malformed = [...new Set(directives.flatMap((d) => d.malformed))];
     if (unknownKeys.length > 0 || malformed.length > 0) {
       const notes: string[] = [];
-      if (unknownKeys.length > 0) notes.push(`unknown key(s): ${unknownKeys.join(", ")}`);
-      if (malformed.length > 0) notes.push(`malformed token(s): ${malformed.join(", ")}`);
+      if (unknownKeys.length > 0)
+        notes.push(`unknown key(s): ${unknownKeys.join(", ")}`);
+      if (malformed.length > 0)
+        notes.push(`malformed token(s): ${malformed.join(", ")}`);
       checks.push({
         name: "content-signals-syntax",
         status: "warn",
@@ -276,7 +295,9 @@ export const contentSignalsRule: Rule = {
     }
 
     // Contradiction: a signal opts a purpose IN while its crawler class is blocked.
-    const contradictions = robotsTxt ? findContradictions(directives, robotsTxt) : [];
+    const contradictions = robotsTxt
+      ? findContradictions(directives, robotsTxt)
+      : [];
     if (contradictions.length > 0) {
       checks.push({
         name: "content-signals-contradiction",
@@ -284,7 +305,7 @@ export const contentSignalsRule: Rule = {
         message: contradictions
           .map(
             (c) =>
-              `Content-Signal ${c.signal}=yes but robots.txt fully Disallow-s ${c.blockedTokens.join(", ")}, a crawler can't tell which directive wins`,
+              `Content-Signal ${c.signal}=yes but robots.txt fully Disallow-s ${c.blockedTokens.join(", ")}, a crawler can't tell which directive wins`
           )
           .join("; "),
         value: `${contradictions.length} contradiction(s)`,

@@ -10,17 +10,22 @@
 // Every fixture runs through `bothPaths`, so the legacy `ctx.site.pages` path and
 // the streaming `SiteQuery` path are asserted byte-identical on all of them.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
+import { getRichResultTypes } from "@squirrelscan/utils";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
-import { getRichResultTypes } from "@squirrelscan/utils";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import {
   schemaCoverageOutlierRule,
   SCHEMA_NORM_MIN_GROUP_PAGES,
   SCHEMA_NORM_MIN_PAGES,
 } from "../src/schema/coverage-outlier";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 interface PageSpec {
   pageType: string | null;
@@ -37,12 +42,22 @@ function url(i: number): string {
 }
 
 /** N pages of one type, all carrying the same schema @types. */
-function uniform(pageType: string, schemaTypes: string[], count: number): PageSpec[] {
+function uniform(
+  pageType: string,
+  schemaTypes: string[],
+  count: number
+): PageSpec[] {
   return Array.from({ length: count }, () => ({ pageType, schemaTypes }));
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as ParsedPage,
   options: {},
 };
@@ -135,7 +150,12 @@ function siteQueryCtx(specs: PageSpec[]): RuleContext {
   return {
     ...baseCtx,
     // EMPTY pages — the streaming path must not read them.
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteQuery,
   };
 }
@@ -169,7 +189,9 @@ function partial(
 
 describe("schema/coverage-outlier — silence guards", () => {
   test("skips a crawl below the site page floor", async () => {
-    const check = await bothPaths(uniform("product", ["Product"], SCHEMA_NORM_MIN_PAGES - 1));
+    const check = await bothPaths(
+      uniform("product", ["Product"], SCHEMA_NORM_MIN_PAGES - 1)
+    );
     expect(check.status).toBe("skipped");
     expect(check.message).toContain(`${SCHEMA_NORM_MIN_PAGES} needed`);
   });
@@ -183,11 +205,16 @@ describe("schema/coverage-outlier — silence guards", () => {
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
-    expect(check.message).toContain(`${SCHEMA_NORM_MIN_GROUP_PAGES}+ comparable pages`);
+    expect(check.message).toContain(
+      `${SCHEMA_NORM_MIN_GROUP_PAGES}+ comparable pages`
+    );
   });
 
   test("a site with no schema anywhere stays clean — that is the per-type rules' finding", async () => {
-    const specs = [...uniform("product", [], 12), ...uniform("article", [], 12)];
+    const specs = [
+      ...uniform("product", [], 12),
+      ...uniform("article", [], 12),
+    ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
     expect(check.message).toContain("sharing a structured-data pattern");
@@ -195,10 +222,12 @@ describe("schema/coverage-outlier — silence guards", () => {
 
   test("skips a group with no modal agreement — every page marks itself up differently", async () => {
     // 10 product pages, each with its own @type: no type reaches 70%.
-    const specs = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].map((t) => ({
-      pageType: "product",
-      schemaTypes: [t],
-    }));
+    const specs = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].map(
+      (t) => ({
+        pageType: "product",
+        schemaTypes: [t],
+      })
+    );
     const check = await bothPaths(specs);
     expect(check.status).toBe("skipped");
   });
@@ -223,7 +252,11 @@ describe("schema/coverage-outlier — silence guards", () => {
   test("non-2xx pages are excluded from the norm and never flagged", async () => {
     const specs = [
       ...uniform("product", ["Product"], 10),
-      ...Array.from({ length: 3 }, () => ({ pageType: "product", schemaTypes: [], status: 404 })),
+      ...Array.from({ length: 3 }, () => ({
+        pageType: "product",
+        schemaTypes: [],
+        status: 404,
+      })),
     ];
     const check = await bothPaths(specs);
     expect(check.status).toBe("pass");
@@ -256,7 +289,9 @@ describe("schema/coverage-outlier — template-uniform pages sit inside the norm
   test("an optional extra on a minority of pages is not a norm, and does not hide a real gap", async () => {
     // 40/45 carry Product; a BreadcrumbList on 10 of them never reaches 70%.
     const specs = partial("product", ["Product"], 40, 45).map((spec, i) =>
-      i < 10 ? { ...spec, schemaTypes: [...spec.schemaTypes, "BreadcrumbList"] } : spec
+      i < 10
+        ? { ...spec, schemaTypes: [...spec.schemaTypes, "BreadcrumbList"] }
+        : spec
     );
     const check = await bothPaths(specs);
     expect(check.items).toHaveLength(1);
@@ -269,7 +304,9 @@ describe("schema/coverage-outlier — outliers", () => {
     const check = await bothPaths(partial("product", ["Product"], 40, 45));
     expect(check.status).toBe("warn");
     expect(check.value).toBe(5);
-    expect(check.message).toContain("5 of 45 page(s) are missing structured data");
+    expect(check.message).toContain(
+      "5 of 45 page(s) are missing structured data"
+    );
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0]?.label).toBe(
       "40 of 45 product pages have Product schema, these 5 do not"

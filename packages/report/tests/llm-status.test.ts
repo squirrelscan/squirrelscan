@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderLlm } from "../src/output/llm";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -21,12 +22,13 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 }
 
 describe("renderLlm failed/blocked status (#792)", () => {
-  test("blocked report emits a <status state=\"blocked\"> block with reason + explanation", () => {
+  test('blocked report emits a <status state="blocked"> block with reason + explanation', () => {
     const xml = renderLlm(
       baseReport({
         status: "blocked",
-        statusReason: "Site blocked the crawler (bot protection / auth / rate limit)",
-      }),
+        statusReason:
+          "Site blocked the crawler (bot protection / auth / rate limit)",
+      })
     );
     expect(xml).toContain('<status state="blocked"');
     expect(xml).toContain('reason="Site blocked the crawler');
@@ -37,12 +39,14 @@ describe("renderLlm failed/blocked status (#792)", () => {
     expect(xml).toContain("squirrel audit https://example.com");
     expect(xml).toContain("</status>");
     // No em-dashes in agent-facing copy.
-    expect(xml.slice(xml.indexOf("<status"), xml.indexOf("</status>"))).not.toContain("—");
+    expect(
+      xml.slice(xml.indexOf("<status"), xml.indexOf("</status>"))
+    ).not.toContain("—");
   });
 
-  test("failed (unreachable) report emits a <status state=\"failed\"> block", () => {
+  test('failed (unreachable) report emits a <status state="failed"> block', () => {
     const xml = renderLlm(
-      baseReport({ status: "failed", statusReason: "No pages were crawled" }),
+      baseReport({ status: "failed", statusReason: "No pages were crawled" })
     );
     expect(xml).toContain('<status state="failed"');
     expect(xml).toContain("No pages could be fetched from the site");
@@ -60,7 +64,8 @@ describe("renderLlm failed/blocked status (#792)", () => {
 // same way, so the retry line gives way to the destination, offered for the
 // user to confirm, or to "needs authentication" for a sign-in page.
 describe("renderLlm off-site redirect failure (#3480)", () => {
-  const OFF_SITE = "Redirect from example.com could not be followed: redirected off-site to www.example.org";
+  const OFF_SITE =
+    "Redirect from example.com could not be followed: redirected off-site to www.example.org";
 
   test("offers the destination's exact command, for the user to confirm", () => {
     const xml = renderLlm(
@@ -68,10 +73,10 @@ describe("renderLlm off-site redirect failure (#3480)", () => {
         status: "failed",
         statusReason: OFF_SITE,
         finalUrl: "https://www.example.org/welcome",
-      }),
+      })
     );
     expect(xml).toContain(
-      "The entry URL redirects to https://www.example.org. If the user confirms that is the site they meant, audit it with `squirrel audit https://www.example.org`.",
+      "The entry URL redirects to https://www.example.org. If the user confirms that is the site they meant, audit it with `squirrel audit https://www.example.org`."
     );
     expect(xml).not.toContain("to retry locally");
   });
@@ -82,7 +87,7 @@ describe("renderLlm off-site redirect failure (#3480)", () => {
         status: "failed",
         statusReason: OFF_SITE,
         finalUrl: "https://login.example.org/oauth?return=%2F",
-      }),
+      })
     );
     expect(xml).toContain("https://login.example.org is a sign-in page");
     expect(xml).toContain("guides/failed-audits#access-gateway");
@@ -91,11 +96,16 @@ describe("renderLlm off-site redirect failure (#3480)", () => {
 
   test("any other failure, or a redirect with no recorded target, keeps the retry line", () => {
     for (const overrides of [
-      { statusReason: "No pages were crawled", finalUrl: "https://www.example.org/" },
+      {
+        statusReason: "No pages were crawled",
+        finalUrl: "https://www.example.org/",
+      },
       { statusReason: OFF_SITE },
     ]) {
       const xml = renderLlm(baseReport({ status: "failed", ...overrides }));
-      expect(xml).toContain("Run the CLI with `squirrel audit https://example.com` to retry locally.");
+      expect(xml).toContain(
+        "Run the CLI with `squirrel audit https://example.com` to retry locally."
+      );
       expect(xml).not.toContain("The entry URL redirects to");
     }
   });

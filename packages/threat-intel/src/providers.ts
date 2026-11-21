@@ -4,9 +4,17 @@
 // defensive — a provider that errors or changes shape degrades to "no data"
 // rather than throwing through the audit.
 
-import type { IntelProviderId, IntelSource } from "@squirrelscan/core-contracts";
+import type {
+  IntelProviderId,
+  IntelSource,
+} from "@squirrelscan/core-contracts";
 
-import type { FeedEntry, FeedProvider, LookupProvider, ProviderConfig } from "./types";
+import type {
+  FeedEntry,
+  FeedProvider,
+  LookupProvider,
+  ProviderConfig,
+} from "./types";
 
 // ── helpers ─────────────────────────────────────────────────────────
 
@@ -34,9 +42,12 @@ function vtUrlId(url: string): string {
 export const urlhausFeed: FeedProvider = {
   id: "urlhaus",
   async fetchFeed(transport, config): Promise<FeedEntry[]> {
-    const res = await transport("https://urlhaus.abuse.ch/downloads/json_recent/", {
-      headers: authKeyHeaders(config),
-    });
+    const res = await transport(
+      "https://urlhaus.abuse.ch/downloads/json_recent/",
+      {
+        headers: authKeyHeaders(config),
+      }
+    );
     if (!res.ok) return [];
     const body = asRecord(await res.json().catch(() => ({})));
     const out: FeedEntry[] = [];
@@ -64,7 +75,10 @@ export const threatfoxFeed: FeedProvider = {
   async fetchFeed(transport, config): Promise<FeedEntry[]> {
     const res = await transport("https://threatfox-api.abuse.ch/api/v1/", {
       method: "POST",
-      headers: { "content-type": "application/json", ...authKeyHeaders(config) },
+      headers: {
+        "content-type": "application/json",
+        ...authKeyHeaders(config),
+      },
       body: JSON.stringify({ query: "get_iocs", days: 1 }),
     });
     if (!res.ok) return [];
@@ -75,7 +89,8 @@ export const threatfoxFeed: FeedProvider = {
       const ioc = str(rec.ioc);
       if (!ioc) continue;
       const iocType = str(rec.ioc_type);
-      const kind = iocType === "url" ? "url" : iocType === "domain" ? "domain" : null;
+      const kind =
+        iocType === "url" ? "url" : iocType === "domain" ? "domain" : null;
       if (!kind) continue; // skip ip:port / hash IOCs
       out.push({
         value: ioc,
@@ -162,7 +177,7 @@ export const safeBrowsingLookup: LookupProvider = {
             threatEntries: [{ url }],
           },
         }),
-      },
+      }
     );
     if (!res.ok) return [];
     const body = asRecord(await res.json().catch(() => ({})));
@@ -206,9 +221,12 @@ export const virustotalLookup: LookupProvider = {
   id: "virustotal",
   async lookup(url, transport, config): Promise<IntelSource[]> {
     if (!config.apiKey) return [];
-    const res = await transport(`https://www.virustotal.com/api/v3/urls/${vtUrlId(url)}`, {
-      headers: { "x-apikey": config.apiKey },
-    });
+    const res = await transport(
+      `https://www.virustotal.com/api/v3/urls/${vtUrlId(url)}`,
+      {
+        headers: { "x-apikey": config.apiKey },
+      }
+    );
     if (!res.ok) return []; // 404 = never scanned → unknown, not clean
     const body = asRecord(await res.json().catch(() => ({})));
     const attrs = asRecord(asRecord(body.data).attributes);

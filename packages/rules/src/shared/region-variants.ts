@@ -30,7 +30,11 @@
 // every page of a large multi-locale site is the resident set the streaming
 // path exists to avoid. So the rules group first and index second.
 
-import type { HreflangAlternate, SiteQuery } from "@squirrelscan/core-contracts";
+import type {
+  HreflangAlternate,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import type { ParsedPage } from "../types";
@@ -64,14 +68,18 @@ export class RegionVariantIndex {
   /** Index the in-memory pages whose URL is in `urls` (the legacy path). */
   static fromPages(
     pages: Iterable<{ url: string; parsed: ParsedPage }>,
-    urls: Iterable<string>,
+    urls: Iterable<string>
   ): RegionVariantIndex {
     const wanted = new Set(urls);
     const index = new RegionVariantIndex();
     if (wanted.size === 0) return index;
     for (const page of pages) {
       if (!wanted.has(page.url)) continue;
-      index.add(page.url, page.parsed.meta.canonical, page.parsed.hreflangAlternates);
+      index.add(
+        page.url,
+        page.parsed.meta.canonical,
+        page.parsed.hreflangAlternates
+      );
     }
     return index;
   }
@@ -82,12 +90,14 @@ export class RegionVariantIndex {
    */
   static async fromSiteQuery(
     siteQuery: SiteQuery,
-    urls: Iterable<string>,
+    urls: Iterable<string>
   ): Promise<RegionVariantIndex> {
     const wanted = new Set(urls);
     const index = new RegionVariantIndex();
     if (wanted.size === 0) return index;
-    for await (const row of siteQuery.pagesMatching((r) => wanted.has(r.normalizedUrl))) {
+    for await (const row of siteQuery.pagesMatching((r) =>
+      wanted.has(r.normalizedUrl)
+    )) {
       index.add(row.normalizedUrl, row.canonical, row.hreflangAlternates);
     }
     return index;
@@ -99,7 +109,7 @@ export class RegionVariantIndex {
    */
   static fromPagesByIdentity(
     pages: Iterable<{ url: string; parsed: ParsedPage }>,
-    urls: Iterable<string>,
+    urls: Iterable<string>
   ): RegionVariantIndex {
     const wanted = identitySet(urls);
     const index = new RegionVariantIndex();
@@ -107,7 +117,11 @@ export class RegionVariantIndex {
     for (const page of pages) {
       const id = identity(page.url);
       if (id === null || !wanted.has(id)) continue;
-      index.add(page.url, page.parsed.meta?.canonical, page.parsed.hreflangAlternates);
+      index.add(
+        page.url,
+        page.parsed.meta?.canonical,
+        page.parsed.hreflangAlternates
+      );
     }
     return index;
   }
@@ -115,7 +129,7 @@ export class RegionVariantIndex {
   /** The streaming counterpart of {@link fromPagesByIdentity}. */
   static async fromSiteQueryByIdentity(
     siteQuery: SiteQuery,
-    urls: Iterable<string>,
+    urls: Iterable<string>
   ): Promise<RegionVariantIndex> {
     const wanted = identitySet(urls);
     const index = new RegionVariantIndex();
@@ -137,7 +151,7 @@ export class RegionVariantIndex {
   add(
     url: string,
     canonical: string | null | undefined,
-    alternates: readonly HreflangAlternate[] | null | undefined,
+    alternates: readonly HreflangAlternate[] | null | undefined
   ): void {
     if (!alternates || alternates.length === 0) return;
     const self = identity(url);
@@ -190,7 +204,10 @@ export class RegionVariantIndex {
   /** {@link areReciprocalAlternates} for page identities already computed by the caller. */
   areReciprocalIds(idA: string, idB: string): boolean {
     if (idA === idB) return false;
-    return this.declared.get(idA)?.has(idB) === true && this.declared.get(idB)?.has(idA) === true;
+    return (
+      this.declared.get(idA)?.has(idB) === true &&
+      this.declared.get(idB)?.has(idA) === true
+    );
   }
 
   /**
@@ -235,7 +252,10 @@ export class RegionVariantIndex {
   }
 
   /** Keep only groups that still hold two or more distinct pages. */
-  withoutVariantOnlyGroups<T>(groups: readonly T[], urlsOf: (group: T) => readonly string[]): T[] {
+  withoutVariantOnlyGroups<T>(
+    groups: readonly T[],
+    urlsOf: (group: T) => readonly string[]
+  ): T[] {
     return groups.filter((group) => this.distinctCount(urlsOf(group)) > 1);
   }
 }

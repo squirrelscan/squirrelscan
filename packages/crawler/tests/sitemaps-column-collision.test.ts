@@ -9,10 +9,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
+import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { unlinkSync } from "fs";
-import { Effect } from "effect";
 
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
@@ -39,9 +39,9 @@ afterEach(() => {
 
 function sitemapColumns(path: string): string[] {
   const db = new Database(path);
-  const cols = (db.prepare("PRAGMA table_info(sitemaps)").all() as Array<{ name: string }>).map(
-    (c) => c.name
-  );
+  const cols = (
+    db.prepare("PRAGMA table_info(sitemaps)").all() as Array<{ name: string }>
+  ).map((c) => c.name);
   db.close();
   return cols;
 }

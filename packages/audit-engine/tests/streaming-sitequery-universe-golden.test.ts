@@ -6,11 +6,11 @@
 // and a non-HTML asset. Membership, iteration ORDER, and link SOURCES must all be
 // bounded to the universe. Matched by the Engine Golden Gates CI glob.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import type { LinkData, PageRecord } from "@squirrelscan/core-contracts";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import type { LinkData, PageRecord } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { createSiteQuery } from "../src/site-query";
 

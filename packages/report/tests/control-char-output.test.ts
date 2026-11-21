@@ -10,6 +10,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderLlm } from "../src/output/llm";
 import { renderText } from "../src/output/text";
 

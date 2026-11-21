@@ -25,7 +25,8 @@ export interface RuleRun {
 type RuleRunInput = Pick<AuditReport, "ruleResults" | "totalPages" | "baseUrl">;
 
 /** A check this audit produced and judged: not skipped, and not a finding carried over from an earlier audit. */
-const judged = (c: CheckResult): boolean => c.status !== "skipped" && c.provenance !== "carried";
+const judged = (c: CheckResult): boolean =>
+  c.status !== "skipped" && c.provenance !== "carried";
 
 function originOf(baseUrl: string): string {
   try {
@@ -46,7 +47,9 @@ function skippedPagesOf(checks: readonly CheckResult[]): Set<string> {
   return pages;
 }
 
-function entries(ruleResults: RuleRunInput["ruleResults"]): Array<[string, ReportRuleResult]> {
+function entries(
+  ruleResults: RuleRunInput["ruleResults"]
+): Array<[string, ReportRuleResult]> {
   return ruleResults instanceof Map
     ? Array.from((ruleResults as Map<string, ReportRuleResult>).entries())
     : Object.entries(ruleResults ?? {});
@@ -73,12 +76,18 @@ export function ruleRuns(report: RuleRunInput): RuleRun[] {
       rows.push({
         ruleId,
         status: "ran",
-        scope: isPage ? { pages: Math.max(0, (report.totalPages ?? 0) - skipped) } : { origin },
+        scope: isPage
+          ? { pages: Math.max(0, (report.totalPages ?? 0) - skipped) }
+          : { origin },
       });
       continue;
     }
-    const timedOut = checks.some((c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON);
-    const reason = timedOut ? RULE_TIMED_OUT_SKIP_REASON : checks.find((c) => c.skipReason)?.skipReason;
+    const timedOut = checks.some(
+      (c) => c.skipReason === RULE_TIMED_OUT_SKIP_REASON
+    );
+    const reason = timedOut
+      ? RULE_TIMED_OUT_SKIP_REASON
+      : checks.find((c) => c.skipReason)?.skipReason;
     rows.push({
       ruleId,
       status: timedOut ? "timed_out" : "skipped",
@@ -90,6 +99,9 @@ export function ruleRuns(report: RuleRunInput): RuleRun[] {
 }
 
 /** The run of one rule, or undefined when the report lists none (see {@link ruleRuns}). */
-export function ruleRunOf(report: RuleRunInput, ruleId: string): RuleRun | undefined {
+export function ruleRunOf(
+  report: RuleRunInput,
+  ruleId: string
+): RuleRun | undefined {
   return ruleRuns(report).find((r) => r.ruleId === ruleId);
 }

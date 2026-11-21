@@ -1,10 +1,12 @@
 // a11y/select-name - Select elements have accessible names
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import { labelsFor, type AttrReadable } from "../shared/attribute-lookup";
+
 import { elementSelector } from "../element-path";
+import { labelsFor, type AttrReadable } from "../shared/attribute-lookup";
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 function hasAccessibleName(el: AttrReadable, doc: Document): boolean {
   // Check aria-label
@@ -70,7 +72,9 @@ export const selectNameRule: Rule = {
         const id = select.getAttribute("id") || "";
         unnamed.add(select, {
           id: name ? `select[name="${name}"]` : id ? `select#${id}` : "select",
-          ...(ctx.wantsItemSelectors ? { selector: elementSelector(select) } : {}),
+          ...(ctx.wantsItemSelectors
+            ? { selector: elementSelector(select) }
+            : {}),
         });
       }
     }
@@ -89,8 +93,8 @@ export const selectNameRule: Rule = {
         unconfirmedRow(
           "select-name",
           "select element(s) without accessible names",
-          unnamed.unconfirmed,
-        ),
+          unnamed.unconfirmed
+        )
       );
     }
     if (selects.length === 0) {
@@ -107,7 +111,9 @@ export const selectNameRule: Rule = {
           unnamed.hidden > 0
             ? "All select elements in the accessibility tree have accessible names"
             : `${selects.length} select element(s) have accessible names`,
-        ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+        ...(unnamed.hidden > 0
+          ? { details: { hiddenWithoutName: unnamed.hidden } }
+          : {}),
       });
     }
 

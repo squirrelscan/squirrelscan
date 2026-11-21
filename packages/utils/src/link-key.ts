@@ -18,10 +18,7 @@
  * the middle ground: keep the query, drop the tracking noise, sort the rest.
  */
 
-import {
-  carriesRedactedValue,
-  redactSecretText,
-} from "./secret-url-redaction";
+import { carriesRedactedValue, redactSecretText } from "./secret-url-redaction";
 
 /**
  * No host is the audited site's own, so only what the redactor removes from
@@ -122,7 +119,8 @@ export const CREDENTIAL_PARAM_NAMES: readonly string[] = [
 
 const CREDENTIAL_NAME_SET = new Set(CREDENTIAL_PARAM_NAMES);
 /** A JSON Web Token as a query value, whatever the parameter is called. */
-const JWT_VALUE = /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
+const JWT_VALUE =
+  /^eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
 
 /** True for a parameter that carries a credential, by its name or a JWT value. */
 export function isCredentialParam(name: string, value = ""): boolean {
@@ -229,13 +227,20 @@ export function redactCredentialParams(url: string): string {
     const name = part.slice(0, equals);
     const value = part.slice(equals + 1);
     if (value === REDACTED_VALUE) return part;
-    if (!isCredentialParam(normalizePercentEncoding(name), normalizePercentEncoding(value))) {
+    if (
+      !isCredentialParam(
+        normalizePercentEncoding(name),
+        normalizePercentEncoding(value)
+      )
+    ) {
       return part;
     }
     changed = true;
     return `${name}=${REDACTED_VALUE}`;
   });
-  return changed ? `${url.slice(0, query + 1)}${redacted.join("&")}${url.slice(end)}` : url;
+  return changed
+    ? `${url.slice(0, query + 1)}${redacted.join("&")}${url.slice(end)}`
+    : url;
 }
 
 /** Whether a key still carries a credential parameter (a key from before #2782). */
@@ -371,9 +376,13 @@ export function canonicalQuery(search: string): string {
   for (const part of raw.split("&")) {
     if (part === "") continue;
     const equals = part.indexOf("=");
-    const name = normalizePercentEncoding(equals === -1 ? part : part.slice(0, equals));
+    const name = normalizePercentEncoding(
+      equals === -1 ? part : part.slice(0, equals)
+    );
     if (isTrackingParam(name)) continue;
-    const value = normalizePercentEncoding(equals === -1 ? "" : part.slice(equals + 1));
+    const value = normalizePercentEncoding(
+      equals === -1 ? "" : part.slice(equals + 1)
+    );
     if (isCredentialParam(name, value)) continue;
     // A value the redactor replaced (a JWT or token under an ordinary name, #3384):
     // dropped like a credential parameter, so links that differ only by a secret
@@ -484,7 +493,9 @@ export function canonicalLinkKey(raw: string): CanonicalLink | null {
   // `username`/`password` and deliberately not reassembled: a shared, global
   // cache key must never carry a secret a page happened to embed.
   const host = parsed.host.toLowerCase();
-  const path = applyTrailingSlashPolicy(normalizePercentEncoding(parsed.pathname));
+  const path = applyTrailingSlashPolicy(
+    normalizePercentEncoding(parsed.pathname)
+  );
   const query = canonicalQuery(parsed.search);
   const key = `${scheme}//${host}${path}${query === "" ? "" : `?${query}`}`;
 
@@ -497,10 +508,14 @@ export function canonicalLinkKey(raw: string): CanonicalLink | null {
   // A key that carries a redacted value is not the link's own URL (a path token
   // became `REDACTED`), so it is no fallback to fetch: such a link is unkeyable.
   const sanitized = sanitizeLinkUrl(trimmed);
-  if ((!sanitized || sanitized.length > MAX_LINK_KEY_LENGTH) && carriesRedactedValue(key)) {
+  if (
+    (!sanitized || sanitized.length > MAX_LINK_KEY_LENGTH) &&
+    carriesRedactedValue(key)
+  ) {
     return null;
   }
-  const fetchUrl = sanitized && sanitized.length <= MAX_LINK_KEY_LENGTH ? sanitized : key;
+  const fetchUrl =
+    sanitized && sanitized.length <= MAX_LINK_KEY_LENGTH ? sanitized : key;
 
   return { key, raw, fetchUrl };
 }
@@ -527,7 +542,11 @@ export function groupByLinkKey(rawUrls: readonly string[]): {
     }
     const existing = byKey.get(canonical.key);
     if (existing) existing.rawUrls.push(rawUrl);
-    else byKey.set(canonical.key, { fetchUrl: canonical.fetchUrl, rawUrls: [rawUrl] });
+    else
+      byKey.set(canonical.key, {
+        fetchUrl: canonical.fetchUrl,
+        rawUrls: [rawUrl],
+      });
   }
   return { byKey, unkeyable };
 }

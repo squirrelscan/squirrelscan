@@ -80,13 +80,21 @@ function isIdentPart(ch: string): boolean {
 // Anything omitted reads as a significant token, which would wrongly separate a
 // keyword from the `(` after it.
 const NON_ASCII_SPACES = new Set([
-  0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
-  0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+  0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+  0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+  0xfeff,
 ]);
 
 function isWhitespaceCode(code: number): boolean {
   // space, tab, LF, CR, form feed, vertical tab
-  if (code === 32 || code === 9 || code === 10 || code === 13 || code === 12 || code === 11) {
+  if (
+    code === 32 ||
+    code === 9 ||
+    code === 10 ||
+    code === 13 ||
+    code === 12 ||
+    code === 11
+  ) {
     return true;
   }
   return code > 0x7f && NON_ASCII_SPACES.has(code);
@@ -116,7 +124,16 @@ function isUrlHostStart(ch: string | undefined): boolean {
 
 // Only these make the `x://` guard fire, so a JS label really named `foo` still
 // gets its `foo:// comment` counted.
-const URL_SCHEMES = new Set(["blob", "data", "file", "ftp", "http", "https", "ws", "wss"]);
+const URL_SCHEMES = new Set([
+  "blob",
+  "data",
+  "file",
+  "ftp",
+  "http",
+  "https",
+  "ws",
+  "wss",
+]);
 
 /** True when `colon` closes a URL scheme, i.e. the `//` after it is part of a URL. */
 function endsUrlScheme(src: string, colon: number): boolean {
@@ -166,18 +183,28 @@ function newIdentState(): IdentState {
 }
 
 /** The keyword immediately before the cursor, or "" when there is not one. */
-function precedingKeyword(src: string, lastCode: number, ident: IdentState): string {
-  if (ident.isProperty || ident.end < 0 || lastCode + 1 !== ident.end) return "";
+function precedingKeyword(
+  src: string,
+  lastCode: number,
+  ident: IdentState
+): string {
+  if (ident.isProperty || ident.end < 0 || lastCode + 1 !== ident.end)
+    return "";
   return src.slice(ident.start, ident.end);
 }
 
 /** True when the `(` about to be pushed opens an `if`/`while`/`for`/`for await` head. */
-function opensControlFlowHead(src: string, lastCode: number, ident: IdentState): boolean {
+function opensControlFlowHead(
+  src: string,
+  lastCode: number,
+  ident: IdentState
+): boolean {
   const word = precedingKeyword(src, lastCode, ident);
   if (CONTROL_FLOW_HEADS.has(word)) return true;
   // `for await (` puts the head keyword one token further back. Plain `await (`
   // is grouping, so only a preceding `for` promotes it.
-  if (word !== "await" || !ident.prevAdjacent || ident.prevIsProperty) return false;
+  if (word !== "await" || !ident.prevAdjacent || ident.prevIsProperty)
+    return false;
   return src.slice(ident.prevStart, ident.prevEnd) === "for";
 }
 
@@ -190,7 +217,7 @@ function regexCanStartAfter(
   src: string,
   lastCode: number,
   controlFlowClose: number,
-  ident: IdentState,
+  ident: IdentState
 ): boolean {
   if (lastCode < 0) return true;
   const ch = src[lastCode] as string;
@@ -202,7 +229,8 @@ function regexCanStartAfter(
   if ((ch === "+" || ch === "-") && src[lastCode - 1] === ch) return false;
   if (ch === ")") return lastCode === controlFlowClose;
   // A property name is never a keyword, so `obj.return /re/` divides.
-  if (isIdentPart(ch)) return REGEX_KEYWORDS.has(precedingKeyword(src, lastCode, ident));
+  if (isIdentPart(ch))
+    return REGEX_KEYWORDS.has(precedingKeyword(src, lastCode, ident));
   // `}` closes a block far more often than it closes an object literal being
   // divided, so a `/` after it is read as a regex at statement position. When
   // that guess is wrong, skipRegex refuses to close a regex on a comment
@@ -218,13 +246,17 @@ function skipQuoted(src: string, start: number, quote: number): number {
     if (code === CH_BACKSLASH) {
       // A backslash before CRLF is a single line continuation. Stepping over
       // only two characters would land on the `\n` and end the string early.
-      i += src.charCodeAt(i + 1) === CH_CR && src.charCodeAt(i + 2) === CH_LF ? 3 : 2;
+      i +=
+        src.charCodeAt(i + 1) === CH_CR && src.charCodeAt(i + 2) === CH_LF
+          ? 3
+          : 2;
       continue;
     }
     if (code === quote) return i + 1;
     // An unterminated string must not swallow the rest of the file, and an
     // unescaped line terminator ends a quoted string anyway.
-    if (code === CH_LF || code === CH_CR || code === CH_LS || code === CH_PS) return i;
+    if (code === CH_LF || code === CH_CR || code === CH_LS || code === CH_PS)
+      return i;
     i++;
   }
   return src.length;
@@ -264,7 +296,11 @@ function skipRegex(src: string, start: number): number {
  * context, so `//` and block-comment openers inside literals are not counted.
  */
 export function scanJsComments(src: string): CommentScan {
-  const scan: CommentScan = { lineComments: 0, blockComments: 0, commentBytes: 0 };
+  const scan: CommentScan = {
+    lineComments: 0,
+    blockComments: 0,
+    commentBytes: 0,
+  };
 
   // Frames record the mode to return to; template interpolations (`${ ... }`)
   // put us back into code, so brace depth has to be tracked per frame.
@@ -357,7 +393,10 @@ export function scanJsComments(src: string): CommentScan {
         i = close + 2;
         continue;
       }
-      if (i >= noRegexBefore && regexCanStartAfter(src, lastCode, controlFlowClose, ident)) {
+      if (
+        i >= noRegexBefore &&
+        regexCanStartAfter(src, lastCode, controlFlowClose, ident)
+      ) {
         const end = skipRegex(src, i);
         if (end !== -1) {
           lastCode = end - 1;
@@ -460,7 +499,11 @@ export function scanJsComments(src: string): CommentScan {
  * `content: "..."` or a data URI is not read as a comment opener (#142).
  */
 export function scanCssComments(src: string): CommentScan {
-  const scan: CommentScan = { lineComments: 0, blockComments: 0, commentBytes: 0 };
+  const scan: CommentScan = {
+    lineComments: 0,
+    blockComments: 0,
+    commentBytes: 0,
+  };
   let i = 0;
 
   while (i < src.length) {

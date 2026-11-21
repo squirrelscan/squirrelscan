@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport, ReportRuleResult } from "../src/types";
+
 import { renderHtml } from "../src/output/html";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
@@ -45,7 +46,7 @@ const PER_PAGE = report(
     message: "1 link(s) with generic text",
     pageUrl: page(k),
     items: [{ id: "read more" }],
-  })),
+  }))
 );
 
 /** A published fold: ten pages listed (one twice), forty in all. */
@@ -58,7 +59,11 @@ const PUBLISHED = report([
     items: [
       {
         id: "click here",
-        sourcePages: [page(0), page(0), ...Array.from({ length: 9 }, (_, k) => page(k + 1))],
+        sourcePages: [
+          page(0),
+          page(0),
+          ...Array.from({ length: 9 }, (_, k) => page(k + 1)),
+        ],
         pageCount: 40,
       },
     ],
@@ -66,12 +71,19 @@ const PUBLISHED = report([
   },
 ]);
 
-const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+const count = (haystack: string, needle: string) =>
+  haystack.split(needle).length - 1;
 
 describe("a11y item source rows (pub#837)", () => {
   test("no format points at a list elsewhere", () => {
     for (const r of [PER_PAGE, PUBLISHED]) {
-      for (const out of [renderHtml(r), renderMarkdown(r), renderText(r), renderLlm(r), renderXml(r)]) {
+      for (const out of [
+        renderHtml(r),
+        renderMarkdown(r),
+        renderText(r),
+        renderLlm(r),
+        renderXml(r),
+      ]) {
         expect(out).not.toContain("see full list");
       }
     }
@@ -88,7 +100,8 @@ describe("a11y item source rows (pub#837)", () => {
 
   test("markdown: every page is listed", () => {
     const md = renderMarkdown(PER_PAGE);
-    for (let k = 0; k < 6; k++) expect(md).toContain(`  - from: [/p${k}](${page(k)})\n`);
+    for (let k = 0; k < 6; k++)
+      expect(md).toContain(`  - from: [/p${k}](${page(k)})\n`);
     expect(md).not.toContain("more pages");
   });
 

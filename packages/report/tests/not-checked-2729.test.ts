@@ -3,8 +3,6 @@
 // reason and what to run instead. Never as a pass, never as an issue, never
 // left out so the rule reads as clean.
 
-import { describe, expect, test } from "bun:test";
-
 import {
   CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
@@ -12,6 +10,9 @@ import {
   EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
+import { describe, expect, test } from "bun:test";
+
+import type { AuditReport, ReportRuleResult } from "../src/types";
 
 import { buildEditorSummaryRequest } from "../src/editor-summary";
 import { notCheckedLines, notCheckedRules } from "../src/not-checked";
@@ -21,13 +22,12 @@ import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
-import type { AuditReport, ReportRuleResult } from "../src/types";
 
 function rule(
   id: string,
   name: string,
   severity: ReportRuleResult["meta"]["severity"],
-  checks: ReportRuleResult["checks"],
+  checks: ReportRuleResult["checks"]
 ): ReportRuleResult {
   return {
     meta: {
@@ -68,27 +68,43 @@ function quickReport(): AuditReport {
             message: EXTERNAL_MESSAGE,
             skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
           },
-        ],
+        ]
       ),
-      "links/broken-links": rule("links/broken-links", "Broken Links", "error", [
-        {
-          name: "broken-links",
-          status: "skipped",
-          message: INTERNAL_MESSAGE,
-          skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
-        },
-      ]),
+      "links/broken-links": rule(
+        "links/broken-links",
+        "Broken Links",
+        "error",
+        [
+          {
+            name: "broken-links",
+            status: "skipped",
+            message: INTERNAL_MESSAGE,
+            skipReason: LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
+          },
+        ]
+      ),
       // Info summary of the same gap: listed once, under the rule that reports it.
-      "links/dead-links": rule("links/dead-links", "Dead Links (Cloud)", "info", [
-        {
-          name: "dead-links",
-          status: "skipped",
-          message: "External link checking was off for this audit, so external links were not verified",
-          skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
-        },
-      ]),
+      "links/dead-links": rule(
+        "links/dead-links",
+        "Dead Links (Cloud)",
+        "info",
+        [
+          {
+            name: "dead-links",
+            status: "skipped",
+            message:
+              "External link checking was off for this audit, so external links were not verified",
+            skipReason: EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON,
+          },
+        ]
+      ),
       "core/meta-title": rule("core/meta-title", "Meta Title", "error", [
-        { name: "meta-title", status: "pass", message: "Title OK", pageUrl: "https://example.com/" },
+        {
+          name: "meta-title",
+          status: "pass",
+          message: "Title OK",
+          pageUrl: "https://example.com/",
+        },
       ]),
     },
   };
@@ -99,11 +115,16 @@ const INTERNAL_LINE = `Not checked: Broken Links. ${INTERNAL_MESSAGE}. Turn inte
 
 describe("notCheckedRules / notCheckedLines", () => {
   test("one entry per rule, by name, with the reason and a hint; info rules left out", () => {
-    expect(notCheckedRules(quickReport()).map((r) => [r.ruleId, r.reason])).toEqual([
+    expect(
+      notCheckedRules(quickReport()).map((r) => [r.ruleId, r.reason])
+    ).toEqual([
       ["links/broken-external-links", EXTERNAL_LINKS_NOT_CHECKED_SKIP_REASON],
       ["links/broken-links", LINK_TARGETS_NOT_FETCHED_SKIP_REASON],
     ]);
-    expect(notCheckedLines(quickReport())).toEqual([EXTERNAL_LINE, INTERNAL_LINE]);
+    expect(notCheckedLines(quickReport())).toEqual([
+      EXTERNAL_LINE,
+      INTERNAL_LINE,
+    ]);
   });
 
   test("external links over the audit's limit are not checked, with the limit's hint", () => {
@@ -111,15 +132,24 @@ describe("notCheckedRules / notCheckedLines", () => {
     const message =
       "40 of 240 external link(s) were not checked: over this audit's limit of 200, which checks the most-linked first";
     report.ruleResults = {
-      "links/broken-external-links": rule("links/broken-external-links", "Broken External Links", "warning", [
-        { name: "broken-external-links", status: "pass", message: "All 200 external link(s) are working" },
-        {
-          name: "broken-external-links",
-          status: "skipped",
-          message,
-          skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
-        },
-      ]),
+      "links/broken-external-links": rule(
+        "links/broken-external-links",
+        "Broken External Links",
+        "warning",
+        [
+          {
+            name: "broken-external-links",
+            status: "pass",
+            message: "All 200 external link(s) are working",
+          },
+          {
+            name: "broken-external-links",
+            status: "skipped",
+            message,
+            skipReason: EXTERNAL_LINKS_OVER_CAP_SKIP_REASON,
+          },
+        ]
+      ),
     };
     expect(notCheckedLines(report)).toEqual([
       `Not checked: Broken External Links. ${message}. Raise the limit with external_links.max_links, or audit more pages, to check them.`,
@@ -127,17 +157,23 @@ describe("notCheckedRules / notCheckedLines", () => {
   });
 
   test("a crawl that stopped at its page cap leaves the inbound-link rules not checked (#1144)", () => {
-    const message = "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
+    const message =
+      "Crawl stopped at its 100-page cap, so an inbound link may sit on a page not crawled";
     const report = {
       ruleResults: {
-        "links/orphan-pages": rule("links/orphan-pages", "Orphan Pages", "warning", [
-          {
-            name: "orphan-pages",
-            status: "skipped",
-            message,
-            skipReason: CRAWL_CAPPED_SKIP_REASON,
-          },
-        ]),
+        "links/orphan-pages": rule(
+          "links/orphan-pages",
+          "Orphan Pages",
+          "warning",
+          [
+            {
+              name: "orphan-pages",
+              status: "skipped",
+              message,
+              skipReason: CRAWL_CAPPED_SKIP_REASON,
+            },
+          ]
+        ),
       },
     };
     expect(notCheckedRules(report)).toEqual([
@@ -154,14 +190,19 @@ describe("notCheckedRules / notCheckedLines", () => {
     const message = "Page type classification skipped";
     const report = {
       ruleResults: {
-        "ai/page-type-match": rule("ai/page-type-match", "Page Type Match", "warning", [
-          {
-            name: "page-type-match",
-            status: "skipped",
-            message,
-            skipReason: CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
-          },
-        ]),
+        "ai/page-type-match": rule(
+          "ai/page-type-match",
+          "Page Type Match",
+          "warning",
+          [
+            {
+              name: "page-type-match",
+              status: "skipped",
+              message,
+              skipReason: CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
+            },
+          ]
+        ),
       },
     };
     expect(notCheckedRules(report)).toEqual([
@@ -177,28 +218,54 @@ describe("notCheckedRules / notCheckedLines", () => {
   test("other skip reasons are not 'not checked'", () => {
     const report = quickReport();
     report.ruleResults = {
-      "content/hidden-text": rule("content/hidden-text", "Hidden text", "warning", [
-        { name: "hidden-text", status: "skipped", message: "x", skipReason: "scan-truncated" },
-      ]),
+      "content/hidden-text": rule(
+        "content/hidden-text",
+        "Hidden text",
+        "warning",
+        [
+          {
+            name: "hidden-text",
+            status: "skipped",
+            message: "x",
+            skipReason: "scan-truncated",
+          },
+        ]
+      ),
     };
     expect(notCheckedRules(report)).toEqual([]);
   });
 
   test("a rule abandoned for its time budget is shown as not checked, a security rule included (pub#960)", () => {
     const report = quickReport();
-    const message = "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned";
+    const message =
+      "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned";
     report.ruleResults = {
-      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
-        { name: "leaked-secrets", status: "pass", message: "ok", pageUrl: "https://example.com/a" },
-        {
-          name: "security/leaked-secrets-error",
-          status: "skipped",
-          message,
-          skipReason: "rule-timed-out",
-          pageUrl: "https://example.com/b",
-          details: { timedOut: true, ruleId: "security/leaked-secrets", budgetMs: 1000, elapsedMs: 1400 },
-        },
-      ]),
+      "security/leaked-secrets": rule(
+        "security/leaked-secrets",
+        "Leaked Secrets",
+        "error",
+        [
+          {
+            name: "leaked-secrets",
+            status: "pass",
+            message: "ok",
+            pageUrl: "https://example.com/a",
+          },
+          {
+            name: "security/leaked-secrets-error",
+            status: "skipped",
+            message,
+            skipReason: "rule-timed-out",
+            pageUrl: "https://example.com/b",
+            details: {
+              timedOut: true,
+              ruleId: "security/leaked-secrets",
+              budgetMs: 1000,
+              elapsedMs: 1400,
+            },
+          },
+        ]
+      ),
     };
     expect(notCheckedLines(report)).toEqual([
       `Not checked: Leaked Secrets. Leaked Secrets timed out on 1 page (exceeded its 1000 ms time budget). A timed-out rule did not check those pages, so no finding there is not a clean result. Run the audit again, or raise [rules] time_budget_ms if the machine was busy.`,
@@ -210,35 +277,53 @@ describe("notCheckedRules / notCheckedLines", () => {
       message: "2 pages not checked",
       details: { timedOut: true, budgetMs: 1000, pagesNotChecked: 2 },
     });
-    expect(notCheckedLines(report)[0]).toContain("Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget).");
+    expect(notCheckedLines(report)[0]).toContain(
+      "Leaked Secrets timed out on 2 pages (exceeded its 1000 ms time budget)."
+    );
     // Without the summary row (a published report may cut it) the folded skip's
     // own counts still say how many pages.
     const cut = quickReport();
     cut.ruleResults = {
-      "security/leaked-secrets": rule("security/leaked-secrets", "Leaked Secrets", "error", [
-        {
-          name: "security/leaked-secrets-error",
-          status: "skipped",
-          message,
-          skipReason: "rule-timed-out",
-          details: { timedOut: true, budgetMs: 1000, occurrences: 20, pagesTruncated: 20 },
-        },
-      ]),
+      "security/leaked-secrets": rule(
+        "security/leaked-secrets",
+        "Leaked Secrets",
+        "error",
+        [
+          {
+            name: "security/leaked-secrets-error",
+            status: "skipped",
+            message,
+            skipReason: "rule-timed-out",
+            details: {
+              timedOut: true,
+              budgetMs: 1000,
+              occurrences: 20,
+              pagesTruncated: 20,
+            },
+          },
+        ]
+      ),
     };
-    expect(notCheckedLines(cut)[0]).toContain("Leaked Secrets timed out on 20 pages");
+    expect(notCheckedLines(cut)[0]).toContain(
+      "Leaked Secrets timed out on 20 pages"
+    );
     // The console and the other formats print it, not only the info row. The human formats
     // list it under the Report detail "Not checked" heading, without the lead-in.
-    expect(renderText(report)).toContain(notCheckedLines(report)[0]!.replace("Not checked: ", ""));
+    expect(renderText(report)).toContain(
+      notCheckedLines(report)[0]!.replace("Not checked: ", "")
+    );
     expect(renderMarkdown(report)).toContain("Leaked Secrets");
   });
 
   test("no em-dash in the copy", () => {
-    for (const line of notCheckedLines(quickReport())) expect(line).not.toContain("—");
+    for (const line of notCheckedLines(quickReport()))
+      expect(line).not.toContain("—");
   });
 });
 
 describe("every format shows it, never as an issue", () => {
-  const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+  const count = (haystack: string, needle: string) =>
+    haystack.split(needle).length - 1;
   // The human formats list each notice under a "Not checked" heading in Report detail, so the
   // line there has no "Not checked: " lead-in.
   const EXTERNAL_ITEM = EXTERNAL_LINE.replace("Not checked: ", "");
@@ -279,8 +364,8 @@ describe("every format shows it, never as an issue", () => {
     expect(
       count(
         out,
-        `<rule id="links/broken-external-links" name="Broken External Links" check="broken-external-links" reason="external-links-not-checked">${EXTERNAL_LINE}</rule>`,
-      ),
+        `<rule id="links/broken-external-links" name="Broken External Links" check="broken-external-links" reason="external-links-not-checked">${EXTERNAL_LINE}</rule>`
+      )
     ).toBe(1);
     expect(out).toContain('reason="link-targets-not-fetched"');
     expect(out).toContain("<issues/>");
@@ -289,7 +374,9 @@ describe("every format shows it, never as an issue", () => {
   test("xml: one not-checked element naming each rule", () => {
     const out = renderXml(quickReport());
     expect(count(out, '<not-checked count="2">')).toBe(1);
-    expect(count(out, `reason="external-links-not-checked">${EXTERNAL_LINE}</rule>`)).toBe(1);
+    expect(
+      count(out, `reason="external-links-not-checked">${EXTERNAL_LINE}</rule>`)
+    ).toBe(1);
   });
 
   test("json: a notChecked list, no issues, nothing scored", () => {
@@ -318,7 +405,9 @@ describe("every format shows it, never as an issue", () => {
 
   test("a report where every check ran carries none of it", () => {
     const report = quickReport();
-    report.ruleResults = { "core/meta-title": report.ruleResults["core/meta-title"]! };
+    report.ruleResults = {
+      "core/meta-title": report.ruleResults["core/meta-title"]!,
+    };
     expect(renderText(report)).not.toContain("Not checked:");
     expect(renderLlm(report)).not.toContain("not-checked");
     expect(JSON.parse(renderJson(report)).notChecked).toBeUndefined();
@@ -343,7 +432,9 @@ describe("editor summary request (repo#2729)", () => {
 
   test("absent when every check ran", () => {
     const report = quickReport();
-    report.ruleResults = { "core/meta-title": report.ruleResults["core/meta-title"]! };
+    report.ruleResults = {
+      "core/meta-title": report.ruleResults["core/meta-title"]!,
+    };
     expect("notChecked" in buildEditorSummaryRequest(report)).toBe(false);
   });
 });

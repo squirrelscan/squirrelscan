@@ -7,10 +7,9 @@
 // content-encoding at all. Site-scope because sub-resources are shared across
 // pages — reporting them per page would repeat one asset N times.
 
-import { z } from "zod";
-
 import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
 import { isCompressibleContentType } from "@squirrelscan/utils/headers";
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -56,12 +55,10 @@ function isKnownUncompressed(encoding: string | null | undefined): boolean {
   // `identity, gzip` is still compressed. The fetchers normalize a lone
   // `identity` to null, but they match one token, so a list reaches this
   // function verbatim.
-  return encoding
-    .split(",")
-    .every((token) => {
-      const coding = token.trim().toLowerCase();
-      return coding === "" || coding === "identity";
-    });
+  return encoding.split(",").every((token) => {
+    const coding = token.trim().toLowerCase();
+    return coding === "" || coding === "identity";
+  });
 }
 
 interface Candidate {

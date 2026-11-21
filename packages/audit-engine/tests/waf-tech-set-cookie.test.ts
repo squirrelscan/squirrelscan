@@ -4,9 +4,9 @@
 // `new Headers()` + `.set()` loop THROWS on that value, dropping WAF
 // detection for the whole page.
 
-import { describe, expect, test } from "bun:test";
-
 import type { DetectedTechnology } from "@squirrelscan/tech-detect";
+
+import { describe, expect, test } from "bun:test";
 
 import { withWafTech } from "../src/technologies";
 
@@ -18,7 +18,9 @@ const MULTI_COOKIE_HEADERS: Record<string, string> = {
 
 describe("withWafTech (#973/#1035)", () => {
   test('does not throw when set-cookie is "\\n"-joined', () => {
-    expect(() => withWafTech([], MULTI_COOKIE_HEADERS, "<html></html>")).not.toThrow();
+    expect(() =>
+      withWafTech([], MULTI_COOKIE_HEADERS, "<html></html>")
+    ).not.toThrow();
   });
 
   test("still detects the WAF from the other headers alongside a multi-cookie set-cookie", () => {
@@ -47,7 +49,11 @@ describe("withWafTech (#973/#1035)", () => {
   });
 
   test("no WAF headers: passes through the input list unchanged", () => {
-    const result = withWafTech([], { "set-cookie": "a=1\nb=2" }, "<html></html>");
+    const result = withWafTech(
+      [],
+      { "set-cookie": "a=1\nb=2" },
+      "<html></html>"
+    );
     expect(result).toEqual([]);
   });
 });

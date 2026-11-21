@@ -3,8 +3,9 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { notCheckedLines } from "../src/not-checked";
 import type { AuditReport } from "../src/types";
+
+import { notCheckedLines } from "../src/not-checked";
 
 function report(): AuditReport {
   return {

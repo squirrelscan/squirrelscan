@@ -2,23 +2,27 @@
 // choice must be deterministic, take the links on the most pages first, and
 // put any the caller names (an open finding's links) ahead of the rest.
 
+import { externalLinkCheckCap } from "@squirrelscan/core-contracts/limits";
 import { describe, expect, test } from "bun:test";
 
-import { externalLinkCheckCap } from "@squirrelscan/core-contracts/limits";
-
-import { linkTextLooksLikeAnAction } from "../src/link-target-probe";
 import {
   looksLikeAnAction,
   selectExternalLinksToCheck,
   type ExternalLinkOccurrences,
 } from "../src/adapter";
+import { linkTextLooksLikeAnAction } from "../src/link-target-probe";
 
 function occurrences(spec: Record<string, string[]>): ExternalLinkOccurrences {
   const map: ExternalLinkOccurrences = new Map();
   for (const [href, pages] of Object.entries(spec)) {
     map.set(
       href,
-      pages.map((pageUrl) => ({ pageUrl, text: "", position: "body", isNofollow: false })) as never,
+      pages.map((pageUrl) => ({
+        pageUrl,
+        text: "",
+        position: "body",
+        isNofollow: false,
+      })) as never
     );
   }
   return map;
@@ -49,7 +53,10 @@ describe("selectExternalLinksToCheck", () => {
 
   test("links the caller names go first, and an unknown one is ignored", () => {
     expect(
-      selectExternalLinksToCheck(SITE, 2, ["https://once.example/", "https://gone.example/"]),
+      selectExternalLinksToCheck(SITE, 2, [
+        "https://once.example/",
+        "https://gone.example/",
+      ])
     ).toEqual(["https://once.example/", "https://footer.example/"]);
   });
 });
@@ -149,7 +156,9 @@ describe("linkTextLooksLikeAnAction", () => {
   test("rel=nofollow on action text", () => {
     expect(linkTextLooksLikeAnAction("Log out", true)).toBe(true);
     expect(linkTextLooksLikeAnAction("  Delete ", true)).toBe(true);
-    expect(linkTextLooksLikeAnAction("Unsubscribe from all our emails", true)).toBe(true);
+    expect(
+      linkTextLooksLikeAnAction("Unsubscribe from all our emails", true)
+    ).toBe(true);
   });
 
   test("short unambiguous action text, with or without nofollow", () => {
@@ -163,7 +172,9 @@ describe("linkTextLooksLikeAnAction", () => {
     // A product page linked as "Buy now" is still a page; its URL decides.
     expect(linkTextLooksLikeAnAction("Buy now", false)).toBe(false);
     expect(linkTextLooksLikeAnAction("Subscribe", false)).toBe(false);
-    expect(linkTextLooksLikeAnAction("Delete files safely: a guide for teams", false)).toBe(false);
+    expect(
+      linkTextLooksLikeAnAction("Delete files safely: a guide for teams", false)
+    ).toBe(false);
     expect(linkTextLooksLikeAnAction("Pricing", true)).toBe(false);
     expect(linkTextLooksLikeAnAction("", true)).toBe(false);
   });

@@ -10,7 +10,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Either, Fiber, TestClock, TestContext } from "effect";
 
-import { createHostBackoff } from "../src/host-backoff";
 import {
   CrawlError,
   RATE_LIMIT_MAX_ATTEMPTS,
@@ -20,6 +19,7 @@ import {
   type RateLimitControl,
   type RateLimitEncounter,
 } from "../src/fetcher";
+import { createHostBackoff } from "../src/host-backoff";
 
 const HOST_A = "shop.example.com";
 const HOST_B = "cdn.example.net";
@@ -277,7 +277,9 @@ describe("host backoff registry — exhaustion (#1829)", () => {
     expect(registry.isExhausted(HOST_A)).toBe(true);
     expect(registry.exhaustedHosts()).toEqual([HOST_A]);
     // The cumulative wait is bounded by the cap, not by the number of attempts.
-    expect(registry.snapshot(HOST_A)!.cumulativeWaitMs).toBeLessThanOrEqual(30_000);
+    expect(registry.snapshot(HOST_A)!.cumulativeWaitMs).toBeLessThanOrEqual(
+      30_000
+    );
   });
 
   test("an exhausted host asks for no further waiting", () => {
@@ -414,7 +416,7 @@ function notFoundFetcher() {
  * the waits it asked for can be asserted exactly.
  */
 async function runWithVirtualTime<A>(
-  effect: Effect.Effect<A, CrawlError, never>,
+  effect: Effect.Effect<A, CrawlError, never>
 ): Promise<{ result: A | CrawlError; failed: boolean }> {
   const program = Effect.gen(function* () {
     // `Effect.either` first, so the fiber never dies and `join` hands back the
@@ -427,7 +429,9 @@ async function runWithVirtualTime<A>(
     return yield* Fiber.join(fiber);
   });
 
-  const outcome = await Effect.runPromise(program.pipe(Effect.provide(TestContext.TestContext)));
+  const outcome = await Effect.runPromise(
+    program.pipe(Effect.provide(TestContext.TestContext))
+  );
   return Either.isLeft(outcome)
     ? { result: outcome.left, failed: true }
     : { result: outcome.right, failed: false };
@@ -444,13 +448,16 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
       onRateLimited: (encounter) => {
         encounters.push(encounter);
         // Mirror the production base/growth without jitter.
-        return { waitMs: 5_000 * 2 ** (encounter.attempt - 1), exhausted: false };
+        return {
+          waitMs: 5_000 * 2 ** (encounter.attempt - 1),
+          exhausted: false,
+        };
       },
       onBackoff: ({ waitMs }) => waits.push(waitMs),
     };
 
     const { failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(false);
@@ -473,7 +480,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(false);
@@ -495,7 +502,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(false);
@@ -510,7 +517,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { result, failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(true);
@@ -531,7 +538,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { result, failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(true);
@@ -549,7 +556,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { failed } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(true);
@@ -572,7 +579,9 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
       },
     };
 
-    await runWithVirtualTime(fetchPageWithRetry("https://shop.example.com/", options(control)));
+    await runWithVirtualTime(
+      fetchPageWithRetry("https://shop.example.com/", options(control))
+    );
 
     expect(attempts).toEqual([1, 2, 3, 4, 5, 6]);
     expect(attempts.length).toBe(RATE_LIMIT_MAX_ATTEMPTS);
@@ -592,7 +601,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { failed, result } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/missing", options(control)),
+      fetchPageWithRetry("https://shop.example.com/missing", options(control))
     );
 
     expect(failed).toBe(false);
@@ -611,7 +620,7 @@ describe("fetchPageWithRetry rate-limit schedule (#1829)", () => {
     };
 
     const { failed, result } = await runWithVirtualTime(
-      fetchPageWithRetry("https://shop.example.com/", options(control)),
+      fetchPageWithRetry("https://shop.example.com/", options(control))
     );
 
     expect(failed).toBe(false);

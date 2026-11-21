@@ -25,7 +25,12 @@ function html(...links: string[]): string {
 }
 
 const SITE: Record<string, string> = {
-  [`${ORIGIN}/`]: html("/listed", `${OBFUSCATION}#2a4f`, `${ORIGIN}${OBFUSCATION}`, "/cdn-cgi/image/width=80/pic.jpg"),
+  [`${ORIGIN}/`]: html(
+    "/listed",
+    `${OBFUSCATION}#2a4f`,
+    `${ORIGIN}${OBFUSCATION}`,
+    "/cdn-cgi/image/width=80/pic.jpg"
+  ),
   [`${ORIGIN}/listed`]: html(),
 };
 
@@ -34,7 +39,10 @@ function mockResponse(url: string, body: string): FetchResponse {
     url,
     finalUrl: url,
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "max-age=3600" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "max-age=3600",
+    },
     body,
     timing: { startedAt: 0, responseAt: 1, finishedAt: 2 },
     redirectChain: {
@@ -89,7 +97,10 @@ const baseConfig = {
   maxPages: 50,
 };
 
-async function createCrawlRecord(storage: CrawlStorage, config: Record<string, unknown>): Promise<string> {
+async function createCrawlRecord(
+  storage: CrawlStorage,
+  config: Record<string, unknown>
+): Promise<string> {
   return Effect.runPromise(
     storage.createCrawl({
       baseUrl: ORIGIN,
@@ -99,11 +110,15 @@ async function createCrawlRecord(storage: CrawlStorage, config: Record<string, u
       status: "paused",
       config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
-    }),
+    })
   );
 }
 
-async function seedFrontier(storage: CrawlStorage, crawlId: string, paths: string[]) {
+async function seedFrontier(
+  storage: CrawlStorage,
+  crawlId: string,
+  paths: string[]
+) {
   for (const [index, path] of paths.entries()) {
     await Effect.runPromise(
       storage.upsertFrontier(crawlId, {
@@ -115,16 +130,24 @@ async function seedFrontier(storage: CrawlStorage, crawlId: string, paths: strin
         source: index === 0 ? ("seed" as const) : ("sitemap" as const),
         enqueuedAt: Date.now(),
         retryCount: 0,
-      }),
+      })
     );
   }
 }
 
-async function crawlOnce(storage: CrawlStorage, config: Record<string, unknown>, fetched: string[], paths: string[]) {
+async function crawlOnce(
+  storage: CrawlStorage,
+  config: Record<string, unknown>,
+  fetched: string[],
+  paths: string[]
+) {
   const crawlId = await createCrawlRecord(storage, config);
   await seedFrontier(storage, crawlId, paths);
   const crawler = await Effect.runPromise(
-    createCrawler({ config: { ...config, documentFetcher: fetcherFor(fetched) }, storage }),
+    createCrawler({
+      config: { ...config, documentFetcher: fetcherFor(fetched) },
+      storage,
+    })
   );
   await Effect.runPromise(crawler.resumeFromStorage(crawlId));
   return crawlId;
@@ -138,7 +161,7 @@ describe("the crawl never queues Cloudflare's email obfuscation link (pub#838)",
       storage,
       { ...baseConfig, incremental: false, useCacheControl: false },
       fetched,
-      ["/"],
+      ["/"]
     );
 
     // Sanity: the crawl followed an ordinary link from the same page.
@@ -147,41 +170,78 @@ describe("the crawl never queues Cloudflare's email obfuscation link (pub#838)",
     // An image-resizing path is not the obfuscation path and is still queued.
     expect(fetched).toContain(`${ORIGIN}/cdn-cgi/image/width=80/pic.jpg`);
 
-    const frontier = await Effect.runPromise(storage.getAllFrontierEntries(crawlId));
-    expect(frontier.some((e) => e.normalizedUrl.includes("email-protection"))).toBe(false);
-    const home = await Effect.runPromise(storage.getPage(crawlId, `${ORIGIN}/`));
-    const stored = JSON.parse(home!.parsedData!) as { links: Array<{ url: string }> };
-    expect(stored.links.some((l) => l.url.includes("email-protection"))).toBe(false);
+    const frontier = await Effect.runPromise(
+      storage.getAllFrontierEntries(crawlId)
+    );
+    expect(
+      frontier.some((e) => e.normalizedUrl.includes("email-protection"))
+    ).toBe(false);
+    const home = await Effect.runPromise(
+      storage.getPage(crawlId, `${ORIGIN}/`)
+    );
+    const stored = JSON.parse(home!.parsedData!) as {
+      links: Array<{ url: string }>;
+    };
+    expect(stored.links.some((l) => l.url.includes("email-protection"))).toBe(
+      false
+    );
     await Effect.runPromise(storage.close());
   }, 30000);
 
   test("a page reused from a cache written before the fix: the stale link is not queued", async () => {
     const storage = await Effect.runPromise(createTestStorage());
-    const pass1 = await crawlOnce(storage, { ...baseConfig, incremental: false, useCacheControl: false }, [], ["/"]);
+    const pass1 = await crawlOnce(
+      storage,
+      { ...baseConfig, incremental: false, useCacheControl: false },
+      [],
+      ["/"]
+    );
 
     // Make the stored page look like one cached by an older squirrel: the obfuscation path
     // is an internal link in its parsedData. `/off-map` is the control: it must be queued,
     // which proves the rewrite reached the reuse path.
     const home = await Effect.runPromise(storage.getPage(pass1, `${ORIGIN}/`));
-    const parsed = JSON.parse(home!.parsedData!) as { links: Array<Record<string, unknown>> };
+    const parsed = JSON.parse(home!.parsedData!) as {
+      links: Array<Record<string, unknown>>;
+    };
     parsed.links.push(
-      { url: `${ORIGIN}${OBFUSCATION}`, text: "[email protected]", isInternal: true },
-      { url: `${ORIGIN}${OBFUSCATION}#2a4f`, text: "[email protected]", isInternal: true },
-      { url: `${ORIGIN}/off-map`, text: "control", isInternal: true },
+      {
+        url: `${ORIGIN}${OBFUSCATION}`,
+        text: "[email protected]",
+        isInternal: true,
+      },
+      {
+        url: `${ORIGIN}${OBFUSCATION}#2a4f`,
+        text: "[email protected]",
+        isInternal: true,
+      },
+      { url: `${ORIGIN}/off-map`, text: "control", isInternal: true }
     );
-    await Effect.runPromise(storage.upsertPage(pass1, { ...home!, parsedData: JSON.stringify(parsed) }));
+    await Effect.runPromise(
+      storage.upsertPage(pass1, {
+        ...home!,
+        parsedData: JSON.stringify(parsed),
+      })
+    );
 
     const fetched: string[] = [];
     const pass2 = await crawlOnce(
       storage,
-      { ...baseConfig, incremental: true, useCacheControl: true, maxStalenessSeconds: 999_999 },
+      {
+        ...baseConfig,
+        incremental: true,
+        useCacheControl: true,
+        maxStalenessSeconds: 999_999,
+      },
       fetched,
-      ["/", "/listed"],
+      ["/", "/listed"]
     );
 
     // Nothing is re-fetched, and the one link the crawl follows is the control.
     expect(fetched).toEqual([`${ORIGIN}/off-map`]);
-    const frontier = (await Effect.runPromise(storage.getAllFrontierEntries(pass2))).map((e) => e.normalizedUrl);
+    const frontier = (
+      await Effect.runPromise(storage.getAllFrontierEntries(pass2))
+    ).map((e) => e.normalizedUrl);
     expect(frontier).toContain(`${ORIGIN}/off-map`);
     expect(frontier.some((u) => u.includes("email-protection"))).toBe(false);
     await Effect.runPromise(storage.close());

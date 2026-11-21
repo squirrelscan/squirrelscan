@@ -1,9 +1,8 @@
 // `scanScope.robotsBlockedPages` (#1782): only frontier rows skipped as `robots_disallowed` count.
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { robotsBlockedFrontierCount } from "../src";
 
@@ -37,7 +36,12 @@ describe("robotsBlockedFrontierCount", () => {
           });
         const crawlId = yield* make();
         const otherId = yield* make();
-        const add = (id: string, path: string, status: "skipped" | "pending", reason?: string) =>
+        const add = (
+          id: string,
+          path: string,
+          status: "skipped" | "pending",
+          reason?: string
+        ) =>
           storage.upsertFrontier(id, {
             normalizedUrl: `${BASE}${path}`,
             rawUrl: `${BASE}${path}`,
@@ -55,7 +59,7 @@ describe("robotsBlockedFrontierCount", () => {
         yield* add(crawlId, "/queued", "pending");
         yield* add(otherId, "/private/c", "skipped", "robots_disallowed");
         return yield* robotsBlockedFrontierCount(storage, crawlId);
-      }),
+      })
     );
     expect(count).toBe(2);
   });

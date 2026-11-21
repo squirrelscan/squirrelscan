@@ -15,7 +15,8 @@ function hostFamily(host: string): string {
  * router alias), and the directory index files `/index|default.(htm|html|php|asp|aspx)`. Case-insensitive.
  * `/homepage-design` and `/home/pricing` are not home pages.
  */
-const HOME_FILE = /^\/(?:(?:index|default)\.(?:html?|php|aspx?)|home\/?|index|home\.[a-z0-9]{1,5})$/i;
+const HOME_FILE =
+  /^\/(?:(?:index|default)\.(?:html?|php|aspx?)|home\/?|index|home\.[a-z0-9]{1,5})$/i;
 
 /** A path the site serves its home page at: the root, or one of the home spellings above. */
 function isRootPath(pathname: string): boolean {
@@ -39,7 +40,7 @@ const LOCALE_HOME = /^\/[a-z]{2}(?:[-_][a-z0-9]{2,8})?\/?$/i;
  */
 export function homepageCanonicalVerdict(
   pageUrl: string,
-  canonical: string,
+  canonical: string
 ): "error" | "locale-home" | "none" {
   let page: URL;
   let target: URL;
@@ -49,7 +50,8 @@ export function homepageCanonicalVerdict(
   } catch {
     return "none";
   }
-  if (!/^https?:$/.test(target.protocol) || !/^https?:$/.test(page.protocol)) return "none";
+  if (!/^https?:$/.test(target.protocol) || !/^https?:$/.test(page.protocol))
+    return "none";
   // Another site's home page is not this site's root.
   if (hostFamily(target.host) !== hostFamily(page.host)) return "none";
   if (!isRootPath(target.pathname) || target.search !== "") return "none";
@@ -79,9 +81,15 @@ export const canonicalRule: Rule = {
     const { checks } = canonicalChecks(ctx);
     // The page URL a redirect ended on: a page that redirects to the home page is the home page.
     const pageUrl = documentUrl(ctx.page);
-    const sources: Array<{ source: "tag" | "header"; value: string | null | undefined }> = [
+    const sources: Array<{
+      source: "tag" | "header";
+      value: string | null | undefined;
+    }> = [
       { source: "tag", value: ctx.parsed.meta.canonical?.trim() },
-      { source: "header", value: parseLinkHeaderCanonical(ctx.page.headers?.["link"]) },
+      {
+        source: "header",
+        value: parseLinkHeaderCanonical(ctx.page.headers?.["link"]),
+      },
     ];
     for (const { source, value } of sources) {
       if (!value) continue;

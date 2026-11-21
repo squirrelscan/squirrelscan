@@ -1,8 +1,8 @@
 // eeat/citations - External citations and source references
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getHostname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const AUTHORITATIVE_DOMAINS = [
   "gov",
@@ -36,7 +36,15 @@ export const citationsRule: Rule = {
     // Authoritative citations are an E-E-A-T signal for editorial / informational
     // content; a SaaS marketing site or ecommerce store has nothing to cite.
     // Gate to content-publishing types. Offline / no-metadata runs as today.
-    appliesWhen: { siteTypes: ["blog", "news", "healthcare_provider", "education", "nonprofit"] },
+    appliesWhen: {
+      siteTypes: [
+        "blog",
+        "news",
+        "healthcare_provider",
+        "education",
+        "nonprofit",
+      ],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {

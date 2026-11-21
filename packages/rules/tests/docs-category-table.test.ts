@@ -12,8 +12,13 @@ const DOCS = join(import.meta.dir, "../../../docs");
 const page = readFileSync(join(DOCS, "configuration/rules.mdx"), "utf8");
 // | [Crawlability](/rules/crawl) | `crawl/*` | ... |
 const ROW = /^\| \[[^\]]+\]\(\/rules\/([a-z0-9-]+)\) \| `([a-z0-9]+)\/\*` \|/gm;
-const rows = [...page.matchAll(ROW)].map((m) => ({ page: m[1]!, category: m[2]! }));
-const categories = new Set([...loadAllRules().values()].map((rule) => rule.meta.category));
+const rows = [...page.matchAll(ROW)].map((m) => ({
+  page: m[1]!,
+  category: m[2]!,
+}));
+const categories = new Set(
+  [...loadAllRules().values()].map((rule) => rule.meta.category)
+);
 
 describe("configuration/rules.mdx category table (#172)", () => {
   test("lists each loaded category once", () => {
@@ -27,6 +32,7 @@ describe("configuration/rules.mdx category table (#172)", () => {
   });
 
   test("links each category to a rules page that exists", () => {
-    for (const row of rows) expect(existsSync(join(DOCS, "rules", row.page, "index.mdx"))).toBe(true);
+    for (const row of rows)
+      expect(existsSync(join(DOCS, "rules", row.page, "index.mdx"))).toBe(true);
   });
 });

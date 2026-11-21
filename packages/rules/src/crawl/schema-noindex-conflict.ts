@@ -1,8 +1,14 @@
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
-import { isPageIndexable, getRichResultTypes, isRobotsTxtDisallowed } from "@squirrelscan/utils";
+import {
+  isPageIndexable,
+  getRichResultTypes,
+  isRobotsTxtDisallowed,
+} from "@squirrelscan/utils";
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { sampleUrlItems } from "../shared/sample-items";
 
 interface Conflict {
@@ -31,7 +37,8 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
           `  Blocked by: ${c.blockSource.join(", ")}`
       )
       .join("\n\n");
-    const suffix = conflicts.length > 5 ? `\n\n+${conflicts.length - 5} more` : "";
+    const suffix =
+      conflicts.length > 5 ? `\n\n+${conflicts.length - 5} more` : "";
     // #1735: the page list and each page's evidence as structured data, not only in `value`.
     // `pages` and the items are the capped sample; `pagesTruncated` and `occurrences` hold the true count.
     const sample = sampleUrlItems(
@@ -39,7 +46,7 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
         id: c.url,
         label: `Schema: ${c.schemaTypes.join(", ")}. Blocked by: ${c.blockSource.join(", ")}`,
         meta: { schemaTypes: c.schemaTypes, blockedBy: c.blockSource },
-      })),
+      }))
     );
     return {
       name: "schema-noindex",
@@ -48,7 +55,11 @@ function buildCheck(unsorted: Conflict[]): CheckResult {
       value: details + suffix,
       pages: sample.items.map((item) => item.id),
       items: sample.items,
-      details: { occurrences: conflicts.length, pagesTruncated: conflicts.length, ...sample.truncation },
+      details: {
+        occurrences: conflicts.length,
+        pagesTruncated: conflicts.length,
+        ...sample.truncation,
+      },
     };
   }
   return {
@@ -80,9 +91,17 @@ async function runViaSiteQuery(
   for await (const row of siteQuery.pagesMatching(() => true)) {
     const richTypes = row.richResultTypes;
     if (richTypes.length === 0) continue;
-    const reasons = fullReasons(row.indexableReasons, row.normalizedUrl, robotsTxt);
+    const reasons = fullReasons(
+      row.indexableReasons,
+      row.normalizedUrl,
+      robotsTxt
+    );
     if (reasons.length > 0) {
-      conflicts.push({ url: row.normalizedUrl, schemaTypes: richTypes, blockSource: reasons });
+      conflicts.push({
+        url: row.normalizedUrl,
+        schemaTypes: richTypes,
+        blockSource: reasons,
+      });
     }
   }
   return { checks: [buildCheck(conflicts)] };
@@ -127,7 +146,12 @@ export const schemaNoindexConflict: Rule = {
 
       if (richTypes.length === 0) continue;
 
-      const check = isPageIndexable(page.parsed, page.headers, page.url, robotsTxt);
+      const check = isPageIndexable(
+        page.parsed,
+        page.headers,
+        page.url,
+        robotsTxt
+      );
 
       if (!check.isIndexable) {
         conflicts.push({

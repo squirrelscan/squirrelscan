@@ -1,13 +1,18 @@
 // repo#4172: the published page map. Rows are bounded, ordered, counted, and valid against the
 // core-contracts schema the API validates with.
 
-import { describe, expect, test } from "bun:test";
-
-import { PAGE_MAP_PUBLISH_LIMITS, PageMapSchema } from "@squirrelscan/core-contracts/page-map";
-import { Value } from "@sinclair/typebox/value";
-
 import type { PageMapRow } from "@squirrelscan/report/page-map";
-import { buildPageMap, projectPageMap } from "@squirrelscan/report/page-map-publish";
+
+import { Value } from "@sinclair/typebox/value";
+import {
+  PAGE_MAP_PUBLISH_LIMITS,
+  PageMapSchema,
+} from "@squirrelscan/core-contracts/page-map";
+import {
+  buildPageMap,
+  projectPageMap,
+} from "@squirrelscan/report/page-map-publish";
+import { describe, expect, test } from "bun:test";
 
 function row(i: number, over: Partial<PageMapRow> = {}): PageMapRow {
   return {
@@ -40,7 +45,9 @@ function row(i: number, over: Partial<PageMapRow> = {}): PageMapRow {
 
 describe("buildPageMap", () => {
   test("a small audit is stored whole and validates", () => {
-    const map = buildPageMap([row(1), row(2)], { site: "https://example.test" })!;
+    const map = buildPageMap([row(1), row(2)], {
+      site: "https://example.test",
+    })!;
     expect(map.total).toBe(2);
     expect(map.stored).toBe(2);
     expect(map.truncated).toBe(false);
@@ -60,8 +67,16 @@ describe("buildPageMap", () => {
 
   test("failed pages stay, with their status", () => {
     const map = buildPageMap(
-      [row(1, { status: 404, title: null, wordCount: null, h1Count: null, h1: null })],
-      { site: "https://example.test" },
+      [
+        row(1, {
+          status: 404,
+          title: null,
+          wordCount: null,
+          h1Count: null,
+          h1: null,
+        }),
+      ],
+      { site: "https://example.test" }
     )!;
     expect(map.pages[0]!.status).toBe(404);
     expect(Value.Check(PageMapSchema, map)).toBe(true);
@@ -70,18 +85,29 @@ describe("buildPageMap", () => {
   test("site-controlled strings and lists are clipped to the publish bound", () => {
     const long = "x".repeat(5000);
     const map = buildPageMap(
-      [row(1, { title: long, externalDomains: Array.from({ length: 80 }, (_, i) => `h${i}.test`) })],
-      { site: "https://example.test" },
+      [
+        row(1, {
+          title: long,
+          externalDomains: Array.from({ length: 80 }, (_, i) => `h${i}.test`),
+        }),
+      ],
+      { site: "https://example.test" }
     )!;
-    expect(map.pages[0]!.title!.length).toBeLessThanOrEqual(PAGE_MAP_PUBLISH_LIMITS.maxStringLength);
-    expect(map.pages[0]!.externalDomains).toHaveLength(PAGE_MAP_PUBLISH_LIMITS.maxListItems);
+    expect(map.pages[0]!.title!.length).toBeLessThanOrEqual(
+      PAGE_MAP_PUBLISH_LIMITS.maxStringLength
+    );
+    expect(map.pages[0]!.externalDomains).toHaveLength(
+      PAGE_MAP_PUBLISH_LIMITS.maxListItems
+    );
     expect(Value.Check(PageMapSchema, map)).toBe(true);
   });
 
   test("a clip never splits a surrogate pair", () => {
     const max = PAGE_MAP_PUBLISH_LIMITS.maxStringLength;
     const title = `${"a".repeat(max - 1)}😀`;
-    const out = buildPageMap([row(1, { title })], { site: "https://example.test" })!.pages[0]!.title!;
+    const out = buildPageMap([row(1, { title })], {
+      site: "https://example.test",
+    })!.pages[0]!.title!;
     expect(out).toBe("a".repeat(max - 1));
   });
 
@@ -92,7 +118,9 @@ describe("buildPageMap", () => {
 
 describe("projectPageMap", () => {
   test("recounts and never trusts the producer's counts", () => {
-    const map = buildPageMap([row(1), row(2)], { site: "https://example.test" })!;
+    const map = buildPageMap([row(1), row(2)], {
+      site: "https://example.test",
+    })!;
     const forged = { ...map, total: 1, stored: 99, truncated: false };
     const out = projectPageMap(forged);
     expect(out.stored).toBe(2);
@@ -103,7 +131,11 @@ describe("projectPageMap", () => {
   test("rows past the cap are cut and the map is marked truncated", () => {
     const rows = Array.from({ length: 1200 }, (_, i) => row(i));
     const big = buildPageMap(rows, { site: "https://example.test" })!;
-    const out = projectPageMap({ ...big, pages: rows.map((r) => ({ ...r })) as never, total: 1200 });
+    const out = projectPageMap({
+      ...big,
+      pages: rows.map((r) => ({ ...r })) as never,
+      total: 1200,
+    });
     expect(out.stored).toBe(1000);
     expect(out.truncated).toBe(true);
   });

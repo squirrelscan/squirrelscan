@@ -10,10 +10,11 @@
 // not. Pages that disagree about such a token are not merged at all; each keeps
 // its own message. See isCountToken in src/grouping.ts.
 
+import type { ReportRuleResult } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ReportRuleResult } from "@squirrelscan/core-contracts";
 
 import { affectedPages } from "../src/affected-pages";
 import { groupIssuesByCategory } from "../src/grouping";
@@ -72,20 +73,26 @@ describe("#2231 counts widen into a range", () => {
   });
 
   test("a count alone in parentheses widens", () => {
-    expect(merged(["Multiple H1 tags found (3)", "Multiple H1 tags found (6)"])).toBe(
-      "Multiple H1 tags found (3 to 6)"
-    );
+    expect(
+      merged(["Multiple H1 tags found (3)", "Multiple H1 tags found (6)"])
+    ).toBe("Multiple H1 tags found (3 to 6)");
   });
 
   test("a threshold every page agrees on keeps its own value", () => {
-    expect(merged(["Thin content: 143 words (min 300)", "Thin content: 87 words (min 300)"])).toBe(
-      "Thin content: 87 to 143 words (min 300)"
-    );
+    expect(
+      merged([
+        "Thin content: 143 words (min 300)",
+        "Thin content: 87 words (min 300)",
+      ])
+    ).toBe("Thin content: 87 to 143 words (min 300)");
   });
 
   test("a configured threshold glued to a unit survives", () => {
     expect(
-      merged(["2 large inline SVG(s) (>4KB each)", "7 large inline SVG(s) (>4KB each)"])
+      merged([
+        "2 large inline SVG(s) (>4KB each)",
+        "7 large inline SVG(s) (>4KB each)",
+      ])
     ).toBe("2 to 7 large inline SVG(s) (>4KB each)");
   });
 
@@ -96,22 +103,24 @@ describe("#2231 counts widen into a range", () => {
   });
 
   test("pages that agree on every count are left exactly as written", () => {
-    expect(merged(["Element with 7 children found", "Element with 7 children found"])).toBe(
-      "Element with 7 children found"
-    );
+    expect(
+      merged(["Element with 7 children found", "Element with 7 children found"])
+    ).toBe("Element with 7 children found");
   });
 
   test("a message with no numbers merges unchanged", () => {
-    expect(merged(["No Content-Security-Policy header", "No Content-Security-Policy header"])).toBe(
-      "No Content-Security-Policy header"
-    );
+    expect(
+      merged([
+        "No Content-Security-Policy header",
+        "No Content-Security-Policy header",
+      ])
+    ).toBe("No Content-Security-Policy header");
   });
 
   test("messages that differ in more than their counts stay separate checks", () => {
-    expect(split(["3 image(s) missing alt", "3 link(s) missing text"])).toEqual([
-      "3 image(s) missing alt",
-      "3 link(s) missing text",
-    ]);
+    expect(split(["3 image(s) missing alt", "3 link(s) missing text"])).toEqual(
+      ["3 image(s) missing alt", "3 link(s) missing text"]
+    );
   });
 });
 
@@ -168,14 +177,16 @@ describe("#2231 a token that is not a count never widens", () => {
   test("a digit inside a word keeps its own group", () => {
     // `Multiple H1 tags found (3)` and `Multiple H2 tags found (6)` used to
     // share a merge key and render `Multiple H1-2 tags found (3-6)`.
-    expect(split(["Multiple H1 tags found (3)", "Multiple H2 tags found (6)"])).toEqual([
-      "Multiple H1 tags found (3)",
-      "Multiple H2 tags found (6)",
-    ]);
+    expect(
+      split(["Multiple H1 tags found (3)", "Multiple H2 tags found (6)"])
+    ).toEqual(["Multiple H1 tags found (3)", "Multiple H2 tags found (6)"]);
   });
 
   test("a negative number is not widened by magnitude", () => {
-    expect(split(["Offset -5 px", "Offset -12 px"])).toEqual(["Offset -12 px", "Offset -5 px"]);
+    expect(split(["Offset -5 px", "Offset -12 px"])).toEqual([
+      "Offset -12 px",
+      "Offset -5 px",
+    ]);
   });
 
   test("a zero-padded code keeps its padding", () => {
@@ -186,10 +197,9 @@ describe("#2231 a token that is not a count never widens", () => {
   });
 
   test("a ratio is not widened", () => {
-    expect(split(["4/10 pages lack a validator", "9/10 pages lack a validator"])).toEqual([
-      "4/10 pages lack a validator",
-      "9/10 pages lack a validator",
-    ]);
+    expect(
+      split(["4/10 pages lack a validator", "9/10 pages lack a validator"])
+    ).toEqual(["4/10 pages lack a validator", "9/10 pages lack a validator"]);
   });
 
   test("a number too long to survive a round trip through Number is not a count", () => {
@@ -208,10 +218,9 @@ describe("#2244 status codes and #-prefixed numbers are not counts", () => {
   });
 
   test("a number after # is an identifier, not a count", () => {
-    expect(split(["Element #1 has no label", "Element #2 has no label"])).toEqual([
-      "Element #1 has no label",
-      "Element #2 has no label",
-    ]);
+    expect(
+      split(["Element #1 has no label", "Element #2 has no label"])
+    ).toEqual(["Element #1 has no label", "Element #2 has no label"]);
     expect(split(["Duplicate id (#1)", "Duplicate id (#2)"])).toEqual([
       "Duplicate id (#1)",
       "Duplicate id (#2)",
@@ -227,7 +236,9 @@ describe("#2231 the merged message is accompanied by its page count", () => {
       "5 image(s) missing width/height (causes CLS)",
     ]);
     expect(checks).toHaveLength(1);
-    expect(checks[0]!.message).toBe("3 to 11 image(s) missing width/height (causes CLS)");
+    expect(checks[0]!.message).toBe(
+      "3 to 11 image(s) missing width/height (causes CLS)"
+    );
     // The count a renderer shows beside the message: the range says what each
     // page reported, this says how many pages there were.
     expect(affectedPages(checks[0]!).count).toBe(3);
@@ -252,7 +263,10 @@ describe("#2231 the merged message is accompanied by its page count", () => {
             status: "warn",
             message: "2 image(s) missing width/height",
             pageUrl: "https://acme.test/a",
-            items: [{ id: "https://acme.test/img/a1.png" }, { id: "https://acme.test/img/a2.png" }],
+            items: [
+              { id: "https://acme.test/img/a1.png" },
+              { id: "https://acme.test/img/a2.png" },
+            ],
           },
           {
             name: "c",
@@ -325,7 +339,10 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
   test("no merged message carries a bare N", () => {
     const offenders: string[] = [];
     for (const { file, template } of templates) {
-      for (const message of grouped([fill(template, 3), fill(template, 17)]).map((c) => c.message)) {
+      for (const message of grouped([
+        fill(template, 3),
+        fill(template, 17),
+      ]).map((c) => c.message)) {
         if (BARE_N.test(message)) offenders.push(`${file}: ${message}`);
       }
     }
@@ -336,7 +353,9 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
     // `(${status})` is count-shaped, so pages reporting 404 and 500 would merge
     // into `(404 to 500)` (#2244). Write `(HTTP ${status})` instead.
     const offenders = templates
-      .filter(({ template }) => /\(\$\{[^}]*(status|code)[^}]*\}\)/i.test(template))
+      .filter(({ template }) =>
+        /\(\$\{[^}]*(status|code)[^}]*\}\)/i.test(template)
+      )
       .map(({ file, template }) => `${file}: ${template}`);
     expect(offenders).toEqual([]);
   });
@@ -353,10 +372,14 @@ describe("#2231 guard: every rule's message templates survive a merge", () => {
       for (const message of grouped([a, b]).map((c) => c.message)) {
         if (message === a || message === b) continue;
         const rebuilt = message
-          .replace(/(?<![A-Za-z0-9._:/,#-])(\d+) to (\d+)(?![A-Za-z0-9._:/,#-])/g, "3")
+          .replace(
+            /(?<![A-Za-z0-9._:/,#-])(\d+) to (\d+)(?![A-Za-z0-9._:/,#-])/g,
+            "3"
+          )
           // A per-page measurement alone in parentheses widens too: `(850 to 1200ms)` (#1767).
           .replace(/(?<=\()(\d+) to (\d+)(?=(?:ms|s|KB|MB|GB|px|%)\))/g, "3");
-        if (rebuilt !== a) offenders.push(`${file}\n  in : ${a}\n  out: ${message}`);
+        if (rebuilt !== a)
+          offenders.push(`${file}\n  in : ${a}\n  out: ${message}`);
       }
     }
     expect(offenders).toEqual([]);

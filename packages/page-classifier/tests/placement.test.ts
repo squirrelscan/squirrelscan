@@ -1,9 +1,9 @@
 // elementPlacer (#2307): one element's region and section on a classified
 // page, the comments rule first.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { describe, expect, test } from "bun:test";
 
-import { parseHTML } from "@squirrelscan/parser/dom";
 import { elementPlacer } from "../src/placement";
 import { classifyDocument } from "../src/predict";
 
@@ -50,8 +50,16 @@ describe("elementPlacer", () => {
   test("chrome links: the nearest region, no section", () => {
     const { at, place } = setup();
     const placeOf = place();
-    expect(placeOf(at("home")).region).toMatchObject({ label: "navigation", tag: "nav", hops: 1 });
-    expect(placeOf(at("foot")).region).toMatchObject({ label: "footer", tag: "footer", hops: 2 });
+    expect(placeOf(at("home")).region).toMatchObject({
+      label: "navigation",
+      tag: "nav",
+      hops: 1,
+    });
+    expect(placeOf(at("foot")).region).toMatchObject({
+      label: "footer",
+      tag: "footer",
+      hops: 2,
+    });
     expect(placeOf(at("home")).section).toBeNull();
     expect(placeOf(at("foot")).section).toBeNull();
     expect(placeOf(at("cite")).section).toBeNull();
@@ -59,7 +67,8 @@ describe("elementPlacer", () => {
 
   test("a head section comes from the nearest node, and loses to the rule", () => {
     const { result, elements, at, place } = setup();
-    const nodeOf = (el: unknown) => result.nodes.find((n) => elements[n.nodeRef.nodeId] === el);
+    const nodeOf = (el: unknown) =>
+      result.nodes.find((n) => elements[n.nodeRef.nodeId] === el);
     nodeOf(at("foot").closest("footer"))!.section = {
       label: "newsletter_signup",
       confidence: 0.97,
@@ -77,14 +86,20 @@ describe("elementPlacer", () => {
       source: "model",
       hops: 2,
     });
-    expect(placeOf(at("spam")).section).toMatchObject({ label: "comments", source: "rules" });
+    expect(placeOf(at("spam")).section).toMatchObject({
+      label: "comments",
+      source: "rules",
+    });
   });
 
   test("an element from another parse: no region, the rule still reads its markup", () => {
     const { place } = setup();
     const other = parseHTML(HTML).document;
     const placeOf = place();
-    expect(placeOf(other.querySelector("#foot"))).toEqual({ region: null, section: null });
+    expect(placeOf(other.querySelector("#foot"))).toEqual({
+      region: null,
+      section: null,
+    });
     const spam = placeOf(other.querySelector("#spam"));
     expect(spam.region).toBeNull();
     expect(spam.section).toMatchObject({ label: "comments", nodeId: null });
@@ -94,7 +109,7 @@ describe("elementPlacer", () => {
 describe("a thread out of the rule's reach", () => {
   test("is placed nowhere: no region, no section, `truncated`, never a fall back to content", () => {
     const { document } = parseHTML(
-      `<html><body><main><h1>Title</h1><div id="root"></div></main></body></html>`,
+      `<html><body><main><h1>Title</h1><div id="root"></div></main></body></html>`
     );
     let parent = document.getElementById("root")!;
     for (let i = 0; i < 300; i++) {
@@ -107,11 +122,12 @@ describe("a thread out of the rule's reach", () => {
     anchor.setAttribute("href", "/x");
     parent.appendChild(anchor);
     const elements: unknown[] = [];
-    const result = classifyDocument(document, "https://example.com/", { elementsOut: elements });
+    const result = classifyDocument(document, "https://example.com/", {
+      elementsOut: elements,
+    });
     const started = performance.now();
     const placed = elementPlacer(result, elements)(anchor);
     expect(placed).toEqual({ region: null, section: null, truncated: true });
     expect(performance.now() - started).toBeLessThan(50);
   });
 });
-

@@ -2,9 +2,10 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
-import type { AuditReport } from "../src/types";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -26,11 +27,18 @@ const fellBack = {
   pagesRendered: 12,
   pagesFetchedPlain: 28,
 };
-const clean = { requested: true, mode: "all" as const, pagesRendered: 40, pagesFetchedPlain: 0 };
+const clean = {
+  requested: true,
+  mode: "all" as const,
+  pagesRendered: 40,
+  pagesFetchedPlain: 0,
+};
 
 describe("render in the JSON report", () => {
   test("carries the mode, the page split and the fallback reason", () => {
-    expect(JSON.parse(renderJson(report({ render: fellBack }))).render).toEqual(fellBack);
+    expect(JSON.parse(renderJson(report({ render: fellBack }))).render).toEqual(
+      fellBack
+    );
   });
 
   test("a render that ran to the end has no fallbackReason", () => {
@@ -46,24 +54,28 @@ describe("render in the JSON report", () => {
 
 describe("render in the LLM report", () => {
   const llm = (r: AuditReport) =>
-    renderLlm(r as Parameters<typeof renderLlm>[0], { version: "0.0.0", includePassed: false, includeInfo: false });
+    renderLlm(r as Parameters<typeof renderLlm>[0], {
+      version: "0.0.0",
+      includePassed: false,
+      includeInfo: false,
+    });
 
   test("a <render> element with the mode, the split and the reason", () => {
     expect(llm(report({ render: fellBack }))).toContain(
-      '<render requested="true" mode="all" pages-rendered="12" pages-fetched-plain="28" fallback-reason="out of credits"/>',
+      '<render requested="true" mode="all" pages-rendered="12" pages-fetched-plain="28" fallback-reason="out of credits"/>'
     );
   });
 
   test("no fallback, no reason attribute", () => {
     expect(llm(report({ render: clean }))).toContain(
-      '<render requested="true" mode="all" pages-rendered="40" pages-fetched-plain="0"/>',
+      '<render requested="true" mode="all" pages-rendered="40" pages-fetched-plain="0"/>'
     );
   });
 
   test("the reason is escaped", () => {
-    expect(llm(report({ render: { ...fellBack, fallbackReason: 'a"b<c' } }))).toContain(
-      'fallback-reason="a&quot;b&lt;c"',
-    );
+    expect(
+      llm(report({ render: { ...fellBack, fallbackReason: 'a"b<c' } }))
+    ).toContain('fallback-reason="a&quot;b&lt;c"');
   });
 
   test("no render block, no element", () => {

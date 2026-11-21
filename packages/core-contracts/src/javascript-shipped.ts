@@ -55,7 +55,11 @@ export const JAVASCRIPT_HEAVIEST_PAGES = 3;
 // Chunk paths each runtime serves its own JavaScript from. Only paths no
 // ordinary site uses are listed; a framework without one (Gatsby, Remix) is not
 // claimed.
-const FRAMEWORK_CHUNK_PATHS: ReadonlyArray<{ id: string; name: string; path: string }> = [
+const FRAMEWORK_CHUNK_PATHS: ReadonlyArray<{
+  id: string;
+  name: string;
+  path: string;
+}> = [
   { id: "nextjs", name: "Next.js", path: "/_next/static/" },
   { id: "nuxt", name: "Nuxt", path: "/_nuxt/" },
   { id: "astro", name: "Astro", path: "/_astro/" },
@@ -64,7 +68,12 @@ const FRAMEWORK_CHUNK_PATHS: ReadonlyArray<{ id: string; name: string; path: str
 
 function measuredSize(script: JavascriptShippedInput): number | null {
   const { sizeBytes, status } = script;
-  if (typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes) || sizeBytes <= 0) return null;
+  if (
+    typeof sizeBytes !== "number" ||
+    !Number.isFinite(sizeBytes) ||
+    sizeBytes <= 0
+  )
+    return null;
   if (status === null || status < 200 || status >= 300) return null;
   return Math.round(sizeBytes);
 }
@@ -108,8 +117,14 @@ export function buildJavascriptShipped(input: {
       return;
     }
     const path = pathnameOf(script.url);
-    const runtime = path ? FRAMEWORK_CHUNK_PATHS.find((f) => path.startsWith(f.path)) : undefined;
-    if (runtime) frameworkBytes.set(runtime.id, (frameworkBytes.get(runtime.id) ?? 0) + size);
+    const runtime = path
+      ? FRAMEWORK_CHUNK_PATHS.find((f) => path.startsWith(f.path))
+      : undefined;
+    if (runtime)
+      frameworkBytes.set(
+        runtime.id,
+        (frameworkBytes.get(runtime.id) ?? 0) + size
+      );
   };
   for (const script of input.sameSite) add(script, false);
   for (const script of input.thirdParty ?? []) add(script, true);
@@ -130,7 +145,10 @@ export function buildJavascriptShipped(input: {
 
   const heaviestPages = [...perPage]
     .map(([url, entry]) => ({ url, ...entry }))
-    .sort((a, b) => b.bytes - a.bytes || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0))
+    .sort(
+      (a, b) =>
+        b.bytes - a.bytes || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
+    )
     .slice(0, JAVASCRIPT_HEAVIEST_PAGES);
 
   let framework: JavascriptShippedFramework | undefined;

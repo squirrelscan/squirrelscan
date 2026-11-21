@@ -132,7 +132,9 @@ describe("parseSitemap", () => {
 
     // The XML entity is decoded: the URL is what the sitemap means, not its
     // escaped form (the CLI's regex copy kept `&amp;`).
-    expect(result.urls[0].loc).toBe("https://example.com/page?param=value&other=123");
+    expect(result.urls[0].loc).toBe(
+      "https://example.com/page?param=value&other=123"
+    );
   });
 
   it("handles empty sitemap", () => {

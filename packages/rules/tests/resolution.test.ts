@@ -3,12 +3,15 @@
 // (absent key) or "non-authoritative" (truncated marker), never to a shape the
 // server could mis-read as "crawled clean".
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { RESOLUTION_SIGNAL_LIMITS } from "@squirrelscan/core-contracts/limits";
-import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+import {
+  resolutionCheckKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 import { normalizeUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { buildResolutionSignal } from "../src/resolution";
 
@@ -49,29 +52,40 @@ describe("buildResolutionSignal", () => {
         { name: "has-meta", status: "pass", message: "ok", pageUrl: P1 },
         { name: "meta-length", status: "pass", message: "ok", pageUrl: P1 },
       ]),
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
 
     expect(signal.crawledUrls).toEqual([P1, P2, P3]);
-    expect(new Set(signal.failing[resolutionCheckKey("meta-description", "has-meta")])).toEqual(
-      new Set([h(P2), h(P3)]),
-    );
+    expect(
+      new Set(
+        signal.failing[resolutionCheckKey("meta-description", "has-meta")]
+      )
+    ).toEqual(new Set([h(P2), h(P3)]));
     // All-pass class: key emitted (proves the check RAN) with zero hashes, so
     // the server may resolve — key ABSENCE must never be produced for a class
     // that evaluated pages this run.
-    expect(signal.failing[resolutionCheckKey("meta-description", "meta-length")]).toEqual([]);
+    expect(
+      signal.failing[resolutionCheckKey("meta-description", "meta-length")]
+    ).toEqual([]);
     expect(signal.truncated).toBeUndefined();
   });
 
   test("hashes are computed over the NORMALIZED url (matches server-side finding keys)", () => {
     const denormalized = "https://x.test/about/"; // normalizeUrl strips/normalizes
     const signal = buildResolutionSignal(
-      rules([{ name: "has-meta", status: "fail", message: "m", pageUrl: denormalized }]),
-      [denormalized],
+      rules([
+        {
+          name: "has-meta",
+          status: "fail",
+          message: "m",
+          pageUrl: denormalized,
+        },
+      ]),
+      [denormalized]
     )!;
-    expect(signal.failing[resolutionCheckKey("meta-description", "has-meta")]).toEqual([
-      resolutionUrlHash(normalizeUrl(denormalized)),
-    ]);
+    expect(
+      signal.failing[resolutionCheckKey("meta-description", "has-meta")]
+    ).toEqual([resolutionUrlHash(normalizeUrl(denormalized))]);
   });
 
   test("folded aggregates contribute their full pages[]", () => {
@@ -85,11 +99,13 @@ describe("buildResolutionSignal", () => {
           details: { aggregated: true, occurrences: 3 },
         },
       ]),
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
-    expect(new Set(signal.failing[resolutionCheckKey("meta-description", "has-meta")])).toEqual(
-      new Set([h(P1), h(P2), h(P3)]),
-    );
+    expect(
+      new Set(
+        signal.failing[resolutionCheckKey("meta-description", "has-meta")]
+      )
+    ).toEqual(new Set([h(P1), h(P2), h(P3)]));
   });
 
   test("a fold-clipped aggregate (pagesTruncated > pages.length) marks the key truncated", () => {
@@ -103,7 +119,7 @@ describe("buildResolutionSignal", () => {
           details: { aggregated: true, occurrences: 900, pagesTruncated: 900 },
         },
       ]),
-      [P1, P2],
+      [P1, P2]
     )!;
     const key = resolutionCheckKey("meta-description", "has-meta");
     expect(new Set(signal.failing[key])).toEqual(new Set([h(P1), h(P2)]));
@@ -114,10 +130,20 @@ describe("buildResolutionSignal", () => {
     const signal = buildResolutionSignal(
       rules([
         // site-scope with pages[] but NOT an aggregate — never a page finding
-        { name: "sitemap-orphans", status: "fail", message: "orphans", pages: [P1, P2] },
-        { name: "robots-check", status: "skipped", message: "no robots.txt", pageUrl: P1 },
+        {
+          name: "sitemap-orphans",
+          status: "fail",
+          message: "orphans",
+          pages: [P1, P2],
+        },
+        {
+          name: "robots-check",
+          status: "skipped",
+          message: "no robots.txt",
+          pageUrl: P1,
+        },
       ]),
-      [P1, P2],
+      [P1, P2]
     )!;
     expect(Object.keys(signal.failing)).toEqual([]);
     expect(signal.crawledUrls).toEqual([P1, P2]);
@@ -130,33 +156,46 @@ describe("buildResolutionSignal", () => {
   test("crawledUrls capped at maxCrawledUrls", () => {
     const urls = Array.from(
       { length: RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls + 10 },
-      (_, i) => `https://x.test/p/${i}`,
+      (_, i) => `https://x.test/p/${i}`
     );
     const signal = buildResolutionSignal({}, urls)!;
-    expect(signal.crawledUrls.length).toBe(RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls);
+    expect(signal.crawledUrls.length).toBe(
+      RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls
+    );
   });
 
   test("crawledUrlsComplete (repo#2078) is true under the cap and false once clipped", () => {
     const cap = RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls;
-    const mk = (n: number) => Array.from({ length: n }, (_, i) => `https://x.test/p/${i}`);
+    const mk = (n: number) =>
+      Array.from({ length: n }, (_, i) => `https://x.test/p/${i}`);
     expect(buildResolutionSignal({}, mk(cap))!.crawledUrlsComplete).toBe(true);
-    expect(buildResolutionSignal({}, mk(cap + 1))!.crawledUrlsComplete).toBe(false);
+    expect(buildResolutionSignal({}, mk(cap + 1))!.crawledUrlsComplete).toBe(
+      false
+    );
   });
 
   test("a single check past maxHashesPerCheck is clipped to the cap and marked truncated", () => {
     const pages = Array.from(
       { length: RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck + 10 },
-      (_, i) => `https://x.test/p/${i}`,
+      (_, i) => `https://x.test/p/${i}`
     );
     const signal = buildResolutionSignal(
-      rules([{ name: "c", status: "fail", message: "m", pages, details: { aggregated: true } }]),
-      [P1],
+      rules([
+        {
+          name: "c",
+          status: "fail",
+          message: "m",
+          pages,
+          details: { aggregated: true },
+        },
+      ]),
+      [P1]
     )!;
     const key = resolutionCheckKey("meta-description", "c");
     // Clipped deterministically (page order) — kept hashes are still positive
     // "still failing" evidence; the marker makes absence non-authoritative.
     expect(signal.failing[key]!.length).toBeLessThanOrEqual(
-      RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck,
+      RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck
     );
     expect(signal.failing[key]).toContain(h("https://x.test/p/0"));
     expect(signal.truncated).toEqual([key]);
@@ -176,7 +215,10 @@ describe("buildResolutionSignal", () => {
             name: "c",
             status: "fail",
             message: "m",
-            pages: Array.from({ length: per }, (_, i) => `https://x.test/${r}/${i}`),
+            pages: Array.from(
+              { length: per },
+              (_, i) => `https://x.test/${r}/${i}`
+            ),
             details: { aggregated: true },
           },
         ],
@@ -187,10 +229,13 @@ describe("buildResolutionSignal", () => {
     const lastKey = resolutionCheckKey(`rule-${count - 1}`, "c");
     expect(signal.failing[firstKey]!.length).toBeGreaterThan(0);
     expect(signal.failing[lastKey]!.length).toBeLessThan(
-      RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck,
+      RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck
     );
     expect(signal.truncated).toContain(lastKey);
-    const total = Object.values(signal.failing).reduce((n, hs) => n + hs.length, 0);
+    const total = Object.values(signal.failing).reduce(
+      (n, hs) => n + hs.length,
+      0
+    );
     expect(total).toBeLessThanOrEqual(RESOLUTION_SIGNAL_LIMITS.maxHashesTotal);
   }, 30_000);
 });
@@ -206,11 +251,26 @@ describe("buildResolutionSignal — notEvaluated (unevaluated pages never resolv
   test("a page the check SKIPPED lands in notEvaluated, not in the clean set", () => {
     const signal = buildResolutionSignal(
       rules([
-        { name: "c", status: "pass", message: "ok", pageUrl: P1 } as CheckResult,
-        { name: "c", status: "fail", message: "bad", pageUrl: P2 } as CheckResult,
-        { name: "c", status: "skipped", message: "no data", pageUrl: P3 } as CheckResult,
+        {
+          name: "c",
+          status: "pass",
+          message: "ok",
+          pageUrl: P1,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "fail",
+          message: "bad",
+          pageUrl: P2,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "skipped",
+          message: "no data",
+          pageUrl: P3,
+        } as CheckResult,
       ]),
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
 
     expect(signal.failing[KEY]).toEqual([h(P2)]);
@@ -223,10 +283,20 @@ describe("buildResolutionSignal — notEvaluated (unevaluated pages never resolv
     // Only P1/P2 produced results; P3 was crawled but the rule never ran on it.
     const signal = buildResolutionSignal(
       rules([
-        { name: "c", status: "pass", message: "ok", pageUrl: P1 } as CheckResult,
-        { name: "c", status: "fail", message: "bad", pageUrl: P2 } as CheckResult,
+        {
+          name: "c",
+          status: "pass",
+          message: "ok",
+          pageUrl: P1,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "fail",
+          message: "bad",
+          pageUrl: P2,
+        } as CheckResult,
       ]),
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
 
     expect(signal.notEvaluated?.[KEY]).toEqual([h(P3)]);
@@ -235,11 +305,26 @@ describe("buildResolutionSignal — notEvaluated (unevaluated pages never resolv
   test("a check that evaluated every crawled page emits NO notEvaluated (common case is free)", () => {
     const signal = buildResolutionSignal(
       rules([
-        { name: "c", status: "pass", message: "ok", pageUrl: P1 } as CheckResult,
-        { name: "c", status: "pass", message: "ok", pageUrl: P2 } as CheckResult,
-        { name: "c", status: "fail", message: "bad", pageUrl: P3 } as CheckResult,
+        {
+          name: "c",
+          status: "pass",
+          message: "ok",
+          pageUrl: P1,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "pass",
+          message: "ok",
+          pageUrl: P2,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "fail",
+          message: "bad",
+          pageUrl: P3,
+        } as CheckResult,
       ]),
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
 
     expect(signal.notEvaluated).toBeUndefined();
@@ -277,10 +362,20 @@ describe("buildResolutionSignal — hash collisions stay in the safe direction",
     // `a` is evaluated (pass), `b` was skipped — and they share a hash.
     const signal = buildResolutionSignal(
       rules([
-        { name: "c", status: "pass", message: "ok", pageUrl: a! } as CheckResult,
-        { name: "c", status: "skipped", message: "no data", pageUrl: b! } as CheckResult,
+        {
+          name: "c",
+          status: "pass",
+          message: "ok",
+          pageUrl: a!,
+        } as CheckResult,
+        {
+          name: "c",
+          status: "skipped",
+          message: "no data",
+          pageUrl: b!,
+        } as CheckResult,
       ]),
-      [a!, b!],
+      [a!, b!]
     )!;
 
     // Subtracting by URL keeps b's hash in notEvaluated. Consequence: the
@@ -297,7 +392,10 @@ test("a check clipped at EXACTLY the per-check cap is still marked truncated", (
   // budget pass would see a complete-looking set, and the key would be treated
   // as authoritative — resolving pages that were only clipped.
   const cap = RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck;
-  const pages = Array.from({ length: cap + 50 }, (_, i) => `https://x.test/p/${i}`);
+  const pages = Array.from(
+    { length: cap + 50 },
+    (_, i) => `https://x.test/p/${i}`
+  );
   const signal = buildResolutionSignal(
     rules([
       {
@@ -308,7 +406,7 @@ test("a check clipped at EXACTLY the per-check cap is still marked truncated", (
         details: { aggregated: true },
       } as CheckResult,
     ]),
-    [P1],
+    [P1]
   )!;
 
   const key = resolutionCheckKey("meta-description", "c");

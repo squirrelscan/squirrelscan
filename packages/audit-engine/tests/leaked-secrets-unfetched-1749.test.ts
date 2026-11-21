@@ -3,12 +3,12 @@
 // refused connection) is listed as unfetched and the rule does not claim a clean site; a script that is gone
 // (404) is not listed; a script the asset cap never requested is counted.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { parseDocument } from "@squirrelscan/parser";
 import { security } from "@squirrelscan/rules";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   absorbResourceOccurrences,
@@ -18,7 +18,9 @@ import {
 
 type Storage = Parameters<typeof fetchAssetsFromOccurrences>[0];
 type Config = Parameters<typeof fetchAssetsFromOccurrences>[3];
-type ParsedPage = Parameters<typeof absorbResourceOccurrences>[1][number]["parsed"];
+type ParsedPage = Parameters<
+  typeof absorbResourceOccurrences
+>[1][number]["parsed"];
 type Overrides = Parameters<typeof fetchAssetsFromOccurrences>[4];
 
 function storageFor(siteBase: string): Storage {
@@ -30,7 +32,9 @@ function storageFor(siteBase: string): Storage {
   } as unknown as Storage;
 }
 
-const NO_CONFIG = { rules: { enable: ["*"], disable: [] } } as unknown as Config;
+const NO_CONFIG = {
+  rules: { enable: ["*"], disable: [] },
+} as unknown as Config;
 
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
@@ -40,15 +44,28 @@ beforeAll(() => {
     port: 0,
     fetch(req) {
       const { pathname } = new URL(req.url);
-      if (pathname === "/ok.js") return new Response("var x = 1;", { headers: { "content-type": "text/javascript" } });
-      if (pathname === "/ok2.js") return new Response("var y = 2;", { headers: { "content-type": "text/javascript" } });
-      if (/^\/bulk\d+\.js$/.test(pathname)) return new Response("var z = 3;", { headers: { "content-type": "text/javascript" } });
+      if (pathname === "/ok.js")
+        return new Response("var x = 1;", {
+          headers: { "content-type": "text/javascript" },
+        });
+      if (pathname === "/ok2.js")
+        return new Response("var y = 2;", {
+          headers: { "content-type": "text/javascript" },
+        });
+      if (/^\/bulk\d+\.js$/.test(pathname))
+        return new Response("var z = 3;", {
+          headers: { "content-type": "text/javascript" },
+        });
       if (pathname === "/gone.js") return new Response("gone", { status: 404 });
       if (pathname === "/boom.js") return new Response("boom", { status: 500 });
       if (pathname === "/waf.js") {
         return new Response("<html>Just a moment...</html>", {
           status: 403,
-          headers: { "content-type": "text/html", server: "cloudflare", "cf-ray": "abc123-LHR" },
+          headers: {
+            "content-type": "text/html",
+            server: "cloudflare",
+            "cf-ray": "abc123-LHR",
+          },
         });
       }
       return new Response("not found", { status: 404 });
@@ -61,7 +78,11 @@ afterAll(() => {
   server.stop(true);
 });
 
-async function assetsFor(srcs: string[], overrides?: Overrides, config: Config = NO_CONFIG) {
+async function assetsFor(
+  srcs: string[],
+  overrides?: Overrides,
+  config: Config = NO_CONFIG
+) {
   const url = `${base}/`;
   const markup = `<!doctype html><html><head><title>x</title>${srcs
     .map((s) => `<script src="${s}"></script>`)
@@ -69,33 +90,60 @@ async function assetsFor(srcs: string[], overrides?: Overrides, config: Config =
   const occurrences = emptySiteAssetOccurrences();
   absorbResourceOccurrences(
     occurrences,
-    [{ url, finalUrl: url, parsed: { document: parseDocument(markup), images: [] } as unknown as ParsedPage, hasCsp: false }],
-    base,
+    [
+      {
+        url,
+        finalUrl: url,
+        parsed: {
+          document: parseDocument(markup),
+          images: [],
+        } as unknown as ParsedPage,
+        hasCsp: false,
+      },
+    ],
+    base
   );
   occurrences.pageCount = 1;
   return Effect.runPromise(
-    fetchAssetsFromOccurrences(storageFor(base), "fixture-crawl", occurrences, config, overrides),
+    fetchAssetsFromOccurrences(
+      storageFor(base),
+      "fixture-crawl",
+      occurrences,
+      config,
+      overrides
+    )
   );
 }
 
-function leakChecks(assets: Awaited<ReturnType<typeof assetsFor>>): CheckResult[] {
-  return (security.leakedSecretsRule.run({
-    page: { url: `${base}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
-    parsed: {} as never,
-    site: {
-      baseUrl: base,
-      pages: [],
-      robotsTxt: null,
-      sitemaps: null,
-      scripts: assets.scripts,
-      assetCapDropped: assets.assetCapDropped,
-      scriptsNotReadUrls: assets.scriptsNotReadUrls,
-    },
-    options: {},
-  }) as { checks: CheckResult[] }).checks;
+function leakChecks(
+  assets: Awaited<ReturnType<typeof assetsFor>>
+): CheckResult[] {
+  return (
+    security.leakedSecretsRule.run({
+      page: {
+        url: `${base}/`,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
+      parsed: {} as never,
+      site: {
+        baseUrl: base,
+        pages: [],
+        robotsTxt: null,
+        sitemaps: null,
+        scripts: assets.scripts,
+        assetCapDropped: assets.assetCapDropped,
+        scriptsNotReadUrls: assets.scriptsNotReadUrls,
+      },
+      options: {},
+    }) as { checks: CheckResult[] }
+  ).checks;
 }
 
-const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name);
+const named = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name);
 
 describe("security/leaked-secrets reports the scripts it could not read (#1749)", () => {
   test("a script that is read and clean keeps the clean pass", async () => {
@@ -105,13 +153,19 @@ describe("security/leaked-secrets reports the scripts it could not read (#1749)"
   });
 
   test("a 5xx and a WAF challenge are listed as unfetched, and the site is not called clean", async () => {
-    const checks = leakChecks(await assetsFor(["/ok.js", "/boom.js", "/waf.js"]));
+    const checks = leakChecks(
+      await assetsFor(["/ok.js", "/boom.js", "/waf.js"])
+    );
     const unfetched = named(checks, "leaked-secrets-unfetched");
     expect(unfetched?.status).toBe("info");
     const ids = unfetched?.items?.map((i) => i.id).sort();
     expect(ids).toEqual([`${base}/boom.js`, `${base}/waf.js`].sort());
-    expect(unfetched?.items?.find((i) => i.id.endsWith("/boom.js"))?.label).toContain("500");
-    expect(unfetched?.items?.find((i) => i.id.endsWith("/waf.js"))?.label).toContain("WAF");
+    expect(
+      unfetched?.items?.find((i) => i.id.endsWith("/boom.js"))?.label
+    ).toContain("500");
+    expect(
+      unfetched?.items?.find((i) => i.id.endsWith("/waf.js"))?.label
+    ).toContain("WAF");
     expect(named(checks, "leaked-secrets")).toBeUndefined();
   });
 
@@ -122,7 +176,9 @@ describe("security/leaked-secrets reports the scripts it could not read (#1749)"
   });
 
   test("a script the asset cap never requested is counted", async () => {
-    const assets = await assetsFor(["/ok.js", "/ok2.js"], { resourceCheckMaxItems: 1 });
+    const assets = await assetsFor(["/ok.js", "/ok2.js"], {
+      resourceCheckMaxItems: 1,
+    });
     expect(assets.assetCapDropped?.scripts).toBe(1);
     const unfetched = named(leakChecks(assets), "leaked-secrets-unfetched");
     expect(unfetched?.details).toMatchObject({ unfetched: 0, capDropped: 1 });
@@ -144,7 +200,9 @@ describe("security/leaked-secrets reports the scripts it could not read (#1749)"
     expect(unfetched?.details).toMatchObject({ unfetched: 0, capDropped: 4 });
     expect(named(checks, "leaked-secrets")).toBeUndefined();
     expect(assets.scriptsNotReadUrls).toHaveLength(4);
-    expect(unfetched?.items?.map((i) => i.id)).toEqual(assets.scriptsNotReadUrls);
+    expect(unfetched?.items?.map((i) => i.id)).toEqual(
+      assets.scriptsNotReadUrls
+    );
     expect(unfetched?.items?.[0]?.label).toContain("script limit");
   }, 30_000);
 });

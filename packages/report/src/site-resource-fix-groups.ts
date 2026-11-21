@@ -18,6 +18,7 @@
 // count instead of being absorbed into a claim about 87 pages.
 
 import type { SiteResourceOccurrence } from "@squirrelscan/core-contracts";
+
 import type { GroupedCheck, GroupedRule } from "./grouping";
 
 /**
@@ -54,7 +55,7 @@ function byCodepoint(a: string, b: string): number {
 function groupsForCheck(
   ruleId: string,
   check: GroupedCheck,
-  occurrences: readonly SiteResourceOccurrence[],
+  occurrences: readonly SiteResourceOccurrence[]
 ): SiteResourceFixGroup[] {
   // (origin, kind) -> key -> pages. The page set is what decides the grouping,
   // so it is built first and completely; nothing is emitted until every
@@ -78,7 +79,10 @@ function groupsForCheck(
   // between two runs of the same site churns every diff (#150).
   for (const scope of [...pagesByResource.keys()].sort(byCodepoint)) {
     const byKey = pagesByResource.get(scope)!;
-    const [siteOrigin, kind] = scope.split("\u0000") as [string, SiteResourceOccurrence["kind"]];
+    const [siteOrigin, kind] = scope.split("\u0000") as [
+      string,
+      SiteResourceOccurrence["kind"],
+    ];
     // Page-set signature -> the resource keys sharing it.
     const buckets = new Map<string, { pages: string[]; keys: string[] }>();
     for (const key of [...byKey.keys()].sort(byCodepoint)) {
@@ -93,7 +97,7 @@ function groupsForCheck(
     // Ties break on the signature so the order is total, never insertion-order.
     const ordered = [...buckets.entries()].sort(
       ([leftSig, left], [rightSig, right]) =>
-        right.pages.length - left.pages.length || byCodepoint(leftSig, rightSig),
+        right.pages.length - left.pages.length || byCodepoint(leftSig, rightSig)
     );
     for (const [, bucket] of ordered) {
       groups.push({
@@ -119,11 +123,14 @@ function groupsForCheck(
  * the presentation layer's job (`isRenderableSiteResourceGroup`), and JSON keeps
  * the rest as evidence — the same split `component-fix-groups` draws.
  */
-export function siteResourceFixGroups(rule: GroupedRule): SiteResourceFixGroup[] {
+export function siteResourceFixGroups(
+  rule: GroupedRule
+): SiteResourceFixGroup[] {
   const groups: SiteResourceFixGroup[] = [];
   for (const check of rule.checks) {
-    const occurrences = (check as { siteResourceOccurrences?: SiteResourceOccurrence[] })
-      .siteResourceOccurrences;
+    const occurrences = (
+      check as { siteResourceOccurrences?: SiteResourceOccurrence[] }
+    ).siteResourceOccurrences;
     if (!occurrences?.length) continue;
     groups.push(...groupsForCheck(rule.id, check, occurrences));
   }

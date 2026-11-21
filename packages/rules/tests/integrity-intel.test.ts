@@ -6,8 +6,6 @@
 // `ctx.intel` is stubbed here — the real engine is covered in
 // packages/threat-intel/tests. This file proves the WIRING + rule logic.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   IntelContext,
@@ -17,10 +15,12 @@ import type {
 } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 import { kitSignatureRule } from "../src/integrity/kit-signature";
 import { knownMaliciousUrlRule } from "../src/integrity/known-malicious-url";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const SITE = "https://sydneyavspecialists.com.au";
 
@@ -75,7 +75,7 @@ function pageCtx(url: string, html: string, intel?: IntelContext): RuleContext {
 
 function siteCtx(
   pages: SiteData["pages"],
-  opts: { intel?: IntelContext; externalLinks?: SiteData["externalLinks"] } = {},
+  opts: { intel?: IntelContext; externalLinks?: SiteData["externalLinks"] } = {}
 ): RuleContext {
   const site: SiteData = {
     baseUrl: SITE,
@@ -85,7 +85,13 @@ function siteCtx(
     externalLinks: opts.externalLinks,
   };
   return {
-    page: { url: pages[0]?.url ?? SITE, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: pages[0]?.url ?? SITE,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: pages[0]?.parsed ?? ({} as ParsedPage),
     site,
     intel: opts.intel,
@@ -106,12 +112,20 @@ describe("integrity/kit-signature", () => {
   test("no-op when intel is absent (opt-in off)", async () => {
     const ctx = pageCtx(`${SITE}/calendly?token=x`, KIT); // no intel
     // Off for the whole run: no per-page check (a pass would claim a verdict nobody reached).
-    expect(checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] })).toHaveLength(0);
+    expect(
+      checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] })
+    ).toHaveLength(0);
   });
 
   test("fails when a signature matches the page", async () => {
-    const ctx = pageCtx(`${SITE}/calendly?token=x`, KIT, signatureIntel("__KIT__"));
-    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
+    const ctx = pageCtx(
+      `${SITE}/calendly?token=x`,
+      KIT,
+      signatureIntel("__KIT__")
+    );
+    const out = checks(
+      (await kitSignatureRule.run(ctx)) as { checks: CheckResult[] }
+    );
     expect(out).toHaveLength(1);
     expect(out[0]?.status).toBe("fail");
     expect(out[0]?.value).toBe("calendly-kit");
@@ -122,10 +136,14 @@ describe("integrity/kit-signature", () => {
     const ctx = pageCtx(
       `${SITE}/about`,
       "<html><body>clean</body></html>",
-      signatureIntel("__KIT__"),
+      signatureIntel("__KIT__")
     );
-    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
-    expect(out.map((c) => [c.name, c.status])).toEqual([["kit-signature", "pass"]]);
+    const out = checks(
+      (await kitSignatureRule.run(ctx)) as { checks: CheckResult[] }
+    );
+    expect(out.map((c) => [c.name, c.status])).toEqual([
+      ["kit-signature", "pass"],
+    ]);
   });
 
   test("matches against external script bodies for the page", async () => {
@@ -134,7 +152,12 @@ describe("integrity/kit-signature", () => {
     const intel: IntelContext = {
       providers: [],
       signatureCount: 1,
-      lookupUrl: (u) => ({ url: u, listed: false, checked: false, sources: [] }),
+      lookupUrl: (u) => ({
+        url: u,
+        listed: false,
+        checked: false,
+        sources: [],
+      }),
       matchSignatures: (input) =>
         (input.scripts ?? []).join("").includes("payload")
           ? [{ id: "x", name: "x", severity: "high", matchedStrings: ["s"] }]
@@ -179,7 +202,9 @@ describe("integrity/kit-signature", () => {
       intel,
       options: {},
     };
-    const out = checks((await kitSignatureRule.run(ctx)) as { checks: CheckResult[] });
+    const out = checks(
+      (await kitSignatureRule.run(ctx)) as { checks: CheckResult[] }
+    );
     expect(out).toHaveLength(1);
   });
 });
@@ -193,7 +218,9 @@ describe("integrity/known-malicious-url", () => {
 
   test("says it did not run when intel is absent (opt-in off), never clean (#1741)", async () => {
     const ctx = siteCtx([pageEntry(`${SITE}/`)]);
-    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
+    const out = checks(
+      (await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] }
+    );
     expect(out.map((c) => [c.name, c.status, c.skipReason])).toEqual([
       ["known-malicious-url", "skipped", "not-applicable"],
     ]);
@@ -205,7 +232,9 @@ describe("integrity/known-malicious-url", () => {
       [bad]: [{ provider: "urlhaus", matched: "url", threat: "phishing" }],
     });
     const ctx = siteCtx([pageEntry(`${SITE}/`), pageEntry(bad)], { intel });
-    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
+    const out = checks(
+      (await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] }
+    );
     const fail = out.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail?.pageUrl).toBe(bad);
@@ -220,9 +249,13 @@ describe("integrity/known-malicious-url", () => {
     });
     const ctx = siteCtx([pageEntry(`${SITE}/`)], {
       intel,
-      externalLinks: [{ href: evil, status: 200, error: null, sourcePages: [`${SITE}/`] }],
+      externalLinks: [
+        { href: evil, status: 200, error: null, sourcePages: [`${SITE}/`] },
+      ],
     });
-    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
+    const out = checks(
+      (await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] }
+    );
     const fail = out.find((c) => c.status === "fail");
     expect(fail).toBeDefined();
     expect(fail?.details?.origin).toBe("external-link");
@@ -230,8 +263,12 @@ describe("integrity/known-malicious-url", () => {
 
   test("emits a single pass when intel was consulted and nothing matched", async () => {
     const intel = feedIntel({}); // checked=true for all, listed for none
-    const ctx = siteCtx([pageEntry(`${SITE}/`), pageEntry(`${SITE}/about`)], { intel });
-    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
+    const ctx = siteCtx([pageEntry(`${SITE}/`), pageEntry(`${SITE}/about`)], {
+      intel,
+    });
+    const out = checks(
+      (await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] }
+    );
     expect(out).toHaveLength(1);
     expect(out[0]?.status).toBe("pass");
   });
@@ -244,7 +281,11 @@ describe("integrity/known-malicious-url", () => {
       lookupUrl: (url) => ({ url, listed: false, checked: false, sources: [] }),
     };
     const ctx = siteCtx([pageEntry(`${SITE}/`)], { intel });
-    const out = checks((await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] });
-    expect(out.map((c) => [c.name, c.status])).toEqual([["known-malicious-url", "skipped"]]);
+    const out = checks(
+      (await knownMaliciousUrlRule.run(ctx)) as { checks: CheckResult[] }
+    );
+    expect(out.map((c) => [c.name, c.status])).toEqual([
+      ["known-malicious-url", "skipped"],
+    ]);
   });
 });

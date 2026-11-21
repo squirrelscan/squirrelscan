@@ -13,8 +13,6 @@
 // wrong and the array driver could not — a page holding fresh AND carried findings,
 // a page removed this run, and a rule carrying more findings than the report keeps.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -22,14 +20,16 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
+import { describe, expect, test } from "bun:test";
+
+import { findingFingerprint } from "../src/fingerprint";
 import { findingKey } from "../src/merge-core";
-import { describeSitePagesContract } from "./helpers/site-pages-contract";
 import {
   runCloudSmartAudits,
   type OpenFindingPage,
   type SmartAuditStore,
 } from "../src/merge-promise";
-import { findingFingerprint } from "../src/fingerprint";
+import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 const SITE = "web_1350";
 const AUDIT = "audit_2";
@@ -62,9 +62,14 @@ class MemStore implements SmartAuditStore {
   }) {
     return findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator);
   }
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     if (this.refuseWholeRead) {
-      throw new Error("getFindings: the streaming path must never load the whole open set");
+      throw new Error(
+        "getFindings: the streaming path must never load the whole open set"
+      );
     }
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
@@ -79,7 +84,9 @@ class MemStore implements SmartAuditStore {
       const prior = this.findings.get(k);
       this.findings.set(k, {
         ...f,
-        firstSeenAt: prior ? Math.min(prior.firstSeenAt, f.firstSeenAt) : f.firstSeenAt,
+        firstSeenAt: prior
+          ? Math.min(prior.firstSeenAt, f.firstSeenAt)
+          : f.firstSeenAt,
       });
     }
   }
@@ -90,7 +97,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -102,17 +109,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages) {
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
     }
   }
   async compactFindings(): Promise<number> {
@@ -124,7 +140,7 @@ function row(
   normalizedUrl: string,
   locator: string,
   auditId: string,
-  overrides: Partial<PageFindingRecord> = {},
+  overrides: Partial<PageFindingRecord> = {}
 ): PageFindingRecord {
   const message = `Missing meta description${locator ? `: ${locator}` : ""}`;
   return {
@@ -138,7 +154,9 @@ function row(
     message,
     value: null,
     expected: null,
-    payload: locator ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 }) : null,
+    payload: locator
+      ? JSON.stringify({ items: [{ id: locator, label: locator }], i: 0 })
+      : null,
     fingerprint: findingFingerprint("fail", message, null, null),
     firstSeenAt: 1_600_000_000_000,
     lastSeenCrawlId: auditId,
@@ -167,7 +185,10 @@ const shell = { [RULE]: { meta, checks: [] as CheckResult[] } };
  * The API's cursor, in memory: every OPEN finding for the site in page order, one
  * page per item, split by which audit last saw it.
  */
-async function* openPagesOf(store: MemStore, auditId: string): AsyncGenerator<OpenFindingPage> {
+async function* openPagesOf(
+  store: MemStore,
+  auditId: string
+): AsyncGenerator<OpenFindingPage> {
   const byPage = new Map<string, PageFindingRecord[]>();
   const sorted = [...store.findings.values()]
     .filter((f) => f.state === "open")
@@ -197,8 +218,10 @@ async function* freshPagesOf(store: MemStore, auditId: string) {
   }
 }
 
-
-describeSitePagesContract("canonical-variants-merge-1350.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "canonical-variants-merge-1350.test.ts MemStore",
+  () => new MemStore()
+);
 
 const NOW = 1_700_000_000_000;
 const H = "https://x.test";
@@ -219,7 +242,10 @@ function results(failUrls: string[], passUrls: string[]) {
   return {
     [RULE]: {
       meta,
-      checks: [...failUrls.map((u) => mk(u, "fail")), ...passUrls.map((u) => mk(u, "pass"))],
+      checks: [
+        ...failUrls.map((u) => mk(u, "fail")),
+        ...passUrls.map((u) => mk(u, "pass")),
+      ],
     },
   };
 }
@@ -237,7 +263,7 @@ async function run(
   mode: Mode,
   crawled: string[],
   fail: string[],
-  extra: Record<string, unknown> = {},
+  extra: Record<string, unknown> = {}
 ) {
   const sampled = mode === "sampled";
   return runCloudSmartAudits({
@@ -247,107 +273,145 @@ async function run(
     ruleResults: sampled
       ? results(
           fail,
-          crawled.filter((u) => !fail.includes(u)),
+          crawled.filter((u) => !fail.includes(u))
         )
       : shell,
     pageStatuses: statuses(crawled),
     now: NOW,
     ...(sampled
       ? {}
-      : { completeStore: { openPages: openPagesOf(store, AUDIT), crawledUrls: crawled } }),
+      : {
+          completeStore: {
+            openPages: openPagesOf(store, AUDIT),
+            crawledUrls: crawled,
+          },
+        }),
     ...extra,
   });
 }
 
-describe.each(["sampled", "streamed"] as const)("canonical variants in the merge, %s path (#1350)", (mode) => {
-  const seed = (variantStored: boolean): MemStore => {
-    const store = new MemStore();
-    for (const u of [A, AV, B, C]) store.pages.set(u, active(u, variantStored && u === AV ? A : undefined));
-    // The variant and the canonical page both carry the same finding; B and C are clean.
-    for (const u of [A, AV]) {
-      store.findings.set(findingKey(u, RULE, CHECK, ""), row(u, "", PRIOR_AUDIT));
-    }
-    return store;
-  };
+describe.each(["sampled", "streamed"] as const)(
+  "canonical variants in the merge, %s path (#1350)",
+  (mode) => {
+    const seed = (variantStored: boolean): MemStore => {
+      const store = new MemStore();
+      for (const u of [A, AV, B, C])
+        store.pages.set(
+          u,
+          active(u, variantStored && u === AV ? A : undefined)
+        );
+      // The variant and the canonical page both carry the same finding; B and C are clean.
+      for (const u of [A, AV]) {
+        store.findings.set(
+          findingKey(u, RULE, CHECK, ""),
+          row(u, "", PRIOR_AUDIT)
+        );
+      }
+      return store;
+    };
 
-  test("a stored variant folds out of knownPages and the carried page count", async () => {
-    const store = seed(true);
-    // Only B is re-crawled: A and AV (and C) are carried.
-    const r = await run(store, mode, [B], [], { countCarriedPagesOutsideCrawl: true });
-    expect(r.canonicalVariantOf.get(AV)).toBe(A);
-    expect(r.canonicalVariantOf.size).toBe(1);
-    expect(r.coverage.auditedPages).toBe(1);
-    expect(r.coverage.knownPages).toBe(3); // A, B, C: the variant counts with A
-    // A and AV carry a finding: one page once folded.
-    expect(r.coverage.carriedPagesOutsideCrawl).toBe(1);
-  });
-
-  test("without variants the result is the one it always was", async () => {
-    const r = await run(seed(false), mode, [B], []);
-    expect(r.canonicalVariantOf.size).toBe(0);
-    expect(r.coverage.knownPages).toBe(4);
-    expect(r.coverage).not.toHaveProperty("carriedPagesOutsideCrawl");
-    const plain = await run(seed(false), mode, [B], [], { canonicalVariantPages: undefined });
-    expect(plain.coverage).toEqual(r.coverage);
-  });
-
-  test("auditedPages, the score tallies and the union are the same with and without variants (billing)", async () => {
-    const storeV = seed(true);
-    const store0 = seed(false);
-    const withVariants = await run(storeV, mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: VARIANTS,
+    test("a stored variant folds out of knownPages and the carried page count", async () => {
+      const store = seed(true);
+      // Only B is re-crawled: A and AV (and C) are carried.
+      const r = await run(store, mode, [B], [], {
+        countCarriedPagesOutsideCrawl: true,
+      });
+      expect(r.canonicalVariantOf.get(AV)).toBe(A);
+      expect(r.canonicalVariantOf.size).toBe(1);
+      expect(r.coverage.auditedPages).toBe(1);
+      expect(r.coverage.knownPages).toBe(3); // A, B, C: the variant counts with A
+      // A and AV carry a finding: one page once folded.
+      expect(r.coverage.carriedPagesOutsideCrawl).toBe(1);
     });
-    const without = await run(store0, mode, [A, AV, B], [A, AV]);
-    expect(withVariants.coverage.auditedPages).toBe(3);
-    expect(withVariants.coverage.auditedPages).toBe(without.coverage.auditedPages);
-    expect(withVariants.canonicalVariantOf.get(AV)).toBe(A);
-    expect(withVariants.coverage.knownPages).toBe(without.coverage.knownPages - 1);
-    expect(withVariants.persistedFindings).toBe(without.persistedFindings);
-    expect(withVariants.unionRuleResults).toEqual(without.unionRuleResults);
-    // Both undefined on the sampled path, equal maps on the streamed one.
-    expect(withVariants.scoringTallies).toEqual(without.scoringTallies);
-    expect(withVariants.reportTotals).toEqual(without.reportTotals);
-    // The findings the store holds, row for row (the count alone would miss a rekeyed one).
-    const rowsOf = (st: MemStore) =>
-      [...st.findings.values()]
-        .map((f) => JSON.stringify([f.normalizedUrl, f.ruleId, f.checkName, f.locator, f.state, f.provenance, f.fingerprint, f.lastSeenCrawlId]))
-        .sort();
-    expect(rowsOf(storeV)).toEqual(rowsOf(store0));
-  });
 
-  test("a crawled variant is recorded on its page row, and cleared by a complete list that no longer has it", async () => {
-    const store = seed(false);
-    await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: VARIANTS });
-    expect(store.pages.get(AV)?.canonical).toBe(A);
-    expect(store.pages.get(A)).not.toHaveProperty("canonical");
-    // Next run: the crawl found no variants at all. An EMPTY list is a report that there are none.
-    const later = await run(store, mode, [A, AV, B], [A, AV], { canonicalVariantPages: [] });
-    expect(store.pages.get(AV)?.canonical).toBeNull();
-    expect(later.canonicalVariantOf.size).toBe(0);
-    expect(later.coverage.knownPages).toBe(4); // A, AV, B, C: the variant is a page of its own again
-  });
-
-  test("a clipped list only adds: a crawled page missing from it keeps what it had", async () => {
-    const store = seed(true); // AV is stored as a variant of A
-    const clipped = await run(store, mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: [{ page: C, canonical: A }],
-      canonicalVariantsComplete: false,
+    test("without variants the result is the one it always was", async () => {
+      const r = await run(seed(false), mode, [B], []);
+      expect(r.canonicalVariantOf.size).toBe(0);
+      expect(r.coverage.knownPages).toBe(4);
+      expect(r.coverage).not.toHaveProperty("carriedPagesOutsideCrawl");
+      const plain = await run(seed(false), mode, [B], [], {
+        canonicalVariantPages: undefined,
+      });
+      expect(plain.coverage).toEqual(r.coverage);
     });
-    expect(store.pages.get(AV)?.canonical).toBe(A); // not cleared: the list was clipped
-    expect(clipped.canonicalVariantOf.get(AV)).toBe(A);
-    // ...and the same list, complete, would have cleared it.
-    const complete = await run(seed(true), mode, [A, AV, B], [A, AV], {
-      canonicalVariantPages: [{ page: C, canonical: A }],
-    });
-    expect(complete.canonicalVariantOf.has(AV)).toBe(false);
-  });
 
-  test("a producer that reports no variants keeps what is stored", async () => {
-    const store = seed(true);
-    await run(store, mode, [A, AV, B], [A, AV]);
-    expect(store.pages.get(AV)?.canonical).toBe(A);
-  });
-});
+    test("auditedPages, the score tallies and the union are the same with and without variants (billing)", async () => {
+      const storeV = seed(true);
+      const store0 = seed(false);
+      const withVariants = await run(storeV, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: VARIANTS,
+      });
+      const without = await run(store0, mode, [A, AV, B], [A, AV]);
+      expect(withVariants.coverage.auditedPages).toBe(3);
+      expect(withVariants.coverage.auditedPages).toBe(
+        without.coverage.auditedPages
+      );
+      expect(withVariants.canonicalVariantOf.get(AV)).toBe(A);
+      expect(withVariants.coverage.knownPages).toBe(
+        without.coverage.knownPages - 1
+      );
+      expect(withVariants.persistedFindings).toBe(without.persistedFindings);
+      expect(withVariants.unionRuleResults).toEqual(without.unionRuleResults);
+      // Both undefined on the sampled path, equal maps on the streamed one.
+      expect(withVariants.scoringTallies).toEqual(without.scoringTallies);
+      expect(withVariants.reportTotals).toEqual(without.reportTotals);
+      // The findings the store holds, row for row (the count alone would miss a rekeyed one).
+      const rowsOf = (st: MemStore) =>
+        [...st.findings.values()]
+          .map((f) =>
+            JSON.stringify([
+              f.normalizedUrl,
+              f.ruleId,
+              f.checkName,
+              f.locator,
+              f.state,
+              f.provenance,
+              f.fingerprint,
+              f.lastSeenCrawlId,
+            ])
+          )
+          .sort();
+      expect(rowsOf(storeV)).toEqual(rowsOf(store0));
+    });
+
+    test("a crawled variant is recorded on its page row, and cleared by a complete list that no longer has it", async () => {
+      const store = seed(false);
+      await run(store, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: VARIANTS,
+      });
+      expect(store.pages.get(AV)?.canonical).toBe(A);
+      expect(store.pages.get(A)).not.toHaveProperty("canonical");
+      // Next run: the crawl found no variants at all. An EMPTY list is a report that there are none.
+      const later = await run(store, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: [],
+      });
+      expect(store.pages.get(AV)?.canonical).toBeNull();
+      expect(later.canonicalVariantOf.size).toBe(0);
+      expect(later.coverage.knownPages).toBe(4); // A, AV, B, C: the variant is a page of its own again
+    });
+
+    test("a clipped list only adds: a crawled page missing from it keeps what it had", async () => {
+      const store = seed(true); // AV is stored as a variant of A
+      const clipped = await run(store, mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: [{ page: C, canonical: A }],
+        canonicalVariantsComplete: false,
+      });
+      expect(store.pages.get(AV)?.canonical).toBe(A); // not cleared: the list was clipped
+      expect(clipped.canonicalVariantOf.get(AV)).toBe(A);
+      // ...and the same list, complete, would have cleared it.
+      const complete = await run(seed(true), mode, [A, AV, B], [A, AV], {
+        canonicalVariantPages: [{ page: C, canonical: A }],
+      });
+      expect(complete.canonicalVariantOf.has(AV)).toBe(false);
+    });
+
+    test("a producer that reports no variants keeps what is stored", async () => {
+      const store = seed(true);
+      await run(store, mode, [A, AV, B], [A, AV]);
+      expect(store.pages.get(AV)?.canonical).toBe(A);
+    });
+  }
+);
 
 describe("an untouched split counts its pages as the provider says (#1031)", () => {
   test("a provider that does not count pages leaves the count out", async () => {
@@ -395,7 +459,13 @@ describe("an untouched split counts its pages as the provider says (#1031)", () 
         crawledUrls: [B],
         untouchedCarried: async () => ({
           pages: (async function* () {})(),
-          aggregate: { findings: 3, unrenderedFindings: 0, pages: 2, rules: [], classes: [] },
+          aggregate: {
+            findings: 3,
+            unrenderedFindings: 0,
+            pages: 2,
+            rules: [],
+            classes: [],
+          },
         }),
       },
     });

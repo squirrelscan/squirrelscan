@@ -4,12 +4,16 @@
 // 2 s rule budget is lifted here: a loaded machine would abandon the scan and hand back an empty record, and what is asserted
 // is the cap and the retention, not the speed.
 
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
+
+import type { RuleContext } from "../../src/types";
 
 import { buildCollectedPageSignal } from "../../src/collected-signals";
-import { leakedSecretsRule, PAGE_FINDINGS_CAP } from "../../src/security/leaked-secrets";
-import type { RuleContext } from "../../src/types";
+import {
+  leakedSecretsRule,
+  PAGE_FINDINGS_CAP,
+} from "../../src/security/leaked-secrets";
 
 setDefaultTimeout(100_000);
 
@@ -25,7 +29,8 @@ function stream(seed: number) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return (t ^ (t >>> 14)) >>> 0;
   };
-  return (): string => `${["sk", "live"].join("_")}_${Array.from({ length: 24 }, () => ALNUM[next() % ALNUM.length]).join("")}`;
+  return (): string =>
+    `${["sk", "live"].join("_")}_${Array.from({ length: 24 }, () => ALNUM[next() % ALNUM.length]).join("")}`;
 }
 
 /** Distinct values, joined by `sep`, until the text is `bytes` long. */
@@ -55,7 +60,11 @@ const heapMb = (): number => {
 
 const shapes: Array<[string, (bytes: number) => string]> = [
   ["in text", (n) => `<html><body><p>${body(n, "</p><p>")}</p></body></html>`],
-  ["in one inline script", (n) => `<html><body><script>var k=["${body(n, '","')}"];</script></body></html>`],
+  [
+    "in one inline script",
+    (n) =>
+      `<html><body><script>var k=["${body(n, '","')}"];</script></body></html>`,
+  ],
 ];
 
 for (const [label, bytes] of [
@@ -68,25 +77,34 @@ for (const [label, bytes] of [
         const html = build(bytes);
         const parsed = parsePage(html, URL_);
         const started = performance.now();
-        let signal = buildCollectedPageSignal({ url: URL_, parsed, rendered: false, budgetMs: 600_000 });
+        let signal = buildCollectedPageSignal({
+          url: URL_,
+          parsed,
+          rendered: false,
+          budgetMs: 600_000,
+        });
         const scanMs = performance.now() - started;
         expect(signal.secrets.length).toBeLessThanOrEqual(PAGE_FINDINGS_CAP);
         expect(signal.secretsOmitted ?? 0).toBeGreaterThan(0);
         const ruleStart = performance.now();
-        const result = (await leakedSecretsRule.run({
+        const result = await leakedSecretsRule.run({
           site: { baseUrl: URL_, pages: [], scripts: [] },
           collectedSignals: { pages: [signal] },
-        } as unknown as RuleContext));
+        } as unknown as RuleContext);
         const ruleMs = performance.now() - ruleStart;
         const json = JSON.stringify(result).length;
         expect(json).toBeLessThan(2 * 1024 * 1024);
-        expect(result.checks.some((c) => c.name === "leaked-secrets-omitted")).toBe(true);
+        expect(
+          result.checks.some((c) => c.name === "leaked-secrets-omitted")
+        ).toBe(true);
         // what the page keeps, after GC, with the page itself dropped
         const held = heapMb();
         (signal as { secrets: unknown }).secrets = [];
         signal = undefined as never;
         const dropped = heapMb();
-        console.log(`TIMING ${label} ${shape}: collect ${Math.round(scanMs)} ms, rule ${Math.round(ruleMs)} ms, result ${(json / 1024).toFixed(0)} KB, retained ${(held - dropped).toFixed(1)} MB`);
+        console.log(
+          `TIMING ${label} ${shape}: collect ${Math.round(scanMs)} ms, rule ${Math.round(ruleMs)} ms, result ${(json / 1024).toFixed(0)} KB, retained ${(held - dropped).toFixed(1)} MB`
+        );
         expect(held - dropped).toBeLessThan(20);
         expect(scanMs).toBeLessThan(60_000);
       });

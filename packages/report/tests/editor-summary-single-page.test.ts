@@ -5,12 +5,15 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { buildEditorSummaryRequest } from "../src/editor-summary";
 
 const FIRED = {
   "crawl/single-page-site": {
     meta: { name: "Single-Page Site", category: "crawl", weight: 1 },
-    checks: [{ name: "single-page-site", status: "info", details: { sections: 4 } }],
+    checks: [
+      { name: "single-page-site", status: "info", details: { sections: 4 } },
+    ],
   },
 };
 
@@ -42,7 +45,11 @@ describe("coverage.singlePageSite", () => {
 
   test("is omitted when the finding did not fire", () => {
     const req = buildEditorSummaryRequest(report({ ruleResults: {} }));
-    expect(req.coverage).toEqual({ scannedPages: 1, capped: false, timeStopped: false });
+    expect(req.coverage).toEqual({
+      scannedPages: 1,
+      capped: false,
+      timeStopped: false,
+    });
     expect("singlePageSite" in (req.coverage ?? {})).toBe(false);
     expect("sectionCount" in (req.coverage ?? {})).toBe(false);
   });
@@ -53,7 +60,9 @@ describe("coverage.singlePageSite", () => {
       { origin: "cli", pagesCrawled: 1, capped: false, stopReason: "time" },
       { origin: "cli", pagesCrawled: 1, capped: false, unfetched: 3 },
     ]) {
-      const req = buildEditorSummaryRequest(report({ scanScope } as Partial<AuditReport>));
+      const req = buildEditorSummaryRequest(
+        report({ scanScope } as Partial<AuditReport>)
+      );
       expect(req.coverage?.singlePageSite).toBeUndefined();
       expect(req.coverage?.sectionCount).toBeUndefined();
     }
@@ -65,10 +74,16 @@ describe("coverage.singlePageSite", () => {
         ruleResults: {
           "crawl/single-page-site": {
             meta: { name: "x", category: "crawl", weight: 1 },
-            checks: [{ name: "single-page-site", status: "info", details: { sections: -2 } }],
+            checks: [
+              {
+                name: "single-page-site",
+                status: "info",
+                details: { sections: -2 },
+              },
+            ],
           },
         } as unknown as AuditReport["ruleResults"],
-      }),
+      })
     );
     expect(req.coverage?.singlePageSite).toBeUndefined();
   });
@@ -78,8 +93,13 @@ describe("coverage.creditsStopped (repo#2145)", () => {
   test("a credit stop is sent and suppresses singlePageSite", () => {
     const req = buildEditorSummaryRequest(
       report({
-        scanScope: { origin: "cloud", pagesCrawled: 1, capped: false, stopReason: "credits" },
-      } as Partial<AuditReport>),
+        scanScope: {
+          origin: "cloud",
+          pagesCrawled: 1,
+          capped: false,
+          stopReason: "credits",
+        },
+      } as Partial<AuditReport>)
     );
     expect(req.coverage).toEqual({
       scannedPages: 1,

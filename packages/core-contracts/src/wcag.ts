@@ -26,11 +26,23 @@ interface WcagEntry {
  */
 export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "1.1.1": { title: "Non-text Content", level: "A", version: "2.0" },
-  "1.2.1": { title: "Audio-only and Video-only (Prerecorded)", level: "A", version: "2.0" },
+  "1.2.1": {
+    title: "Audio-only and Video-only (Prerecorded)",
+    level: "A",
+    version: "2.0",
+  },
   "1.2.2": { title: "Captions (Prerecorded)", level: "A", version: "2.0" },
-  "1.2.3": { title: "Audio Description or Media Alternative (Prerecorded)", level: "A", version: "2.0" },
+  "1.2.3": {
+    title: "Audio Description or Media Alternative (Prerecorded)",
+    level: "A",
+    version: "2.0",
+  },
   "1.2.4": { title: "Captions (Live)", level: "AA", version: "2.0" },
-  "1.2.5": { title: "Audio Description (Prerecorded)", level: "AA", version: "2.0" },
+  "1.2.5": {
+    title: "Audio Description (Prerecorded)",
+    level: "AA",
+    version: "2.0",
+  },
   "1.3.1": { title: "Info and Relationships", level: "A", version: "2.0" },
   "1.3.2": { title: "Meaningful Sequence", level: "A", version: "2.0" },
   "1.3.3": { title: "Sensory Characteristics", level: "A", version: "2.0" },
@@ -50,8 +62,16 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "2.1.4": { title: "Character Key Shortcuts", level: "A", version: "2.1" },
   "2.2.1": { title: "Timing Adjustable", level: "A", version: "2.0" },
   "2.2.2": { title: "Pause, Stop, Hide", level: "A", version: "2.0" },
-  "2.3.1": { title: "Three Flashes or Below Threshold", level: "A", version: "2.0" },
-  "2.3.3": { title: "Animation from Interactions", level: "AAA", version: "2.1" },
+  "2.3.1": {
+    title: "Three Flashes or Below Threshold",
+    level: "A",
+    version: "2.0",
+  },
+  "2.3.3": {
+    title: "Animation from Interactions",
+    level: "AAA",
+    version: "2.1",
+  },
   "2.4.1": { title: "Bypass Blocks", level: "A", version: "2.0" },
   "2.4.2": { title: "Page Titled", level: "A", version: "2.0" },
   "2.4.3": { title: "Focus Order", level: "A", version: "2.0" },
@@ -60,7 +80,11 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "2.4.6": { title: "Headings and Labels", level: "AA", version: "2.0" },
   "2.4.7": { title: "Focus Visible", level: "AA", version: "2.0" },
   "2.4.9": { title: "Link Purpose (Link Only)", level: "AAA", version: "2.0" },
-  "2.4.11": { title: "Focus Not Obscured (Minimum)", level: "AA", version: "2.2" },
+  "2.4.11": {
+    title: "Focus Not Obscured (Minimum)",
+    level: "AA",
+    version: "2.2",
+  },
   "2.5.1": { title: "Pointer Gestures", level: "A", version: "2.1" },
   "2.5.2": { title: "Pointer Cancellation", level: "A", version: "2.1" },
   "2.5.3": { title: "Label in Name", level: "A", version: "2.1" },
@@ -78,9 +102,17 @@ export const WCAG_CRITERIA: Readonly<Record<string, WcagEntry>> = {
   "3.3.1": { title: "Error Identification", level: "A", version: "2.0" },
   "3.3.2": { title: "Labels or Instructions", level: "A", version: "2.0" },
   "3.3.3": { title: "Error Suggestion", level: "AA", version: "2.0" },
-  "3.3.4": { title: "Error Prevention (Legal, Financial, Data)", level: "AA", version: "2.0" },
+  "3.3.4": {
+    title: "Error Prevention (Legal, Financial, Data)",
+    level: "AA",
+    version: "2.0",
+  },
   "3.3.7": { title: "Redundant Entry", level: "A", version: "2.2" },
-  "3.3.8": { title: "Accessible Authentication (Minimum)", level: "AA", version: "2.2" },
+  "3.3.8": {
+    title: "Accessible Authentication (Minimum)",
+    level: "AA",
+    version: "2.2",
+  },
   "4.1.2": { title: "Name, Role, Value", level: "A", version: "2.0" },
   "4.1.3": { title: "Status Messages", level: "AA", version: "2.1" },
 };
@@ -103,11 +135,13 @@ export function isWcagLevel(value: unknown): value is WcagLevel {
 }
 
 /** Lowest (easiest to meet) level among a rule's criteria; undefined when it declares none. */
-export function lowestWcagLevel(criteria: readonly WcagCriterion[] | undefined): WcagLevel | undefined {
+export function lowestWcagLevel(
+  criteria: readonly WcagCriterion[] | undefined
+): WcagLevel | undefined {
   if (!criteria || criteria.length === 0) return undefined;
   return criteria.reduce<WcagLevel>(
     (low, c) => (LEVEL_RANK[c.level] < LEVEL_RANK[low] ? c.level : low),
-    criteria[0]!.level,
+    criteria[0]!.level
   );
 }
 
@@ -118,7 +152,7 @@ export function lowestWcagLevel(criteria: readonly WcagCriterion[] | undefined):
  */
 export function meetsWcagTarget(
   criteria: readonly WcagCriterion[] | undefined,
-  target: WcagLevel,
+  target: WcagLevel
 ): boolean {
   const low = lowestWcagLevel(criteria);
   return low === undefined || LEVEL_RANK[low] <= LEVEL_RANK[target];
@@ -134,7 +168,7 @@ export function wcagLabel(c: WcagCriterion): string {
 
 /** Count the rules at each easiest level; empty object when none declares criteria. */
 export function countByWcagLevel(
-  rules: ReadonlyArray<{ wcag?: readonly WcagCriterion[] }>,
+  rules: ReadonlyArray<{ wcag?: readonly WcagCriterion[] }>
 ): Partial<Record<WcagLevel, number>> {
   const counts: Partial<Record<WcagLevel, number>> = {};
   for (const r of rules) {

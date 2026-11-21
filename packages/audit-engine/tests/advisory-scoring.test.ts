@@ -3,10 +3,10 @@
 // info rules still count (e.g. a fallback-masked llms.txt is actively
 // misleading, not merely absent).
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import type { RuleMeta, RuleRunResult } from "@squirrelscan/rules";
+
+import { describe, expect, test } from "bun:test";
 
 import { calculateHealthScore } from "../src/scoring";
 
@@ -23,8 +23,16 @@ function meta(over: Partial<RuleMeta>): RuleMeta {
   };
 }
 
-function check(status: CheckResult["status"], name = "example-check"): CheckResult {
-  return { name, status, message: `status ${status}`, pageUrl: "https://example.com/" };
+function check(
+  status: CheckResult["status"],
+  name = "example-check"
+): CheckResult {
+  return {
+    name,
+    status,
+    message: `status ${status}`,
+    pageUrl: "https://example.com/",
+  };
 }
 
 function score(rules: Array<{ meta: RuleMeta; checks: CheckResult[] }>) {
@@ -35,7 +43,12 @@ function score(rules: Array<{ meta: RuleMeta; checks: CheckResult[] }>) {
 // A scoreable warning-severity rule to anchor the category so it never
 // collapses to "no scoreable rules".
 const ANCHOR = {
-  meta: meta({ id: "ax/anchor", name: "Anchor", severity: "warning", weight: 2 }),
+  meta: meta({
+    id: "ax/anchor",
+    name: "Anchor",
+    severity: "warning",
+    weight: 2,
+  }),
   checks: [check("pass", "anchor-check")],
 };
 
@@ -46,7 +59,8 @@ describe("advisory scoring (severity info rules)", () => {
       ANCHOR,
       { meta: meta({ id: "ax/rec", name: "Rec" }), checks: [check("warn")] },
     ]);
-    const ax = (s: ReturnType<typeof score>) => s.categories.find((c) => c.category === "ax");
+    const ax = (s: ReturnType<typeof score>) =>
+      s.categories.find((c) => c.category === "ax");
     expect(ax(withRec)?.score).toBe(ax(withoutRec)?.score);
     // ...and it is not counted as a warning in the score summary.
     expect(ax(withRec)?.warnings).toBe(0);
@@ -56,9 +70,13 @@ describe("advisory scoring (severity info rules)", () => {
     const clean = score([ANCHOR]);
     const warned = score([
       ANCHOR,
-      { meta: meta({ id: "ax/w", name: "W", severity: "warning" }), checks: [check("warn")] },
+      {
+        meta: meta({ id: "ax/w", name: "W", severity: "warning" }),
+        checks: [check("warn")],
+      },
     ]);
-    const ax = (s: ReturnType<typeof score>) => s.categories.find((c) => c.category === "ax");
+    const ax = (s: ReturnType<typeof score>) =>
+      s.categories.find((c) => c.category === "ax");
     expect(ax(warned)!.score).toBeLessThan(ax(clean)!.score);
     expect(ax(warned)?.warnings).toBe(1);
   });
@@ -69,7 +87,8 @@ describe("advisory scoring (severity info rules)", () => {
       ANCHOR,
       { meta: meta({ id: "ax/f", name: "F" }), checks: [check("fail")] },
     ]);
-    const ax = (s: ReturnType<typeof score>) => s.categories.find((c) => c.category === "ax");
+    const ax = (s: ReturnType<typeof score>) =>
+      s.categories.find((c) => c.category === "ax");
     expect(ax(failed)!.score).toBeLessThan(ax(clean)!.score);
   });
 
@@ -85,7 +104,7 @@ describe("advisory scoring (severity info rules)", () => {
       },
     ]);
     expect(withOnlyRec.categories.find((c) => c.category === "ax")?.score).toBe(
-      base.categories.find((c) => c.category === "ax")?.score,
+      base.categories.find((c) => c.category === "ax")?.score
     );
   });
 });

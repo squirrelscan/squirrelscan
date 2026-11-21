@@ -36,7 +36,10 @@ export interface SkipReasonClass {
   notChecked: boolean;
 }
 
-const gap = (notChecked: boolean, scope: "rule" | "check" = "check"): SkipReasonClass => ({
+const gap = (
+  notChecked: boolean,
+  scope: "rule" | "check" = "check"
+): SkipReasonClass => ({
   outcome: "coverage_gap",
   scope,
   notChecked,
@@ -48,7 +51,11 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
   noindex: { outcome: "not_applicable", scope: "rule", notChecked: false },
   "page-type": { outcome: "not_applicable", scope: "rule", notChecked: false },
   // One check with nothing to look at on this page.
-  "not-applicable": { outcome: "not_applicable", scope: "check", notChecked: false },
+  "not-applicable": {
+    outcome: "not_applicable",
+    scope: "check",
+    notChecked: false,
+  },
   // A rule abandoned for its time budget; `details.errored` turns it into `errored`.
   "rule-timed-out": { outcome: "timed_out", scope: "rule", notChecked: true },
   // A page the parser could not read: nothing was looked at.
@@ -97,7 +104,9 @@ export const SKIP_REASON_CLASSES: Readonly<Record<string, SkipReasonClass>> = {
 };
 
 /** The class of a coded skip reason, or undefined for free text, an empty reason or an unknown one. */
-export function skipReasonClass(reason: string | undefined): SkipReasonClass | undefined {
+export function skipReasonClass(
+  reason: string | undefined
+): SkipReasonClass | undefined {
   return reason !== undefined && Object.hasOwn(SKIP_REASON_CLASSES, reason)
     ? SKIP_REASON_CLASSES[reason]
     : undefined;
@@ -114,7 +123,8 @@ export function isCoverageGapCheck(check: {
   status: string;
   skipReason?: string | undefined;
 }): boolean {
-  if (check.status === "skipped") return skipReasonClass(check.skipReason)?.outcome === "coverage_gap";
+  if (check.status === "skipped")
+    return skipReasonClass(check.skipReason)?.outcome === "coverage_gap";
   return /-(unscanned|omitted|unfetched)$/.test(check.name);
 }
 
@@ -136,6 +146,7 @@ export function classifyRuleOutcome(check: ClassifiableCheck): RuleOutcome {
   if (check.status !== "skipped") return "ran";
   const cls = skipReasonClass(check.skipReason);
   if (!cls) return "not_applicable";
-  if (cls.outcome === "timed_out" && check.details?.errored === true) return "errored";
+  if (cls.outcome === "timed_out" && check.details?.errored === true)
+    return "errored";
   return cls.outcome;
 }

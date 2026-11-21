@@ -1,8 +1,8 @@
 // schema/entity-orphan — an entity nothing references and nothing reuses.
 
-import type { Rule, RuleContext, RuleResult } from "../types";
-
 import { isOrphanNode } from "@squirrelscan/core-contracts/entity-map-findings";
+
+import type { Rule, RuleContext, RuleResult } from "../types";
 
 import {
   ENTITY_FIX_DOCS,
@@ -48,13 +48,16 @@ export const entityOrphanRule: Rule = {
           {
             name: CHECK,
             status: "pass",
-            message: "Every entity with an @id is referenced or spans more than one page",
+            message:
+              "Every entity with an @id is referenced or spans more than one page",
           },
         ],
       };
     }
 
-    const { items, hidden } = cappedItems(orphans.map((node) => entityItem(node)));
+    const { items, hidden } = cappedItems(
+      orphans.map((node) => entityItem(node))
+    );
 
     return {
       checks: [

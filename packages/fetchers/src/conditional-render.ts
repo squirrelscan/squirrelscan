@@ -44,9 +44,8 @@
 // capabilities so downstream concurrency planning (which keys on the
 // "cloud-render" id) is unaffected.
 
-import { createHash } from "node:crypto";
-
 import { normalizeHtmlForFingerprint } from "@squirrelscan/utils/fingerprint";
+import { createHash } from "node:crypto";
 
 import type { DocumentFetcher, FetchRequest, FetchResponse } from "./index";
 
@@ -69,7 +68,10 @@ export interface ConditionalRenderFetcherOptions {
   bootstrapProbeGraceMs?: number;
 }
 
-const CONDITIONAL_HEADER_NAMES = new Set(["if-none-match", "if-modified-since"]);
+const CONDITIONAL_HEADER_NAMES = new Set([
+  "if-none-match",
+  "if-modified-since",
+]);
 
 function requestHasConditionalHeaders(req: FetchRequest): boolean {
   const headers = req.headers;
@@ -96,7 +98,11 @@ function stripConditionalHeaders(req: FetchRequest): FetchRequest {
 // as non-HTML — when unsure we render, because a skipped render loses the
 // rendered DOM (a wrong report) while an unnecessary render only costs credits.
 function isDefinitelyNonHtml(resp: FetchResponse): boolean {
-  const ct = (resp.headers["content-type"] ?? resp.headers["Content-Type"] ?? "").toLowerCase();
+  const ct = (
+    resp.headers["content-type"] ??
+    resp.headers["Content-Type"] ??
+    ""
+  ).toLowerCase();
   if (ct === "") return false;
   return !ct.includes("text/html") && !ct.includes("application/xhtml");
 }
@@ -105,7 +111,9 @@ function isDefinitelyNonHtml(resp: FetchResponse): boolean {
 // with the api server (#840) — both sides must hash the same normalized string
 // for the fingerprints to agree.
 function computeSourceFingerprint(body: string): string {
-  return createHash("sha256").update(normalizeHtmlForFingerprint(body)).digest("hex");
+  return createHash("sha256")
+    .update(normalizeHtmlForFingerprint(body))
+    .digest("hex");
 }
 
 // Bootstrap probe grace: the probe starts with the render and normally resolves
@@ -136,10 +144,12 @@ function synthesizeNotModified(probe: FetchResponse): FetchResponse {
 }
 
 export function createConditionalRenderDocumentFetcher(
-  opts: ConditionalRenderFetcherOptions,
+  opts: ConditionalRenderFetcherOptions
 ): DocumentFetcher {
-  const carriesConditional = opts.hasConditionalHeaders ?? requestHasConditionalHeaders;
-  const bootstrapProbeGraceMs = opts.bootstrapProbeGraceMs ?? BOOTSTRAP_PROBE_GRACE_MS;
+  const carriesConditional =
+    opts.hasConditionalHeaders ?? requestHasConditionalHeaders;
+  const bootstrapProbeGraceMs =
+    opts.bootstrapProbeGraceMs ?? BOOTSTRAP_PROBE_GRACE_MS;
 
   return {
     // Preserve the wrapped render fetcher's identity — downstream concurrency
@@ -150,7 +160,8 @@ export function createConditionalRenderDocumentFetcher(
       // Probe whenever the caller says a stored copy exists: it carries
       // conditional headers, or it supplied the stored source hash. No stored
       // copy (first visit / --refresh) → render directly, exactly as before.
-      const shouldProbe = carriesConditional(req) || req.storedSourceHash != null;
+      const shouldProbe =
+        carriesConditional(req) || req.storedSourceHash != null;
       if (!shouldProbe) {
         // No stored copy to revalidate against — render, but fingerprint the
         // source in parallel to bootstrap `source_hash` for next run (#990).
@@ -161,8 +172,17 @@ export function createConditionalRenderDocumentFetcher(
         const probePromise = opts.http.fetch(req).catch(() => null);
         const rendered = await opts.render.fetch(req);
         const probe = await settleWithin(probePromise, bootstrapProbeGraceMs);
-        if (probe && probe.status >= 200 && probe.status < 300 && !isDefinitelyNonHtml(probe)) {
-          return { ...rendered, sourceHash: computeSourceFingerprint(probe.body), serverHtml: probe.body };
+        if (
+          probe &&
+          probe.status >= 200 &&
+          probe.status < 300 &&
+          !isDefinitelyNonHtml(probe)
+        ) {
+          return {
+            ...rendered,
+            sourceHash: computeSourceFingerprint(probe.body),
+            serverHtml: probe.body,
+          };
         }
         return rendered;
       }

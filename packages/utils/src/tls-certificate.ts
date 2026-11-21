@@ -112,7 +112,10 @@ const MAX_ISSUER_LENGTH = 200;
 
 function certificateText(value: string, maxLength: number): string {
   // oxlint-disable-next-line no-control-regex -- stripping them is the point
-  return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim().slice(0, maxLength);
+  return value
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 /** A TLS `authorizationError` (an Error, a code string, or nothing) as a code. */
@@ -127,12 +130,13 @@ export function authorizationErrorCode(value: unknown): string | undefined {
 /** A `getPeerCertificate()` result as a `TlsCertificate`, or undefined when it holds no usable dates. */
 export function readPeerCertificate(
   raw: RawPeerCertificate | undefined,
-  extras?: TlsCertificateExtras,
+  extras?: TlsCertificateExtras
 ): TlsCertificate | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const validFrom = new Date(raw.valid_from ?? "");
   const validTo = new Date(raw.valid_to ?? "");
-  if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validTo.getTime())) return undefined;
+  if (Number.isNaN(validFrom.getTime()) || Number.isNaN(validTo.getTime()))
+    return undefined;
 
   // The server chooses every string here, and they reach messages and reports:
   // control characters go, and lengths and the name count are bounded.
@@ -141,17 +145,25 @@ export function readPeerCertificate(
     .flatMap((entry) => {
       // trim() and a plain prefix match: no backtracking on a long run of whitespace.
       const match = /^(?:DNS|IP Address):(.+)$/.exec(entry.trim());
-      return match ? [certificateText(match[1]!, MAX_NAME_LENGTH).toLowerCase()] : [];
+      return match
+        ? [certificateText(match[1]!, MAX_NAME_LENGTH).toLowerCase()]
+        : [];
     })
     .filter((name) => name !== "")
     .slice(0, MAX_NAMES);
 
   return {
     names,
-    issuer: certificateText(raw.issuer?.O ?? raw.issuer?.CN ?? "", MAX_ISSUER_LENGTH) || "unknown issuer",
+    issuer:
+      certificateText(
+        raw.issuer?.O ?? raw.issuer?.CN ?? "",
+        MAX_ISSUER_LENGTH
+      ) || "unknown issuer",
     validFrom,
     validTo,
-    ...(raw.modulus !== undefined && typeof raw.bits === "number" ? { rsaBits: raw.bits } : {}),
+    ...(raw.modulus !== undefined && typeof raw.bits === "number"
+      ? { rsaBits: raw.bits }
+      : {}),
     ...keyFacts(raw, extras),
   };
 }
@@ -166,18 +178,30 @@ function keyTypeOf(name: string): TlsKeyType {
 }
 
 /** Key type, size, curve and signature algorithm, bounded and stripped of control characters (the server picks them). */
-function keyFacts(raw: RawPeerCertificate, extras: TlsCertificateExtras | undefined): Partial<TlsCertificate> {
+function keyFacts(
+  raw: RawPeerCertificate,
+  extras: TlsCertificateExtras | undefined
+): Partial<TlsCertificate> {
   const out: Partial<TlsCertificate> = {};
-  if (extras?.keyType) out.keyType = keyTypeOf(certificateText(extras.keyType, 20));
+  if (extras?.keyType)
+    out.keyType = keyTypeOf(certificateText(extras.keyType, 20));
   else if (raw.modulus !== undefined) out.keyType = "rsa";
-  else if (raw.nistCurve !== undefined || raw.asn1Curve !== undefined) out.keyType = "ecdsa";
-  const bits = extras?.keyBits ?? (typeof raw.bits === "number" ? raw.bits : undefined);
-  if (typeof bits === "number" && Number.isFinite(bits) && bits > 0 && out.keyType !== "ed25519") {
+  else if (raw.nistCurve !== undefined || raw.asn1Curve !== undefined)
+    out.keyType = "ecdsa";
+  const bits =
+    extras?.keyBits ?? (typeof raw.bits === "number" ? raw.bits : undefined);
+  if (
+    typeof bits === "number" &&
+    Number.isFinite(bits) &&
+    bits > 0 &&
+    out.keyType !== "ed25519"
+  ) {
     out.keyBits = Math.floor(bits);
   }
   const curve = extras?.curve ?? raw.nistCurve ?? raw.asn1Curve;
   if (out.keyType === "ecdsa" && curve) out.curve = certificateText(curve, 40);
-  if (extras?.signatureAlgorithm) out.signatureAlgorithm = certificateText(extras.signatureAlgorithm, 60);
+  if (extras?.signatureAlgorithm)
+    out.signatureAlgorithm = certificateText(extras.signatureAlgorithm, 60);
   return out;
 }
 
@@ -186,7 +210,10 @@ function keyFacts(raw: RawPeerCertificate, extras: TlsCertificateExtras | undefi
  * one label. An IPv6 address matches in any spelling: the runtime prints an IP
  * SAN expanded (`2001:DB8:0:0:0:0:0:1`) and a URL holds it compressed.
  */
-export function certificateCovers(names: readonly string[], hostname: string): boolean {
+export function certificateCovers(
+  names: readonly string[],
+  hostname: string
+): boolean {
   const host = canonicalName(hostname);
   return names.some((entry) => {
     const name = canonicalName(entry);
@@ -203,7 +230,10 @@ export function certificateCovers(names: readonly string[], hostname: string): b
  * an IPv6 address in the WHATWG URL parser's compressed form.
  */
 function canonicalName(value: string): string {
-  const name = value.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const name = value
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
   if (!name.includes(":")) return name;
   try {
     return new URL(`http://[${name}]/`).hostname.replace(/^\[|\]$/g, "");
@@ -220,7 +250,7 @@ function canonicalName(value: string): string {
 export function certificateProblems(
   probe: Extract<TlsProbe, { kind: "certificate" }>,
   hostname: string,
-  now: Date,
+  now: Date
 ): TlsProblem[] {
   const { certificate } = probe;
   const problems: TlsProblem[] = [];
@@ -237,7 +267,9 @@ export function certificateProblems(
   return problems;
 }
 
-function trustProblem(probe: Extract<TlsProbe, { kind: "certificate" }>): TlsProblem | undefined {
+function trustProblem(
+  probe: Extract<TlsProbe, { kind: "certificate" }>
+): TlsProblem | undefined {
   if (probe.trusted) return undefined;
   switch (probe.trustError) {
     // Expiry, and a name the certificate does not cover, are reported by their
@@ -262,14 +294,20 @@ function trustProblem(probe: Extract<TlsProbe, { kind: "certificate" }>): TlsPro
  * in words the failure classifier already reads as TLS. Undefined when the
  * probe found no problem, or could not look.
  */
-export function tlsFailureCause(probe: TlsProbe, hostname: string, now: Date): string | undefined {
+export function tlsFailureCause(
+  probe: TlsProbe,
+  hostname: string,
+  now: Date
+): string | undefined {
   if (probe.kind !== "certificate") return undefined;
   const [problem] = certificateProblems(probe, hostname, now);
   if (!problem) return undefined;
   const cause = problemCause(problem, hostname);
   // A short RSA key is named beside the first problem: it is often why a chain does not verify (#1259).
   const bits = probe.certificate.rsaBits;
-  return bits !== undefined && bits < 2048 ? `${cause}; the certificate's key is RSA ${bits} bits, below 2048` : cause;
+  return bits !== undefined && bits < 2048
+    ? `${cause}; the certificate's key is RSA ${bits} bits, below 2048`
+    : cause;
 }
 
 function problemCause(problem: TlsProblem, hostname: string): string {

@@ -1,13 +1,22 @@
 // links/broken-links - Broken link detection
 
-import type { CheckResult, FetchedTarget, Rule, RuleContext, RuleResult } from "../types";
-
 import {
   LINK_PROBE_HEAD_UNRELIABLE_ERROR,
   LINK_TARGETS_NOT_FETCHED_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
-import { isCloudflareEmailProtectionUrl, normalizeUrl } from "@squirrelscan/utils";
+import {
+  isCloudflareEmailProtectionUrl,
+  normalizeUrl,
+} from "@squirrelscan/utils";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
+
+import type {
+  CheckResult,
+  FetchedTarget,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import {
   chromeReach,
@@ -166,12 +175,21 @@ export const brokenLinksRule: Rule = {
         const fetched = fetchedOutside.get(normalizedTarget);
         if (fetched?.rateLimited) {
           rateLimitedTargets.add(normalizedTarget);
-          rateLimitedLinks.push({ url: target, sources, statusCode: fetched.status });
+          rateLimitedLinks.push({
+            url: target,
+            sources,
+            statusCode: fetched.status,
+          });
           continue;
         }
         if (fetched?.wafChallenge) {
           refusedTargets.add(normalizedTarget);
-          refusedLinks.push({ url: target, sources, statusCode: fetched.status, wafChallenge: true });
+          refusedLinks.push({
+            url: target,
+            sources,
+            statusCode: fetched.status,
+            wafChallenge: true,
+          });
           continue;
         }
         // Not HTML, and it answered 2xx/3xx: a known status, not broken.
@@ -182,14 +200,22 @@ export const brokenLinksRule: Rule = {
         if (probe?.rateLimited) {
           probedTargets.add(normalizedTarget);
           rateLimitedTargets.add(normalizedTarget);
-          rateLimitedLinks.push({ url: target, sources, statusCode: probe.status ?? 429 });
+          rateLimitedLinks.push({
+            url: target,
+            sources,
+            statusCode: probe.status ?? 429,
+          });
           continue;
         }
         if (typeof probe?.status === "number" && probe.status > 0) {
           probedTargets.add(normalizedTarget);
           if (probe.status === 401 || probe.status === 403) {
             refusedTargets.add(normalizedTarget);
-            refusedLinks.push({ url: target, sources, statusCode: probe.status });
+            refusedLinks.push({
+              url: target,
+              sources,
+              statusCode: probe.status,
+            });
             continue;
           }
           statusCode = probe.status;
@@ -226,7 +252,8 @@ export const brokenLinksRule: Rule = {
     // fetched the targets outside the seed and the sitemaps. "No broken links"
     // would then be a pass on links nobody requested, and it resolved open
     // broken-link issues on every such run. Say they were not checked instead.
-    const notFollowed = ctx.site?.linkDiscoveryOff === true && unfetchedTargets.size > 0;
+    const notFollowed =
+      ctx.site?.linkDiscoveryOff === true && unfetchedTargets.size > 0;
 
     // What the result covers (repo#2729), on every broken-links row (pub#794):
     // comparing two audits' broken links has to tell a target that was fixed
@@ -238,7 +265,7 @@ export const brokenLinksRule: Rule = {
       unfetchedTargets.size,
       unansweredTargets.size,
       untrustedTargets.size,
-      ctx.site?.internalLinkProbe,
+      ctx.site?.internalLinkProbe
     );
     // A fresh object per row: a fail and a skip can both be emitted.
     const coverage = () => ({
@@ -254,9 +281,13 @@ export const brokenLinksRule: Rule = {
     // A broken link that sits in the header, navigation or footer of most pages is its own check (#1772): a
     // visitor meets it on every page, and one fix in the template closes it. Links in page content stay here.
     const itemOf = (b: (typeof brokenLinks)[number]) => {
-      const { sourcePages, sources, sections, regions } = tallyFields(b.sources);
+      const { sourcePages, sources, sections, regions } = tallyFields(
+        b.sources
+      );
       return {
-        reach: chromeReach(tallyFields(chromeTargets.get(b.url) ?? new Map()).sources),
+        reach: chromeReach(
+          tallyFields(chromeTargets.get(b.url) ?? new Map()).sources
+        ),
         item: {
           id: b.url,
           label: withSection(`${b.url} (${b.statusCode})`, sections),
@@ -279,7 +310,10 @@ export const brokenLinksRule: Rule = {
     const sitewideBroken: ReturnType<typeof itemOf>[] = [];
     for (const b of brokenLinks) {
       const built = itemOf(b);
-      (isSitewide(built.reach, crawledHtmlPages) ? sitewideBroken : contentBroken).push(built);
+      (isSitewide(built.reach, crawledHtmlPages)
+        ? sitewideBroken
+        : contentBroken
+      ).push(built);
     }
 
     if (contentBroken.length > 0) {
@@ -400,7 +434,9 @@ interface LinkTargetsNotFetched {
   noAnswer?: number;
 }
 
-type InternalLinkProbe = NonNullable<NonNullable<RuleContext["site"]>["internalLinkProbe"]>;
+type InternalLinkProbe = NonNullable<
+  NonNullable<RuleContext["site"]>["internalLinkProbe"]
+>;
 
 /**
  * Split the unfetched targets by cause. Targets the probe asked about without
@@ -416,20 +452,26 @@ function notFetchedCauses(
   unfetched: number,
   unanswered: number,
   untrusted: number,
-  probe: InternalLinkProbe | undefined,
+  probe: InternalLinkProbe | undefined
 ): LinkTargetsNotFetched {
   let causes: LinkTargetsNotFetched;
   if (!probe) {
     causes = { off: unfetched };
   } else {
     const notAsked = Math.max(0, unfetched - unanswered - untrusted);
-    const overLimit = Math.min(notAsked, Math.max(0, probe.unfetched - probe.cap));
+    const overLimit = Math.min(
+      notAsked,
+      Math.max(0, probe.unfetched - probe.cap)
+    );
     const left = notAsked - overLimit;
     const outOfScope = Math.min(left, probe.outOfScope ?? 0);
     // When the count is clipped, `excluded` keeps its targets first: `action`
     // claims the gap is stable between audits, so it never takes a target that
     // may be a robots or scope exclusion.
-    const excluded = Math.min(outOfScope, Math.max(0, (probe.outOfScope ?? 0) - (probe.actionLinks ?? 0)));
+    const excluded = Math.min(
+      outOfScope,
+      Math.max(0, (probe.outOfScope ?? 0) - (probe.actionLinks ?? 0))
+    );
     const action = outOfScope - excluded;
     causes = {
       overLimit,
@@ -449,7 +491,9 @@ const targets = (n: number): string => `${n} ${n === 1 ? "target" : "targets"}`;
 
 /** The "because ..." clause for the Not checked message: one cause in words, several with a count each. */
 function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
-  const present = (Object.keys(causes) as (keyof LinkTargetsNotFetched)[]).filter((k) => causes[k]);
+  const present = (
+    Object.keys(causes) as (keyof LinkTargetsNotFetched)[]
+  ).filter((k) => causes[k]);
   if (present.length === 1) {
     switch (present[0]) {
       case "off":
@@ -473,20 +517,22 @@ function notFetchedReason(causes: LinkTargetsNotFetched, cap: number): string {
     parts.push(
       cap === 0
         ? `${causes.overLimit} because internal_links.max_targets is 0`
-        : `${causes.overLimit} past the limit of ${targets(cap)}`,
+        : `${causes.overLimit} past the limit of ${targets(cap)}`
     );
   }
   if (causes.action) {
     parts.push(
-      `${causes.action} skipped as ${causes.action === 1 ? "an action or token link" : "action or token links"}`,
+      `${causes.action} skipped as ${causes.action === 1 ? "an action or token link" : "action or token links"}`
     );
   }
   if (causes.excluded) {
-    parts.push(`${causes.excluded} skipped as outside the crawl scope or disallowed by robots.txt`);
+    parts.push(
+      `${causes.excluded} skipped as outside the crawl scope or disallowed by robots.txt`
+    );
   }
   if (causes.untrusted) {
     parts.push(
-      `${causes.untrusted} not trusted, because the site answers HEAD requests with errors on pages it serves`,
+      `${causes.untrusted} not trusted, because the site answers HEAD requests with errors on pages it serves`
     );
   }
   if (causes.noAnswer) parts.push(`${causes.noAnswer} with no answer`);

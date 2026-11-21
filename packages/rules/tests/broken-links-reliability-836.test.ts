@@ -3,14 +3,17 @@
 // (SEO group) to Reliability. Their ids are unchanged, so configs, disable
 // lists, `rule_options`, the rule cache and docs URLs keep working.
 
-import { describe, expect, test } from "bun:test";
-
 import { matchesRulePattern } from "@squirrelscan/utils/rule-pattern";
+import { describe, expect, test } from "bun:test";
 
 import { getCategoryGroup } from "../src/categories";
 import { loadAllRules } from "../src/loader";
 
-const MOVED = ["links/broken-links", "links/broken-external-links", "links/broken-anchors"];
+const MOVED = [
+  "links/broken-links",
+  "links/broken-external-links",
+  "links/broken-anchors",
+];
 
 describe("broken-link rules are reliability findings (pub#836, pub#843)", () => {
   test("the three rules sit in Reliability, under the Performance group, with their ids unchanged", () => {
@@ -24,7 +27,7 @@ describe("broken-link rules are reliability findings (pub#836, pub#843)", () => 
 
   test("the other link rules stay in Links", () => {
     const links = [...loadAllRules().values()].filter(
-      (r) => r.meta.id.startsWith("links/") && !MOVED.includes(r.meta.id),
+      (r) => r.meta.id.startsWith("links/") && !MOVED.includes(r.meta.id)
     );
     expect(links.length).toBeGreaterThan(0);
     for (const rule of links) expect(rule.meta.category).toBe("links");

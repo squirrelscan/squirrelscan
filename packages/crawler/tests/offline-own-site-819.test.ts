@@ -5,15 +5,23 @@
 // by that log that the other host got nothing, and has a control with the flag
 // off where it does.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Fiber, Stream } from "effect";
+import type { RobotsTxtData } from "@squirrelscan/core-contracts";
 
 import { SITEMAP_OFF_SITE_SKIPPED_ERROR } from "@squirrelscan/core-contracts/storage";
 import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
-import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { Effect, Fiber, Stream } from "effect";
+
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 import { discoverSitemaps } from "../src/sitemaps";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
@@ -34,9 +42,12 @@ const CONFIG: Partial<CrawlerConfig> = {
 };
 
 const html = (body: string) =>
-  new Response(`<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`, {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  new Response(
+    `<!doctype html><html><head><title>Fixture</title></head><body>${body}</body></html>`,
+    {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }
+  );
 
 type Seen = { path: string; host: string | null };
 const otherSeen: Seen[] = [];
@@ -54,7 +65,7 @@ beforeAll(() => {
       if (path.endsWith(".xml")) {
         return new Response(
           `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>http://localhost:${other.port}/a</loc></url></urlset>`,
-          { headers: { "content-type": "application/xml" } },
+          { headers: { "content-type": "application/xml" } }
         );
       }
       return html("elsewhere");
@@ -65,7 +76,8 @@ beforeAll(() => {
     hostname: "127.0.0.1",
     fetch(req) {
       const path = new URL(req.url).pathname;
-      if (path === "/") return html(`<a href="/about">About</a><a href="/go-away">Away</a>`);
+      if (path === "/")
+        return html(`<a href="/about">About</a><a href="/go-away">Away</a>`);
       if (path === "/go-away") {
         return new Response(null, {
           status: 302,
@@ -105,15 +117,21 @@ async function crawl(config: Partial<CrawlerConfig>, seed = "/") {
   return Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
+      const crawler = yield* createCrawler({
+        config: { ...CONFIG, ...config },
+        storage,
+      });
       const events = Effect.runFork(
-        Stream.runForEach(crawler.events, (_event: CrawlerEvent) => Effect.void),
+        Stream.runForEach(crawler.events, (_event: CrawlerEvent) => Effect.void)
       );
-      const crawlId = yield* crawler.start(`${siteBase}${seed}`, `${siteBase}${seed}`);
+      const crawlId = yield* crawler.start(
+        `${siteBase}${seed}`,
+        `${siteBase}${seed}`
+      );
       const pages = yield* storage.getPages(crawlId);
       yield* Fiber.interrupt(events);
       return pages;
-    }),
+    })
   );
 }
 
@@ -125,7 +143,9 @@ describe.each([
     const pages = await crawl({ ...fetcher, ownSiteOnly: true });
 
     expect(pages.find((p) => p.url === `${siteBase}/about`)?.status).toBe(200);
-    expect(pages.find((p) => p.url === `${siteBase}/go-away`)?.status).toBe(302);
+    expect(pages.find((p) => p.url === `${siteBase}/go-away`)?.status).toBe(
+      302
+    );
     expect(otherSeen).toEqual([]);
   });
 
@@ -170,7 +190,7 @@ describe("a sitemap that robots.txt names on another host", () => {
     const result = await Effect.runPromise(
       discoverSitemaps(siteBase, robots([named]), "squirrel-test", {
         egress: egress((host) => host === "127.0.0.1"),
-      }),
+      })
     );
 
     expect(otherSeen).toEqual([]);
@@ -187,17 +207,21 @@ describe("a sitemap that robots.txt names on another host", () => {
     const result = await Effect.runPromise(
       discoverSitemaps(siteBase, robots([named]), "squirrel-test", {
         egress: egress((host) => host === "127.0.0.1"),
-      }),
+      })
     );
 
     expect(otherSeen).toEqual([]);
-    expect(result.failed.find((f) => f.url === named)?.error).toBe(SITEMAP_OFF_SITE_SKIPPED_ERROR);
+    expect(result.failed.find((f) => f.url === named)?.error).toBe(
+      SITEMAP_OFF_SITE_SKIPPED_ERROR
+    );
   });
 
   test("control: without the restriction it is requested and read", async () => {
     const named = `http://localhost:${other.port}/sitemap.xml`;
     const result = await Effect.runPromise(
-      discoverSitemaps(siteBase, robots([named]), "squirrel-test", { egress: egress() }),
+      discoverSitemaps(siteBase, robots([named]), "squirrel-test", {
+        egress: egress(),
+      })
     );
 
     expect(otherSeen.some((s) => s.path === "/sitemap.xml")).toBe(true);

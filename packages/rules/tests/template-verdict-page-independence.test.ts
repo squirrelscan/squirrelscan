@@ -39,10 +39,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { RuleRunner } from "../src/runner";
-import { loadAllRules } from "../src/loader";
-import { mayFanOutAcrossTemplate } from "../src/types";
 import type { PageData, SiteData } from "../src/types";
+
+import { loadAllRules } from "../src/loader";
+import { RuleRunner } from "../src/runner";
+import { mayFanOutAcrossTemplate } from "../src/types";
 
 const rules = [...loadAllRules().values()];
 const fannable = rules.filter((r) => mayFanOutAcrossTemplate(r.meta));
@@ -120,9 +121,13 @@ const [resultA, resultB] = await Promise.all([
 /** Every distinctive substring of a url that must not survive into a verdict. */
 function identities(url: string): string[] {
   const u = new URL(url);
-  return [url, u.pathname + u.search, u.pathname, "parka-9271", "collections"].filter(
-    (s) => s.length > 1,
-  );
+  return [
+    url,
+    u.pathname + u.search,
+    u.pathname,
+    "parka-9271",
+    "collections",
+  ].filter((s) => s.length > 1);
 }
 
 describe("the fixture exercises the declarations", () => {
@@ -131,7 +136,9 @@ describe("the fixture exercises the declarations", () => {
     for (const rule of fannable) {
       // A rule that emitted nothing here is compared on nothing, so the gate
       // below would pass on it vacuously — the per-rule vacuity hole #1950 hit.
-      expect(resultA.ruleResults.get(rule.meta.id)?.checks.length ?? 0).toBeGreaterThan(0);
+      expect(
+        resultA.ruleResults.get(rule.meta.id)?.checks.length ?? 0
+      ).toBeGreaterThan(0);
     }
   });
 
@@ -147,17 +154,19 @@ describe("a template-scoped verdict does not depend on the page it ran on", () =
     (ruleId) => {
       const a = resultA.ruleResults.get(ruleId)?.checks ?? [];
       const b = resultB.ruleResults.get(ruleId)?.checks ?? [];
-      const leaked = identities(URL_B).find((id) => JSON.stringify(b).includes(id));
+      const leaked = identities(URL_B).find((id) =>
+        JSON.stringify(b).includes(id)
+      );
       if (leaked) {
         throw new Error(
           `${ruleId} declares verdictScope "template" but its verdict quotes the page ` +
             `it ran on (${leaked}). #1951 copies this verdict onto the cluster's other ` +
             "members verbatim, which would attribute this page's url to them. Either " +
-            'stop deriving output from `ctx.page.url`, or declare verdictScope "page".',
+            'stop deriving output from `ctx.page.url`, or declare verdictScope "page".'
         );
       }
       expect(b).toEqual(a);
-    },
+    }
   );
 });
 
@@ -181,11 +190,14 @@ describe("core/charset reads a response header, so it is page-scoped", () => {
         ...pageData(URL_A, HEADER_ONLY_HTML),
         headers: { "content-type": "text/html; charset=utf-8" },
       },
-      SITE_DATA,
+      SITE_DATA
     );
     const b = await runner.runPageRules(
-      { ...pageData(URL_A, HEADER_ONLY_HTML), headers: { "content-type": "text/html" } },
-      SITE_DATA,
+      {
+        ...pageData(URL_A, HEADER_ONLY_HTML),
+        headers: { "content-type": "text/html" },
+      },
+      SITE_DATA
     );
 
     const charsetOf = (r: Awaited<ReturnType<typeof runner.runPageRules>>) =>
@@ -212,7 +224,7 @@ describe("a template-scoped rule is never also soft-404 gated", () => {
       // fanned verdict only AFTER this gate, so the live behaviour is safe either
       // way — this keeps the contradiction from being introduced silently.
       expect(meta.skipOnSoft404).toBeUndefined();
-    },
+    }
   );
 });
 
@@ -224,7 +236,7 @@ describe("a template-scoped rule is never also noindex gated", () => {
       // is per page, and a noindex representative would otherwise cache its skip
       // for indexable members. createTemplateFanout drops such a rule at runtime.
       expect(meta.skipOnNoindex).toBeUndefined();
-    },
+    }
   );
 });
 
@@ -236,6 +248,6 @@ describe("a template-scoped rule is never also page-type gated", () => {
       // representative would otherwise cache its skip for marketing pages of the cluster.
       // createTemplateFanout drops such a rule at runtime.
       expect(meta.skipOnPageType).toBeUndefined();
-    },
+    }
   );
 });

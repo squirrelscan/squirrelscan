@@ -7,14 +7,14 @@
 // reported as missing ratingValue. These lock in: a wrapped complete rating
 // passes, and plain object handling is unchanged.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { reviewSchemaRule } from "../src/schema/review";
-import type { ParsedPage, Rule, RuleContext } from "../src/types";
 
 function pageCtx(html: string, url = "https://example.com/"): RuleContext {
   return {
@@ -34,7 +34,7 @@ function check(checks: CheckResult[], name: string): CheckResult | undefined {
 
 function withSchema(schema: unknown): string {
   return `<html><head><script type="application/ld+json">${JSON.stringify(
-    schema,
+    schema
   )}</script></head><body><p>content</p></body></html>`;
 }
 
@@ -51,7 +51,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Wrapped Widget",
       aggregateRating: [COMPLETE],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
@@ -62,9 +62,11 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
     const html = withSchema({
       "@type": "Product",
       name: "Review Count Widget",
-      aggregateRating: [{ "@type": "AggregateRating", ratingValue: "4.2", reviewCount: "12" }],
+      aggregateRating: [
+        { "@type": "AggregateRating", ratingValue: "4.2", reviewCount: "12" },
+      ],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
@@ -75,7 +77,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Half Widget",
       aggregateRating: [{ "@type": "AggregateRating", ratingCount: "5" }],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
@@ -88,7 +90,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Null Then Rating",
       aggregateRating: [null, COMPLETE],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });
@@ -99,7 +101,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Empty Rating",
       aggregateRating: [],
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")).toBeUndefined();
     expect(check(checks, "review-schema")?.status).toBe("info");
@@ -111,7 +113,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Plain Widget",
       aggregateRating: COMPLETE,
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("pass");
@@ -124,7 +126,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Plain Half Widget",
       aggregateRating: { "@type": "AggregateRating", ratingCount: "5" },
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
@@ -137,11 +139,13 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       name: "Countless Widget",
       aggregateRating: { "@type": "AggregateRating", ratingValue: "4.0" },
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
     const rating = check(checks, "aggregate-rating");
 
     expect(rating?.status).toBe("warn");
-    expect(rating?.message).toBe("AggregateRating missing ratingCount/reviewCount");
+    expect(rating?.message).toBe(
+      "AggregateRating missing ratingCount/reviewCount"
+    );
   });
 
   test("standalone AggregateRating node → unchanged (regression)", async () => {
@@ -150,7 +154,7 @@ describe("schema/review — array-wrapped aggregateRating (#721)", () => {
       ratingValue: "4.9",
       ratingCount: "200",
     });
-    const checks = (await run(reviewSchemaRule, pageCtx(html)));
+    const checks = await run(reviewSchemaRule, pageCtx(html));
 
     expect(check(checks, "aggregate-rating")?.status).toBe("pass");
   });

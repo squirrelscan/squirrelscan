@@ -31,7 +31,10 @@ export function byteLength(str: string): number {
  * Content-Length header, the ENCODED size; a response with none is sized from its body) and the decoded body's UTF-8
  * bytes. A small gzip body can inflate past a parse cap, so the encoded size alone is not a safe bound.
  */
-export function decodedPageBytes(sizeBytes: number | null | undefined, body: string): number {
+export function decodedPageBytes(
+  sizeBytes: number | null | undefined,
+  body: string
+): number {
   return Math.max(sizeBytes ?? 0, byteLength(body));
 }
 

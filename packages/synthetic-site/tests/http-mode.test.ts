@@ -69,7 +69,7 @@ describe("synthetic-site HTTP mode is crawlable", () => {
         const stats = yield* crawler.storage.getStats(crawlId);
 
         return { pageCount, pages, stats };
-      }),
+      })
     );
 
     // Most content pages (including the sitemap-only orphan pages) got crawled.
@@ -91,15 +91,19 @@ describe("synthetic-site HTTP mode is crawlable", () => {
     // Broken links: the crawler attempted a discovered /broken/* href and
     // recorded the 404 as a failed page.
     expect(outcome.stats?.pagesFailed ?? 0).toBeGreaterThanOrEqual(1);
-    const brokenPage = outcome.pages.find((p) => p.normalizedUrl.includes("/broken/"));
+    const brokenPage = outcome.pages.find((p) =>
+      p.normalizedUrl.includes("/broken/")
+    );
     expect(brokenPage?.status).toBe(404);
 
     // Orphan pages: unreachable via links, only discoverable via sitemap.xml —
     // still got crawled (that's exactly why the orphan-pages rule can flag them).
-    const orphanModelPage = model.pages.find((p) => p.issues.includes("orphan"));
+    const orphanModelPage = model.pages.find((p) =>
+      p.issues.includes("orphan")
+    );
     expect(orphanModelPage).toBeDefined();
     const orphanCrawled = outcome.pages.some((p) =>
-      p.normalizedUrl.endsWith(orphanModelPage!.path),
+      p.normalizedUrl.endsWith(orphanModelPage!.path)
     );
     expect(orphanCrawled).toBe(true);
   }, 20_000);

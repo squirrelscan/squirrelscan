@@ -12,7 +12,10 @@
 import type { EntityMap, EntityMapGroup, EntityMapNode } from "./entity-map";
 
 /** Group key: sorted type set, sorted outgoing predicate set, page-local flag. */
-export function groupSignature(node: EntityMapNode, predicates: readonly string[]): string {
+export function groupSignature(
+  node: EntityMapNode,
+  predicates: readonly string[]
+): string {
   const types = [...new Set(node.types)].sort().join("|");
   const preds = [...new Set(predicates)].sort().join("|");
   return `${types}#${preds}#${node.pageLocal ? "local" : "site"}`;
@@ -62,13 +65,15 @@ export function groupNodes(map: EntityMap, minGroupSize: number): NodeGroups {
 export function buildGroups(
   map: EntityMap,
   groups: NodeGroups,
-  kept: readonly EntityMapNode[],
+  kept: readonly EntityMapNode[]
 ): EntityMapGroup[] {
   const predicates = outgoingPredicates(map);
   const keptKeys = new Set(kept.map((node) => node.key));
   const out: EntityMapGroup[] = [];
   for (const [signature, list] of groups.members) {
-    const exemplars = list.filter((node) => keptKeys.has(node.key)).map((node) => node.key);
+    const exemplars = list
+      .filter((node) => keptKeys.has(node.key))
+      .map((node) => node.key);
     const first = list[0]!;
     out.push({
       kind: "group",
@@ -84,6 +89,7 @@ export function buildGroups(
   }
   return out.sort(
     (a, b) =>
-      b.count - a.count || (a.signature < b.signature ? -1 : a.signature > b.signature ? 1 : 0),
+      b.count - a.count ||
+      (a.signature < b.signature ? -1 : a.signature > b.signature ? 1 : 0)
   );
 }

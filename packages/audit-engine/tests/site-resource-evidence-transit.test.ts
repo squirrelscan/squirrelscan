@@ -7,18 +7,22 @@
 // correct one. That is why every drop here leaves a marker, and why these tests
 // assert on the marker as hard as on the round-trip.
 
-import { describe, expect, test } from "bun:test";
-import type { CheckResult, SiteResourceOccurrence } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  SiteResourceOccurrence,
+} from "@squirrelscan/core-contracts";
+import type { PageFindingRecord } from "@squirrelscan/core-contracts";
+
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import {
   packSiteResourceOccurrences,
   unpackSiteResourceOccurrences,
 } from "@squirrelscan/core-contracts/site-resource-evidence";
+import { describe, expect, test } from "bun:test";
 
 import { flattenChecks } from "../src/merge-core";
 import { reconstructPageRuleChecks } from "../src/reconstruct";
 import { carriedFindingToCheck } from "../src/scoring";
-import type { PageFindingRecord } from "@squirrelscan/core-contracts";
 
 const ORIGIN = "https://example.test";
 const URL = `${ORIGIN}/about`;
@@ -33,7 +37,10 @@ function occurrence(page: string, key: string): SiteResourceOccurrence {
   };
 }
 
-function check(occurrences: SiteResourceOccurrence[], items?: string[]): CheckResult {
+function check(
+  occurrences: SiteResourceOccurrence[],
+  items?: string[]
+): CheckResult {
   return {
     name: "source-maps-exposed",
     status: "warn",
@@ -65,7 +72,7 @@ function roundTrip(source: CheckResult): CheckResult {
       lastSeenCrawlId: "c",
       provenance: "fresh",
       state: "open",
-    }),
+    })
   );
   const rebuilt = reconstructPageRuleChecks(findings).get("perf/source-maps")!;
   return rebuilt[0]!;
@@ -74,8 +81,12 @@ function roundTrip(source: CheckResult): CheckResult {
 describe("the codec", () => {
   test("hoists every repeated string and rebuilds the occurrences exactly", () => {
     const pages = Array.from({ length: 30 }, (_, i) => `${ORIGIN}/p${i}`);
-    const keys = ["app", "vendor", "theme"].map((n) => `${ORIGIN}/assets/${n}.js.map`);
-    const occurrences = pages.flatMap((page) => keys.map((key) => occurrence(page, key)));
+    const keys = ["app", "vendor", "theme"].map(
+      (n) => `${ORIGIN}/assets/${n}.js.map`
+    );
+    const occurrences = pages.flatMap((page) =>
+      keys.map((key) => occurrence(page, key))
+    );
 
     const packed = packSiteResourceOccurrences(occurrences);
     expect(packed.keys).toHaveLength(3);
@@ -95,13 +106,17 @@ describe("the codec", () => {
   });
 
   test("skips a row whose index does not resolve rather than inventing a page", () => {
-    const packed = packSiteResourceOccurrences([occurrence(URL, `${ORIGIN}/a.js.map`)]);
+    const packed = packSiteResourceOccurrences([
+      occurrence(URL, `${ORIGIN}/a.js.map`),
+    ]);
     packed.occurrences.push([0, 0, 99, 0, 0]);
     expect(unpackSiteResourceOccurrences(packed)).toHaveLength(1);
   });
 
   test("a malformed blob yields undefined instead of throwing", () => {
-    expect(unpackSiteResourceOccurrences({ v: 99, nonsense: true })).toBeUndefined();
+    expect(
+      unpackSiteResourceOccurrences({ v: 99, nonsense: true })
+    ).toBeUndefined();
     expect(unpackSiteResourceOccurrences(null)).toBeUndefined();
   });
 });
@@ -112,20 +127,31 @@ describe("flatten -> reconstruct", () => {
       occurrence(URL, `${ORIGIN}/a.js.map`),
       occurrence(URL, `${ORIGIN}/b.js.map`),
     ]);
-    expect(roundTrip(source).siteResourceOccurrences).toEqual(source.siteResourceOccurrences!);
+    expect(roundTrip(source).siteResourceOccurrences).toEqual(
+      source.siteResourceOccurrences!
+    );
   });
 
   test("an item check stores ONE copy and the rest carry sibling markers", () => {
     const source = check(
-      [occurrence(URL, `${ORIGIN}/a.js.map`), occurrence(URL, `${ORIGIN}/b.js.map`)],
-      [`${ORIGIN}/a.js.map`, `${ORIGIN}/b.js.map`],
+      [
+        occurrence(URL, `${ORIGIN}/a.js.map`),
+        occurrence(URL, `${ORIGIN}/b.js.map`),
+      ],
+      [`${ORIGIN}/a.js.map`, `${ORIGIN}/b.js.map`]
     );
     const findings = flattenChecks(URL, "perf/source-maps", [source]);
-    const payloads = findings.map((f) => JSON.parse(f.payload!) as Record<string, unknown>);
-    const owners = payloads.filter((p) => p.siteResourceOccurrences !== undefined);
+    const payloads = findings.map(
+      (f) => JSON.parse(f.payload!) as Record<string, unknown>
+    );
+    const owners = payloads.filter(
+      (p) => p.siteResourceOccurrences !== undefined
+    );
     expect(owners).toHaveLength(1);
     const siblings = payloads.filter(
-      (p) => (p.siteResourceEvidence as { reason?: string } | undefined)?.reason === "sibling-row",
+      (p) =>
+        (p.siteResourceEvidence as { reason?: string } | undefined)?.reason ===
+        "sibling-row"
     );
     expect(siblings).toHaveLength(1);
     // And the rebuild still gets the complete set from the single owner.
@@ -148,7 +174,7 @@ describe("flatten -> reconstruct", () => {
 describe("over-cap payload", () => {
   // Enough distinct maps that the packed set cannot fit the finding payload.
   const huge = Array.from({ length: 4000 }, (_, i) =>
-    occurrence(URL, `${ORIGIN}/assets/${"x".repeat(60)}-${i}.js.map`),
+    occurrence(URL, `${ORIGIN}/assets/${"x".repeat(60)}-${i}.js.map`)
   );
 
   test("the evidence yields and leaves a payload-limit marker behind", () => {
@@ -192,9 +218,11 @@ describe("a carried page", () => {
         payload: finding.payload,
         lastSeenAt: 123,
       } as Parameters<typeof carriedFindingToCheck>[0],
-      URL,
+      URL
     );
-    expect(carried.siteResourceOccurrences).toEqual(source.siteResourceOccurrences!);
+    expect(carried.siteResourceOccurrences).toEqual(
+      source.siteResourceOccurrences!
+    );
     expect(carried.provenance).toBe("carried");
   });
 });

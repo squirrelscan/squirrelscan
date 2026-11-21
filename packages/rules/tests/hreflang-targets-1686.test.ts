@@ -1,11 +1,12 @@
 // i18n/hreflang-targets (#1686): where a page's hreflang links go.
 
-import { describe, expect, test } from "bun:test";
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
 
-import { hreflangTargetsRule } from "../src/i18n/hreflang-targets";
-import { buildCollectedPageSignal } from "../src/collected-signals";
 import type { CheckResult, RuleContext, SiteData } from "../src/types";
+
+import { buildCollectedPageSignal } from "../src/collected-signals";
+import { hreflangTargetsRule } from "../src/i18n/hreflang-targets";
 
 const B = "https://example.com";
 
@@ -52,7 +53,7 @@ function sitePage(spec: PageSpec): SiteData["pages"][number] {
 
 async function run(
   specs: PageSpec[],
-  opts: { collected?: boolean; fetched?: SiteData["fetchedTargets"] } = {},
+  opts: { collected?: boolean; fetched?: SiteData["fetchedTargets"] } = {}
 ): Promise<CheckResult[]> {
   const pages = specs.map(sitePage);
   const ctx = {
@@ -64,7 +65,11 @@ async function run(
       ? {
           collectedSignals: {
             pages: pages.map((p) =>
-              buildCollectedPageSignal({ url: p.url, parsed: p.parsed, headers: p.headers }),
+              buildCollectedPageSignal({
+                url: p.url,
+                parsed: p.parsed,
+                headers: p.headers,
+              })
             ),
           },
         }
@@ -73,7 +78,8 @@ async function run(
   return (await hreflangTargetsRule.run(ctx)).checks as CheckResult[];
 }
 
-const named = (checks: CheckResult[], name: string) => checks.find((c) => c.name === name)!;
+const named = (checks: CheckResult[], name: string) =>
+  checks.find((c) => c.name === name)!;
 
 // Every page names every other page and itself.
 const fullSet = (): PageSpec[] => {
@@ -91,7 +97,7 @@ const fullSet = (): PageSpec[] => {
 for (const collected of [false, true]) {
   describe(`i18n/hreflang-targets (${collected ? "collected signals" : "site pages"})`, () => {
     test("a complete set passes all four checks", async () => {
-      const checks = (await run(fullSet(), { collected }));
+      const checks = await run(fullSet(), { collected });
       for (const n of [
         "hreflang-to-redirect",
         "hreflang-to-broken",
@@ -104,14 +110,14 @@ for (const collected of [false, true]) {
     });
 
     test("a target that redirects is reported with source, target and final URL", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           { path: "/en", links: [["de", "/old-de"]] },
           { path: "/old-de", finalPath: "/de" },
           { path: "/de" },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       const c = named(checks, "hreflang-to-redirect");
       expect(c.status).toBe("warn");
       expect(c.items).toHaveLength(1);
@@ -120,33 +126,33 @@ for (const collected of [false, true]) {
     });
 
     test("a link to the final URL of a redirect is not a redirect when the destination was crawled", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           { path: "/en", links: [["de", "/de"]] },
           { path: "/old-de", finalPath: "/de" },
           { path: "/de", links: [["en", "/en"]] },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       expect(named(checks, "hreflang-to-redirect").status).toBe("pass");
       expect(checks.some((c) => c.name === "hreflang-not-checked")).toBe(false);
     });
 
     test("a link to the final URL of a redirect whose destination was not crawled is not checked, never a redirect", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           { path: "/en", links: [["de", "/de"]] },
           { path: "/old-de", finalPath: "/de" },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       expect(named(checks, "hreflang-to-redirect").status).toBe("pass");
       expect(named(checks, "hreflang-to-redirect").items ?? []).toHaveLength(0);
       expect(named(checks, "hreflang-not-checked").value).toBe(1);
     });
 
     test("a 404 and a 503 target are errors with the status", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           {
             path: "/en",
@@ -158,8 +164,8 @@ for (const collected of [false, true]) {
           { path: "/de", status: 404, noMarkup: true },
           { path: "/fr", status: 503, noMarkup: true },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       const c = named(checks, "hreflang-to-broken");
       expect(c.status).toBe("fail");
       expect(c.items!.map((i) => i.label).join("|")).toContain("returns 404");
@@ -167,7 +173,7 @@ for (const collected of [false, true]) {
     });
 
     test("noindex (meta and header) and a different canonical are reported with the reason", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           {
             path: "/en",
@@ -181,8 +187,8 @@ for (const collected of [false, true]) {
           { path: "/fr", headers: { "x-robots-tag": "noindex" } },
           { path: "/es", canonical: `${B}/en` },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       const c = named(checks, "hreflang-to-non-indexable");
       expect(c.status).toBe("warn");
       const labels = c.items!.map((i) => i.label!).join("|");
@@ -192,18 +198,18 @@ for (const collected of [false, true]) {
     });
 
     test("a self canonical is not a problem", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           { path: "/en", links: [["de", "/de"]] },
           { path: "/de", canonical: `${B}/de/` },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       expect(named(checks, "hreflang-to-non-indexable").status).toBe("pass");
     });
 
     test("a missing return link is reported once, with both URLs", async () => {
-      const checks = (await run(
+      const checks = await run(
         [
           {
             path: "/en",
@@ -215,8 +221,8 @@ for (const collected of [false, true]) {
           { path: "/de", links: [["fr", "/fr"]] },
           { path: "/fr", links: [["de", "/de"]] },
         ],
-        { collected },
-      ));
+        { collected }
+      );
       const c = named(checks, "hreflang-no-return-link");
       expect(c.status).toBe("fail");
       const pair = c.items!.filter((i) => i.id === `${B}/en -> ${B}/de`);
@@ -225,12 +231,17 @@ for (const collected of [false, true]) {
     });
 
     test("a target with no hreflang at all is not a missing return link", async () => {
-      const checks = (await run([{ path: "/en", links: [["de", "/de"]] }, { path: "/de" }], { collected }));
+      const checks = await run(
+        [{ path: "/en", links: [["de", "/de"]] }, { path: "/de" }],
+        { collected }
+      );
       expect(named(checks, "hreflang-no-return-link").status).toBe("pass");
     });
 
     test("targets the crawl did not fetch are counted as not checked and never fail", async () => {
-      const checks = (await run([{ path: "/en", links: [["de", "/missing"]] }], { collected }));
+      const checks = await run([{ path: "/en", links: [["de", "/missing"]] }], {
+        collected,
+      });
       for (const n of [
         "hreflang-to-redirect",
         "hreflang-to-broken",
@@ -246,16 +257,18 @@ for (const collected of [false, true]) {
     });
 
     test("a rate-limited target is not checked", async () => {
-      const checks = (await run([{ path: "/en", links: [["de", "/de"]] }], {
+      const checks = await run([{ path: "/en", links: [["de", "/de"]] }], {
         collected,
         fetched: [{ url: `${B}/de`, status: 429, rateLimited: true }],
-      }));
+      });
       expect(named(checks, "hreflang-to-broken").status).toBe("pass");
       expect(named(checks, "hreflang-not-checked").value).toBe(1);
     });
 
     test("no hreflang links gives a skipped result with the reason", async () => {
-      const checks = (await run([{ path: "/en" }, { path: "/de" }], { collected }));
+      const checks = await run([{ path: "/en" }, { path: "/de" }], {
+        collected,
+      });
       expect(checks).toHaveLength(1);
       expect(checks[0]!.status).toBe("skipped");
       expect(checks[0]!.skipReason).toBeTruthy();
@@ -274,7 +287,7 @@ for (const collected of [false, true]) {
         { path: "/fr", links: [["it", "/it"]] },
       ];
       expect(JSON.stringify(await run(specs, { collected }))).toBe(
-        JSON.stringify(await run([...specs].reverse(), { collected })),
+        JSON.stringify(await run([...specs].reverse(), { collected }))
       );
     });
   });

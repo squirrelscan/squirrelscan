@@ -160,7 +160,9 @@ export function implicitRole(el: RoleElement): string | null {
       return inGridTable(el) ? "gridcell" : "cell";
     case "th": {
       const scope = (el.getAttribute("scope") ?? "").trim().toLowerCase();
-      return scope === "row" || scope === "rowgroup" ? "rowheader" : "columnheader";
+      return scope === "row" || scope === "rowgroup"
+        ? "rowheader"
+        : "columnheader";
     }
     default:
       return BY_TAG.get(el.localName) ?? null;
@@ -169,7 +171,10 @@ export function implicitRole(el: RoleElement): string | null {
 
 /** The first token of `role` that names a real ARIA role, if any. */
 export function explicitRole(el: RoleElement): string | null {
-  const tokens = (el.getAttribute("role") ?? "").trim().toLowerCase().split(/\s+/);
+  const tokens = (el.getAttribute("role") ?? "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/);
   return tokens.find((token) => validAriaRoles.has(token)) ?? null;
 }
 
@@ -193,11 +198,16 @@ const EDITING_HOST_VALUES = new Set(["", "true", "plaintext-only"]);
 function isFocusable(el: RoleElement): boolean {
   if (VALID_TABINDEX.test(el.getAttribute("tabindex") ?? "")) return true;
   const editable = el.getAttribute("contenteditable");
-  if (editable !== null && EDITING_HOST_VALUES.has(editable.toLowerCase())) return true;
+  if (editable !== null && EDITING_HOST_VALUES.has(editable.toLowerCase()))
+    return true;
   const tag = el.localName;
   if (tag === "a" || tag === "area") return el.hasAttribute("href");
   if (!NATIVELY_FOCUSABLE.has(tag)) return false;
-  if (tag === "input" && (el.getAttribute("type") ?? "").toLowerCase() === "hidden") return false;
+  if (
+    tag === "input" &&
+    (el.getAttribute("type") ?? "").toLowerCase() === "hidden"
+  )
+    return false;
   return !el.hasAttribute("disabled");
 }
 

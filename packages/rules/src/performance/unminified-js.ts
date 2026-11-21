@@ -1,14 +1,13 @@
 // performance/unminified-js - Detect unminified JavaScript
 // Aligns with Lighthouse unminified-javascript audit
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
-import { scanJsComments } from "../shared/comment-scan";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
-
 import { sharedRegex } from "../shared-regex";
+import { scanJsComments } from "../shared/comment-scan";
 export const optionsSchema = z.object({
   min_size_bytes: z
     .number()
@@ -24,10 +23,15 @@ const LONG_VAR_THRESHOLD = 0.002; // Long vars per character
 
 // Matches ONE leading `/*! ... */` or `//! ...` banner (plus surrounding whitespace), anchored to string start.
 // `.` never crosses a line terminator, so CRLF needs the explicit `\r?` before `\n`.
-const LEADING_BANNER_RE = /^\s*(?:\/\*!(?:[^*]|\*(?!\/))*\*\/|\/\/!.*(?:\r?\n|$))/;
+const LEADING_BANNER_RE =
+  /^\s*(?:\/\*!(?:[^*]|\*(?!\/))*\*\/|\/\/!.*(?:\r?\n|$))/;
 
-const LONG_VAR_RE = sharedRegex(/(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g);
-const LONG_FUNCTION_RE = sharedRegex(/function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g);
+const LONG_VAR_RE = sharedRegex(
+  /(?:var|let|const)\s+[a-zA-Z_$][a-zA-Z0-9_$]{5,}/g
+);
+const LONG_FUNCTION_RE = sharedRegex(
+  /function\s+[a-zA-Z_$][a-zA-Z0-9_$]{10,}/g
+);
 const INDENT_RE = sharedRegex(/\n[ \t]{2,}/g);
 const WHITESPACE_RUN_RE = sharedRegex(/\s{2,}/g);
 /** Occurrences of a single character, without materialising a match array. */
@@ -112,7 +116,10 @@ function analyzeJs(rawJs: string): {
   // matters, so stop counting at six.
   let longFunctions = 0;
   LONG_FUNCTION_RE.lastIndex = 0;
-  while (longFunctions <= LONG_FUNCTION_THRESHOLD && LONG_FUNCTION_RE.exec(js) !== null) {
+  while (
+    longFunctions <= LONG_FUNCTION_THRESHOLD &&
+    LONG_FUNCTION_RE.exec(js) !== null
+  ) {
     longFunctions += 1;
   }
   if (longFunctions > LONG_FUNCTION_THRESHOLD) {
@@ -131,7 +138,11 @@ function analyzeJs(rawJs: string): {
   // Check for excessive whitespace
   let excessiveWhitespace = 0;
   WHITESPACE_RUN_RE.lastIndex = 0;
-  for (let m = WHITESPACE_RUN_RE.exec(js); m !== null; m = WHITESPACE_RUN_RE.exec(js)) {
+  for (
+    let m = WHITESPACE_RUN_RE.exec(js);
+    m !== null;
+    m = WHITESPACE_RUN_RE.exec(js)
+  ) {
     excessiveWhitespace += m[0].length - 1;
   }
   if (excessiveWhitespace > js.length * 0.05) {
@@ -218,7 +229,8 @@ export const unminifiedJsRule: Rule = {
         if (content) {
           const result = analyzeJs(content);
           if (!result.minified) {
-            const filename = script.url.split("/").pop()?.split("?")[0] || script.url;
+            const filename =
+              script.url.split("/").pop()?.split("?")[0] || script.url;
             unminifiedItems.push({
               source: filename,
               sizeKb: sizeBytes / 1024,
@@ -232,7 +244,9 @@ export const unminifiedJsRule: Rule = {
           const filename = url.split("/").pop()?.split("?")[0] || url;
 
           const hasMinIndicator =
-            filename.includes(".min.") || filename.includes("-min.") || filename.includes(".prod.");
+            filename.includes(".min.") ||
+            filename.includes("-min.") ||
+            filename.includes(".prod.");
 
           // Check for hash patterns (bundler output is usually minified)
           const hasHash = /[.-][a-f0-9]{8,}\./i.test(filename);
@@ -276,12 +290,19 @@ export const unminifiedJsRule: Rule = {
       const filename = src.split("/").pop()?.split("?")[0] || src;
 
       const hasMinIndicator =
-        filename.includes(".min.") || filename.includes("-min.") || filename.includes(".prod.");
+        filename.includes(".min.") ||
+        filename.includes("-min.") ||
+        filename.includes(".prod.");
 
       const hasHash = /[.-][a-f0-9]{8,}\./i.test(filename);
       const isBundlerOutput =
-        filename.includes("chunk") || filename.includes("bundle") || filename.includes("vendor");
-      const isCdn = src.includes("cdn") || src.includes("unpkg") || src.includes("jsdelivr");
+        filename.includes("chunk") ||
+        filename.includes("bundle") ||
+        filename.includes("vendor");
+      const isCdn =
+        src.includes("cdn") ||
+        src.includes("unpkg") ||
+        src.includes("jsdelivr");
 
       if (!hasMinIndicator && !hasHash && !isBundlerOutput && !isCdn) {
         if (filename.endsWith(".js") || filename.endsWith(".mjs")) {
@@ -296,11 +317,18 @@ export const unminifiedJsRule: Rule = {
     }
 
     // Report findings
-    const confirmedUnminified = unminifiedItems.filter((i) => i.reason !== "no .min indicator");
-    const suspectedUnminified = unminifiedItems.filter((i) => i.reason === "no .min indicator");
+    const confirmedUnminified = unminifiedItems.filter(
+      (i) => i.reason !== "no .min indicator"
+    );
+    const suspectedUnminified = unminifiedItems.filter(
+      (i) => i.reason === "no .min indicator"
+    );
 
     if (confirmedUnminified.length > 0) {
-      const totalSavingsKb = confirmedUnminified.reduce((sum, i) => sum + i.savingsKb, 0);
+      const totalSavingsKb = confirmedUnminified.reduce(
+        (sum, i) => sum + i.savingsKb,
+        0
+      );
       checks.push({
         name: "unminified-js",
         status: "warn",
@@ -312,7 +340,9 @@ export const unminifiedJsRule: Rule = {
         })),
         details: {
           totalPotentialSavingsKb: totalSavingsKb.toFixed(1),
-          ...(confirmedUnminified.length > 5 ? { additional: confirmedUnminified.length - 5 } : {}),
+          ...(confirmedUnminified.length > 5
+            ? { additional: confirmedUnminified.length - 5 }
+            : {}),
         },
       });
     }

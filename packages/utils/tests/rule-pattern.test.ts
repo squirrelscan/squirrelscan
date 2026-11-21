@@ -26,7 +26,9 @@ describe("matchesRulePattern", () => {
 
   test('"category/rule" matches only that exact rule', () => {
     expect(matchesRulePattern("core/meta-title", "core/meta-title")).toBe(true);
-    expect(matchesRulePattern("core/meta-titles", "core/meta-title")).toBe(false);
+    expect(matchesRulePattern("core/meta-titles", "core/meta-title")).toBe(
+      false
+    );
     expect(matchesRulePattern("core/canonical", "core/meta-title")).toBe(false);
   });
 
@@ -61,15 +63,25 @@ describe("matchesRulePattern — category-code aliases (#504)", () => {
   });
 
   test("exact `category/rule` is alias-aware on the category half", () => {
-    expect(matchesRulePattern("ai/site-metadata", "ax/site-metadata")).toBe(true);
-    expect(matchesRulePattern("ai/site-metadata", "ai/site-metadata")).toBe(true);
+    expect(matchesRulePattern("ai/site-metadata", "ax/site-metadata")).toBe(
+      true
+    );
+    expect(matchesRulePattern("ai/site-metadata", "ai/site-metadata")).toBe(
+      true
+    );
     // …but the rule name still has to match exactly.
-    expect(matchesRulePattern("ai/site-metadata", "ax/page-type-match")).toBe(false);
+    expect(matchesRulePattern("ai/site-metadata", "ax/page-type-match")).toBe(
+      false
+    );
   });
 
   test("adblock→blocking alias works the same way", () => {
-    expect(matchesRulePattern("adblock/cookie-banner", "blocking/*")).toBe(true);
-    expect(matchesRulePattern("adblock/cookie-banner", "blocking/cookie-banner")).toBe(true);
+    expect(matchesRulePattern("adblock/cookie-banner", "blocking/*")).toBe(
+      true
+    );
+    expect(
+      matchesRulePattern("adblock/cookie-banner", "blocking/cookie-banner")
+    ).toBe(true);
   });
 
   test("aliases do not bleed across unrelated categories", () => {

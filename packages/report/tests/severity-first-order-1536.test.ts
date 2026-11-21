@@ -4,30 +4,50 @@
 // warnings both landed above a11y's errors.
 
 import { describe, expect, test } from "bun:test";
+
 import type { AuditReport, ReportRuleResult } from "../src/types";
 
-import { groupIssuesByCategory, flattenIssuesBySeverity } from "../src/grouping";
-import { renderJson } from "../src/output/json";
-import { renderText } from "../src/output/text";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+} from "../src/grouping";
 import { renderHtml } from "../src/output/html";
-import { renderMarkdown } from "../src/output/markdown";
-import { renderXml } from "../src/output/xml";
+import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
+import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
+import { renderXml } from "../src/output/xml";
 
 function rule(
   id: string,
   category: string,
   severity: "error" | "warning" | "info",
-  checks: ReportRuleResult["checks"],
+  checks: ReportRuleResult["checks"]
 ): ReportRuleResult {
   return {
-    meta: { id, name: id, description: "", category, scope: "page", severity, weight: 5 },
+    meta: {
+      id,
+      name: id,
+      description: "",
+      category,
+      scope: "page",
+      severity,
+      weight: 5,
+    },
     checks,
   };
 }
 
-const fail = (msg: string) => ({ name: "c", status: "fail" as const, message: msg });
-const warn = (msg: string) => ({ name: "c", status: "warn" as const, message: msg });
+const fail = (msg: string) => ({
+  name: "c",
+  status: "fail" as const,
+  message: msg,
+});
+const warn = (msg: string) => ({
+  name: "c",
+  status: "warn" as const,
+  message: msg,
+});
 
 // Two categories that each carry an error AND a warning — the exact shape that
 // interleaved before #1536. `perf/warn` also fails a meta-severity "error" rule
@@ -56,7 +76,9 @@ function report(): AuditReport {
 
 describe("flattenIssuesBySeverity (#1536)", () => {
   test("orders every issue by severity first, across categories", () => {
-    const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedSeverities()));
+    const flat = flattenIssuesBySeverity(
+      groupIssuesByCategory(mixedSeverities())
+    );
     expect(flat.map((r) => r.severity)).toEqual([
       "error",
       "error",
@@ -67,7 +89,9 @@ describe("flattenIssuesBySeverity (#1536)", () => {
   });
 
   test("groups a severity's issues by category rather than interleaving them", () => {
-    const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedSeverities()));
+    const flat = flattenIssuesBySeverity(
+      groupIssuesByCategory(mixedSeverities())
+    );
     const errors = flat.filter((r) => r.severity === "error");
     expect(errors.map((r) => r.id)).toEqual(["core/err", "perf/err"]);
     // Category context survives the flattening — renderers label each rule with it.
@@ -76,11 +100,13 @@ describe("flattenIssuesBySeverity (#1536)", () => {
   });
 
   test("a meta-severity error whose checks only warned sorts as a warning", () => {
-    const flat = flattenIssuesBySeverity(groupIssuesByCategory(mixedSeverities()));
+    const flat = flattenIssuesBySeverity(
+      groupIssuesByCategory(mixedSeverities())
+    );
     const perfWarn = flat.find((r) => r.id === "perf/warn");
     expect(perfWarn?.severity).toBe("warning");
     expect(flat.indexOf(perfWarn!)).toBeGreaterThan(
-      flat.findIndex((r) => r.severity === "info"),
+      flat.findIndex((r) => r.severity === "info")
     );
   });
 });

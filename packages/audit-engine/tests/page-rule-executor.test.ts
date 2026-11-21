@@ -6,9 +6,9 @@
 // pass-through of the already-tested `RuleRunner.runPageRules`, so these assert
 // the seam's own wiring, not rule behavior.
 
-import { describe, expect, test } from "bun:test";
-
 import type { PageData, RuleRunner, SiteData } from "@squirrelscan/rules";
+
+import { describe, expect, test } from "bun:test";
 
 import {
   type PageRuleExecutor,
@@ -25,7 +25,10 @@ function task(key: string): PageRuleTask {
 
 /** RuleRunner stub — records the pages it ran and returns a check tagged by url,
  * optionally invoking a hook (used to trigger mid-batch abort). */
-function stubRunner(onRun?: (page: PageData) => void): { runner: RuleRunner; ran: string[] } {
+function stubRunner(onRun?: (page: PageData) => void): {
+  runner: RuleRunner;
+  ran: string[];
+} {
   const ran: string[] = [];
   const runner = {
     runPageRules: async (page: PageData) => {
@@ -59,7 +62,9 @@ describe("SerialPageRuleExecutor", () => {
     const { runner, ran } = stubRunner(() => controller.abort());
     const exec = new SerialPageRuleExecutor(runner);
 
-    await expect(exec.run(["a", "b"].map(task), siteData, controller.signal)).rejects.toThrow();
+    await expect(
+      exec.run(["a", "b"].map(task), siteData, controller.signal)
+    ).rejects.toThrow();
     expect(ran).toEqual(["a"]); // "b" never ran
   });
 
@@ -118,7 +123,11 @@ describe("SerialPageRuleExecutor loop hooks (#1252)", () => {
     const exec = new SerialPageRuleExecutor(runner, { yieldEveryMs: 1 });
 
     await expect(
-      exec.run(["a", "b", "c", "d", "e", "f"].map(task), siteData, controller.signal),
+      exec.run(
+        ["a", "b", "c", "d", "e", "f"].map(task),
+        siteData,
+        controller.signal
+      )
     ).rejects.toThrow();
     clearTimeout(timer);
     // Aborted partway — not every page ran.
@@ -153,7 +162,9 @@ describe("runAndDispose", () => {
       },
     };
 
-    await expect(runAndDispose(exec, [task("a")], siteData)).rejects.toThrow("boom");
+    await expect(runAndDispose(exec, [task("a")], siteData)).rejects.toThrow(
+      "boom"
+    );
     expect(disposed).toBe(true);
   });
 });

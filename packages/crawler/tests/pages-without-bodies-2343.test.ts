@@ -14,6 +14,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -69,14 +70,20 @@ async function freshCrawl(store: SQLiteStorage): Promise<string> {
 }
 
 /** Every scalar set to something distinguishable, so a dropped column shows. */
-function page(normalizedUrl: string, i: number, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  i: number,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: `${normalizedUrl}?raw`,
     normalizedUrl,
     finalUrl: `${normalizedUrl}/final`,
     depth: i,
     parentUrl: "https://example.com/",
-    redirectChain: { hops: [{ url: `${normalizedUrl}/old`, status: 301 }] } as never,
+    redirectChain: {
+      hops: [{ url: `${normalizedUrl}/old`, status: 301 }],
+    } as never,
     status: 200 + i,
     contentType: "text/html",
     sizeBytes: 1000 + i,
@@ -144,10 +151,14 @@ describe("getPagesWithoutBodies (#2343)", () => {
     ];
     for (const [i, url] of urls.entries()) {
       // One page stored with no body at all (a non-HTML response).
-      await run(store.upsertPage(crawlId, page(url, i, i === 3 ? { html: null } : {})));
+      await run(
+        store.upsertPage(crawlId, page(url, i, i === 3 ? { html: null } : {}))
+      );
     }
     // Another crawl's rows must not leak in.
-    await run(store.upsertPage(other, page("https://example.com/only-other", 9)));
+    await run(
+      store.upsertPage(other, page("https://example.com/only-other", 9))
+    );
 
     const full = await run(store.getPages(crawlId));
     const light = await run(store.getPagesWithoutBodies(crawlId));
@@ -164,7 +175,9 @@ describe("getPagesWithoutBodies (#2343)", () => {
     for (const limit of [1, 2, 4]) {
       for (const offset of [0, 1, 3, urls.length]) {
         const a = await run(store.getPages(crawlId, { limit, offset }));
-        const b = await run(store.getPagesWithoutBodies(crawlId, { limit, offset }));
+        const b = await run(
+          store.getPagesWithoutBodies(crawlId, { limit, offset })
+        );
         expect(b).toEqual(a.map(withoutBody));
       }
     }
@@ -176,7 +189,9 @@ describe("getPagesWithoutBodies (#2343)", () => {
     await run(store.init());
     const crawlId = await freshCrawl(store);
     for (let i = 0; i < 5; i++) {
-      await run(store.upsertPage(crawlId, page(`https://example.com/p${i}`, i)));
+      await run(
+        store.upsertPage(crawlId, page(`https://example.com/p${i}`, i))
+      );
     }
 
     counter.reads = 0;

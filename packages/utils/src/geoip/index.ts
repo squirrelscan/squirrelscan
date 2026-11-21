@@ -8,7 +8,8 @@ import dbPath from "../../geoip-db/country.bin.gz" with { type: "file" };
 import snapshot from "../../geoip-db/SNAPSHOT.json";
 import { parseV4, parseV6 } from "./ip";
 
-export const GEOIP_ATTRIBUTION = "IP geolocation by DB-IP.com (https://db-ip.com), CC BY 4.0";
+export const GEOIP_ATTRIBUTION =
+  "IP geolocation by DB-IP.com (https://db-ip.com), CC BY 4.0";
 export const GEOIP_SNAPSHOT: string = snapshot.snapshot;
 
 interface Table {
@@ -24,7 +25,8 @@ let table: Promise<Table> | undefined;
 async function load(): Promise<Table> {
   const buf = gunzipSync(new Uint8Array(await Bun.file(dbPath).arrayBuffer()));
   const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  if (new TextDecoder().decode(buf.subarray(0, 6)) !== "SQGEO1") throw new Error("bad geoip database");
+  if (new TextDecoder().decode(buf.subarray(0, 6)) !== "SQGEO1")
+    throw new Error("bad geoip database");
   let o = 6;
   const n = view.getUint16(o);
   o += 2;
@@ -99,10 +101,16 @@ export async function lookupCountry(ip: string): Promise<string | null> {
     const key = parseV6(ip);
     if (!key) return null;
     // ::ffff:a.b.c.d is the IPv4 address a.b.c.d
-    if (key.subarray(0, 10).every((b) => b === 0) && key[10] === 0xff && key[11] === 0xff) {
+    if (
+      key.subarray(0, 10).every((b) => b === 0) &&
+      key[10] === 0xff &&
+      key[11] === 0xff
+    ) {
       return lookupCountry(`${key[12]}.${key[13]}.${key[14]}.${key[15]}`);
     }
-    const i = floorSearch(t.v6Starts.length / 16, (m) => compare16(t.v6Starts, m, key));
+    const i = floorSearch(t.v6Starts.length / 16, (m) =>
+      compare16(t.v6Starts, m, key)
+    );
     if (i < 0) return null;
     cc = t.v6Cc[i]!;
   }

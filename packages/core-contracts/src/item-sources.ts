@@ -2,14 +2,22 @@
 // rules put on their items, and the per-source detail every report format prints, so a finding
 // reads the same in each of them.
 
-import type { CheckItem, CheckItemSource, LinkSection, LinkSectionCounts } from "./index";
+import type {
+  CheckItem,
+  CheckItemSource,
+  LinkSection,
+  LinkSectionCounts,
+} from "./index";
 
 /**
  * How a section reads in a finding: "in the footer", "in the page content", "in the
  * pagination", ... The first six come from page markup; the rest are section purposes the page
  * classifier names where the markup says nothing.
  */
-export const LINK_SECTION_PHRASE: Record<Exclude<LinkSection, "unknown">, string> = {
+export const LINK_SECTION_PHRASE: Record<
+  Exclude<LinkSection, "unknown">,
+  string
+> = {
   header: "the header",
   footer: "the footer",
   navigation: "the navigation",
@@ -30,7 +38,9 @@ export const LINK_SECTION_PHRASE: Record<Exclude<LinkSection, "unknown">, string
  * A placed section name this version knows: not `unknown`, and an own key of the phrase table, so
  * a stored key such as "constructor" never reads as a section.
  */
-export function isLinkSection(value: unknown): value is Exclude<LinkSection, "unknown"> {
+export function isLinkSection(
+  value: unknown
+): value is Exclude<LinkSection, "unknown"> {
   return typeof value === "string" && Object.hasOwn(LINK_SECTION_PHRASE, value);
 }
 
@@ -57,7 +67,8 @@ export function linkSectionPhrase(counts: LinkSectionCounts): string {
  */
 export function itemSourceDetail(source: CheckItemSource): string {
   const parts: string[] = [];
-  if (source.links !== undefined && source.links > 1) parts.push(`${source.links} links`);
+  if (source.links !== undefined && source.links > 1)
+    parts.push(`${source.links} links`);
   const where = source.sections ? linkSectionPhrase(source.sections) : "";
   if (where) parts.push(where);
   return parts.join(", ");

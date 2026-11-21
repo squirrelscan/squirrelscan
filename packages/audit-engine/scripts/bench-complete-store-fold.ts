@@ -23,7 +23,10 @@
 // The absolute numbers are Bun/JSC on the host, not workerd/V8 in a 128 MB
 // isolate — the RATIO is what transfers.
 
-import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 
 import { foldCompleteStoreTallies } from "../src/complete-store-fold";
@@ -39,13 +42,15 @@ const arg = (name: string, fallback: number): number => {
   return hit ? Number(hit.slice(name.length + 3)) : fallback;
 };
 const mode =
-  process.argv.find((a) => a.startsWith("--mode="))?.slice("--mode=".length) ?? "bounded";
+  process.argv.find((a) => a.startsWith("--mode="))?.slice("--mode=".length) ??
+  "bounded";
 const PAGES = arg("pages", 500);
 const FINDINGS = arg("findings", 60_000);
 const RULES = arg("rules", 40);
 
 const ruleId = (r: number) => `content/rule-${r}`;
-const pageUrl = (p: number) => `https://bench.test/section-${p % 20}/page-${p}?variant=${p % 3}`;
+const pageUrl = (p: number) =>
+  `https://bench.test/section-${p % 20}/page-${p}?variant=${p % 3}`;
 
 const meta = (r: number): RuleRunResult["meta"] => ({
   id: ruleId(r),
@@ -58,8 +63,12 @@ const meta = (r: number): RuleRunResult["meta"] => ({
 });
 
 /** The staged shell: rule META plus a bounded display sample, as the container stages it. */
-const ruleResults: Record<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }> = {};
-for (let r = 0; r < RULES; r++) ruleResults[ruleId(r)] = { meta: meta(r), checks: [] };
+const ruleResults: Record<
+  string,
+  { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+> = {};
+for (let r = 0; r < RULES; r++)
+  ruleResults[ruleId(r)] = { meta: meta(r), checks: [] };
 
 const crawledUrls = new Set<string>();
 for (let p = 0; p < PAGES; p++) crawledUrls.add(pageUrl(p));
@@ -84,7 +93,13 @@ function rowsForPage(p: number): PageFindingRecord[] {
       value: `observed-value-${i}`,
       expected: `expected-value-${i}`,
       payload: JSON.stringify({
-        items: [{ id: `item-${i}`, label: `Element #${i} in the document body`, sourcePages: [url] }],
+        items: [
+          {
+            id: `item-${i}`,
+            label: `Element #${i} in the document body`,
+            sourcePages: [url],
+          },
+        ],
         details: { additional: i % 7 },
         i,
       }),
@@ -115,7 +130,9 @@ if (mode === "materialized") {
     freshResults,
     carriedFindings: [],
     carriedPageUrls: new Set(),
-    ruleMetaIndex: new Map(Object.entries(ruleResults).map(([id, r]) => [id, r.meta])),
+    ruleMetaIndex: new Map(
+      Object.entries(ruleResults).map(([id, r]) => [id, r.meta])
+    ),
   });
   overall = calculateHealthScore({ results: union }).overall;
 } else {
@@ -129,7 +146,9 @@ if (mode === "materialized") {
     crawledUrls,
     carriedFindings: [],
     carriedPageUrls: new Set(),
-    ruleMetaIndex: new Map(Object.entries(ruleResults).map(([id, r]) => [id, r.meta])),
+    ruleMetaIndex: new Map(
+      Object.entries(ruleResults).map(([id, r]) => [id, r.meta])
+    ),
   });
   overall = calculateHealthScoreFromTallies(tallies, new Map()).overall;
 }
@@ -143,5 +162,5 @@ console.log(
     overall,
     elapsedMs: Date.now() - started,
     rssMb: Number((process.memoryUsage().rss / 1024 / 1024).toFixed(1)),
-  }),
+  })
 );

@@ -5,7 +5,10 @@
 // `elementPlacer` as its placer. With no model the classifier is the rules path, so the placer still
 // answers for landmarks and declared comment threads and the markup rules cover the rest.
 
-import { extractMainText, type MainTextExtraction } from "@squirrelscan/parser/main-text";
+import {
+  extractMainText,
+  type MainTextExtraction,
+} from "@squirrelscan/parser/main-text";
 
 // linkedom is not a dependency of this package: take the document type from the parser.
 type ParsedDocument = Parameters<typeof extractMainText>[0];
@@ -16,7 +19,13 @@ import { classifyDocument, type ClassifyOptions } from "./predict";
 /** The classify options that make sense here; `elementsOut` is owned by this function. */
 export type MainTextClassifyOptions = Pick<
   ClassifyOptions,
-  "model" | "budgetMs" | "threshold" | "siteFeatures" | "html" | "platform" | "groupFallback"
+  | "model"
+  | "budgetMs"
+  | "threshold"
+  | "siteFeatures"
+  | "html"
+  | "platform"
+  | "groupFallback"
 >;
 
 /**
@@ -27,9 +36,12 @@ export type MainTextClassifyOptions = Pick<
 export function extractPageMainText(
   document: ParsedDocument,
   url: string,
-  options: MainTextClassifyOptions = {},
+  options: MainTextClassifyOptions = {}
 ): MainTextExtraction {
   const elements: unknown[] = [];
-  const result = classifyDocument(document, url, { ...options, elementsOut: elements });
+  const result = classifyDocument(document, url, {
+    ...options,
+    elementsOut: elements,
+  });
   return extractMainText(document, { place: elementPlacer(result, elements) });
 }

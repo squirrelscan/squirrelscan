@@ -21,7 +21,11 @@
 // batched statements), and the size of the serialized union, which is what the
 // report is rendered from.
 
-import type { CheckResult, PageFindingRecord, SitePageRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  PageFindingRecord,
+  SitePageRecord,
+} from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
 
 import {
@@ -29,7 +33,10 @@ import {
   type UntouchedCarriedPage,
   type UntouchedSamplePage,
 } from "../src/complete-store-fold";
-import { runCloudSmartAudits, type OpenFindingPage } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type OpenFindingPage,
+} from "../src/merge-promise";
 import { calculateHealthScoreFromTallies } from "../src/scoring";
 import { BenchStore } from "./bench-store";
 
@@ -59,12 +66,18 @@ const meta = (r: number): RuleRunResult["meta"] => ({
   severity: r % 9 === 0 ? "info" : r % 5 === 0 ? "error" : "warning",
   weight: 10,
 });
-const ruleResults: Record<string, { meta: RuleRunResult["meta"]; checks: CheckResult[] }> = {};
-for (let r = 0; r < RULES; r++) ruleResults[ruleId(r)] = { meta: meta(r), checks: [] };
+const ruleResults: Record<
+  string,
+  { meta: RuleRunResult["meta"]; checks: CheckResult[] }
+> = {};
+for (let r = 0; r < RULES; r++)
+  ruleResults[ruleId(r)] = { meta: meta(r), checks: [] };
 
 // Crawled pages sort before the backlog, as `/a/` before `/b/`.
-const crawledUrl = (p: number) => `https://bench.test/a/${String(p).padStart(6, "0")}`;
-const backlogUrl = (p: number) => `https://bench.test/b/${String(p).padStart(6, "0")}`;
+const crawledUrl = (p: number) =>
+  `https://bench.test/a/${String(p).padStart(6, "0")}`;
+const backlogUrl = (p: number) =>
+  `https://bench.test/b/${String(p).padStart(6, "0")}`;
 
 function row(url: string, i: number, auditId: string): PageFindingRecord {
   const r = i % RULES;
@@ -81,7 +94,13 @@ function row(url: string, i: number, auditId: string): PageFindingRecord {
     value: `observed-value-${i}`,
     expected: `expected-value-${i}`,
     payload: JSON.stringify({
-      items: [{ id: `item-${i}`, label: `Element #${i} in the document body`, sourcePages: [url] }],
+      items: [
+        {
+          id: `item-${i}`,
+          label: `Element #${i} in the document body`,
+          sourcePages: [url],
+        },
+      ],
       details: { additional: i % 7 },
       i,
     }),
@@ -113,7 +132,8 @@ for (let p = 0; p < CRAWLED; p++) {
   const url = crawledUrl(p);
   crawled.push(url);
   const fresh: PageFindingRecord[] = [];
-  for (let i = 0; i < freshPerPage; i++) fresh.push(row(url, p * freshPerPage + i, AUDIT));
+  for (let i = 0; i < freshPerPage; i++)
+    fresh.push(row(url, p * freshPerPage + i, AUDIT));
   touched.push({ normalizedUrl: url, fresh, prior: [] });
 }
 
@@ -124,7 +144,8 @@ for (let p = 0; p < backlogPages; p++) {
   const url = backlogUrl(p);
   priorPages.push(sitePage(url, PRIOR));
   const rows: PageFindingRecord[] = [];
-  for (let i = 0; i < PER_PAGE && p * PER_PAGE + i < CARRIED; i++) rows.push(row(url, p * PER_PAGE + i, PRIOR));
+  for (let i = 0; i < PER_PAGE && p * PER_PAGE + i < CARRIED; i++)
+    rows.push(row(url, p * PER_PAGE + i, PRIOR));
   untouched.push({ normalizedUrl: url, rows, rendered: true, active: true });
 }
 // What the store's single scan returns.
@@ -159,13 +180,23 @@ const result = await runCloudSmartAudits({
     },
   },
 });
-const score = calculateHealthScoreFromTallies(result.scoringTallies!, result.unionRuleResults);
+const score = calculateHealthScoreFromTallies(
+  result.scoringTallies!,
+  result.unionRuleResults
+);
 const wallMs = performance.now() - wall0;
 const cpu = process.cpuUsage(cpu0);
 const union = JSON.stringify([...result.unionRuleResults]);
 // Everything a caller reads, hashed, so two builds can be compared byte for byte.
 const digest = new Bun.CryptoHasher("sha256")
-  .update(JSON.stringify([[...result.scoringTallies!], score, result.coverage, result.persistedFindings]))
+  .update(
+    JSON.stringify([
+      [...result.scoringTallies!],
+      score,
+      result.coverage,
+      result.persistedFindings,
+    ])
+  )
   .update(union)
   .digest("hex")
   .slice(0, 16);
@@ -184,5 +215,5 @@ console.log(
     digest,
     overall: score.overall,
     carriedFindings: result.coverage.carriedFindings,
-  }),
+  })
 );

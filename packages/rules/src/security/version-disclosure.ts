@@ -24,7 +24,9 @@ const VERSION = /(?:^|[\s/(,;])v?\d+(?:\.\d+)+(?!\w)/;
 const MAX_QUOTED_VALUE = 120;
 
 /** Headers only recorded since #713: Server was always recorded. */
-const RECENT_LABELS = WATCHED.filter((w) => w.key !== "server").map((w) => w.label);
+const RECENT_LABELS = WATCHED.filter((w) => w.key !== "server").map(
+  (w) => w.label
+);
 
 interface Finding {
   label: string;
@@ -35,7 +37,9 @@ interface Finding {
 }
 
 function quote(value: string): string {
-  return value.length > MAX_QUOTED_VALUE ? `${value.slice(0, MAX_QUOTED_VALUE)}...` : value;
+  return value.length > MAX_QUOTED_VALUE
+    ? `${value.slice(0, MAX_QUOTED_VALUE)}...`
+    : value;
 }
 
 export const versionDisclosureRule: Rule = {
@@ -103,7 +107,9 @@ export const versionDisclosureRule: Rule = {
 
     // A crawl stored before these headers were recorded cannot say they were
     // not sent: only Server was checked on it.
-    const recentRecorded = pages.some((page) => page.versionHeadersRecorded === true);
+    const recentRecorded = pages.some(
+      (page) => page.versionHeadersRecorded === true
+    );
     if (!recentRecorded) {
       checks.push({
         name: "version-disclosure-unrecorded",

@@ -11,9 +11,15 @@
 // browser.
 // https://www.w3.org/TR/mixed-content/ , https://www.w3.org/TR/secure-contexts/
 
-import type { Rule, RuleContext, RuleResult, CheckResult, CheckItem } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type {
+  Rule,
+  RuleContext,
+  RuleResult,
+  CheckResult,
+  CheckItem,
+} from "../types";
 
 type Treatment = "blockable" | "upgradable";
 
@@ -34,9 +40,26 @@ const CANDIDATES: Candidate[] = [
   { selector: "object", attribute: "data" },
 ];
 
-const ICON_RELS = new Set(["icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed"]);
-const BLOCKABLE_LINK_RELS = new Set(["stylesheet", "modulepreload", "manifest", "prefetch"]);
-const BLOCKABLE_PRELOAD_AS = new Set(["script", "style", "font", "fetch", "worker", "document"]);
+const ICON_RELS = new Set([
+  "icon",
+  "shortcut",
+  "apple-touch-icon",
+  "apple-touch-icon-precomposed",
+]);
+const BLOCKABLE_LINK_RELS = new Set([
+  "stylesheet",
+  "modulepreload",
+  "manifest",
+  "prefetch",
+]);
+const BLOCKABLE_PRELOAD_AS = new Set([
+  "script",
+  "style",
+  "font",
+  "fetch",
+  "worker",
+  "document",
+]);
 
 const HTTP_PREFIX = /^http:\/\//i;
 
@@ -68,13 +91,17 @@ function treatmentFor(el: Element, tag: string): Treatment | null {
     case "source":
       return "upgradable";
     case "link": {
-      const rels = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+      const rels = (el.getAttribute("rel") ?? "")
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
       if (rels.some((r) => BLOCKABLE_LINK_RELS.has(r))) return "blockable";
       if (rels.includes("preload")) {
         const as = (el.getAttribute("as") ?? "").toLowerCase();
         return BLOCKABLE_PRELOAD_AS.has(as) ? "blockable" : "upgradable";
       }
-      if (rels.some((r) => ICON_RELS.has(r) || r === "mask-icon")) return "upgradable";
+      if (rels.some((r) => ICON_RELS.has(r) || r === "mask-icon"))
+        return "upgradable";
       // canonical, alternate, author, next, prev, dns-prefetch... fetch no subresource
       return null;
     }
@@ -125,7 +152,10 @@ export const mixedContentRule: Rule = {
     let upgradable = 0;
 
     for (const { selector, attribute } of CANDIDATES) {
-      for (const el of querySelectorAllOutsideNoscript(doc, `${selector}[${attribute}]`)) {
+      for (const el of querySelectorAllOutsideNoscript(
+        doc,
+        `${selector}[${attribute}]`
+      )) {
         const url = el.getAttribute(attribute)?.trim();
         if (!url || !HTTP_PREFIX.test(url)) continue;
         const treatment = treatmentFor(el, selector);
@@ -142,12 +172,17 @@ export const mixedContentRule: Rule = {
         if (selector === "link" && rel) meta.rel = rel;
 
         if (host && isLoopbackHost(host)) {
-          local.push({ id: url, label, meta: { ...meta, kind: "local-development" } });
+          local.push({
+            id: url,
+            label,
+            meta: { ...meta, kind: "local-development" },
+          });
           continue;
         }
 
         // Browsers block, rather than upgrade, requests to IP-literal hosts.
-        const effective: Treatment = host && isIpLiteral(host) ? "blockable" : treatment;
+        const effective: Treatment =
+          host && isIpLiteral(host) ? "blockable" : treatment;
         if (effective === "blockable") blockable++;
         else upgradable++;
         mixed.push({
@@ -155,7 +190,10 @@ export const mixedContentRule: Rule = {
           label,
           meta: {
             ...meta,
-            kind: effective === "blockable" ? "potentially-blocked" : "potentially-upgraded",
+            kind:
+              effective === "blockable"
+                ? "potentially-blocked"
+                : "potentially-upgraded",
           },
         });
       }

@@ -22,7 +22,11 @@ const blocked = (url: string) =>
 
 describe("addWafBlockedPage: the seed counts once", () => {
   test("a second sighting of the seed adds nothing", () => {
-    let summary = addWafBlockedPage(undefined, blocked("https://example.com/challenge"), true);
+    let summary = addWafBlockedPage(
+      undefined,
+      blocked("https://example.com/challenge"),
+      true
+    );
     summary = addWafBlockedPage(summary, blocked("https://example.com/"), true);
     expect(summary.total).toBe(1);
     expect(summary.seed?.url).toBe("https://example.com/challenge");
@@ -30,11 +34,26 @@ describe("addWafBlockedPage: the seed counts once", () => {
   });
 
   test("other blocked pages still count and list", () => {
-    let summary = addWafBlockedPage(undefined, blocked("https://example.com/"), true);
-    summary = addWafBlockedPage(summary, blocked("https://example.com/a"), false);
-    summary = addWafBlockedPage(summary, blocked("https://example.com/b"), false);
+    let summary = addWafBlockedPage(
+      undefined,
+      blocked("https://example.com/"),
+      true
+    );
+    summary = addWafBlockedPage(
+      summary,
+      blocked("https://example.com/a"),
+      false
+    );
+    summary = addWafBlockedPage(
+      summary,
+      blocked("https://example.com/b"),
+      false
+    );
     expect(summary.total).toBe(3);
-    expect(summary.pages.map((p) => p.url)).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(summary.pages.map((p) => p.url)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
   });
 });
 
@@ -48,16 +67,25 @@ const suspect = (url: string): WafSuspectPage => ({
 
 describe("addWafSuspectPage", () => {
   test("counts every page, lists each URL once and names providers once", () => {
-    let summary = addWafSuspectPage(undefined, suspect("https://example.com/a"));
+    let summary = addWafSuspectPage(
+      undefined,
+      suspect("https://example.com/a")
+    );
     summary = addWafSuspectPage(summary, suspect("https://example.com/a"));
     summary = addWafSuspectPage(summary, suspect("https://example.com/b"));
     expect(summary.total).toBe(3);
-    expect(summary.pages.map((p) => p.url)).toEqual(["https://example.com/a", "https://example.com/b"]);
+    expect(summary.pages.map((p) => p.url)).toEqual([
+      "https://example.com/a",
+      "https://example.com/b",
+    ]);
     expect(summary.providers).toEqual(["Cloudflare"]);
   });
 
   test("the list is capped, the total is not", () => {
-    let summary = addWafSuspectPage(undefined, suspect("https://example.com/0"));
+    let summary = addWafSuspectPage(
+      undefined,
+      suspect("https://example.com/0")
+    );
     for (let i = 1; i < MAX_WAF_BLOCKED_PAGES + 10; i++) {
       summary = addWafSuspectPage(summary, suspect(`https://example.com/${i}`));
     }

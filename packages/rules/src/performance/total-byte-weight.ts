@@ -1,6 +1,7 @@
 // performance/total-byte-weight - Total page weight check
 // Aligns with Lighthouse total-byte-weight audit
 
+import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type {
@@ -11,8 +12,6 @@ import type {
   RuleResult,
 } from "../types";
 
-import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
-
 /**
  * Per-page byte-weight signal read off a live DOM (#1021 E-E2). Shared by the
  * page-time collector (buildCollectedPageSignal) and this rule's legacy
@@ -22,7 +21,7 @@ import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
  * no-resource-data estimate branch (used only for the first page).
  */
 export function extractPageByteSignal(
-  doc: NonNullable<ParsedPage["document"]>,
+  doc: NonNullable<ParsedPage["document"]>
 ): {
   inlineCssLen: number;
   inlineJsLen: number;
@@ -38,7 +37,7 @@ export function extractPageByteSignal(
   let inlineJsLen = 0;
   for (const script of querySelectorAllOutsideNoscript(
     doc,
-    "script:not([src])",
+    "script:not([src])"
   )) {
     // Skip JSON-LD and other data scripts
     const type = script.getAttribute("type") || "";
@@ -52,7 +51,7 @@ export function extractPageByteSignal(
     inlineJsLen,
     externalCssCount: querySelectorAllOutsideNoscript(
       doc,
-      'link[rel="stylesheet"]',
+      'link[rel="stylesheet"]'
     ).length,
     externalJsCount: querySelectorAllOutsideNoscript(doc, "script[src]").length,
     imageCount: querySelectorAllOutsideNoscript(doc, "img[src]").length,
@@ -110,7 +109,14 @@ export const totalByteWeightRule: Rule = {
           // A bodiless error page (one v1 appends per 4xx/5xx it could not parse) has no weight to average in,
           // and the streaming universe has no record of it (#1359).
           .filter((page) => !page.redirectSource)
-          .filter((page) => !(page.statusCode >= 400 && !page.parsed?.document && (!page.parsed?.pageType || page.parsed.pageType === "unknown")))
+          .filter(
+            (page) =>
+              !(
+                page.statusCode >= 400 &&
+                !page.parsed?.document &&
+                (!page.parsed?.pageType || page.parsed.pageType === "unknown")
+              )
+          )
           .map((page) => {
             const s = page.parsed?.document
               ? extractPageByteSignal(page.parsed.document)
@@ -145,7 +151,7 @@ export const totalByteWeightRule: Rule = {
             fallbackOnly?: boolean;
             deferredPages?: string[];
           }>
-        | undefined,
+        | undefined
     ): void => {
       for (const res of list ?? []) {
         // An <img src> behind a srcset that picks another file is not downloaded (#1251).
@@ -228,19 +234,25 @@ export const totalByteWeightRule: Rule = {
             rec.imageCount * 100) *
             1024;
       }
-      return { rec, kb: bytes / 1024, parts, lazyImages: sumBucket(rec.deferredImages) };
+      return {
+        rec,
+        kb: bytes / 1024,
+        parts,
+        lazyImages: sumBucket(rec.deferredImages),
+      };
     });
 
     // The largest file the heaviest page loads, so the verdict names what to fix
     // rather than only the page (#1753). Lazy images below the fold are not in
     // `external`, so they are not named: they are not what the page loads.
     const largestResource = (
-      rec: PageWeight | undefined,
+      rec: PageWeight | undefined
     ): { url: string; size: number; kind: string } | undefined => {
       let best: { url: string; size: number; kind: string } | undefined;
       for (const kind of ["css", "js", "images", "fonts"] as const) {
         for (const [url, size] of rec?.external?.[kind] ?? []) {
-          if (size > 0 && (!best || size > best.size)) best = { url, size, kind };
+          if (size > 0 && (!best || size > best.size))
+            best = { url, size, kind };
         }
       }
       return best;
@@ -249,13 +261,13 @@ export const totalByteWeightRule: Rule = {
     const isEstimate = !hasExternalResourceData && scored.length > 0;
     const heaviest = scored.reduce<Scored | undefined>(
       (best, cur) => (!best || cur.kb > best.kb ? cur : best),
-      undefined,
+      undefined
     );
     const overWarn = scored.filter(
-      (s) => s.kb >= opts.warn_threshold_kb,
+      (s) => s.kb >= opts.warn_threshold_kb
     ).length;
     const overError = scored.filter(
-      (s) => s.kb >= opts.error_threshold_kb,
+      (s) => s.kb >= opts.error_threshold_kb
     ).length;
     const heaviestKb = heaviest?.kb ?? 0;
 

@@ -2,10 +2,16 @@
 // that do not resolve to one canonical. Every case runs through BOTH paths (legacy
 // ctx.site.pages and streaming collectedSignals + siteQuery) and asserts identical output.
 
+import type {
+  CheckResult,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import {
   buildCheck,
@@ -21,7 +27,6 @@ import {
   urlFormKey,
 } from "../src/content/duplicate-content";
 import { noindexSource } from "../src/shared/noindex";
-import type { RuleContext } from "../src/types";
 
 const words = (n: number, tag = "alpha") =>
   Array.from({ length: n }, (_, i) => `${tag}${i}`).join(" ");
@@ -42,7 +47,7 @@ function html(s: Spec): string {
   const links = [
     s.canonical ? `<link rel="canonical" href="${s.canonical}">` : "",
     ...(s.alternates ?? []).map(
-      (a) => `<link rel="alternate" hreflang="${a.hreflang}" href="${a.href}">`,
+      (a) => `<link rel="alternate" hreflang="${a.hreflang}" href="${a.href}">`
     ),
     s.noindex ? `<meta name="robots" content="noindex">` : "",
   ].join("");
@@ -50,7 +55,13 @@ function html(s: Spec): string {
 }
 
 const baseCtx = {
-  page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+  page: {
+    url: "https://example.com/",
+    html: "",
+    statusCode: 200,
+    loadTime: 0,
+    headers: {},
+  },
   parsed: {} as never,
   options: {},
 };
@@ -83,7 +94,10 @@ function row(s: Spec): PageFeatureRow {
   } as unknown as PageFeatureRow;
 }
 
-function streamingCtx(specs: Spec[], opts: { withoutFingerprint?: boolean } = {}): RuleContext {
+function streamingCtx(
+  specs: Spec[],
+  opts: { withoutFingerprint?: boolean } = {}
+): RuleContext {
   const rows = specs.map(row);
   const unused = (): never => {
     throw new Error("duplicate-content must not use this SiteQuery method");
@@ -104,7 +118,12 @@ function streamingCtx(specs: Spec[], opts: { withoutFingerprint?: boolean } = {}
   };
   return {
     ...baseCtx,
-    site: { baseUrl: "https://example.com/", pages: [], robotsTxt: null, sitemaps: null },
+    site: {
+      baseUrl: "https://example.com/",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+    },
     siteQuery,
     collectedSignals: {
       pages: specs.map((s) => {
@@ -113,7 +132,13 @@ function streamingCtx(specs: Spec[], opts: { withoutFingerprint?: boolean } = {}
           url: s.url,
           ...(opts.withoutFingerprint
             ? {}
-            : { contentFingerprint: fingerprintForPage(parsed.document, s.url, s.finalUrl) }),
+            : {
+                contentFingerprint: fingerprintForPage(
+                  parsed.document,
+                  s.url,
+                  s.finalUrl
+                ),
+              }),
         } as never;
       }),
     },
@@ -210,10 +235,19 @@ describe("content/duplicate-content", () => {
   });
 
   test("AC4: reciprocal hreflang alternates are not duplicates of each other", async () => {
-    const alt = (a: string, b: string, l: string) => ({ hreflang: l, href: u(b) });
+    const alt = (a: string, b: string, l: string) => ({
+      hreflang: l,
+      href: u(b),
+    });
     const r = await both([
-      { url: u("/en"), alternates: [alt("", "/en", "en"), alt("", "/de", "de")] },
-      { url: u("/de"), alternates: [alt("", "/en", "en"), alt("", "/de", "de")] },
+      {
+        url: u("/en"),
+        alternates: [alt("", "/en", "en"), alt("", "/de", "de")],
+      },
+      {
+        url: u("/de"),
+        alternates: [alt("", "/en", "en"), alt("", "/de", "de")],
+      },
     ]);
     expect(r.status).toBe("pass");
     expect(r.details).toMatchObject({ excluded: { hreflang: 2 } });
@@ -237,7 +271,12 @@ describe("content/duplicate-content", () => {
       if (i > 0) alternates.push({ hreflang: "en", href: at(i - 1) });
       if (i < n - 1) alternates.push({ hreflang: "de", href: at(i + 1) });
       fingerprints.set(at(i), { hash: "h", words: 150 });
-      meta.set(at(i), { status: 200, noindex: false, canonical: null, alternates });
+      meta.set(at(i), {
+        status: 200,
+        noindex: false,
+        canonical: null,
+        alternates,
+      });
     }
     const start = performance.now();
     // One reciprocal chain is a single page in many languages: no duplicate.
@@ -246,7 +285,12 @@ describe("content/duplicate-content", () => {
     expect(chained.details).toMatchObject({ excluded: { hreflang: n } });
     // An unlinked copy of the same body keeps the group reported.
     fingerprints.set(u("/copy"), { hash: "h", words: 150 });
-    meta.set(u("/copy"), { status: 200, noindex: false, canonical: null, alternates: null });
+    meta.set(u("/copy"), {
+      status: 200,
+      noindex: false,
+      canonical: null,
+      alternates: null,
+    });
     expect(buildCheck({ fingerprints, meta }).status).toBe("warn");
     // Pairwise scanning is ~200M checks per run (tens of seconds); linear is well under a second.
     expect(performance.now() - start).toBeLessThan(1500);
@@ -307,7 +351,7 @@ describe("content/duplicate-content", () => {
     const item = r.items![0]!;
     expect(item.meta).toMatchObject({ urlFormOnly: true });
     expect(item.label).toContain(
-      "URL form (tracking parameters, trailing slash or letter case) is the cause",
+      "URL form (tracking parameters, trailing slash or letter case) is the cause"
     );
     expect(r.details).toMatchObject({ urlFormGroups: 1 });
   });
@@ -337,7 +381,9 @@ describe("content/duplicate-content", () => {
 
   test("whitespace and case differences do not change the fingerprint", () => {
     const fp = (b: string) =>
-      buildContentFingerprint(parsePage(`<html><body><p>${b}</p></body></html>`, u("/")).document!);
+      buildContentFingerprint(
+        parsePage(`<html><body><p>${b}</p></body></html>`, u("/")).document!
+      );
     expect(fp("Hello   World\n foo")).toEqual(fp("hello world foo"));
     expect(fp("hello world foo")!.hash).toMatch(/^[0-9a-f]{16}$/);
     expect(fp("hello world foo")).not.toEqual(fp("hello world bar"));
@@ -345,9 +391,18 @@ describe("content/duplicate-content", () => {
 
   test("AC9: shuffled input gives the same output", async () => {
     const specs: Spec[] = [
-      ...Array.from({ length: 6 }, (_, i) => ({ url: u(`/x${i}`), body: words(150, "x") })),
-      ...Array.from({ length: 4 }, (_, i) => ({ url: u(`/y${i}`), body: words(150, "y") })),
-      ...Array.from({ length: 4 }, (_, i) => ({ url: u(`/z${i}`), body: words(150, "z") })),
+      ...Array.from({ length: 6 }, (_, i) => ({
+        url: u(`/x${i}`),
+        body: words(150, "x"),
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        url: u(`/y${i}`),
+        body: words(150, "y"),
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        url: u(`/z${i}`),
+        body: words(150, "z"),
+      })),
     ];
     const base = await both(specs);
     for (const order of [
@@ -365,7 +420,10 @@ describe("content/duplicate-content", () => {
     }));
     const r = await both(many);
     expect(r.items![0]!.sourcePages).toHaveLength(MAX_URLS_PER_GROUP);
-    expect(r.items![0]!.meta).toMatchObject({ pageCount: MAX_URLS_PER_GROUP + 5, omittedUrls: 5 });
+    expect(r.items![0]!.meta).toMatchObject({
+      pageCount: MAX_URLS_PER_GROUP + 5,
+      omittedUrls: 5,
+    });
 
     const groups: Spec[] = [];
     for (let g = 0; g < MAX_GROUPS + 2; g++) {
@@ -374,16 +432,22 @@ describe("content/duplicate-content", () => {
     }
     const r2 = await both(groups);
     expect(r2.items).toHaveLength(MAX_GROUPS);
-    expect(r2.details).toMatchObject({ totalGroups: MAX_GROUPS + 2, omittedGroups: 2 });
+    expect(r2.details).toMatchObject({
+      totalGroups: MAX_GROUPS + 2,
+      omittedGroups: 2,
+    });
   }, 20_000);
 
   test("skips with fewer than two candidate pages, and with no fingerprint data", async () => {
     expect((await both([{ url: u("/a") }])).status).toBe("skipped");
     expect((await both([])).status).toBe("skipped");
-    const ctx = streamingCtx([{ url: u("/a") }, { url: u("/b") }], { withoutFingerprint: true });
+    const ctx = streamingCtx([{ url: u("/a") }, { url: u("/b") }], {
+      withoutFingerprint: true,
+    });
     expect((await check(ctx)).status).toBe("skipped");
     const noDocs = legacyCtx([{ url: u("/a") }, { url: u("/b") }]);
-    for (const p of noDocs.site!.pages) (p.parsed as { document: unknown }).document = undefined;
+    for (const p of noDocs.site!.pages)
+      (p.parsed as { document: unknown }).document = undefined;
     expect((await check(noDocs)).status).toBe("skipped");
   });
 
@@ -394,7 +458,9 @@ describe("content/duplicate-content", () => {
       },
     } as unknown as Document;
     expect(buildContentFingerprint(throwing)).toBeNull();
-    expect(buildContentFingerprint({ body: null } as unknown as Document)).toBeNull();
+    expect(
+      buildContentFingerprint({ body: null } as unknown as Document)
+    ).toBeNull();
   });
 
   test("helpers", () => {

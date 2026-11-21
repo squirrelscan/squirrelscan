@@ -12,16 +12,17 @@
 // human and LLM surface. They exist to make grouping decisions reproducible,
 // not to be read. JSON keeps them; it is the machine format.
 
-import type { CheckItem } from "./types";
 import type { ComponentFixGroup } from "./component-fix-groups";
 import type { ComponentFixRollup } from "./component-fix-rollup";
+import type { GroupedRule } from "./grouping";
+import type { CheckItem } from "./types";
+
+import { ruleAffectedPages } from "./affected-pages";
 import {
   componentFamilyRollups,
   componentFixRollups,
   describeRollupDefect,
 } from "./component-fix-rollup";
-import type { GroupedRule } from "./grouping";
-import { ruleAffectedPages } from "./affected-pages";
 
 /**
  * How much of a rule's affected-page set its fix groups account for.
@@ -62,7 +63,10 @@ const RENDERABLE_ATTRIBUTIONS = new Set<string>([
  * as they are; the human and LLM surfaces do not.
  */
 export function isRenderableFixGroup(group: ComponentFixGroup): boolean {
-  return group.affectedPageCount >= 2 && RENDERABLE_ATTRIBUTIONS.has(group.attribution);
+  return (
+    group.affectedPageCount >= 2 &&
+    RENDERABLE_ATTRIBUTIONS.has(group.attribution)
+  );
 }
 
 export function ruleFixCoverage(rule: GroupedRule): FixCoverage {
@@ -70,10 +74,12 @@ export function ruleFixCoverage(rule: GroupedRule): FixCoverage {
   // group we then decline to print would suppress the legacy lines for its
   // pages and leave the defect described nowhere at all.
   const groups = (rule.componentFixGroups ?? []).filter(isRenderableFixGroup);
-  if (groups.length === 0) return { mode: "none", groups: [], uncoveredPages: [] };
+  if (groups.length === 0)
+    return { mode: "none", groups: [], uncoveredPages: [] };
 
   const covered = new Set<string>();
-  for (const group of groups) for (const page of group.affectedPages) covered.add(page);
+  for (const group of groups)
+    for (const page of group.affectedPages) covered.add(page);
 
   const affected = ruleAffectedPages(rule.checks);
   const uncoveredPages = [...affected]
@@ -83,8 +89,13 @@ export function ruleFixCoverage(rule: GroupedRule): FixCoverage {
   // A rule whose pages are unknown (site-scope checks with no page list) cannot
   // be said to be fully covered by anything, so it stays partial rather than
   // silently swallowing the legacy lines.
-  if (affected.size === 0) return { mode: "partial", groups, uncoveredPages: [] };
-  return { mode: uncoveredPages.length === 0 ? "full" : "partial", groups, uncoveredPages };
+  if (affected.size === 0)
+    return { mode: "partial", groups, uncoveredPages: [] };
+  return {
+    mode: uncoveredPages.length === 0 ? "full" : "partial",
+    groups,
+    uncoveredPages,
+  };
 }
 
 /**
@@ -99,7 +110,7 @@ export function ruleFixCoverage(rule: GroupedRule): FixCoverage {
  */
 export function uncoveredItems(
   items: readonly CheckItem[] | undefined,
-  coverage: FixCoverage,
+  coverage: FixCoverage
 ): CheckItem[] {
   if (!items || items.length === 0) return [];
   if (coverage.mode === "none") return [...items];
@@ -170,14 +181,25 @@ export const ROOT_LABEL_MAX = 40;
  *
  * Read defensively: the field is additive and may not be present yet.
  */
-export function describeRoot(unit: ComponentFixGroup | ComponentFixRollup): string | undefined {
+export function describeRoot(
+  unit: ComponentFixGroup | ComponentFixRollup
+): string | undefined {
   const group = "representative" in unit ? unit.representative : unit;
   const hint = (
-    group as { rootHint?: { tag?: string; id?: string; ariaLabel?: string; heading?: string } }
+    group as {
+      rootHint?: {
+        tag?: string;
+        id?: string;
+        ariaLabel?: string;
+        heading?: string;
+      };
+    }
   ).rootHint;
   if (!hint) return undefined;
   const truncate = (value: string) =>
-    value.length > ROOT_LABEL_MAX ? `${value.slice(0, ROOT_LABEL_MAX - 1)}\u2026` : value;
+    value.length > ROOT_LABEL_MAX
+      ? `${value.slice(0, ROOT_LABEL_MAX - 1)}\u2026`
+      : value;
   if (hint.heading) return `"${truncate(hint.heading)}"`;
   if (hint.ariaLabel) return `"${truncate(hint.ariaLabel)}"`;
   if (hint.id) return `#${truncate(hint.id)}`;
@@ -212,7 +234,9 @@ export function describeDefect(group: ComponentFixGroup): string {
     // `normalizedText` is what the rule emits; `text` covers evidence recorded
     // before that key settled, so the line never silently loses the wording.
     const text = values.normalizedText ?? values.text;
-    return text === undefined ? "link text is generic" : `link text ${quote(text)} is generic`;
+    return text === undefined
+      ? "link text is generic"
+      : `link text ${quote(text)} is generic`;
   }
   if (kind === "link-text-empty") {
     const reason = values.reason;
@@ -233,7 +257,7 @@ export interface PageSample {
 export function fixGroupPages(
   group: ComponentFixGroup,
   limit: number,
-  format: (page: string) => string,
+  format: (page: string) => string
 ): PageSample {
   const shown = group.affectedPages.slice(0, limit).map(format);
   return {
@@ -262,7 +286,7 @@ export function formatPageSample(sample: PageSample, noun = "pages"): string {
  */
 export function fixUnits(
   groups: readonly ComponentFixGroup[],
-  rollupEnabled = true,
+  rollupEnabled = true
 ): ComponentFixRollup[] {
   // Root first: merging one block's slots is the stronger claim, and the family
   // level then merges those units across structural variants.
@@ -291,7 +315,7 @@ export function fixRollupLine(
   limit: number,
   format: (page: string) => string,
   /** false when the caller appends its own trailing slot hint (llm does). */
-  includeSlot = true,
+  includeSlot = true
 ): string {
   const group = rollup.representative;
   // One group is ONE element, however many pages it repeats on, so its slot
@@ -325,7 +349,7 @@ export function fixGroupLine(
   group: ComponentFixGroup,
   limit: number,
   format: (page: string) => string,
-  includeSlot = true,
+  includeSlot = true
 ): string {
   const sample = fixGroupPages(group, limit, format);
   return `${fixPrefix(group, includeSlot ? describeSlot(group) : undefined)}: ${describeDefect(group)}, ${
@@ -344,7 +368,7 @@ export function fixGroupLine(
 function fixPrefix(
   group: ComponentFixGroup,
   slot: string | undefined,
-  variantCount = 1,
+  variantCount = 1
 ): string {
   const label = describeRoot(group);
   const region = describeRegion(group);

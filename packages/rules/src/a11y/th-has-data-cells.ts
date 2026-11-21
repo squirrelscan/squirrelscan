@@ -1,9 +1,9 @@
 // a11y/th-has-data-cells - Table headers have associated data cells
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { getAttrCI } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { ownTableCells, type OwnRow } from "../shared/own-table-cells";
 
@@ -48,7 +48,8 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
   const groupEnd: number[] = [];
   for (let r = rows.length - 1; r >= 0; r--) {
     const sameGroup =
-      r + 1 < rows.length && rows[r]!.row.parentElement === rows[r + 1]!.row.parentElement;
+      r + 1 < rows.length &&
+      rows[r]!.row.parentElement === rows[r + 1]!.row.parentElement;
     groupEnd[r] = sameGroup ? groupEnd[r + 1]! : r;
   }
 
@@ -60,7 +61,10 @@ function buildGrid(rows: readonly OwnRow[]): (GridCell | null)[][] {
     for (const cell of cells) {
       const colspan = span(cell, "colspan", MAX_COLSPAN);
       // Cut at the group's end first, so the slot count is for the grid built.
-      const rowspan = Math.min(span(cell, "rowspan", MAX_ROWSPAN), groupEnd[r]! - r + 1);
+      const rowspan = Math.min(
+        span(cell, "rowspan", MAX_ROWSPAN),
+        groupEnd[r]! - r + 1
+      );
       // The fill loops below run ceil(span) times for a fractional span.
       slots += Math.ceil(colspan) * Math.ceil(rowspan);
       if (slots > MAX_GRID_SLOTS) return grid;
@@ -134,7 +138,9 @@ export const thHasDataCellsRule: Rule = {
       // Which rows hold a td, and how many td slots each column holds, read
       // once rather than rescanned per header. A header's own slot is a th, so
       // a td anywhere in its column is in another row.
-      const rowHasTd = grid.map((row) => !!row?.some((slot) => slot && slot.tag === "td"));
+      const rowHasTd = grid.map(
+        (row) => !!row?.some((slot) => slot && slot.tag === "td")
+      );
       const columnTds: number[] = [];
       for (const row of grid) {
         if (!row) continue;
@@ -168,7 +174,8 @@ export const thHasDataCellsRule: Rule = {
         // Text read for the shown ten only: on nested markup each header's
         // text is its whole subtree's.
         items: orphanedHeaders.slice(0, 10).map(({ el, r, c }) => ({
-          id: el.textContent?.trim().slice(0, 30) || `row ${r + 1}, col ${c + 1}`,
+          id:
+            el.textContent?.trim().slice(0, 30) || `row ${r + 1}, col ${c + 1}`,
         })),
         details:
           orphanedHeaders.length > 10

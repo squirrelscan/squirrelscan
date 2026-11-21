@@ -1,7 +1,12 @@
 import { CHALLENGE_INTERSTITIAL_MAX_TEXT } from "./providers";
 import { tagEnd } from "./views";
 
-function skipElement(lower: string, html: string, tag: string, start: number): number {
+function skipElement(
+  lower: string,
+  html: string,
+  tag: string,
+  start: number
+): number {
   const prefix = `</${tag}`;
   let cursor = start;
   while (cursor < html.length) {
@@ -20,7 +25,10 @@ function skipElement(lower: string, html: string, tag: string, start: number): n
  * Approximate visible-text length without backtracking over hostile markup.
  * Stops counting past `limit`, so the result only says "more than limit".
  */
-export function visibleTextLength(html: string, limit = CHALLENGE_INTERSTITIAL_MAX_TEXT): number {
+export function visibleTextLength(
+  html: string,
+  limit = CHALLENGE_INTERSTITIAL_MAX_TEXT
+): number {
   const lower = html.toLowerCase();
   let cursor = 0;
   let length = 0;
@@ -42,7 +50,9 @@ export function visibleTextLength(html: string, limit = CHALLENGE_INTERSTITIAL_M
       while (/[a-z]/.test(lower[nameEnd] ?? "")) nameEnd++;
       const name = lower.slice(nameStart, nameEnd);
       cursor =
-        name === "script" || name === "style" ? skipElement(lower, html, name, end + 1) : end + 1;
+        name === "script" || name === "style"
+          ? skipElement(lower, html, name, end + 1)
+          : end + 1;
       pendingSpace = true;
       continue;
     }

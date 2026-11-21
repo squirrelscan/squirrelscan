@@ -31,9 +31,12 @@ export const AUDIT_FAILURE_REASON_CODES = [
   "unknown",
 ] as const;
 
-export type AuditFailureReasonCode = (typeof AUDIT_FAILURE_REASON_CODES)[number];
+export type AuditFailureReasonCode =
+  (typeof AUDIT_FAILURE_REASON_CODES)[number];
 
-export function isAuditFailureReasonCode(value: unknown): value is AuditFailureReasonCode {
+export function isAuditFailureReasonCode(
+  value: unknown
+): value is AuditFailureReasonCode {
   return (
     typeof value === "string" &&
     (AUDIT_FAILURE_REASON_CODES as readonly string[]).includes(value)
@@ -47,12 +50,18 @@ export function isAuditFailureReasonCode(value: unknown): value is AuditFailureR
  * `crawl_timeout`: the crawl-phase backstop (`--crawl-timeout`, #1639) stopped the crawl
  * before the site was exhausted, so the link graph is incomplete.
  */
-export const AUDIT_PARTIAL_REASON_CODES = ["max_duration", "crawl_timeout"] as const;
+export const AUDIT_PARTIAL_REASON_CODES = [
+  "max_duration",
+  "crawl_timeout",
+] as const;
 
-export type AuditPartialReasonCode = (typeof AUDIT_PARTIAL_REASON_CODES)[number];
+export type AuditPartialReasonCode =
+  (typeof AUDIT_PARTIAL_REASON_CODES)[number];
 
 /** Every value `AuditReport.statusReasonCode` can carry. */
-export type AuditStatusReasonCode = AuditFailureReasonCode | AuditPartialReasonCode;
+export type AuditStatusReasonCode =
+  | AuditFailureReasonCode
+  | AuditPartialReasonCode;
 
 /**
  * Which URL the failure came from. `entry` is the audited URL itself and always
@@ -114,7 +123,10 @@ const STRUCTURAL_CHARS = /[`[\]<>|]/g;
  * the characters that would turn text into markup, collapse whitespace, and cap
  * the length.
  */
-function sanitizeFragment(value: string | undefined, max: number): string | undefined {
+function sanitizeFragment(
+  value: string | undefined,
+  max: number
+): string | undefined {
   if (!value) return undefined;
   const cleaned = stripControlChars(value)
     .replace(ABSOLUTE_URL, (_match, host: string) => host)
@@ -128,9 +140,13 @@ function sanitizeFragment(value: string | undefined, max: number): string | unde
 }
 
 /** Build a detail with every origin-influenced field already sanitized. */
-export function auditFailureDetail(input: AuditFailureDetail): AuditFailureDetail {
+export function auditFailureDetail(
+  input: AuditFailureDetail
+): AuditFailureDetail {
   const status =
-    typeof input.status === "number" && Number.isInteger(input.status) ? input.status : undefined;
+    typeof input.status === "number" && Number.isInteger(input.status)
+      ? input.status
+      : undefined;
   return {
     code: input.code,
     ...(sanitizeFragment(input.host, MAX_HOST_LENGTH)
@@ -175,7 +191,9 @@ function statusPhrase(status: number | undefined): string {
   if (status === undefined) return "an error";
   // Object.hasOwn, not `in`/[]: the key comes from a persisted blob and a
   // prototype method must never surface as a status phrase.
-  const text = Object.hasOwn(STATUS_TEXT, status) ? STATUS_TEXT[status] : undefined;
+  const text = Object.hasOwn(STATUS_TEXT, status)
+    ? STATUS_TEXT[status]
+    : undefined;
   return text ? `${status} ${text}` : String(status);
 }
 
@@ -222,7 +240,9 @@ export function auditFailureReasonText(detail: AuditFailureDetail): string {
  * the site owner directly: the failure email, the HTML report, and the CLI's
  * text/markdown output.
  */
-export const AUDIT_FAILURE_NEXT_STEP: Readonly<Record<AuditFailureReasonCode, string>> = {
+export const AUDIT_FAILURE_NEXT_STEP: Readonly<
+  Record<AuditFailureReasonCode, string>
+> = {
   dns: "Check the domain's DNS records and that the hostname resolves from the public internet. If you moved hosts recently, wait for the change to propagate and re-run the audit.",
   tls: "Renew or repair the TLS certificate so it is valid for this hostname and served with the full chain, then re-run the audit.",
   connection:
@@ -253,7 +273,9 @@ export const AUDIT_FAILURE_NEXT_STEP: Readonly<Record<AuditFailureReasonCode, st
  * notice (the HTML report and the dashboard). Sits above the next step, which
  * says what to do about it.
  */
-export const AUDIT_FAILURE_CAUSE: Readonly<Record<AuditFailureReasonCode, string>> = {
+export const AUDIT_FAILURE_CAUSE: Readonly<
+  Record<AuditFailureReasonCode, string>
+> = {
   dns: "We couldn't resolve your site's hostname, so there was no server to fetch pages from and nothing to audit.",
   tls: "We couldn't complete a TLS handshake with your site, so no page could be read securely and there was nothing to audit.",
   connection:
@@ -277,7 +299,9 @@ export const AUDIT_FAILURE_CAUSE: Readonly<Record<AuditFailureReasonCode, string
  * renderer, the API report markdown, the MCP tools) which describe the site to
  * an agent rather than talking to its owner.
  */
-export const AUDIT_FAILURE_NEXT_STEP_THIRD: Readonly<Record<AuditFailureReasonCode, string>> = {
+export const AUDIT_FAILURE_NEXT_STEP_THIRD: Readonly<
+  Record<AuditFailureReasonCode, string>
+> = {
   dns: "The hostname did not resolve. Check the domain's DNS records, and whether the domain has expired or was recently moved.",
   tls: "The TLS certificate could not be validated for this hostname. Check its expiry, hostname coverage, and that the full chain is served.",
   connection:
@@ -290,7 +314,8 @@ export const AUDIT_FAILURE_NEXT_STEP_THIRD: Readonly<Record<AuditFailureReasonCo
     "The server returned an error of its own. Re-run the audit once the site is serving normally.",
   redirect:
     "The audited URL redirected somewhere the crawl could not follow. Audit the URL the site actually serves.",
-  robots: "robots.txt disallows the crawler on this path. Audit a path robots.txt permits.",
+  robots:
+    "robots.txt disallows the crawler on this path. Audit a path robots.txt permits.",
   // Pre-#1822 wording, kept for the same reason as the second-person entry.
   unknown:
     "No pages could be fetched from the site, so nothing was audited. The site may have been down, unreachable, or timing out. Check that the site is reachable and try again.",
@@ -298,9 +323,11 @@ export const AUDIT_FAILURE_NEXT_STEP_THIRD: Readonly<Record<AuditFailureReasonCo
 
 export function auditFailureNextStep(
   code: AuditFailureReasonCode,
-  voice: "second" | "third" = "second",
+  voice: "second" | "third" = "second"
 ): string {
-  return voice === "third" ? AUDIT_FAILURE_NEXT_STEP_THIRD[code] : AUDIT_FAILURE_NEXT_STEP[code];
+  return voice === "third"
+    ? AUDIT_FAILURE_NEXT_STEP_THIRD[code]
+    : AUDIT_FAILURE_NEXT_STEP[code];
 }
 
 /**
@@ -352,7 +379,8 @@ const MAX_CAUSE_DEPTH = 5;
 export function fetchErrorCode(error: unknown): string | undefined {
   let current = error as { cause?: unknown; code?: unknown } | null | undefined;
   for (let depth = 0; current && depth < MAX_CAUSE_DEPTH; depth++) {
-    if (typeof current.code === "string" && current.code.length > 0) return current.code;
+    if (typeof current.code === "string" && current.code.length > 0)
+      return current.code;
     current = current.cause as typeof current;
   }
   return undefined;
@@ -365,7 +393,7 @@ export function fetchErrorCode(error: unknown): string | undefined {
  * the message, and a code we do not recognize must not stop it doing so.
  */
 export function classifyFetchErrorCode(
-  code: string | null | undefined,
+  code: string | null | undefined
 ): AuditFailureReasonCode | undefined {
   if (!code) return undefined;
   const key = code.toLowerCase();
@@ -388,7 +416,7 @@ export function classifyFetchErrorCode(
  * a failure, never as an absence of one.
  */
 export function classifyAuditFailureReasonText(
-  reason: string | null | undefined,
+  reason: string | null | undefined
 ): AuditFailureReasonCode {
   const r = (reason ?? "").toLowerCase();
   if (r.length === 0) return "unknown";
@@ -580,7 +608,9 @@ export function maxDurationReason(cut: {
   if (cut.siteChecksCut) parts.push("site-wide checks did not finish");
   if (cut.resourceChecksCut) parts.push("resource checks were cut short");
   if (cut.probesSkipped && cut.probesSkipped.length > 0) {
-    parts.push(`${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`);
+    parts.push(
+      `${cut.probesSkipped.join(", ")} did not finish and ${cut.probesSkipped.length === 1 ? "was" : "were"} skipped`
+    );
   }
   // Pages too large to parse are a size limit of a budgeted run, not the clock running out.
   const stopped = parts.length > 0;

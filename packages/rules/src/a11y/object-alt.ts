@@ -1,8 +1,10 @@
 // a11y/object-alt - Object elements have alternative text
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 export const objectAltRule: Rule = {
   meta: {
@@ -68,7 +70,11 @@ export const objectAltRule: Rule = {
     }
     if (unnamed.unconfirmed.length > 0) {
       checks.push(
-        unconfirmedRow("object-alt", "object element(s) without alternative content", unnamed.unconfirmed),
+        unconfirmedRow(
+          "object-alt",
+          "object element(s) without alternative content",
+          unnamed.unconfirmed
+        )
       );
     }
     if (missingAlt.length === 0 && unnamed.unconfirmed.length === 0) {
@@ -80,7 +86,9 @@ export const objectAltRule: Rule = {
             unnamed.hidden > 0
               ? "All object elements in the accessibility tree have alternative content"
               : `${objects.length} object element(s) have alternative content`,
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

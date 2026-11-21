@@ -56,13 +56,19 @@ export const brokenHtmlRule: Rule = {
     // Links inside links
     const nestedLinks = doc.querySelectorAll("a a");
     if (nestedLinks.length > 0) {
-      issues.push({ id: "nested-links", label: `${nestedLinks.length} nested <a> tag(s)` });
+      issues.push({
+        id: "nested-links",
+        label: `${nestedLinks.length} nested <a> tag(s)`,
+      });
     }
 
     // Buttons inside links or vice versa
     const buttonInLink = doc.querySelectorAll("a button, button a");
     if (buttonInLink.length > 0) {
-      issues.push({ id: "button-in-link", label: "Button inside link or vice versa" });
+      issues.push({
+        id: "button-in-link",
+        label: "Button inside link or vice versa",
+      });
     }
 
     // Forms inside forms
@@ -76,7 +82,10 @@ export const brokenHtmlRule: Rule = {
     for (const tag of deprecated) {
       const elements = doc.querySelectorAll(tag);
       if (elements.length > 0) {
-        issues.push({ id: `deprecated-${tag}`, label: `Deprecated <${tag}> element` });
+        issues.push({
+          id: `deprecated-${tag}`,
+          label: `Deprecated <${tag}> element`,
+        });
         break; // Only report one deprecated element
       }
     }
@@ -84,7 +93,9 @@ export const brokenHtmlRule: Rule = {
     if (issues.length > 0) {
       checks.push({
         name: "broken-html",
-        status: issues.some((i) => i.id.startsWith("missing-")) ? "warn" : "info",
+        status: issues.some((i) => i.id.startsWith("missing-"))
+          ? "warn"
+          : "info",
         message: `${issues.length} HTML issue(s) found`,
         items: issues.map((issue) => ({ id: issue.id, label: issue.label })),
       });

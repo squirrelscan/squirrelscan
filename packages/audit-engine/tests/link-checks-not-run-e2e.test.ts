@@ -7,12 +7,12 @@
 // host name, so a real check can reach it). Before repo#2729 the quick crawl
 // passed `links/broken-links` and `links/broken-external-links` here.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -48,14 +48,14 @@ function serveSite(opts: { sitemap: boolean }): string {
         case "/":
           return ok(
             html(
-              `<a href="/about">About</a> <a href="/missing">Old</a> <a href="http://127.0.0.1:${url.port}/elsewhere">Elsewhere</a>`,
-            ),
+              `<a href="/about">About</a> <a href="/missing">Old</a> <a href="http://127.0.0.1:${url.port}/elsewhere">Elsewhere</a>`
+            )
           );
         case "/about":
           return ok(
             html(
-              `<a href="/">Home</a> <a href="http://127.0.0.1:${url.port}/elsewhere">Elsewhere</a> <a href="http://127.0.0.1:${url.port}/elsewhere-two">Elsewhere too</a>`,
-            ),
+              `<a href="/">Home</a> <a href="http://127.0.0.1:${url.port}/elsewhere">Elsewhere</a> <a href="http://127.0.0.1:${url.port}/elsewhere-two">Elsewhere too</a>`
+            )
           );
         case "/elsewhere":
         case "/elsewhere-two":
@@ -64,12 +64,18 @@ function serveSite(opts: { sitemap: boolean }): string {
           if (!opts.sitemap) break;
           return ok(
             `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url><url><loc>${origin}/about</loc></url></urlset>`,
-            "application/xml",
+            "application/xml"
           );
         case "/robots.txt":
-          return ok(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, "text/plain");
+          return ok(
+            `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+            "text/plain"
+          );
       }
-      return new Response(html("Not found"), { status: 404, headers: { "content-type": "text/html" } });
+      return new Response(html("Not found"), {
+        status: 404,
+        headers: { "content-type": "text/html" },
+      });
     },
   });
   servers.push(server);
@@ -85,7 +91,7 @@ async function audit(
     maxLinks?: number;
     sitemap?: boolean;
     exclude?: string[];
-  },
+  }
 ) {
   const origin = serveSite({ sitemap: opts.sitemap ?? true });
   const crawler = await Effect.runPromise(
@@ -103,9 +109,11 @@ async function audit(
         useCacheControl: false,
         disableLinkDiscovery: !opts.followLinks,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const config = {
     rule_options: {},
@@ -128,7 +136,7 @@ async function audit(
       ...(opts.externalLinks
         ? { externalLinks: { config: config.external_links, linkCache: null } }
         : {}),
-    }),
+    })
   );
   const assets = preRules.assets;
 
@@ -137,10 +145,20 @@ async function audit(
       if (engine === "v1") {
         const stored = yield* storage.getPages(crawlId);
         const siteContext = yield* buildSiteContext(stored);
-        return yield* runRulesOnStorage(storage, crawlId, siteContext, config, assets);
+        return yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          config,
+          assets
+        );
       }
       return yield* runStreamingRules(storage, crawlId, config, assets);
-    }) as unknown as Effect.Effect<{ siteRuleResults: Map<string, CheckResult[]> }, never, never>,
+    }) as unknown as Effect.Effect<
+      { siteRuleResults: Map<string, CheckResult[]> },
+      never,
+      never
+    >
   );
   const checksOf = (id: string) => ran.siteRuleResults.get(id) ?? [];
   return {
@@ -150,7 +168,8 @@ async function audit(
   };
 }
 
-const statuses = (checks: CheckResult[]) => checks.map((c) => `${c.status}:${c.skipReason ?? ""}`);
+const statuses = (checks: CheckResult[]) =>
+  checks.map((c) => `${c.status}:${c.skipReason ?? ""}`);
 
 for (const engine of ["v1", "v2"] as const) {
   describe(`link checks that did not run (${engine})`, () => {
@@ -171,7 +190,9 @@ for (const engine of ["v1", "v2"] as const) {
         notFetched: { off: 1 },
       });
       expect(internal[0]!.message).toContain("internal link checks were off");
-      expect(statuses(external)).toEqual(["skipped:external-links-not-checked"]);
+      expect(statuses(external)).toEqual([
+        "skipped:external-links-not-checked",
+      ]);
       expect(external[0]!.details).toEqual({ externalLinksFound: 2 });
     });
 
@@ -207,12 +228,21 @@ for (const engine of ["v1", "v2"] as const) {
         externalLinks: true,
         maxLinks: 1,
       });
-      expect(stats?.externalLinkCheck).toEqual({ found: 2, checked: 1, cap: 1 });
-      expect(statuses(external)).toEqual(["pass:", "skipped:external-links-over-cap"]);
+      expect(stats?.externalLinkCheck).toEqual({
+        found: 2,
+        checked: 1,
+        cap: 1,
+      });
+      expect(statuses(external)).toEqual([
+        "pass:",
+        "skipped:external-links-over-cap",
+      ]);
       // /elsewhere is on both pages, /elsewhere-two on one: the first is the one checked.
-      expect(external[0]!.message).toBe("1 of 2 external link(s) verified working; 1 could not be verified or were not checked");
+      expect(external[0]!.message).toBe(
+        "1 of 2 external link(s) verified working; 1 could not be verified or were not checked"
+      );
       expect(external[1]!.message).toBe(
-        "1 of 2 external link(s) were not checked: over this audit's limit of 1, which checks the most-linked first",
+        "1 of 2 external link(s) were not checked: over this audit's limit of 1, which checks the most-linked first"
       );
     });
 
@@ -223,11 +253,17 @@ for (const engine of ["v1", "v2"] as const) {
       });
       expect(stats?.linkDiscoveryOff).toBeUndefined();
       expect(statuses(internal)).toEqual(["fail:"]);
-      expect(internal[0]!.items?.map((i) => i.id)).toEqual([expect.stringContaining("/missing")]);
+      expect(internal[0]!.items?.map((i) => i.id)).toEqual([
+        expect.stringContaining("/missing"),
+      ]);
       expect(statuses(external)).toEqual(["pass:"]);
       expect(external[0]!.message).toBe("All 2 external link(s) are working");
       // Unset max_links is the page budget, at least 200.
-      expect(stats?.externalLinkCheck).toEqual({ found: 2, checked: 2, cap: 200 });
+      expect(stats?.externalLinkCheck).toEqual({
+        found: 2,
+        checked: 2,
+        cap: 200,
+      });
     });
 
     test("no usable sitemap: the crawler follows links after all, so the 404 is found", async () => {

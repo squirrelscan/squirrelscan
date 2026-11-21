@@ -1,7 +1,8 @@
 // extractMainText (#2359): markup fallback, placer decisions, markdown structure, safety.
 
-import { describe, expect, test } from "bun:test";
 import type { Element } from "linkedom";
+
+import { describe, expect, test } from "bun:test";
 
 import {
   extractMainText,
@@ -36,8 +37,13 @@ describe("markup fallback: landmarks", () => {
       <nav><a href="/">Home</a></nav>
       <article><header><h1>Post title</h1><p>By Ada</p></header>
       <p>Body text here.</p><footer><p>Filed under tests</p></footer></article>`);
-    expect(out.text).toBe("Post title\n\nBy Ada\n\nBody text here.\n\nFiled under tests");
-    expect(out.blocks[0]!.region).toMatchObject({ label: "main_content", source: "rules" });
+    expect(out.text).toBe(
+      "Post title\n\nBy Ada\n\nBody text here.\n\nFiled under tests"
+    );
+    expect(out.blocks[0]!.region).toMatchObject({
+      label: "main_content",
+      source: "rules",
+    });
   });
 
   test("ARIA roles: banner, contentinfo, navigation, complementary and dialog are dropped", () => {
@@ -50,7 +56,8 @@ describe("markup fallback: landmarks", () => {
   });
 
   test("hidden, aria-hidden, sr-only and script/style never contribute", () => {
-    const out = run(`<div><p hidden>h</p><p aria-hidden="true">x</p><span class="sr-only">y</span>
+    const out =
+      run(`<div><p hidden>h</p><p aria-hidden="true">x</p><span class="sr-only">y</span>
       <p style="display:none">z</p><script>var a=1</script><style>p{}</style><p>seen</p></div>`);
     expect(out.text).toBe("seen");
   });
@@ -97,28 +104,45 @@ describe("markup fallback: furniture tokens", () => {
       "drift-chart",
       "chat-log",
     ]) {
-      const document = parseDocument(`<div class="${cls}" id="x-${cls}">t</div>`);
+      const document = parseDocument(
+        `<div class="${cls}" id="x-${cls}">t</div>`
+      );
       const el = document.querySelector("div") as unknown as Element;
       expect([cls, hasFurnitureToken(el)]).toEqual([cls, false]);
     }
-    const out = run(`<div class="header shadow download breadcrumb"><p>kept text</p></div>`);
+    const out = run(
+      `<div class="header shadow download breadcrumb"><p>kept text</p></div>`
+    );
     expect(out.text).toBe("kept text");
   });
 
   test("tokens that must match do match", () => {
-    for (const cls of ["ad", "ads", "ad-slot", "cookie-consent", "CybotCookiebotDialog", "tawk-widget", "sidebar"]) {
+    for (const cls of [
+      "ad",
+      "ads",
+      "ad-slot",
+      "cookie-consent",
+      "CybotCookiebotDialog",
+      "tawk-widget",
+      "sidebar",
+    ]) {
       const document = parseDocument(`<div class="${cls}">t</div>`);
-      expect([cls, hasFurnitureToken(document.querySelector("div") as unknown as Element)]).toEqual([
+      expect([
         cls,
-        true,
-      ]);
+        hasFurnitureToken(document.querySelector("div") as unknown as Element),
+      ]).toEqual([cls, true]);
     }
   });
 
   test("comment threads are kept and labelled", () => {
-    const out = run(`<article><p>Post.</p><div id="comments"><p>Nice post!</p></div></article>`);
+    const out = run(
+      `<article><p>Post.</p><div id="comments"><p>Nice post!</p></div></article>`
+    );
     expect(out.text).toBe("Post.\n\nNice post!");
-    expect(out.blocks[1]!.section).toMatchObject({ label: "comments", source: "rules" });
+    expect(out.blocks[1]!.section).toMatchObject({
+      label: "comments",
+      source: "rules",
+    });
     expect(out.blocks[0]!.section).toBeNull();
   });
 });
@@ -132,12 +156,15 @@ describe("structure and markdown", () => {
       ["heading", 3],
       ["paragraph", undefined],
     ]);
-    expect(out.markdown).toBe("# Title\n\n### Sub\n\nSee the docs and run `npm test`.");
+    expect(out.markdown).toBe(
+      "# Title\n\n### Sub\n\nSee the docs and run `npm test`."
+    );
     expect(out.text).not.toContain("x.example");
   });
 
   test("lists, ordered lists and nested lists", () => {
-    const out = run(`<main><ul><li>One<ul><li>Inner</li></ul></li><li>Two</li></ul>
+    const out =
+      run(`<main><ul><li>One<ul><li>Inner</li></ul></li><li>Two</li></ul>
       <ol><li>First</li><li>Second</li></ol></main>`);
     expect(out.blocks.map((b) => b.kind)).toEqual(["list", "list"]);
     expect(out.blocks[0]!.markdown).toBe("- One\n  - Inner\n- Two");
@@ -146,11 +173,12 @@ describe("structure and markdown", () => {
   });
 
   test("tables become GFM pipe tables and escape pipes", () => {
-    const out = run(`<main><table><thead><tr><th>Name</th><th>Value</th></tr></thead>
+    const out =
+      run(`<main><table><thead><tr><th>Name</th><th>Value</th></tr></thead>
       <tbody><tr><td>a|b</td><td>1</td></tr><tr><td>c</td></tr></tbody></table></main>`);
     expect(out.blocks).toHaveLength(1);
     expect(out.blocks[0]!.markdown).toBe(
-      "| Name | Value |\n| --- | --- |\n| a\\|b | 1 |\n| c |  |",
+      "| Name | Value |\n| --- | --- |\n| a\\|b | 1 |\n| c |  |"
     );
   });
 
@@ -158,7 +186,7 @@ describe("structure and markdown", () => {
     const out = run(`<main><table><tr><th>Path</th><th>Note</th></tr>
       <tr><td>C:\\dir\\</td><td>x\\|y</td></tr></table></main>`);
     expect(out.blocks[0]!.markdown).toBe(
-      "| Path | Note |\n| --- | --- |\n| C:\\\\dir\\\\ | x\\\\\\|y |",
+      "| Path | Note |\n| --- | --- |\n| C:\\\\dir\\\\ | x\\\\\\|y |"
     );
   });
 
@@ -169,12 +197,16 @@ describe("structure and markdown", () => {
   });
 
   test("a layout table is walked through, not flattened into one table block", () => {
-    const out = run(`<table role="presentation"><tr><td><h2>Heading</h2><p>Para</p></td></tr></table>`);
+    const out = run(
+      `<table role="presentation"><tr><td><h2>Heading</h2><p>Para</p></td></tr></table>`
+    );
     expect(out.blocks.map((b) => b.kind)).toEqual(["heading", "paragraph"]);
   });
 
   test("blockquote and loose text become quote and paragraph blocks", () => {
-    const out = run(`<div>Loose <b>text</b> here<blockquote><p>Quoted words</p></blockquote>tail</div>`);
+    const out = run(
+      `<div>Loose <b>text</b> here<blockquote><p>Quoted words</p></blockquote>tail</div>`
+    );
     expect(out.blocks.map((b) => [b.kind, b.text])).toEqual([
       ["paragraph", "Loose text here"],
       ["quote", "Quoted words"],
@@ -197,7 +229,9 @@ describe("code blocks", () => {
       ["code", "sh"],
     ]);
     expect(code[0]!.text).toBe('const a = 1;\n  const b = "two";');
-    expect(out.markdown).toContain('```ts\nconst a = 1;\n  const b = "two";\n```');
+    expect(out.markdown).toContain(
+      '```ts\nconst a = 1;\n  const b = "two";\n```'
+    );
     expect(out.markdown).toContain("```sh\nnpm run build\n```");
   });
 
@@ -216,7 +250,9 @@ describe("code blocks", () => {
 describe("safety", () => {
   test("50k nested divs do not throw", () => {
     const depth = 50_000;
-    const html = page(`${"<div>".repeat(depth)}<p>deep text</p>${"</div>".repeat(depth)}`);
+    const html = page(
+      `${"<div>".repeat(depth)}<p>deep text</p>${"</div>".repeat(depth)}`
+    );
     const doc = parseDocument(html);
     const seen: string[] = [];
     const out = extractMainText(doc, {
@@ -232,13 +268,22 @@ describe("safety", () => {
 
   test("an empty document gives an empty extraction", () => {
     const out = extractMainText(parseDocument(""));
-    expect(out).toMatchObject({ text: "", markdown: "", proseText: "", blocks: [] });
+    expect(out).toMatchObject({
+      text: "",
+      markdown: "",
+      proseText: "",
+      blocks: [],
+    });
   });
 });
 
 describe("with a placer", () => {
   // Each labelled element is its own classifier node: ids are handed out from 7 in the order asked.
-  const label = (l: string, nodeId: number, source: "model" | "rules" = "model") => ({
+  const label = (
+    l: string,
+    nodeId: number,
+    source: "model" | "rules" = "model"
+  ) => ({
     label: l,
     confidence: 0.93,
     source,
@@ -246,27 +291,33 @@ describe("with a placer", () => {
   });
   // Label by element id, inherited from the nearest labelled ancestor as elementPlacer does:
   // `region-x` / `section-x`; `trunc` fails closed; `boom` throws.
-  const byId =
-    (calls?: Element[]): ContentPlacer => {
-      const nodeIds = new Map<Element, number>();
-      const idOf = (node: Element): number => {
-        if (!nodeIds.has(node)) nodeIds.set(node, 7 + nodeIds.size);
-        return nodeIds.get(node)!;
-      };
-      return (el) => {
+  const byId = (calls?: Element[]): ContentPlacer => {
+    const nodeIds = new Map<Element, number>();
+    const idOf = (node: Element): number => {
+      if (!nodeIds.has(node)) nodeIds.set(node, 7 + nodeIds.size);
+      return nodeIds.get(node)!;
+    };
+    return (el) => {
       calls?.push(el);
       const out: ContentPlacement = { region: null, section: null };
       let hops = 0;
-      for (let node: Element | null = el; node; node = node.parentElement, hops++) {
+      for (
+        let node: Element | null = el;
+        node;
+        node = node.parentElement, hops++
+      ) {
         const id = node.getAttribute("id") ?? "";
         if (id === "boom") throw new Error("placer exploded");
-        if (id === "trunc") return { region: null, section: null, truncated: true };
-        if (!out.region && id.startsWith("region-")) out.region = { ...label(id.slice(7), idOf(node)), hops };
-        if (!out.section && id.startsWith("section-")) out.section = { ...label(id.slice(8), idOf(node)), hops };
+        if (id === "trunc")
+          return { region: null, section: null, truncated: true };
+        if (!out.region && id.startsWith("region-"))
+          out.region = { ...label(id.slice(7), idOf(node)), hops };
+        if (!out.section && id.startsWith("section-"))
+          out.section = { ...label(id.slice(8), idOf(node)), hops };
       }
       return out.region || out.section ? out : null;
-      };
     };
+  };
 
   test("a section labelled cookie_consent or ad is dropped, with no markup hint", () => {
     const out = run(
@@ -274,7 +325,7 @@ describe("with a placer", () => {
          <div id="section-cookie_consent"><p>cookies</p></div>
          <div id="section-ad"><p>ad copy</p></div>
          <div id="section-chat_widget"><p>chat</p></div></div>`,
-      byId(),
+      byId()
     );
     expect(out.text).toBe("keep me");
     expect(out.placer).toBe("classifier");
@@ -288,7 +339,10 @@ describe("with a placer", () => {
 
   test("a region labelled footer (or any dropped region) is dropped", () => {
     for (const region of MAIN_TEXT_DROPPED_REGIONS) {
-      const out = run(`<div id="region-${region}"><p>gone</p></div><div><p>stay</p></div>`, byId());
+      const out = run(
+        `<div id="region-${region}"><p>gone</p></div><div><p>stay</p></div>`,
+        byId()
+      );
       expect(out.text).toBe("stay");
     }
   });
@@ -297,7 +351,7 @@ describe("with a placer", () => {
     const out = run(
       `<header id="region-article_chrome"><h1>Title</h1><p>By Ada</p>Loose byline<ul><li>Share</li></ul></header>
        <div id="region-main_content"><p>body</p></div>`,
-      byId(),
+      byId()
     );
     expect(out.blocks.map((b) => b.text)).toEqual(["Title", "body"]);
   });
@@ -306,18 +360,24 @@ describe("with a placer", () => {
     const out = run(
       `<article id="region-site_header"><h2>Opening hours</h2><p>Open nine to five.</p></article>
        <div id="region-site_header"><p>real header</p></div>`,
-      byId(),
+      byId()
     );
-    expect(out.blocks.map((b) => b.text)).toEqual(["Opening hours", "Open nine to five."]);
+    expect(out.blocks.map((b) => b.text)).toEqual([
+      "Opening hours",
+      "Open nine to five.",
+    ]);
     // The kept blocks say what actually decided: the markup, not the overruled model label.
-    expect(out.blocks[0]!.region).toMatchObject({ label: "main_content", source: "rules" });
+    expect(out.blocks[0]!.region).toMatchObject({
+      label: "main_content",
+      source: "rules",
+    });
   });
 
   test("a nav that inherits main_content (hops 1) is dropped by its markup; an own answer keeps a div", () => {
     const out = run(
       `<div id="region-main_content"><p>text</p><nav><p>menu</p></nav><aside><p>side</p></aside>
        <div role="navigation"><p>roles</p></div><div><p>plain</p></div></div>`,
-      byId(),
+      byId()
     );
     expect(out.blocks.map((b) => b.text)).toEqual(["text", "plain"]);
   });
@@ -326,13 +386,16 @@ describe("with a placer", () => {
     const out = run(
       `<div id="region-main_content"><header><h2>Section title</h2></header><p>body</p></div>
        <header><h2>Site banner</h2></header>`,
-      byId(),
+      byId()
     );
     expect(out.blocks.map((b) => b.text)).toEqual(["Section title", "body"]);
   });
 
   test("a div labelled main_content is kept and its block carries label, node id and source", () => {
-    const out = run(`<div id="region-main_content"><p>Kept paragraph.</p></div>`, byId());
+    const out = run(
+      `<div id="region-main_content"><p>Kept paragraph.</p></div>`,
+      byId()
+    );
     expect(out.blocks).toHaveLength(1);
     expect(out.blocks[0]!.region).toEqual({
       label: "main_content",
@@ -347,24 +410,33 @@ describe("with a placer", () => {
     const out = run(
       `<main id="region-content_block"><p>one</p><div id="section-newsletter_signup"><p>sign up</p></div>
        <div id="section-comments"><p>a comment</p></div></main>`,
-      byId(),
+      byId()
     );
     expect(out.blocks.map((b) => b.text)).toEqual(["one", "a comment"]);
     expect(out.blocks[1]!.section!.label).toBe("comments");
   });
 
   test("truncated fails closed", () => {
-    const out = run(`<div id="trunc"><p>unknown extent</p></div><p>fine</p>`, byId());
+    const out = run(
+      `<div id="trunc"><p>unknown extent</p></div><p>fine</p>`,
+      byId()
+    );
     expect(out.text).toBe("fine");
   });
 
   test("a placer that throws is an abstention, not a crash", () => {
-    const out = run(`<div id="boom"><p>still read</p></div><nav><p>menu</p></nav>`, byId());
+    const out = run(
+      `<div id="boom"><p>still read</p></div><nav><p>menu</p></nav>`,
+      byId()
+    );
     expect(out.text).toBe("still read");
   });
 
   test("an abstaining placer falls back to the markup rules", () => {
-    const out = run(`<nav><p>menu</p></nav><div class="cookie-banner"><p>c</p></div><p>body</p>`, () => null);
+    const out = run(
+      `<nav><p>menu</p></nav><div class="cookie-banner"><p>c</p></div><p>body</p>`,
+      () => null
+    );
     expect(out.text).toBe("body");
     expect(out.placer).toBe("markup");
   });
@@ -380,13 +452,16 @@ describe("with a placer", () => {
   test("a chat widget the classifier did not name is still dropped by its markup", () => {
     const out = run(
       `<div id="region-content_block"><p>text</p><div class="tawk-min-container"><p>chat</p></div></div>`,
-      byId(),
+      byId()
     );
     expect(out.text).toBe("text");
   });
 
   test("a page-wide form that holds main is a wrapper, not a form", () => {
-    const out = run(`<form id="region-form"><main id="region-main_content"><p>asp.net page</p></main></form>`, byId());
+    const out = run(
+      `<form id="region-form"><main id="region-main_content"><p>asp.net page</p></main></form>`,
+      byId()
+    );
     expect(out.text).toBe("asp.net page");
     const real = run(`<form id="region-form"><p>Your name</p></form>`, byId());
     expect(real.text).toBe("");
@@ -399,7 +474,10 @@ describe("with a placer", () => {
   });
 
   test("the label sets are disjoint and as documented", () => {
-    expect([...MAIN_TEXT_KEPT_REGIONS].sort()).toEqual(["content_block", "main_content"]);
+    expect([...MAIN_TEXT_KEPT_REGIONS].sort()).toEqual([
+      "content_block",
+      "main_content",
+    ]);
     expect([...MAIN_TEXT_DROPPED_SECTIONS].sort()).toEqual([
       "ad",
       "chat_widget",
@@ -408,6 +486,7 @@ describe("with a placer", () => {
       "promo_banner",
       "social_share",
     ]);
-    for (const r of MAIN_TEXT_KEPT_REGIONS) expect(MAIN_TEXT_DROPPED_REGIONS.has(r)).toBe(false);
+    for (const r of MAIN_TEXT_KEPT_REGIONS)
+      expect(MAIN_TEXT_DROPPED_REGIONS.has(r)).toBe(false);
   });
 });

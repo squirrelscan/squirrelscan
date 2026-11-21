@@ -1,22 +1,25 @@
 // security/leaked-secrets: JSON items identify the matched value's length and
 // source position without publishing the value itself (#1230).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckItem, RuleContext } from "../../src/types";
 
 import {
   leakedSecretsRule,
   scanContent,
   scanPageForSecrets,
 } from "../../src/security/leaked-secrets";
-import type { CheckItem, RuleContext } from "../../src/types";
 
 const PAGE = "https://app.acme.test/";
 const inlineSecret = "sk_live_" + "aB3dE5gH7jK9mN1pQ3rS5tU7"; // pragma: allowlist secret
 const externalSecret = "sk_live_" + "zY8xW6vU4tS2rQ0pN8mL6kJ4"; // pragma: allowlist secret
 
-async function run(html: string, scripts: { url: string; content: string }[] = []): Promise<CheckItem[]> {
+async function run(
+  html: string,
+  scripts: { url: string; content: string }[] = []
+): Promise<CheckItem[]> {
   const ctx = {
     site: {
       baseUrl: PAGE,
@@ -35,16 +38,20 @@ async function run(html: string, scripts: { url: string; content: string }[] = [
     options: {},
   } as unknown as RuleContext;
 
-  return ((await leakedSecretsRule.run(ctx)).checks ?? []).flatMap((check) => check.items ?? []);
+  return ((await leakedSecretsRule.run(ctx)).checks ?? []).flatMap(
+    (check) => check.items ?? []
+  );
 }
 
 describe("leaked-secret source location metadata", () => {
   test("inline items point into the script body and identify its page position", async () => {
     const script = `window.config = { key: "${inlineSecret}" };`;
-    const items = (await run(
+    const items = await run(
       `<html><body><script src="/vendor.js"></script><script>${script}</script></body></html>`
-    ));
-    const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
+    );
+    const item = items.find((candidate) =>
+      candidate.id.startsWith("Stripe Live Key:")
+    );
 
     expect(item?.meta).toMatchObject({
       length: inlineSecret.length,
@@ -59,10 +66,12 @@ describe("leaked-secret source location metadata", () => {
 
   test("external-script offsets use UTF-16 indices in the fetched script body", async () => {
     const content = `const note = "🔥"; export const config = { key: "${externalSecret}" };`;
-    const items = (await run("<html><body>ok</body></html>", [
+    const items = await run("<html><body>ok</body></html>", [
       { url: "https://app.acme.test/app.js", content },
-    ]));
-    const item = items.find((candidate) => candidate.id.startsWith("Stripe Live Key:"));
+    ]);
+    const item = items.find((candidate) =>
+      candidate.id.startsWith("Stripe Live Key:")
+    );
 
     expect(item?.meta).toMatchObject({
       length: externalSecret.length,
@@ -89,7 +98,10 @@ describe("leaked-secret source location metadata", () => {
   });
 
   test("base64 findings point to the encoded source blob", () => {
-    const decoded = JSON.stringify({ padding: "x".repeat(40), key: externalSecret });
+    const decoded = JSON.stringify({
+      padding: "x".repeat(40),
+      key: externalSecret,
+    });
     const encoded = Buffer.from(decoded).toString("base64");
     const script = `window.config = "${encoded}";`;
     const doc = parsePage(
@@ -119,6 +131,8 @@ describe("leaked-secret source location metadata", () => {
       length: externalSecret.length,
       offset: serialized.indexOf(externalSecret),
     });
-    expect(serialized.indexOf(externalSecret)).not.toBe(source.indexOf(externalSecret));
+    expect(serialized.indexOf(externalSecret)).not.toBe(
+      source.indexOf(externalSecret)
+    );
   });
 });

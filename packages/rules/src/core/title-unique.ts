@@ -1,8 +1,10 @@
 // core/title-unique - Unique title check (site-scope)
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { SiteQuery } from "@squirrelscan/core-contracts";
+
 import { crawledPageKeys, redirectedAway } from "@squirrelscan/utils/url";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 import { RegionVariantIndex } from "../shared/region-variants";
@@ -24,7 +26,8 @@ function normalizeTitle(rawTitle: string): string {
 function findDuplicates(
   titleMap: Map<string, string[]>
 ): Array<{ title: string; count: number; urls: string[] }> {
-  const duplicates: Array<{ title: string; count: number; urls: string[] }> = [];
+  const duplicates: Array<{ title: string; count: number; urls: string[] }> =
+    [];
   for (const [title, urls] of titleMap) {
     if (urls.length > 1) {
       duplicates.push({ title, count: urls.length, urls });
@@ -69,7 +72,10 @@ function buildCheck(
 // pages are left out of both paths (pub#457): their titles never meet in search.
 // Reciprocal same-language hreflang variants count as one page on both paths
 // (#489), read from the same parser-extracted alternates.
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const checks: CheckResult[] = [];
   if (siteQuery.pageCount() < 2) {
     checks.push(SKIP_CHECK);
@@ -92,9 +98,11 @@ async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Prom
   const duplicates = findDuplicates(titleMap);
   const variants = await RegionVariantIndex.fromSiteQuery(
     siteQuery,
-    duplicates.flatMap((d) => d.urls),
+    duplicates.flatMap((d) => d.urls)
   );
-  checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
+  checks.push(
+    buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls))
+  );
   return { checks };
 }
 
@@ -146,9 +154,11 @@ export const titleUniqueRule: Rule = {
     const duplicates = findDuplicates(titleMap);
     const variants = RegionVariantIndex.fromPages(
       ctx.site.pages,
-      duplicates.flatMap((d) => d.urls),
+      duplicates.flatMap((d) => d.urls)
     );
-    checks.push(buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls)));
+    checks.push(
+      buildCheck(variants.withoutVariantOnlyGroups(duplicates, (d) => d.urls))
+    );
     return { checks };
   },
 };

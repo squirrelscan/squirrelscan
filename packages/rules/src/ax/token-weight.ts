@@ -1,7 +1,8 @@
 // ax/token-weight - per-page raw-HTML token estimate + text-to-HTML ratio
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Below this, a page is almost certainly a redirect, error stub, or otherwise
 // too small to say anything meaningful about its content-to-markup ratio.
@@ -47,7 +48,8 @@ export const tokenWeightRule: Rule = {
       checks.push({
         name: "token-weight",
         status: "skipped",
-        message: "Page too small (or not a real content page) to assess token weight",
+        message:
+          "Page too small (or not a real content page) to assess token weight",
         skipReason: "below minimum size",
       });
       return { checks };
@@ -57,9 +59,14 @@ export const tokenWeightRule: Rule = {
       checks.push({
         name: "token-weight",
         status: "skipped",
-        message: "Page too small (or not a real content page) to assess token weight",
-        skipReason: ok ? CHECK_NOT_APPLICABLE_SKIP_REASON : "below minimum size",
-        ...(ok ? { details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON } } : {}),
+        message:
+          "Page too small (or not a real content page) to assess token weight",
+        skipReason: ok
+          ? CHECK_NOT_APPLICABLE_SKIP_REASON
+          : "below minimum size",
+        ...(ok
+          ? { details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON } }
+          : {}),
       });
       return { checks };
     }
@@ -87,7 +94,10 @@ export const tokenWeightRule: Rule = {
             label: `~${ratioPct}% of HTML is visible text (~${estimatedTokens.toLocaleString()} est. tokens)`,
           },
         ],
-        details: { textLength: ctx.parsed.content.textLength, htmlLength: ctx.parsed.content.htmlLength },
+        details: {
+          textLength: ctx.parsed.content.textLength,
+          htmlLength: ctx.parsed.content.htmlLength,
+        },
       });
     } else {
       checks.push({
@@ -95,7 +105,10 @@ export const tokenWeightRule: Rule = {
         status: "pass",
         message: `~${ratioPct}% of this page's HTML is visible text, above the 15% floor`,
         value: ratioPct,
-        details: { textLength: ctx.parsed.content.textLength, htmlLength: ctx.parsed.content.htmlLength },
+        details: {
+          textLength: ctx.parsed.content.textLength,
+          htmlLength: ctx.parsed.content.htmlLength,
+        },
       });
     }
 

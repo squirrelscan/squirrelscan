@@ -69,7 +69,6 @@ const CF_CHALLENGE = /__CF\$cv\$params|\/cdn-cgi\/challenge-platform\//i;
 // deploy-version cache-buster; both must stay fingerprint-significant.
 const EPOCH_MS_TOKEN = /\b\d{13}\b/g;
 
-
 const SHOPIFY_EXTENSION_HOST = "cdn.shopify.com";
 const SHOPIFY_EXTENSION_PATH = "/extensions/";
 
@@ -141,7 +140,10 @@ function closeEnd(html: string, endIndex: number): number {
 }
 
 /** Rewrite `html` by replacing disjoint regions, left to right. */
-function spliceRegions(html: string, edits: Array<Region & { text: string }>): string {
+function spliceRegions(
+  html: string,
+  edits: Array<Region & { text: string }>
+): string {
   if (edits.length === 0) return html;
   edits.sort((a, b) => a.start - b.start);
   let out = "";
@@ -232,7 +234,11 @@ function neutralizeScripts(html: string): string {
           // block and an attribute-looking string after it become a tag once the
           // block between them vanishes, and the next pass then treats that
           // manufactured tag as a real element. A placeholder keeps the boundary.
-          edits.push({ start, end: closeEnd(html, parser.endIndex), text: "<!--cf-->" });
+          edits.push({
+            start,
+            end: closeEnd(html, parser.endIndex),
+            text: "<!--cf-->",
+          });
           return;
         }
         // JSON-LD bodies are deliberately in scope for the epoch pass: a payload
@@ -240,13 +246,16 @@ function neutralizeScripts(html: string): string {
         // accepted narrowing, bounded by the 7-day TTL (#991).
         const rewritten = body
           .replace(EPOCH_MS_TOKEN, "0")
-          .replace(IDENTITY_FIELD, (_m, name1, sep1, name2, sep2) =>
-            `"${name1 ?? name2}"${name1 ? sep1 : sep2}""`,
+          .replace(
+            IDENTITY_FIELD,
+            (_m, name1, sep1, name2, sep2) =>
+              `"${name1 ?? name2}"${name1 ? sep1 : sep2}""`
           );
-        if (rewritten !== body) edits.push({ start: bodyStart, end: bodyEnd, text: rewritten });
+        if (rewritten !== body)
+          edits.push({ start: bodyStart, end: bodyEnd, text: rewritten });
       },
     },
-    { lowerCaseTags: true, lowerCaseAttributeNames: true },
+    { lowerCaseTags: true, lowerCaseAttributeNames: true }
   );
   parser.write(html);
   parser.end();
@@ -275,7 +284,10 @@ function sortShopifyRuns(html: string): string {
         if (APP_BLOCK_END.test(text) && blockDepth > 0) {
           blockDepth--;
           if (blockDepth === 0 && blockStart !== null) {
-            appBlocks.push({ start: blockStart, end: closeEnd(html, parser.endIndex) });
+            appBlocks.push({
+              start: blockStart,
+              end: closeEnd(html, parser.endIndex),
+            });
             blockStart = null;
           }
         }
@@ -288,18 +300,28 @@ function sortShopifyRuns(html: string): string {
         // Only a stylesheet. `rel="canonical"` and `rel="preconnect"` pointing
         // at the same host are metadata, not assets, and reordering metadata is
         // outside the accepted narrowing.
-        if (name === "link" && attribs.rel === "stylesheet" && isExtensionAsset(attribs.href)) {
-          assetTags.push({ start: parser.startIndex, end: parser.endIndex + 1 });
+        if (
+          name === "link" &&
+          attribs.rel === "stylesheet" &&
+          isExtensionAsset(attribs.href)
+        ) {
+          assetTags.push({
+            start: parser.startIndex,
+            end: parser.endIndex + 1,
+          });
         }
       },
       onclosetag(name) {
         if (name === "script" && pendingAsset !== null) {
-          assetTags.push({ start: pendingAsset, end: closeEnd(html, parser.endIndex) });
+          assetTags.push({
+            start: pendingAsset,
+            end: closeEnd(html, parser.endIndex),
+          });
           pendingAsset = null;
         }
       },
     },
-    { lowerCaseTags: true, lowerCaseAttributeNames: true },
+    { lowerCaseTags: true, lowerCaseAttributeNames: true }
   );
   parser.write(html);
   parser.end();
@@ -346,7 +368,10 @@ function locateAppBlocks(html: string): Region[] {
       if (APP_BLOCK_END.test(text) && depth > 0) {
         depth--;
         if (depth === 0 && blockStart !== null) {
-          blocks.push({ start: blockStart, end: closeEnd(html, parser.endIndex) });
+          blocks.push({
+            start: blockStart,
+            end: closeEnd(html, parser.endIndex),
+          });
           blockStart = null;
         }
       }

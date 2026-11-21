@@ -1,6 +1,17 @@
-import type { ReportEdgeSource, ReportHost, ReportHostCloudRange, ReportHostEdge, ReportTechnology } from "@squirrelscan/core-contracts";
+import type {
+  ReportEdgeSource,
+  ReportHost,
+  ReportHostCloudRange,
+  ReportHostEdge,
+  ReportTechnology,
+} from "@squirrelscan/core-contracts";
+
+import {
+  countryName,
+  GEOIP_SNAPSHOT,
+  lookupCountry,
+} from "@squirrelscan/utils/geoip";
 import { matchEdgeAsn, matchEdgeRanges } from "@squirrelscan/utils/geoip/edge";
-import { countryName, GEOIP_SNAPSHOT, lookupCountry } from "@squirrelscan/utils/geoip";
 
 /**
  * The technology fingerprints that mean "a CDN or edge platform answers for this site" (#10, #1807), each
@@ -37,7 +48,8 @@ const TECH_PROVIDER: Readonly<Record<string, string>> = {
 const EDGE_HOSTED_PROVIDERS = new Set(["vercel", "netlify"]);
 const EDGE_HOSTED_TECHNOLOGIES = new Set(["cloudflare-pages"]);
 
-type TechInput = Pick<ReportTechnology, "id"> & Partial<Pick<ReportTechnology, "name" | "category" | "detectedBy">>;
+type TechInput = Pick<ReportTechnology, "id"> &
+  Partial<Pick<ReportTechnology, "name" | "category" | "detectedBy">>;
 
 export interface HostProbe {
   host: string;
@@ -47,7 +59,9 @@ export interface HostProbe {
 }
 
 /** The detected edge provider, if technology detection found one of the supported ones. */
-export function detectedEdge(technologies: ReadonlyArray<TechInput> | undefined): { id: string; name: string } | null {
+export function detectedEdge(
+  technologies: ReadonlyArray<TechInput> | undefined
+): { id: string; name: string } | null {
   for (const t of technologies ?? []) {
     const name = EDGE_TECHNOLOGY_IDS[t.id];
     if (name) return { id: t.id, name };
@@ -55,7 +69,11 @@ export function detectedEdge(technologies: ReadonlyArray<TechInput> | undefined)
   return null;
 }
 
-const SOURCE_ORDER: Record<ReportEdgeSource, number> = { header: 0, "ip-range": 1, asn: 2 };
+const SOURCE_ORDER: Record<ReportEdgeSource, number> = {
+  header: 0,
+  "ip-range": 1,
+  asn: 2,
+};
 
 /**
  * The edge of the audited host from three sources, strongest first: platform response headers (the existing
@@ -68,34 +86,67 @@ const SOURCE_ORDER: Record<ReportEdgeSource, number> = { header: 0, "ip-range": 
  */
 export function detectEdge(
   addresses: ReadonlyArray<string>,
-  technologies: ReadonlyArray<TechInput> | undefined,
+  technologies: ReadonlyArray<TechInput> | undefined
 ): ReportHostEdge | null {
-  interface Hit { id: string; name: string; source: ReportEdgeSource; address?: string; asn?: number }
+  interface Hit {
+    id: string;
+    name: string;
+    source: ReportEdgeSource;
+    address?: string;
+    asn?: number;
+  }
   const hits: Hit[] = [];
   for (const t of technologies ?? []) {
     const id = TECH_PROVIDER[t.id];
     if (!id) continue;
-    if (t.detectedBy !== undefined && !t.detectedBy.startsWith("header:")) continue;
+    if (t.detectedBy !== undefined && !t.detectedBy.startsWith("header:"))
+      continue;
     hits.push({ id, name: EDGE_TECHNOLOGY_IDS[t.id]!, source: "header" });
   }
   for (const address of addresses) {
     for (const m of matchEdgeRanges(address)) {
-      if (!m.broad) hits.push({ id: m.provider, name: m.name, source: "ip-range", address });
+      if (!m.broad)
+        hits.push({
+          id: m.provider,
+          name: m.name,
+          source: "ip-range",
+          address,
+        });
     }
     const a = matchEdgeAsn(address);
-    if (a) hits.push({ id: a.provider, name: a.name, source: "asn", address, asn: a.asn });
+    if (a)
+      hits.push({
+        id: a.provider,
+        name: a.name,
+        source: "asn",
+        address,
+        asn: a.asn,
+      });
   }
   if (hits.length === 0) return null;
   hits.sort((x, y) => SOURCE_ORDER[x.source] - SOURCE_ORDER[y.source]);
   const best = hits[0]!;
   const same = hits.filter((h) => h.id === best.id);
-  const matched = [...new Set(same.map((h) => h.source))].sort((x, y) => SOURCE_ORDER[x] - SOURCE_ORDER[y]);
+  const matched = [...new Set(same.map((h) => h.source))].sort(
+    (x, y) => SOURCE_ORDER[x] - SOURCE_ORDER[y]
+  );
   const lead = same.find((h) => h.source === best.source)!;
-  const others = new Map<string, { id: string; name: string; source: ReportEdgeSource }>();
-  for (const h of hits) if (h.id !== best.id && !others.has(h.id)) others.set(h.id, { id: h.id, name: h.name, source: h.source });
+  const others = new Map<
+    string,
+    { id: string; name: string; source: ReportEdgeSource }
+  >();
+  for (const h of hits)
+    if (h.id !== best.id && !others.has(h.id))
+      others.set(h.id, { id: h.id, name: h.name, source: h.source });
   const edgeHosted =
-    EDGE_HOSTED_PROVIDERS.has(best.id) || (technologies ?? []).some((t) => EDGE_HOSTED_TECHNOLOGIES.has(t.id) && best.id === TECH_PROVIDER[t.id]);
-  const hosting = (technologies ?? []).find((t) => t.category === "hosting" && !(t.id in EDGE_TECHNOLOGY_IDS));
+    EDGE_HOSTED_PROVIDERS.has(best.id) ||
+    (technologies ?? []).some(
+      (t) =>
+        EDGE_HOSTED_TECHNOLOGIES.has(t.id) && best.id === TECH_PROVIDER[t.id]
+    );
+  const hosting = (technologies ?? []).find(
+    (t) => t.category === "hosting" && !(t.id in EDGE_TECHNOLOGY_IDS)
+  );
   return {
     id: best.id,
     name: best.name,
@@ -107,7 +158,11 @@ export function detectEdge(
     origin: edgeHosted
       ? { status: "edge-hosted" }
       : hosting
-        ? { status: "identified", id: hosting.id, name: hosting.name ?? hosting.id }
+        ? {
+            status: "identified",
+            id: hosting.id,
+            name: hosting.name ?? hosting.id,
+          }
         : { status: "unknown" },
     ...(others.size > 0 ? { alsoMatched: [...others.values()] } : {}),
   };
@@ -117,7 +172,9 @@ export function detectEdge(
  * The first resolved address that a provider's whole-cloud range list contains (Google Cloud's cloud.json).
  * This is provider information for the report only: it never sets `edge`, and it never labels the country.
  */
-export function cloudRangeOf(addresses: ReadonlyArray<string>): ReportHostCloudRange | undefined {
+export function cloudRangeOf(
+  addresses: ReadonlyArray<string>
+): ReportHostCloudRange | undefined {
   for (const address of addresses) {
     const m = matchEdgeRanges(address).find((r) => r.broad);
     if (m) return { id: m.provider, name: m.name, address };
@@ -132,7 +189,7 @@ export function cloudRangeOf(addresses: ReadonlyArray<string>): ReportHostCloudR
  */
 export async function buildReportHost(
   probe: HostProbe,
-  technologies: ReadonlyArray<TechInput> | undefined,
+  technologies: ReadonlyArray<TechInput> | undefined
 ): Promise<ReportHost | undefined> {
   const address = probe.ipv4[0] ?? probe.ipv6[0];
   if (!address) return undefined;

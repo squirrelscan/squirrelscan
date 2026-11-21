@@ -1,19 +1,28 @@
+import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
+
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
 import { Effect } from "effect";
 
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, ungated } from "./deadline";
-import { noteRefusal } from "./refusals";
-
 import type { PhaseBudget, ProbeGate } from "./deadline";
-import type { MarkdownProbeData } from "@squirrelscan/core-contracts";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  ungated,
+} from "./deadline";
+import { noteRefusal } from "./refusals";
 
 const PROBE_TIMEOUT_MS = 30_000;
 
-const isMarkdown = (ct: string | null): boolean => ct != null && /markdown/i.test(ct);
+const isMarkdown = (ct: string | null): boolean =>
+  ct != null && /markdown/i.test(ct);
 
 // Parse a `Link:` response header for a `rel="alternate"; type="text/markdown"`
 // entry and resolve it to an absolute URL. Returns null if none matches.
-export function parseAlternateMarkdownLink(linkHeader: string | null, baseUrl: string): string | null {
+export function parseAlternateMarkdownLink(
+  linkHeader: string | null,
+  baseUrl: string
+): string | null {
   if (!linkHeader) return null;
   for (const entry of linkHeader.split(/,(?=\s*<)/)) {
     const urlMatch = entry.match(/<([^>]+)>/);
@@ -63,7 +72,7 @@ async function probeOne(
   accept: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-  keepEveryStatus = false,
+  keepEveryStatus = false
 ): Promise<ProbeResult | null> {
   const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
   if (timeoutMs === null) return null;
@@ -71,7 +80,13 @@ async function probeOne(
     return await safeFetchWithDeadline(
       url,
       // The negotiation IS the Accept, so it is laid last (repo#3346).
-      { headers: mergeHeaderRecords({ "User-Agent": userAgent }, customHeaders, { Accept: accept }) },
+      {
+        headers: mergeHeaderRecords(
+          { "User-Agent": userAgent },
+          customHeaders,
+          { Accept: accept }
+        ),
+      },
       timeoutMs,
       async (res) => {
         if (noteRefusal(budget?.refusals, url, "markdown", res)) {
@@ -81,7 +96,12 @@ async function probeOne(
         // A 404/410 is an answer (no Markdown here). A 5xx or other non-ok status is
         // no answer, so it is not stored as "no Markdown" (#1760), except on the
         // strict probe, where every status but a refusal is its answer.
-        if (!res.ok && res.status !== 404 && res.status !== 410 && !keepEveryStatus) {
+        if (
+          !res.ok &&
+          res.status !== 404 &&
+          res.status !== 410 &&
+          !keepEveryStatus
+        ) {
           await res.body?.cancel().catch(() => {});
           return null;
         }
@@ -93,12 +113,15 @@ async function probeOne(
           vary: res.headers.get("vary"),
           markdownTokens: res.headers.get("x-markdown-tokens"),
           originalTokens: res.headers.get("x-original-tokens"),
-          alternateMarkdownUrl: parseAlternateMarkdownLink(res.headers.get("link"), url),
+          alternateMarkdownUrl: parseAlternateMarkdownLink(
+            res.headers.get("link"),
+            url
+          ),
         };
         await res.body?.cancel().catch(() => {});
         return result;
       },
-      budget?.egress,
+      budget?.egress
     );
   } catch {
     return null;
@@ -120,20 +143,39 @@ export function probeMarkdownResponse(
   userAgent: string,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-  gate: ProbeGate = ungated,
+  gate: ProbeGate = ungated
 ): Effect.Effect<MarkdownProbeData | null, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const mdUrl = new URL("/index.md", baseUrl).toString();
   return Effect.promise(async () => {
     const [negAnswer, strictAnswer, mdAnswer] = await Promise.all([
       gate(homeUrl, () =>
-        probeOne(homeUrl, userAgent, "text/markdown, text/x-markdown, */*", customHeaders, budget),
+        probeOne(
+          homeUrl,
+          userAgent,
+          "text/markdown, text/x-markdown, */*",
+          customHeaders,
+          budget
+        )
       ),
       gate(homeUrl, () =>
-        probeOne(homeUrl, userAgent, STRICT_MARKDOWN_ACCEPT, customHeaders, budget, true),
+        probeOne(
+          homeUrl,
+          userAgent,
+          STRICT_MARKDOWN_ACCEPT,
+          customHeaders,
+          budget,
+          true
+        )
       ),
       gate(mdUrl, () =>
-        probeOne(mdUrl, userAgent, "text/markdown, text/plain, */*", customHeaders, budget),
+        probeOne(
+          mdUrl,
+          userAgent,
+          "text/markdown, text/plain, */*",
+          customHeaders,
+          budget
+        )
       ),
     ]);
     const neg = negAnswer ?? unreachableProbe();
@@ -141,10 +183,14 @@ export function probeMarkdownResponse(
     // A strict 5xx only counts when the lenient probe answered (see above). With
     // no lenient answer it is no answer either: the strict probe is unanswered.
     const strict =
-      strictAnswer && strictAnswer.status !== null && strictAnswer.status >= 500 && !negAnswer
+      strictAnswer &&
+      strictAnswer.status !== null &&
+      strictAnswer.status >= 500 &&
+      !negAnswer
         ? null
         : strictAnswer;
-    const strictServesMarkdown = strict !== null && strict.ok && isMarkdown(strict.contentType);
+    const strictServesMarkdown =
+      strict !== null && strict.ok && isMarkdown(strict.contentType);
     const data: MarkdownProbeData = {
       negotiatedUrl: homeUrl,
       negotiatedContentType: neg.contentType,

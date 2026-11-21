@@ -31,7 +31,8 @@ describe("readPeerCertificate", () => {
 
   test("reads SAN entries, issuer, dates and the RSA size", () => {
     const certificate = readPeerCertificate({
-      subjectaltname: "DNS:Example.com, DNS:*.example.com, IP Address:127.0.0.1",
+      subjectaltname:
+        "DNS:Example.com, DNS:*.example.com, IP Address:127.0.0.1",
       issuer: { O: "Test CA", CN: "Test Root" },
       valid_from: "Jan  1 00:00:00 2025 GMT",
       valid_to: "Jan  1 00:00:00 2099 GMT",
@@ -62,26 +63,57 @@ describe("readPeerCertificate", () => {
   });
 
   test("key type, size, curve and signature come from the extras, or from the peer certificate's own fields (#1259)", () => {
-    const base = { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" };
-    expect(readPeerCertificate({ ...base, bits: 256, asn1Curve: "prime256v1", nistCurve: "P-256" })).toMatchObject({
+    const base = {
+      issuer: { CN: "CA" },
+      valid_from: "Jan  1 00:00:00 2025 GMT",
+      valid_to: "Jan  1 00:00:00 2099 GMT",
+    };
+    expect(
+      readPeerCertificate({
+        ...base,
+        bits: 256,
+        asn1Curve: "prime256v1",
+        nistCurve: "P-256",
+      })
+    ).toMatchObject({
       keyType: "ecdsa",
       keyBits: 256,
       curve: "P-256",
     });
-    const ed = readPeerCertificate({ ...base, bits: 256 }, { keyType: "ed25519", signatureAlgorithm: "ED25519" });
-    expect(ed).toMatchObject({ keyType: "ed25519", signatureAlgorithm: "ED25519" });
+    const ed = readPeerCertificate(
+      { ...base, bits: 256 },
+      { keyType: "ed25519", signatureAlgorithm: "ED25519" }
+    );
+    expect(ed).toMatchObject({
+      keyType: "ed25519",
+      signatureAlgorithm: "ED25519",
+    });
     expect(ed?.keyBits).toBeUndefined();
-    expect(readPeerCertificate({ ...base }, { keyType: "dsa", keyBits: 1024 })).toMatchObject({ keyType: "dsa", keyBits: 1024 });
-    expect(readPeerCertificate({ ...base }, { keyType: "ec" })?.keyType).toBe("ecdsa");
-    expect(readPeerCertificate({ ...base }, { keyType: "x448" })?.keyType).toBe("other");
+    expect(
+      readPeerCertificate({ ...base }, { keyType: "dsa", keyBits: 1024 })
+    ).toMatchObject({ keyType: "dsa", keyBits: 1024 });
+    expect(readPeerCertificate({ ...base }, { keyType: "ec" })?.keyType).toBe(
+      "ecdsa"
+    );
+    expect(readPeerCertificate({ ...base }, { keyType: "x448" })?.keyType).toBe(
+      "other"
+    );
     // Nothing known: no key facts at all.
     expect(readPeerCertificate({ ...base })).not.toHaveProperty("keyType");
   });
 
   test("the signature algorithm and curve are bounded and lose control characters", () => {
     const certificate = readPeerCertificate(
-      { issuer: { CN: "CA" }, valid_from: "Jan  1 00:00:00 2025 GMT", valid_to: "Jan  1 00:00:00 2099 GMT" },
-      { keyType: "rsa", keyBits: 2048, signatureAlgorithm: `sha1\u001b[31mWith${"x".repeat(200)}` },
+      {
+        issuer: { CN: "CA" },
+        valid_from: "Jan  1 00:00:00 2025 GMT",
+        valid_to: "Jan  1 00:00:00 2099 GMT",
+      },
+      {
+        keyType: "rsa",
+        keyBits: 2048,
+        signatureAlgorithm: `sha1\u001b[31mWith${"x".repeat(200)}`,
+      }
     );
     expect(certificate?.signatureAlgorithm).not.toContain("\u001b");
     expect(certificate?.signatureAlgorithm?.length).toBeLessThanOrEqual(60);
@@ -114,16 +146,25 @@ describe("authorizationErrorCode", () => {
   test("reads a code from an Error, a string, or nothing", () => {
     expect(authorizationErrorCode(undefined)).toBeUndefined();
     expect(authorizationErrorCode(null)).toBeUndefined();
-    expect(authorizationErrorCode("DEPTH_ZERO_SELF_SIGNED_CERT")).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
-    expect(authorizationErrorCode(Object.assign(new Error("x"), { code: "CERT_HAS_EXPIRED" }))).toBe(
-      "CERT_HAS_EXPIRED",
+    expect(authorizationErrorCode("DEPTH_ZERO_SELF_SIGNED_CERT")).toBe(
+      "DEPTH_ZERO_SELF_SIGNED_CERT"
     );
-    expect(authorizationErrorCode(new Error("plain message"))).toBe("plain message");
+    expect(
+      authorizationErrorCode(
+        Object.assign(new Error("x"), { code: "CERT_HAS_EXPIRED" })
+      )
+    ).toBe("CERT_HAS_EXPIRED");
+    expect(authorizationErrorCode(new Error("plain message"))).toBe(
+      "plain message"
+    );
   });
 });
 
 describe("certificateProblems", () => {
-  const served = (trustError?: string, names = ["example.com"]): Extract<TlsProbe, { kind: "certificate" }> => ({
+  const served = (
+    trustError?: string,
+    names = ["example.com"]
+  ): Extract<TlsProbe, { kind: "certificate" }> => ({
     kind: "certificate",
     certificate: {
       names,
@@ -137,21 +178,39 @@ describe("certificateProblems", () => {
 
   test("maps the runtime's chain verdict to a problem", () => {
     expect(certificateProblems(served(), "example.com", NOW)).toEqual([]);
-    expect(certificateProblems(served("DEPTH_ZERO_SELF_SIGNED_CERT"), "example.com", NOW)).toEqual([
-      { kind: "self-signed" },
-    ]);
-    expect(certificateProblems(served("UNABLE_TO_VERIFY_LEAF_SIGNATURE"), "example.com", NOW)).toEqual([
-      { kind: "incomplete-chain" },
-    ]);
-    expect(certificateProblems(served("SELF_SIGNED_CERT_IN_CHAIN"), "example.com", NOW)).toEqual([
-      { kind: "untrusted-root", code: "SELF_SIGNED_CERT_IN_CHAIN" },
-    ]);
+    expect(
+      certificateProblems(
+        served("DEPTH_ZERO_SELF_SIGNED_CERT"),
+        "example.com",
+        NOW
+      )
+    ).toEqual([{ kind: "self-signed" }]);
+    expect(
+      certificateProblems(
+        served("UNABLE_TO_VERIFY_LEAF_SIGNATURE"),
+        "example.com",
+        NOW
+      )
+    ).toEqual([{ kind: "incomplete-chain" }]);
+    expect(
+      certificateProblems(
+        served("SELF_SIGNED_CERT_IN_CHAIN"),
+        "example.com",
+        NOW
+      )
+    ).toEqual([{ kind: "untrusted-root", code: "SELF_SIGNED_CERT_IN_CHAIN" }]);
   });
 
   test("a name mismatch is reported once, from the names, not again from the chain", () => {
     expect(
-      certificateProblems(served("ERR_TLS_CERT_ALTNAME_INVALID", ["other.test"]), "example.com", NOW),
-    ).toEqual([{ kind: "hostname", hostname: "example.com", names: ["other.test"] }]);
+      certificateProblems(
+        served("ERR_TLS_CERT_ALTNAME_INVALID", ["other.test"]),
+        "example.com",
+        NOW
+      )
+    ).toEqual([
+      { kind: "hostname", hostname: "example.com", names: ["other.test"] },
+    ]);
   });
 });
 
@@ -175,8 +234,12 @@ describe("certificateCovers", () => {
 
   test("an IPv6 SAN matches the address in any spelling", () => {
     // The runtime prints an IP SAN expanded and uppercase; a URL holds it compressed.
-    expect(certificateCovers(["2001:DB8:0:0:0:0:0:1"], "2001:db8::1")).toBe(true);
-    expect(certificateCovers(["2001:db8::1"], "[2001:DB8:0:0:0:0:0:1]")).toBe(true);
+    expect(certificateCovers(["2001:DB8:0:0:0:0:0:1"], "2001:db8::1")).toBe(
+      true
+    );
+    expect(certificateCovers(["2001:db8::1"], "[2001:DB8:0:0:0:0:0:1]")).toBe(
+      true
+    );
     expect(certificateCovers(["2001:db8::1"], "2001:db8::2")).toBe(false);
   });
 
@@ -203,26 +266,43 @@ describe("tlsFailureCause", () => {
     const cause = tlsFailureCause(
       certAt(new Date("2020-01-15T00:00:00Z"), ["example.com"]),
       "example.com",
-      NOW,
+      NOW
     );
     expect(cause).toBe("certificate has expired on 2020-01-15");
   });
 
   test("names the hostname the certificate does not cover", () => {
-    const probe = { ...certAt(new Date("2099-01-01T00:00:00Z"), ["other.test"]), trustError: "ERR_TLS_CERT_ALTNAME_INVALID" };
+    const probe = {
+      ...certAt(new Date("2099-01-01T00:00:00Z"), ["other.test"]),
+      trustError: "ERR_TLS_CERT_ALTNAME_INVALID",
+    };
     expect(tlsFailureCause(probe, "example.com", NOW)).toBe(
-      "hostname/IP does not match: the certificate does not cover example.com",
+      "hostname/IP does not match: the certificate does not cover example.com"
     );
   });
 
   test("names a missing intermediate", () => {
-    const probe = { ...certAt(new Date("2099-01-01T00:00:00Z")), trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE" };
-    expect(tlsFailureCause(probe, "example.com", NOW)).toContain("did not send its intermediate");
+    const probe = {
+      ...certAt(new Date("2099-01-01T00:00:00Z")),
+      trustError: "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    };
+    expect(tlsFailureCause(probe, "example.com", NOW)).toContain(
+      "did not send its intermediate"
+    );
   });
 
   test("returns nothing when the handshake found no problem or could not look", () => {
-    expect(tlsFailureCause({ kind: "unavailable", reason: "no tls" }, "example.com", NOW)).toBeUndefined();
-    const valid = { ...certAt(new Date("2099-01-01T00:00:00Z")), trusted: true };
+    expect(
+      tlsFailureCause(
+        { kind: "unavailable", reason: "no tls" },
+        "example.com",
+        NOW
+      )
+    ).toBeUndefined();
+    const valid = {
+      ...certAt(new Date("2099-01-01T00:00:00Z")),
+      trusted: true,
+    };
     expect(tlsFailureCause(valid, "example.com", NOW)).toBeUndefined();
   });
 });
@@ -239,8 +319,12 @@ describe("shared packages open no raw socket", () => {
   // nothing. Tests are not shipped, and their fixture servers are sockets.
   const packagesRoot = join(import.meta.dir, "..", "..");
   const TLS_PROBE_FILE = "tls-probe/src/index.ts";
-  const files = [...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({ cwd: packagesRoot })].filter(
-    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE,
+  const files = [
+    ...new Bun.Glob("*/src/**/*.{ts,tsx,js,mjs,cjs}").scanSync({
+      cwd: packagesRoot,
+    }),
+  ].filter(
+    (file) => !/\.test\.[cm]?[jt]sx?$/.test(file) && file !== TLS_PROBE_FILE
   );
   const SOCKET_MODULE =
     /(?:(?:import|export)\s*(\{[^}]*\}|\*\s+as\s+\w+|\*|\w+)?\s*(?:from\s*)?|import\s*\(\s*|require\s*\(\s*)["'](?:node:)?(tls|net|http2|dgram)["']/g;
@@ -256,14 +340,21 @@ describe("shared packages open no raw socket", () => {
       found.push(match[0]);
     }
     for (const match of text.matchAll(BUN_SOCKET_IMPORT)) {
-      if (/\b(?:connect|listen|udpSocket)\b/.test(match[1]!)) found.push(match[0]);
+      if (/\b(?:connect|listen|udpSocket)\b/.test(match[1]!))
+        found.push(match[0]);
     }
     for (const match of text.matchAll(BUN_SOCKET_CALL)) found.push(match[0]);
     return found;
   }
 
   test("the scan sees the shared packages", () => {
-    for (const pkg of ["utils", "rules", "crawler", "audit-engine", "fetchers"]) {
+    for (const pkg of [
+      "utils",
+      "rules",
+      "crawler",
+      "audit-engine",
+      "fetchers",
+    ]) {
       expect(files.some((file) => file.startsWith(`${pkg}/`))).toBe(true);
     }
   });
@@ -285,7 +376,9 @@ describe("shared packages open no raw socket", () => {
       expect(offendersIn(source)).not.toEqual([]);
     }
     expect(offendersIn('import { isIP } from "node:net";')).toEqual([]);
-    expect(offendersIn('import type { TLSSocket } from "node:tls";')).toEqual([]);
+    expect(offendersIn('import type { TLSSocket } from "node:tls";')).toEqual(
+      []
+    );
   });
 
   test("the probe is the only socket site and stays vetted", () => {
@@ -297,8 +390,12 @@ describe("shared packages open no raw socket", () => {
   test("no shared package opens one", () => {
     const offenders: string[] = [];
     for (const file of files) {
-      for (const found of offendersIn(readFileSync(join(packagesRoot, file), "utf8"))) {
-        offenders.push(`${relative(packagesRoot, join(packagesRoot, file))}: ${found}`);
+      for (const found of offendersIn(
+        readFileSync(join(packagesRoot, file), "utf8")
+      )) {
+        offenders.push(
+          `${relative(packagesRoot, join(packagesRoot, file))}: ${found}`
+        );
       }
     }
     expect(offenders).toEqual([]);
@@ -306,15 +403,26 @@ describe("shared packages open no raw socket", () => {
 
   test("no shared package imports the probe, and only its own package holds it", () => {
     const importers = files.filter((file) =>
-      /@squirrelscan\/tls-probe|tls-probe\/src|\.\/tls-probe/.test(readFileSync(join(packagesRoot, file), "utf8")),
+      /@squirrelscan\/tls-probe|tls-probe\/src|\.\/tls-probe/.test(
+        readFileSync(join(packagesRoot, file), "utf8")
+      )
     );
     expect(importers).toEqual([]);
-    for (const pkg of [...new Bun.Glob("*/package.json").scanSync({ cwd: packagesRoot })]) {
+    for (const pkg of [
+      ...new Bun.Glob("*/package.json").scanSync({ cwd: packagesRoot }),
+    ]) {
       if (pkg === "tls-probe/package.json") continue;
-      const manifest = JSON.parse(readFileSync(join(packagesRoot, pkg), "utf8"));
-      expect({ pkg, dep: manifest.dependencies?.["@squirrelscan/tls-probe"] }).toEqual({ pkg, dep: undefined });
+      const manifest = JSON.parse(
+        readFileSync(join(packagesRoot, pkg), "utf8")
+      );
+      expect({
+        pkg,
+        dep: manifest.dependencies?.["@squirrelscan/tls-probe"],
+      }).toEqual({ pkg, dep: undefined });
     }
-    const manifest = JSON.parse(readFileSync(join(packagesRoot, "fetchers/package.json"), "utf8"));
+    const manifest = JSON.parse(
+      readFileSync(join(packagesRoot, "fetchers/package.json"), "utf8")
+    );
     expect(manifest.exports["./tls-probe"]).toBeUndefined();
   });
 });

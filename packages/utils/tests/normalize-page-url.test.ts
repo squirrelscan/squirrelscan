@@ -23,15 +23,25 @@ describe("normalizePageUrl", () => {
   });
 
   test("keeps parameter order verbatim (the crawler's frontier entries differ)", () => {
-    expect(normalizePageUrl("https://x.test/p?a=1&b=2")).toBe("https://x.test/p?a=1&b=2");
-    expect(normalizePageUrl("https://x.test/p?b=2&a=1")).toBe("https://x.test/p?b=2&a=1");
+    expect(normalizePageUrl("https://x.test/p?a=1&b=2")).toBe(
+      "https://x.test/p?a=1&b=2"
+    );
+    expect(normalizePageUrl("https://x.test/p?b=2&a=1")).toBe(
+      "https://x.test/p?b=2&a=1"
+    );
   });
 
   test("otherwise matches normalizeUrl: lowercased scheme/host, kept path case, no trailing slash, no fragment", () => {
-    expect(normalizePageUrl("HTTPS://X.TEST/About/")).toBe("https://x.test/About");
-    expect(normalizePageUrl("https://x.test/p#section")).toBe("https://x.test/p");
+    expect(normalizePageUrl("HTTPS://X.TEST/About/")).toBe(
+      "https://x.test/About"
+    );
+    expect(normalizePageUrl("https://x.test/p#section")).toBe(
+      "https://x.test/p"
+    );
     expect(normalizePageUrl("https://x.test/")).toBe("https://x.test/");
-    expect(normalizePageUrl("https://x.test/p?id=1#frag")).toBe("https://x.test/p?id=1");
+    expect(normalizePageUrl("https://x.test/p?id=1#frag")).toBe(
+      "https://x.test/p?id=1"
+    );
   });
 
   test("returns unparseable input unchanged", () => {
@@ -43,7 +53,7 @@ describe("stripUrlQuery", () => {
   test("recovers the pre-#2063 spelling of a page identity", () => {
     expect(stripUrlQuery("https://x.test/p?id=1")).toBe("https://x.test/p");
     expect(stripUrlQuery(normalizePageUrl("https://x.test/p?id=1"))).toBe(
-      normalizeUrl("https://x.test/p?id=1"),
+      normalizeUrl("https://x.test/p?id=1")
     );
   });
 

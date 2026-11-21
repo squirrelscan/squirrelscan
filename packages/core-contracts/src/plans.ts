@@ -246,9 +246,9 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
  * internal plan leaks into pricing or a plan picker the moment it is added.
  * Ordered low → high tier.
  */
-export const SELF_SERVE_PLAN_IDS: readonly PlanId[] = (Object.keys(PLANS) as PlanId[]).filter(
-  (id) => PLANS[id].selfServe,
-);
+export const SELF_SERVE_PLAN_IDS: readonly PlanId[] = (
+  Object.keys(PLANS) as PlanId[]
+).filter((id) => PLANS[id].selfServe);
 
 // Accepts a raw string (DB columns are plain text) and falls back to the free
 // plan for any unknown id — callers never need to cast or null-check.
@@ -311,12 +311,20 @@ const FALLBACK_SCHEDULE_LIMITS: {
  * granting daily audits on every site.
  */
 export function resolvePlanScheduleLimits(
-  plan: Pick<PlanDefinition, "maxScheduledWebsites" | "scheduleFrequencies"> | null | undefined,
-): { maxScheduledWebsites: number; scheduleFrequencies: readonly ScheduledAuditFrequency[] } {
+  plan:
+    | Pick<PlanDefinition, "maxScheduledWebsites" | "scheduleFrequencies">
+    | null
+    | undefined
+): {
+  maxScheduledWebsites: number;
+  scheduleFrequencies: readonly ScheduledAuditFrequency[];
+} {
   return {
     maxScheduledWebsites:
-      plan?.maxScheduledWebsites ?? FALLBACK_SCHEDULE_LIMITS.maxScheduledWebsites,
-    scheduleFrequencies: plan?.scheduleFrequencies ?? FALLBACK_SCHEDULE_LIMITS.scheduleFrequencies,
+      plan?.maxScheduledWebsites ??
+      FALLBACK_SCHEDULE_LIMITS.maxScheduledWebsites,
+    scheduleFrequencies:
+      plan?.scheduleFrequencies ?? FALLBACK_SCHEDULE_LIMITS.scheduleFrequencies,
   };
 }
 
@@ -331,12 +339,17 @@ export function planMaxScheduledWebsites(planId: string): number {
 }
 
 /** The cadences a plan funds, most frequent first. Never undefined. */
-export function planScheduleFrequencies(planId: string): readonly ScheduledAuditFrequency[] {
+export function planScheduleFrequencies(
+  planId: string
+): readonly ScheduledAuditFrequency[] {
   return resolvePlanScheduleLimits(getPlan(planId)).scheduleFrequencies;
 }
 
 /** True when `count` scheduled websites is at or over the plan's cap. Uncapped (-1) is never full. */
-export function scheduledWebsiteCapReached(planId: string, count: number): boolean {
+export function scheduledWebsiteCapReached(
+  planId: string,
+  count: number
+): boolean {
   const cap = planMaxScheduledWebsites(planId);
   return cap >= 0 && count >= cap;
 }
@@ -357,8 +370,11 @@ export function scheduledWebsiteCapReached(planId: string, count: number): boole
  */
 export function planScheduleSummary(planId: string): string {
   const plan = getPlan(planId);
-  const { maxScheduledWebsites: cap, scheduleFrequencies } = resolvePlanScheduleLimits(plan);
-  const cadence = SCHEDULE_FREQUENCIES.find((f) => scheduleFrequencies.includes(f));
+  const { maxScheduledWebsites: cap, scheduleFrequencies } =
+    resolvePlanScheduleLimits(plan);
+  const cadence = SCHEDULE_FREQUENCIES.find((f) =>
+    scheduleFrequencies.includes(f)
+  );
   // No cadence, or no slots, is the same product answer as no capability: this
   // plan does not schedule. Plain words rather than a dash — the cell is public
   // copy sitting beside real values in the same column.
@@ -376,7 +392,7 @@ const SCHEDULE_LABEL: Record<ScheduledAuditFrequency, string> = {
 
 export function planAllowsScheduleFrequency(
   planId: string,
-  frequency: ScheduledAuditFrequency,
+  frequency: ScheduledAuditFrequency
 ): boolean {
   return planScheduleFrequencies(planId).includes(frequency);
 }
@@ -394,7 +410,7 @@ export function planAllowsScheduleFrequency(
  */
 export function clampScheduleFrequency(
   planId: string,
-  requested: ScheduledAuditFrequency,
+  requested: ScheduledAuditFrequency
 ): ScheduledAuditFrequency {
   const allowed = planScheduleFrequencies(planId);
   if (allowed.includes(requested)) return requested;

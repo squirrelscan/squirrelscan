@@ -3,15 +3,16 @@
 // carried every off-domain sitemap URL: 250,000 items and affected pages, most
 // of an 80 MB report. Small lists are unchanged.
 
+import type { SitemapDiscovery } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { SitemapDiscovery } from "@squirrelscan/core-contracts";
+import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
 
 import { sitemapCoverageRule } from "../src/crawl/sitemap-coverage";
 import { sitemapDomainRule } from "../src/crawl/sitemap-domain";
 import { sitemapValidRule } from "../src/crawl/sitemap-valid";
 import { URL_ITEM_SAMPLE, sampleUrlItems } from "../src/shared/sample-items";
-import type { CheckResult, ParsedPage, Rule, RuleContext } from "../src/types";
 
 const BASE = "https://example.com";
 
@@ -19,7 +20,9 @@ function urls(count: number, origin: string): string[] {
   return Array.from({ length: count }, (_, i) => `${origin}/p/${i}`);
 }
 
-function sitemaps(over: Partial<SitemapDiscovery> & { locs?: string[] }): SitemapDiscovery {
+function sitemaps(
+  over: Partial<SitemapDiscovery> & { locs?: string[] }
+): SitemapDiscovery {
   const locs = over.locs ?? [];
   return {
     discovered: [
@@ -36,18 +39,32 @@ function sitemaps(over: Partial<SitemapDiscovery> & { locs?: string[] }): Sitema
     totalUrls: over.totalUrls ?? locs.length,
     orphanPages: over.orphanPages ?? [],
     missingPages: over.missingPages ?? [],
-    ...(over.orphanPagesTotal !== undefined ? { orphanPagesTotal: over.orphanPagesTotal } : {}),
+    ...(over.orphanPagesTotal !== undefined
+      ? { orphanPagesTotal: over.orphanPagesTotal }
+      : {}),
     failed: [],
   };
 }
 
 function check(rule: Rule, sm: SitemapDiscovery, name: string): CheckResult {
   const ctx = {
-    page: { url: `${BASE}/`, html: "", statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: `${BASE}/`,
+      html: "",
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: {} as ParsedPage,
     site: {
       baseUrl: BASE,
-      pages: [{ url: `${BASE}/`, statusCode: 200, parsed: { meta: {} } as unknown as ParsedPage }],
+      pages: [
+        {
+          url: `${BASE}/`,
+          statusCode: 200,
+          parsed: { meta: {} } as unknown as ParsedPage,
+        },
+      ],
       robotsTxt: null,
       sitemaps: sm,
       crawlLimits: { pagesCrawled: 1, maxPages: 100 },
@@ -71,11 +88,17 @@ describe("sampleUrlItems", () => {
     const items = urls(120, BASE).map((id) => ({ id }));
     const { items: sample, truncation } = sampleUrlItems(items);
     expect(sample).toEqual(items.slice(0, URL_ITEM_SAMPLE));
-    expect(truncation).toEqual({ additional: 120 - URL_ITEM_SAMPLE, pagesTruncated: 120 });
+    expect(truncation).toEqual({
+      additional: 120 - URL_ITEM_SAMPLE,
+      pagesTruncated: 120,
+    });
   });
 
   test("stamps the distinct URL count, not the item count, as the page total", () => {
-    const items = [...Array.from({ length: 70 }, () => ({ id: `${BASE}/a` })), { id: `${BASE}/b` }];
+    const items = [
+      ...Array.from({ length: 70 }, () => ({ id: `${BASE}/a` })),
+      { id: `${BASE}/b` },
+    ];
     expect(sampleUrlItems(items, items.length, 2).truncation).toEqual({
       additional: 21,
       pagesTruncated: 2,
@@ -98,7 +121,10 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
     expect(c.status).toBe("fail");
     expect(c.message).toBe("50000 URL(s) point to different domain(s)");
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
-    expect(c.items?.[0]).toEqual({ id: locs[0], meta: { host: "other.example.net" } });
+    expect(c.items?.[0]).toEqual({
+      id: locs[0],
+      meta: { host: "other.example.net" },
+    });
     expect(c.details).toMatchObject({
       total: 50_000,
       additional: 50_000 - URL_ITEM_SAMPLE,
@@ -116,14 +142,20 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
   });
 
   test("hundreds of distinct off-domain hosts are sampled, with the host count", () => {
-    const locs = Array.from({ length: 300 }, (_, i) => `https://h${i}.example.net/`);
+    const locs = Array.from(
+      { length: 300 },
+      (_, i) => `https://h${i}.example.net/`
+    );
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
     expect(c.details?.foundHosts).toHaveLength(URL_ITEM_SAMPLE);
     expect(c.details?.hostCount).toBe(300);
   });
 
   test("a URL listed many times counts once as an affected page", () => {
-    const locs = [...Array.from({ length: 60 }, () => "https://other.example.net/same"), `${BASE}/`];
+    const locs = [
+      ...Array.from({ length: 60 }, () => "https://other.example.net/same"),
+      `${BASE}/`,
+    ];
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
     expect(c.message).toBe("60 URL(s) point to different domain(s)");
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
@@ -151,7 +183,11 @@ describe("sitemap-orphans (repo#2320)", () => {
   test("crawl/sitemap-coverage: message and total are the real count, items a sample", () => {
     const c = check(
       sitemapCoverageRule,
-      sitemaps({ orphanPages: cut, orphanPagesTotal: 250_000, totalUrls: 250_001 }),
+      sitemaps({
+        orphanPages: cut,
+        orphanPagesTotal: 250_000,
+        totalUrls: 250_001,
+      }),
       "sitemap-orphans"
     );
     expect(c.status).toBe("warn");
@@ -173,11 +209,18 @@ describe("sitemap-orphans (repo#2320)", () => {
     expect(c.status).toBe("info");
     expect(c.message).toBe("250000 URL(s) in sitemap not found during crawl");
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
-    expect(c.details).toMatchObject({ total: 250_000, pagesTruncated: 250_000 });
+    expect(c.details).toMatchObject({
+      total: 250_000,
+      pagesTruncated: 250_000,
+    });
   });
 
   test("without an engine total the list length is the count", () => {
-    const c = check(sitemapCoverageRule, sitemaps({ orphanPages: urls(2, BASE) }), "sitemap-orphans");
+    const c = check(
+      sitemapCoverageRule,
+      sitemaps({ orphanPages: urls(2, BASE) }),
+      "sitemap-orphans"
+    );
     expect(c.message).toBe("2 sitemap URL(s) were not crawled");
     expect(c.items).toHaveLength(2);
     expect(c.details).toEqual({ total: 2 });

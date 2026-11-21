@@ -1,6 +1,7 @@
 // a11y/aria-deprecated-role - No deprecated ARIA roles
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Deprecated or discouraged roles

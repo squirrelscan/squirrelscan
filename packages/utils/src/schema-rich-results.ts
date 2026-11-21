@@ -76,7 +76,7 @@ export function flattenJsonLdNodes(raw: string): Record<string, unknown>[] {
  */
 export function indexJsonLdIds(
   nodes: readonly Record<string, unknown>[],
-  baseUrl?: string,
+  baseUrl?: string
 ): Map<string, Record<string, unknown>> {
   const full = new Map<string, Record<string, unknown>>();
   const stubs = new Map<string, Record<string, unknown>>();
@@ -125,7 +125,9 @@ function jsonLdIdKey(id: string, baseUrl: string | undefined): string {
  */
 function isJsonLdReference(value: Record<string, unknown>): boolean {
   if (typeof value["@id"] !== "string") return false;
-  return Object.keys(value).every((key) => key === "@id" || key === "@type" || key === "@context");
+  return Object.keys(value).every(
+    (key) => key === "@id" || key === "@type" || key === "@context"
+  );
 }
 
 /**
@@ -136,7 +138,7 @@ function isJsonLdReference(value: Record<string, unknown>): boolean {
 export function resolveJsonLdRef(
   value: unknown,
   ids: ReadonlyMap<string, Record<string, unknown>>,
-  baseUrl?: string,
+  baseUrl?: string
 ): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const node = value as Record<string, unknown>;

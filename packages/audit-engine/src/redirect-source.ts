@@ -11,17 +11,25 @@ import type { ParsedPage } from "@squirrelscan/rules";
 export { isRedirectSourcePage } from "@squirrelscan/crawler/redirect-row";
 
 /** The status the redirecting URL itself answered with: its first hop's 3xx when the crawl saw one. */
-export function redirectSourceStatus(page: Pick<PageRecord, "redirectChain">): number {
+export function redirectSourceStatus(
+  page: Pick<PageRecord, "redirectChain">
+): number {
   const first = page.redirectChain?.hops[0];
-  return first && first.type === "http" && first.statusCode >= 300 && first.statusCode < 400
+  return first &&
+    first.type === "http" &&
+    first.statusCode >= 300 &&
+    first.statusCode < 400
     ? first.statusCode
     : 302;
 }
 
 /** The `site.pages` entry for a redirecting URL: hops and destination, no content. */
 export function redirectSourceEntry(
-  page: Pick<PageRecord, "normalizedUrl" | "finalUrl" | "status" | "redirectChain">,
-  empty: ParsedPage,
+  page: Pick<
+    PageRecord,
+    "normalizedUrl" | "finalUrl" | "status" | "redirectChain"
+  >,
+  empty: ParsedPage
 ): {
   url: string;
   finalUrl?: string;
@@ -34,7 +42,10 @@ export function redirectSourceEntry(
   return {
     url: page.normalizedUrl,
     finalUrl: page.finalUrl,
-    statusCode: page.status >= 300 && page.status < 400 ? page.status : redirectSourceStatus(page),
+    statusCode:
+      page.status >= 300 && page.status < 400
+        ? page.status
+        : redirectSourceStatus(page),
     // A copy: the runner writes soft-404 flags onto the parse it is handed.
     parsed: { ...empty },
     headers: {},

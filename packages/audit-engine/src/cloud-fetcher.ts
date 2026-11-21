@@ -38,23 +38,32 @@
 // cancels the SUBMIT: the server debits on submit, so the submit runs to its
 // own bound and the debit is recorded whether or not anyone still wants the page.
 
-import { MAX_RENDERED_REQUESTS_PER_PAGE } from "@squirrelscan/core-contracts";
 import type {
   RenderChargeLine,
   RenderJobResponse,
   RenderResultItem,
 } from "@squirrelscan/core-contracts";
+
+import {
+  CloudClientError,
+  type CloudServicesClient,
+} from "@squirrelscan/cloud-client";
+import { MAX_RENDERED_REQUESTS_PER_PAGE } from "@squirrelscan/core-contracts";
 import { CREDIT_COSTS } from "@squirrelscan/core-contracts/credits";
-import { CLOUD_CRAWLER, SERVICE_LIMITS } from "@squirrelscan/core-contracts/limits";
+import {
+  CLOUD_CRAWLER,
+  SERVICE_LIMITS,
+} from "@squirrelscan/core-contracts/limits";
 import {
   type DocumentFetcher,
   type FetchRequest,
   type FetchResponse,
   withObservedHopStatuses,
 } from "@squirrelscan/fetchers";
-
-import { CloudClientError, type CloudServicesClient } from "@squirrelscan/cloud-client";
-import { detectWafChallengePage, WAF_CHALLENGE_STATUS_CODES } from "@squirrelscan/waf-detect";
+import {
+  detectWafChallengePage,
+  WAF_CHALLENGE_STATUS_CODES,
+} from "@squirrelscan/waf-detect";
 
 const DEFAULT_POLL_INTERVAL_MS = 1_500;
 const DEFAULT_FIRST_POLL_MS = 300;
@@ -68,7 +77,9 @@ const MAX_CONSECUTIVE_SERVER_FAILURES = 3;
 
 type RenderResultItemWithHtml = RenderResultItem & { html: string };
 
-function hasRenderedHtml(item: RenderResultItem): item is RenderResultItemWithHtml {
+function hasRenderedHtml(
+  item: RenderResultItem
+): item is RenderResultItemWithHtml {
   return typeof item.html === "string";
 }
 
@@ -114,7 +125,11 @@ export interface CloudFetcherOptions {
    * Older servers omit the split → `breakdown` attributes the whole batch to
    * `render` (the conservative miss assumption). #279
    */
-  onRenderCharged?: (units: number, credits: number, breakdown: RenderChargeLine[]) => void;
+  onRenderCharged?: (
+    units: number,
+    credits: number,
+    breakdown: RenderChargeLine[]
+  ) => void;
   /**
    * Shared spend budget (#609). Render is charged ON SUBMIT, so without a
    * preflight a run with under one batch of credit left would still submit a
@@ -212,7 +227,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export function mapRenderItemToResponse(
   item: RenderResultItemWithHtml,
   requestUrl: string,
-  timing: { startedAt: number; responseAt: number; finishedAt: number },
+  timing: { startedAt: number; responseAt: number; finishedAt: number }
 ): FetchResponse {
   const lastHop = item.redirectChain?.[item.redirectChain.length - 1];
   const finalUrl = lastHop?.url ?? item.url ?? requestUrl;
@@ -230,7 +245,8 @@ export function mapRenderItemToResponse(
   // the same convention the fetchers use for a response that never arrived)
   // rather than inventing one. Skip it entirely when the service already
   // reported the source itself.
-  const needsSourceHop = renderHops.length > 0 && renderHops[0]?.url !== requestUrl;
+  const needsSourceHop =
+    renderHops.length > 0 && renderHops[0]?.url !== requestUrl;
   const rawHops = needsSourceHop
     ? [{ url: requestUrl, statusCode: 0, type: "http" as const }, ...renderHops]
     : renderHops.length > 0
@@ -260,16 +276,25 @@ export function mapRenderItemToResponse(
       chainLength: Math.max(0, hops.length - 1),
       isLoop: false,
       endsInError: status >= 400,
-      httpsToHttp: requestUrl.startsWith("https://") && finalUrl.startsWith("http://"),
-      httpToHttps: requestUrl.startsWith("http://") && finalUrl.startsWith("https://"),
+      httpsToHttp:
+        requestUrl.startsWith("https://") && finalUrl.startsWith("http://"),
+      httpToHttps:
+        requestUrl.startsWith("http://") && finalUrl.startsWith("https://"),
     },
     fetcherMethod: "cloud-render",
     // The server's own HTML, when the render service sent it (#1769): only then does the crawler merge the
     // scripts hydration removed. Absent, the response is exactly what it was.
-    ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0 ? { serverHtml: item.serverHtml } : {}),
+    ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0
+      ? { serverHtml: item.serverHtml }
+      : {}),
     // XHR and fetch requests the page issued, for endpoint discovery. Absent when the service sent none.
     ...(Array.isArray(item.requests) && item.requests.length > 0
-      ? { renderedRequests: item.requests.slice(0, MAX_RENDERED_REQUESTS_PER_PAGE) }
+      ? {
+          renderedRequests: item.requests.slice(
+            0,
+            MAX_RENDERED_REQUESTS_PER_PAGE
+          ),
+        }
       : {}),
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,
@@ -310,7 +335,7 @@ export function isRenderBlocked(item: RenderResultItem): boolean {
  */
 export function terminalFallbackReason(
   error: unknown,
-  consecutiveServerFailures: number,
+  consecutiveServerFailures: number
 ): string | null {
   if (error instanceof CloudClientError) {
     if (error.code === "insufficient_credits") return "out of credits";
@@ -319,7 +344,8 @@ export function terminalFallbackReason(
     // same way, so fall back to local HTTP now instead of retrying page by page.
     if (error.code === "run_inactive") return "run no longer active";
     if (
-      (error.code === "service_unavailable" || error.code === "network_error") &&
+      (error.code === "service_unavailable" ||
+        error.code === "network_error") &&
       consecutiveServerFailures >= MAX_CONSECUTIVE_SERVER_FAILURES
     ) {
       return `${consecutiveServerFailures} consecutive cloud failures`;
@@ -340,14 +366,21 @@ class RenderJobError extends Error {}
 
 export function createCloudDocumentFetcher(
   client: CloudServicesClient,
-  opts: CloudFetcherOptions,
+  opts: CloudFetcherOptions
 ): DocumentFetcher {
   const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  const firstPollDelayMs = Math.min(opts.firstPollDelayMs ?? DEFAULT_FIRST_POLL_MS, pollIntervalMs);
+  const firstPollDelayMs = Math.min(
+    opts.firstPollDelayMs ?? DEFAULT_FIRST_POLL_MS,
+    pollIntervalMs
+  );
   const batchWindowMs = opts.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS;
-  const maxBatchUrls = Math.max(1, opts.maxBatchUrls ?? SERVICE_LIMITS.renderBatchUrls);
+  const maxBatchUrls = Math.max(
+    1,
+    opts.maxBatchUrls ?? SERVICE_LIMITS.renderBatchUrls
+  );
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fallbackHeadroomMs = opts.fallbackHeadroomMs ?? CLOUD_CRAWLER.fallbackHeadroomMs;
+  const fallbackHeadroomMs =
+    opts.fallbackHeadroomMs ?? CLOUD_CRAWLER.fallbackHeadroomMs;
 
   let fallbackActive = false;
   let consecutiveServerFailures = 0;
@@ -421,14 +454,20 @@ export function createCloudDocumentFetcher(
   // The fallback gets what is LEFT of the outer deadline, never the request's
   // full timeout again: render + fallback fit inside one deadline (#2026). The
   // headroom timer guarantees that remainder is at least the headroom.
-  async function fallbackWaiter(w: Waiter, fallbackReason?: string): Promise<void> {
+  async function fallbackWaiter(
+    w: Waiter,
+    fallbackReason?: string
+  ): Promise<void> {
     if (w.state === "settled") return;
     if (w.req.signal?.aborted) {
       rejectWaiter(w, abortError());
       return;
     }
     try {
-      const resp = await opts.fallback.fetch({ ...w.req, timeoutMs: remainingOuterMs(w) });
+      const resp = await opts.fallback.fetch({
+        ...w.req,
+        timeoutMs: remainingOuterMs(w),
+      });
       resolveWaiter(w, fallbackReason ? { ...resp, fallbackReason } : resp);
     } catch (err) {
       // A racing fallback that fails FAST (refused, DNS) while the render is
@@ -459,14 +498,16 @@ export function createCloudDocumentFetcher(
         w.state = "racing";
         void fallbackWaiter(w);
       },
-      Math.max(0, startAt - Date.now()),
+      Math.max(0, startAt - Date.now())
     );
   }
 
   function settleAllViaFallback(waiters: Waiter[]): Promise<void[]> {
     // Claim first: a waiter already resolved (or whose fallback is in-flight) from
     // an earlier per-item delivery (#992) must not get a second fallback fetch.
-    return Promise.all(waiters.map((w) => (claim(w) ? fallbackWaiter(w) : Promise.resolve())));
+    return Promise.all(
+      waiters.map((w) => (claim(w) ? fallbackWaiter(w) : Promise.resolve()))
+    );
   }
 
   // Mirror the per-error bookkeeping of the legacy single-url catch: count only
@@ -494,7 +535,7 @@ export function createCloudDocumentFetcher(
     results: RenderResultItem[],
     active: Waiter[],
     startedAt: number,
-    fallbackUnmatched = true,
+    fallbackUnmatched = true
   ): void {
     const byUrl = new Map<string, RenderResultItem>();
     for (const item of results) {
@@ -537,7 +578,7 @@ export function createCloudDocumentFetcher(
             startedAt,
             responseAt: now,
             finishedAt: now,
-          }),
+          })
         );
       } else {
         // Succeeded but no HTML and not a known block — fall back to be safe.
@@ -613,7 +654,7 @@ export function createCloudDocumentFetcher(
     if (budget) {
       const perUrl = CREDIT_COSTS.render.cost;
       const affordable = Math.floor(
-        Math.max(0, budget.cap - budget.spent - reservedCredits) / perUrl,
+        Math.max(0, budget.cap - budget.spent - reservedCredits) / perUrl
       );
       if (affordable < active.length) {
         void settleAllViaFallback(active.splice(affordable));
@@ -663,7 +704,8 @@ export function createCloudDocumentFetcher(
     const batchBudgetMs = Math.max(timeoutMs, ...active.map((w) => w.outerMs));
     const deadline = startedAt + batchBudgetMs;
     // Per-page render budget; the server clamps to BROWSER_QUEUE bounds.
-    const reqTimeoutMs = Math.max(0, ...active.map((w) => w.req.timeoutMs ?? 0)) || undefined;
+    const reqTimeoutMs =
+      Math.max(0, ...active.map((w) => w.req.timeoutMs ?? 0)) || undefined;
 
     // A waiter settling by any path (a racing fallback landing during a poll
     // sleep, say) must retire the batch the same way an abort does: wake the
@@ -683,7 +725,7 @@ export function createCloudDocumentFetcher(
       // wait for nothing; the charge below still lands in the accounting.
       job = await client.render(
         { urls, timeoutMs: reqTimeoutMs, ...(runId ? { runId } : {}) },
-        { signal: AbortSignal.timeout(batchBudgetMs) },
+        { signal: AbortSignal.timeout(batchBudgetMs) }
       );
     } catch (error) {
       // Nothing was debited — free the preflight reservation.
@@ -720,11 +762,15 @@ export function createCloudDocumentFetcher(
     let pollDelay = firstPollDelayMs;
     try {
       while (Date.now() < deadline) {
-        if (batchAbort.signal.aborted) throw new RenderJobError("Cloud render aborted");
+        if (batchAbort.signal.aborted)
+          throw new RenderJobError("Cloud render aborted");
         // Every url may already be retired (a race settled the last one while
         // the submit was in flight) — nothing left to poll for.
         if (allRetired()) return;
-        await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())), batchAbort.signal);
+        await sleep(
+          Math.min(pollDelay, Math.max(1, deadline - Date.now())),
+          batchAbort.signal
+        );
         // The sleep may have been woken by the last live waiter settling.
         if (allRetired()) return;
         // Bounded by the batch deadline as well as retirement, so a poll that
@@ -765,7 +811,9 @@ export function createCloudDocumentFetcher(
         if (allRetired()) return;
         pollDelay = Math.min(pollDelay * POLL_BACKOFF_FACTOR, pollIntervalMs);
       }
-      throw new RenderJobError(`Cloud render timed out after ${batchBudgetMs}ms`);
+      throw new RenderJobError(
+        `Cloud render timed out after ${batchBudgetMs}ms`
+      );
     } catch (error) {
       // Caller cancellation (all urls aborted) is not a cloud failure — see above.
       // (A batch retired by settlement throws RenderJobError here, which leaves

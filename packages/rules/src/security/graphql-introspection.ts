@@ -52,7 +52,8 @@ function isApiType(name: string): boolean {
  */
 export function readSchema(body: GraphqlBody | null): SchemaSummary | null {
   const schema = body?.data?.__schema;
-  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return null;
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema))
+    return null;
   const types = (schema as Record<string, unknown>).types;
   if (!Array.isArray(types) || types.length === 0) return null;
   let apiTypes = 0;
@@ -88,11 +89,21 @@ function schemaFrom(outcome: GraphqlProbeOutcome): SchemaSummary | null {
   if (full) return full;
   const names = truncatedSchemaTypeNames(outcome.response);
   if (!names) return null;
-  return { types: names.length, apiTypes: names.filter(isApiType).length, truncated: true };
+  return {
+    types: names.length,
+    apiTypes: names.filter(isApiType).length,
+    truncated: true,
+  };
 }
 
-async function probeEndpoint(ctx: RuleContext, candidate: GraphqlCandidate): Promise<EndpointVerdict> {
-  const get = await sendGraphqlProbe(ctx.probe, candidate.url, { op: "introspection", method: "GET" });
+async function probeEndpoint(
+  ctx: RuleContext,
+  candidate: GraphqlCandidate
+): Promise<EndpointVerdict> {
+  const get = await sendGraphqlProbe(ctx.probe, candidate.url, {
+    op: "introspection",
+    method: "GET",
+  });
   if (!get.sent) return { kind: "not-sent" };
   if ("error" in get) return { kind: "errored" };
   const schema = schemaFrom(get);
@@ -108,7 +119,8 @@ async function probeEndpoint(ctx: RuleContext, candidate: GraphqlCandidate): Pro
       method: "POST",
     });
     const postSchema = schemaFrom(post);
-    if (postSchema) return { kind: "exposed", method: "POST", schema: postSchema };
+    if (postSchema)
+      return { kind: "exposed", method: "POST", schema: postSchema };
   }
   return { kind: "graphql", errors: errorSummary(body) };
 }
@@ -162,7 +174,11 @@ export const graphqlIntrospectionRule: Rule = {
     let graphqlAnswers = 0;
     let errored = 0;
     let budgetStopped = false;
-    const exposed: Array<{ candidate: GraphqlCandidate; method: "GET" | "POST"; schema: SchemaSummary }> = [];
+    const exposed: Array<{
+      candidate: GraphqlCandidate;
+      method: "GET" | "POST";
+      schema: SchemaSummary;
+    }> = [];
     for (const candidate of selection.candidates) {
       const verdict = await probeEndpoint(ctx, candidate);
       if (verdict.kind === "not-sent") {
@@ -172,7 +188,8 @@ export const graphqlIntrospectionRule: Rule = {
       probed++;
       if (verdict.kind === "errored") errored++;
       if (verdict.kind === "exposed") exposed.push({ candidate, ...verdict });
-      if (verdict.kind === "exposed" || verdict.kind === "graphql") graphqlAnswers++;
+      if (verdict.kind === "exposed" || verdict.kind === "graphql")
+        graphqlAnswers++;
     }
 
     if (probed === 0) {
@@ -180,7 +197,8 @@ export const graphqlIntrospectionRule: Rule = {
         name: CHECK,
         status: "skipped",
         skipReason: "probe-budget",
-        message: "The probe budget ran out before any GraphQL endpoint was probed",
+        message:
+          "The probe budget ran out before any GraphQL endpoint was probed",
         details,
       });
       return { checks };
@@ -198,7 +216,8 @@ export const graphqlIntrospectionRule: Rule = {
     }
 
     for (const { candidate, method, schema } of exposed) {
-      const seen = schema.types > 0 ? `at least ${schema.types} types seen, ` : "";
+      const seen =
+        schema.types > 0 ? `at least ${schema.types} types seen, ` : "";
       const message = schema.truncated
         ? `GraphQL introspection is open at ${candidate.url}: the schema answer is larger than 1 MB, too large to count (${seen}answered over ${method})`
         : `GraphQL introspection is open at ${candidate.url}: the schema lists ${schema.types} types, ${schema.apiTypes} of them defined by the API (answered over ${method})`;
@@ -217,7 +236,9 @@ export const graphqlIntrospectionRule: Rule = {
               method,
               types: schema.types,
               apiTypes: schema.apiTypes,
-              ...(schema.truncated ? { truncated: true, confidence: "lower" } : {}),
+              ...(schema.truncated
+                ? { truncated: true, confidence: "lower" }
+                : {}),
               source: candidate.source,
               discoveredVia: candidate.discoveredVia,
             },

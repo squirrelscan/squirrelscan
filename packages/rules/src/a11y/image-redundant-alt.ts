@@ -1,8 +1,8 @@
 // a11y/image-redundant-alt - Image alt not redundant with surrounding text
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Common redundant alt text patterns
 // Expanded based on Lighthouse and common usage
@@ -74,7 +74,7 @@ export const imageRedundantAltRule: Rule = {
       "Image alt text should not start with 'image of', 'photo of', 'picture of', etc. Screen readers already announce that it's an image. Alt text should describe the content or function, not state the obvious. Also avoid duplicating adjacent text in the alt.",
     category: "a11y",
     wcagNone:
-      "It flags alt text that names the image type (\"image of\", \"photo\"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests.",
+      'It flags alt text that names the image type ("image of", "photo"), repeats the filename or repeats nearby text, which are wording practices; such an image still has a text alternative, so 1.1.1 Non-text Content is not what it tests.',
     scope: "page",
     findingScope: "page",
     verdictScope: "page",
@@ -153,7 +153,10 @@ export const imageRedundantAltRule: Rule = {
             ? parent
             : parent.closest?.("figure");
         if (figure) {
-          const figcaption = querySelectorAllOutsideNoscript(figure, "figcaption")[0];
+          const figcaption = querySelectorAllOutsideNoscript(
+            figure,
+            "figcaption"
+          )[0];
           if (figcaption) {
             const captionText =
               figcaption.textContent?.trim().toLowerCase() || "";

@@ -77,7 +77,10 @@ export const entityDanglingRule: Rule = {
 
     // Grouped by TARGET, because one undeclared publisher referenced from 300
     // article pages is one thing to fix, not 300.
-    const byTarget = new Map<string, { predicates: Set<string>; sources: Set<string>; pages: string[] }>();
+    const byTarget = new Map<
+      string,
+      { predicates: Set<string>; sources: Set<string>; pages: string[] }
+    >();
     for (const edge of dangling) {
       const entry = byTarget.get(edge.target) ?? {
         predicates: new Set<string>(),
@@ -86,12 +89,16 @@ export const entityDanglingRule: Rule = {
       };
       entry.predicates.add(edge.predicate);
       entry.sources.add(edge.source);
-      for (const page of edge.pages) if (!entry.pages.includes(page)) entry.pages.push(page);
+      for (const page of edge.pages)
+        if (!entry.pages.includes(page)) entry.pages.push(page);
       byTarget.set(edge.target, entry);
     }
 
     const rows: CheckItem[] = [...byTarget.entries()]
-      .sort((a, b) => b[1].sources.size - a[1].sources.size || compareStrings(a[0], b[0]))
+      .sort(
+        (a, b) =>
+          b[1].sources.size - a[1].sources.size || compareStrings(a[0], b[0])
+      )
       .map(([target, entry]) => {
         const sourceLabels = [...entry.sources]
           .sort(compareStrings)
@@ -121,7 +128,8 @@ export const entityDanglingRule: Rule = {
           status: "fail",
           message: `${rows.length} referenced ${rows.length === 1 ? "@id resolves" : "@ids resolve"} to nothing declared on any crawled page${moreSuffix(hidden, "targets")}`,
           value: items[0]?.label ? clipValue(items[0].label) : null,
-          expected: "every referenced @id declared on the pages that reference it",
+          expected:
+            "every referenced @id declared on the pages that reference it",
           items,
         },
       ],

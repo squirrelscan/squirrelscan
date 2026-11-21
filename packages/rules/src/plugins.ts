@@ -1,11 +1,15 @@
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
-
 import { z } from "zod";
 
-import { isValidCategory, normalizeCategoryCode } from "./categories";
-import { getBuiltInNamespaceNames, getBuiltInRuleIds, type RuleNamespace } from "./loader";
 import type { Rule } from "./types";
+
+import { isValidCategory, normalizeCategoryCode } from "./categories";
+import {
+  getBuiltInNamespaceNames,
+  getBuiltInRuleIds,
+  type RuleNamespace,
+} from "./loader";
 
 export const PluginCapabilitySchema = z.enum(["rules", "listeners"]);
 export type PluginCapability = z.infer<typeof PluginCapabilitySchema>;
@@ -20,7 +24,7 @@ export type PluginManifestItem = z.infer<typeof PluginManifestItemSchema>;
 
 export type AuditEventListener = (
   eventName: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown>
 ) => void | Promise<void>;
 
 export interface PluginRegistrationContext {
@@ -61,13 +65,13 @@ const PLUGIN_RULE_ID = /^([a-z][a-z0-9-]{0,31})\/([a-z0-9][a-z0-9-]{0,63})$/;
 export function assertPluginRuleId(ruleId: string, owner = "a plugin"): void {
   if (getBuiltInRuleIds().has(ruleId)) {
     throw new PluginLoadError(
-      `Rule id "${ruleId}" from ${owner} clashes with a built-in rule and cannot replace it`,
+      `Rule id "${ruleId}" from ${owner} clashes with a built-in rule and cannot replace it`
     );
   }
   const match = PLUGIN_RULE_ID.exec(ruleId);
   if (!match) {
     throw new PluginLoadError(
-      `Rule id "${ruleId}" from ${owner} must look like <namespace>/<name> (lowercase letters, digits and hyphens)`,
+      `Rule id "${ruleId}" from ${owner} must look like <namespace>/<name> (lowercase letters, digits and hyphens)`
     );
   }
   // A category name or alias is reserved too: `--rule-exclude <word>` reads a bare word as a category first.
@@ -76,7 +80,7 @@ export function assertPluginRuleId(ruleId: string, owner = "a plugin"): void {
     isValidCategory(normalizeCategoryCode(match[1] as string))
   ) {
     throw new PluginLoadError(
-      `Rule id "${ruleId}" from ${owner} uses the built-in namespace "${match[1]}"; pick a namespace of your own`,
+      `Rule id "${ruleId}" from ${owner} uses the built-in namespace "${match[1]}"; pick a namespace of your own`
     );
   }
 }
@@ -86,13 +90,16 @@ export function assertPluginRuleId(ruleId: string, owner = "a plugin"): void {
  * Validates every id (see {@link assertPluginRuleId}) and rejects a duplicate id,
  * so the in-process path an embedding host uses is as strict as the loader.
  */
-export function pluginNamespaces(snapshot: Pick<PluginRegistrySnapshot, "rules">): RuleNamespace[] {
+export function pluginNamespaces(
+  snapshot: Pick<PluginRegistrySnapshot, "rules">
+): RuleNamespace[] {
   const byNamespace = new Map<string, Rule[]>();
   const seen = new Set<string>();
   for (const rule of snapshot.rules) {
     const id = rule.meta.id;
     assertPluginRuleId(id);
-    if (seen.has(id)) throw new PluginLoadError(`Rule id "${id}" is registered more than once`);
+    if (seen.has(id))
+      throw new PluginLoadError(`Rule id "${id}" is registered more than once`);
     seen.add(id);
     const name = id.slice(0, id.indexOf("/"));
     const list = byNamespace.get(name) ?? [];
@@ -109,7 +116,9 @@ export class PluginRegistry {
   registerRule(rule: Rule): void {
     assertPluginRuleId(rule.meta.id);
     if (this.rules.some((existing) => existing.meta.id === rule.meta.id)) {
-      throw new PluginLoadError(`Rule id "${rule.meta.id}" is registered more than once`);
+      throw new PluginLoadError(
+        `Rule id "${rule.meta.id}" is registered more than once`
+      );
     }
     this.rules.push(rule);
   }
@@ -124,7 +133,10 @@ export class PluginRegistry {
     return {
       rules: [...this.rules],
       listeners: new Map(
-        [...this.listeners.entries()].map(([eventName, listeners]) => [eventName, [...listeners]]),
+        [...this.listeners.entries()].map(([eventName, listeners]) => [
+          eventName,
+          [...listeners],
+        ])
       ),
     };
   }
@@ -140,7 +152,9 @@ export interface LoadPluginsOptions {
    * `manifest.entry` from disk. A caller that has verified the file's bytes
    * (see the CLI's pinned allowlist) supplies this to import exactly those bytes.
    */
-  importPlugin?: (manifest: PluginManifestItem) => Promise<{ default?: SquirrelPlugin }>;
+  importPlugin?: (
+    manifest: PluginManifestItem
+  ) => Promise<{ default?: SquirrelPlugin }>;
 }
 
 function describeFailure(error: unknown): string {
@@ -159,7 +173,7 @@ function describeFailure(error: unknown): string {
 export async function loadPlugins(
   manifests: PluginManifestItem[],
   allowlist: Set<string>,
-  options: LoadPluginsOptions = {},
+  options: LoadPluginsOptions = {}
 ): Promise<PluginRegistrySnapshot> {
   const registry = new PluginRegistry();
 
@@ -173,10 +187,12 @@ export async function loadPlugins(
     const isFileUrl = parsed.entry.startsWith("file:");
     if (!isFileUrl && !isAbsolute(parsed.entry)) {
       throw new PluginLoadError(
-        `Plugin "${parsed.id}" entry must be an absolute path or a file: URL`,
+        `Plugin "${parsed.id}" entry must be an absolute path or a file: URL`
       );
     }
-    const specifier = isFileUrl ? parsed.entry : pathToFileURL(parsed.entry).href;
+    const specifier = isFileUrl
+      ? parsed.entry
+      : pathToFileURL(parsed.entry).href;
     let plugin: SquirrelPlugin | undefined;
     try {
       const mod = options.importPlugin
@@ -185,7 +201,9 @@ export async function loadPlugins(
       plugin = mod.default;
     } catch (error) {
       if (error instanceof PluginLoadError) throw error;
-      throw new PluginLoadError(`Plugin "${parsed.id}" failed to load: ${describeFailure(error)}`);
+      throw new PluginLoadError(
+        `Plugin "${parsed.id}" failed to load: ${describeFailure(error)}`
+      );
     }
     if (!plugin) {
       options.onSkipped?.(parsed.id, "no-default-export");
@@ -197,7 +215,7 @@ export async function loadPlugins(
       registerRule: (rule) => {
         if (!allowedCapabilities.has("rules")) {
           throw new PluginLoadError(
-            `Plugin "${parsed.id}" registered rule "${rule.meta.id}" but its manifest does not allow "rules"`,
+            `Plugin "${parsed.id}" registered rule "${rule.meta.id}" but its manifest does not allow "rules"`
           );
         }
         assertPluginRuleId(rule.meta.id, `plugin "${parsed.id}"`);
@@ -206,7 +224,7 @@ export async function loadPlugins(
       registerListener: (eventName, listener) => {
         if (!allowedCapabilities.has("listeners")) {
           throw new PluginLoadError(
-            `Plugin "${parsed.id}" registered a listener but its manifest does not allow "listeners"`,
+            `Plugin "${parsed.id}" registered a listener but its manifest does not allow "listeners"`
           );
         }
         registry.registerListener(eventName, listener);
@@ -218,7 +236,7 @@ export async function loadPlugins(
     } catch (error) {
       if (error instanceof PluginLoadError) throw error;
       throw new PluginLoadError(
-        `Plugin "${parsed.id}" failed in register(): ${describeFailure(error)}`,
+        `Plugin "${parsed.id}" failed in register(): ${describeFailure(error)}`
       );
     }
   }

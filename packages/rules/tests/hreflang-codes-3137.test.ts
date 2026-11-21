@@ -1,12 +1,12 @@
 // squirrelscan/repo#3137: i18n/hreflang validates the format of each hreflang
 // code (x-default, or language[-script][-region]). Code format only.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import { hreflangRule } from "../src/i18n/hreflang";
-import type { RuleContext } from "../src/types";
 
 const URL_ = "https://example.com/";
 
@@ -30,9 +30,24 @@ async function invalid(codes: string[]) {
 
 describe("i18n/hreflang code validation (#3137)", () => {
   test("valid codes pass with no code check", async () => {
-    const codes = ["en", "en-US", "en-gb", "de-AT", "pt-BR", "zh-Hant-TW", "zh-hans", "es-419", "fil", "yue-HK", "uk", "ja"];
+    const codes = [
+      "en",
+      "en-US",
+      "en-gb",
+      "de-AT",
+      "pt-BR",
+      "zh-Hant-TW",
+      "zh-hans",
+      "es-419",
+      "fil",
+      "yue-HK",
+      "uk",
+      "ja",
+    ];
     expect(await invalid(codes)).toEqual([]);
-    expect((await run(codes)).map((c) => c.name)).not.toContain("hreflang-codes");
+    expect((await run(codes)).map((c) => c.name)).not.toContain(
+      "hreflang-codes"
+    );
   });
 
   test("x-default is case-insensitive", async () => {
@@ -48,11 +63,18 @@ describe("i18n/hreflang code validation (#3137)", () => {
   });
 
   test("invalid language is flagged", async () => {
-    expect(await invalid(["xx", "english", "e", "xx-US"])).toEqual(["xx", "english", "e", "xx-US"]);
+    expect(await invalid(["xx", "english", "e", "xx-US"])).toEqual([
+      "xx",
+      "english",
+      "e",
+      "xx-US",
+    ]);
   });
 
   test("invalid region is flagged; uk as a region suggests GB", async () => {
-    const c = (await run(["en-uk", "en-ZZ"])).find((x) => x.name === "hreflang-codes");
+    const c = (await run(["en-uk", "en-ZZ"])).find(
+      (x) => x.name === "hreflang-codes"
+    );
     expect(c?.status).toBe("warn");
     expect(c?.items?.map((i) => i.id)).toEqual(["en-uk", "en-ZZ"]);
     expect(c?.items?.[0]?.label).toContain("en-GB");
@@ -64,14 +86,20 @@ describe("i18n/hreflang code validation (#3137)", () => {
   });
 
   test("underscore is flagged with a hyphenated suggestion", async () => {
-    const c = (await run(["en_US", "zh_hant_TW"])).find((x) => x.name === "hreflang-codes");
+    const c = (await run(["en_US", "zh_hant_TW"])).find(
+      (x) => x.name === "hreflang-codes"
+    );
     expect(c?.items?.map((i) => i.id)).toEqual(["en_US", "zh_hant_TW"]);
     expect(c?.items?.[0]?.label).toContain("use en-US");
   });
 
   test("script subtag is accepted case-insensitively; bad shapes are flagged", async () => {
     expect(await invalid(["sr-Latn", "sr-LATN-RS", "sr-latn"])).toEqual([]);
-    expect(await invalid(["en-US-x", "en-Latn-US-1996", "en-1"])).toEqual(["en-US-x", "en-Latn-US-1996", "en-1"]);
+    expect(await invalid(["en-US-x", "en-Latn-US-1996", "en-1"])).toEqual([
+      "en-US-x",
+      "en-Latn-US-1996",
+      "en-1",
+    ]);
   });
 
   test("UN M.49 numeric region is accepted", async () => {
@@ -79,7 +107,7 @@ describe("i18n/hreflang code validation (#3137)", () => {
   });
 
   test("existing checks are unchanged: pass check lists every code, the x-default self reference still counts", async () => {
-    const checks = (await run(["en_US"]));
+    const checks = await run(["en_US"]);
     const pass = checks.find((c) => c.name === "hreflang");
     expect(pass?.status).toBe("pass");
     expect(pass?.items?.map((i) => i.id)).toEqual(["en_US", "x-default"]);

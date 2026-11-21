@@ -10,10 +10,10 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
+import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { unlinkSync } from "fs";
-import { Effect } from "effect";
 
 import type {
   CrawlMetadata,
@@ -21,6 +21,7 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -92,7 +93,10 @@ async function freshCrawl(store: SQLiteStorage): Promise<string> {
   return run(store.createCrawl(meta));
 }
 
-function page(normalizedUrl: string, over: Partial<PageRecord> = {}): PageRecord {
+function page(
+  normalizedUrl: string,
+  over: Partial<PageRecord> = {}
+): PageRecord {
   return {
     url: normalizedUrl,
     normalizedUrl,
@@ -202,7 +206,12 @@ describe("source_hash migration collision self-heal (#839)", () => {
     const crawlId = await freshCrawl(store);
 
     // Before the fix this threw "table pages has no column named source_hash".
-    await run(store.upsertPage(crawlId, page("https://example.com/a", { sourceHash: "abc123" })));
+    await run(
+      store.upsertPage(
+        crawlId,
+        page("https://example.com/a", { sourceHash: "abc123" })
+      )
+    );
 
     const a = await run(store.getPage(crawlId, "https://example.com/a"));
     expect(a?.sourceHash).toBe("abc123");
@@ -216,13 +225,20 @@ describe("source_hash migration collision self-heal (#839)", () => {
     const store = new SQLiteStorage(path);
     await run(store.init());
     const crawlId = await freshCrawl(store);
-    await run(store.upsertPage(crawlId, page("https://example.com/b", { sourceHash: "def456" })));
+    await run(
+      store.upsertPage(
+        crawlId,
+        page("https://example.com/b", { sourceHash: "def456" })
+      )
+    );
     await run(store.close());
 
     const snap = new Database(path);
-    const colsFirst = (snap.prepare("PRAGMA table_info(pages)").all() as Array<{
-      name: string;
-    }>).map((c) => c.name);
+    const colsFirst = (
+      snap.prepare("PRAGMA table_info(pages)").all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name);
     snap.close();
 
     // Re-open: runMigrations + reconcile run again on an already-healthy DB.
@@ -233,9 +249,11 @@ describe("source_hash migration collision self-heal (#839)", () => {
     await run(store2.close());
 
     const snap2 = new Database(path);
-    const colsSecond = (snap2.prepare("PRAGMA table_info(pages)").all() as Array<{
-      name: string;
-    }>).map((c) => c.name);
+    const colsSecond = (
+      snap2.prepare("PRAGMA table_info(pages)").all() as Array<{
+        name: string;
+      }>
+    ).map((c) => c.name);
     snap2.close();
 
     // No duplicate/extra columns from a second reconcile pass.

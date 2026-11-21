@@ -67,7 +67,10 @@ function identityOf(node: EntityMapNode): string | null {
   // JSON.stringify of the parts, never a delimiter join: `@type` is a
   // site-controlled string, so types ["A+B"] and ["A","B"] would otherwise
   // produce the same signature and pair two unrelated entities.
-  return JSON.stringify([types, node.name.trim().replace(/\s+/g, " ").toLowerCase()]);
+  return JSON.stringify([
+    types,
+    node.name.trim().replace(/\s+/g, " ").toLowerCase(),
+  ]);
 }
 
 /** Every page a map saw, including the ones that declared nothing. */
@@ -185,7 +188,11 @@ function buildReplacementTest(
  * site-controlled string, so any separator can appear inside one and make two
  * different edges share a key.
  */
-function edgeKey(edge: { source: string; predicate: string; target: string }): string {
+function edgeKey(edge: {
+  source: string;
+  predicate: string;
+  target: string;
+}): string {
   return JSON.stringify([edge.source, edge.predicate, edge.target]);
 }
 
@@ -203,12 +210,16 @@ function metric(before: number, after: number): EntityMapDiffMetric {
 export function diffEntityMaps(
   older: EntityMap,
   newer: EntityMap,
-  options: DiffEntityMapsOptions = {},
+  options: DiffEntityMapsOptions = {}
 ): EntityMapDiff {
   const threshold = Math.max(1, options.occurrenceThreshold ?? 1);
 
-  const olderNodes = new Map(older.nodes.map((node) => [node.key, node] as const));
-  const newerNodes = new Map(newer.nodes.map((node) => [node.key, node] as const));
+  const olderNodes = new Map(
+    older.nodes.map((node) => [node.key, node] as const)
+  );
+  const newerNodes = new Map(
+    newer.nodes.map((node) => [node.key, node] as const)
+  );
   const olderPages = pageSet(older);
   const newerPages = pageSet(newer);
   // Built BEFORE the identity block, not after it: an entity matched as an id
@@ -240,8 +251,12 @@ export function diffEntityMaps(
     }
     return out;
   };
-  const olderCandidates = groupByIdentity(older.nodes, (key) => newerNodes.has(key));
-  const newerCandidates = groupByIdentity(newer.nodes, (key) => olderNodes.has(key));
+  const olderCandidates = groupByIdentity(older.nodes, (key) =>
+    newerNodes.has(key)
+  );
+  const newerCandidates = groupByIdentity(newer.nodes, (key) =>
+    olderNodes.has(key)
+  );
 
   const gainedId: EntityMapDiffIdChange[] = [];
   const lostId: EntityMapDiffIdChange[] = [];
@@ -340,11 +355,16 @@ export function diffEntityMaps(
   // Per (entity, property), not per entity: a node that swapped one conflicting
   // property for another has both a new and a resolved finding, and collapsing
   // them to "still conflicted" would hide the fix and the regression together.
-  const conflictPairs = (map: EntityMap): Map<string, { node: EntityMapNode; property: string }> => {
+  const conflictPairs = (
+    map: EntityMap
+  ): Map<string, { node: EntityMapNode; property: string }> => {
     const out = new Map<string, { node: EntityMapNode; property: string }>();
     for (const node of map.nodes) {
       for (const conflict of node.conflicts) {
-        out.set(JSON.stringify([node.key, conflict.property]), { node, property: conflict.property });
+        out.set(JSON.stringify([node.key, conflict.property]), {
+          node,
+          property: conflict.property,
+        });
       }
     }
     return out;
@@ -355,7 +375,11 @@ export function diffEntityMaps(
   const newConflicts: EntityMapDiffConflict[] = [];
   for (const [id, entry] of newerConflicts) {
     if (olderConflicts.has(id)) continue;
-    newConflicts.push({ key: entry.node.key, name: entry.node.name, property: entry.property });
+    newConflicts.push({
+      key: entry.node.key,
+      name: entry.node.name,
+      property: entry.property,
+    });
   }
   const resolvedConflicts: EntityMapDiffConflict[] = [];
   for (const [id, entry] of olderConflicts) {
@@ -366,21 +390,33 @@ export function diffEntityMaps(
     // not visit. A conflict needs two declarations to exist, so surviving on
     // ONE of its pages tells you nothing about whether it was reconciled.
     if (!fullyRecrawled(entry.node)) continue;
-    resolvedConflicts.push({ key: entry.node.key, name: entry.node.name, property: entry.property });
+    resolvedConflicts.push({
+      key: entry.node.key,
+      name: entry.node.name,
+      property: entry.property,
+    });
   }
 
   // ── dangling references ──────────────────────────────────────────
   const olderDangling = new Map(
-    older.edges.filter((edge) => edge.dangling).map((edge) => [edgeKey(edge), edge] as const),
+    older.edges
+      .filter((edge) => edge.dangling)
+      .map((edge) => [edgeKey(edge), edge] as const)
   );
   const newerDangling = new Map(
-    newer.edges.filter((edge) => edge.dangling).map((edge) => [edgeKey(edge), edge] as const),
+    newer.edges
+      .filter((edge) => edge.dangling)
+      .map((edge) => [edgeKey(edge), edge] as const)
   );
 
   const newDangling: EntityMapDiffDangling[] = [];
   for (const [id, edge] of newerDangling) {
     if (olderDangling.has(id)) continue;
-    newDangling.push({ source: edge.source, predicate: edge.predicate, target: edge.target });
+    newDangling.push({
+      source: edge.source,
+      predicate: edge.predicate,
+      target: edge.target,
+    });
   }
   const resolvedDangling: EntityMapDiffDangling[] = [];
   for (const [id, edge] of olderDangling) {
@@ -392,16 +428,23 @@ export function diffEntityMaps(
     // (a map reassembled from the project store leaves it empty), so the
     // source's declaring pages are the evidence set that can be relied on.
     const source = olderNodes.get(edge.source);
-    if (!newerNodes.has(edge.source) || !source || !fullyRecrawled(source)) continue;
-    resolvedDangling.push({ source: edge.source, predicate: edge.predicate, target: edge.target });
+    if (!newerNodes.has(edge.source) || !source || !fullyRecrawled(source))
+      continue;
+    resolvedDangling.push({
+      source: edge.source,
+      predicate: edge.predicate,
+      target: edge.target,
+    });
   }
 
   // ── summary ──────────────────────────────────────────────────────
   const summaryDelta: Record<string, EntityMapDiffMetric> = {};
   for (const key of Object.keys(newer.summary).sort(compareStrings)) {
     if (key === "countsByType") continue;
-    const before = (older.summary as unknown as Record<string, number>)[key] ?? 0;
-    const after = (newer.summary as unknown as Record<string, number>)[key] ?? 0;
+    const before =
+      (older.summary as unknown as Record<string, number>)[key] ?? 0;
+    const after =
+      (newer.summary as unknown as Record<string, number>)[key] ?? 0;
     if (typeof before !== "number" || typeof after !== "number") continue;
     summaryDelta[key] = metric(before, after);
   }
@@ -409,12 +452,17 @@ export function diffEntityMaps(
   // Capped: two 5,000-page crawls covering different pages would otherwise put
   // 10,000 URLs in this document. Sorted before the slice, so which ones survive
   // is a property of the pages and not of iteration order.
-  const onlyInOlder = [...olderPages].filter((url) => !newerPages.has(url)).sort(compareStrings);
-  const onlyInNewer = [...newerPages].filter((url) => !olderPages.has(url)).sort(compareStrings);
+  const onlyInOlder = [...olderPages]
+    .filter((url) => !newerPages.has(url))
+    .sort(compareStrings);
+  const onlyInNewer = [...newerPages]
+    .filter((url) => !olderPages.has(url))
+    .sort(compareStrings);
   const pagesOnlyInOlder = onlyInOlder.slice(0, ENTITY_MAP_DIFF_PAGES_CAP);
   const pagesOnlyInNewer = onlyInNewer.slice(0, ENTITY_MAP_DIFF_PAGES_CAP);
 
-  const byKey = (a: { key: string }, b: { key: string }) => compareStrings(a.key, b.key);
+  const byKey = (a: { key: string }, b: { key: string }) =>
+    compareStrings(a.key, b.key);
   const byAfterKey = (a: EntityMapDiffIdChange, b: EntityMapDiffIdChange) =>
     compareStrings(a.afterKey, b.afterKey);
   const byConflict = (a: EntityMapDiffConflict, b: EntityMapDiffConflict) =>

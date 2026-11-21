@@ -76,6 +76,7 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 import type { RuleRunResult } from "@squirrelscan/rules/types";
+
 import { ISSUE_PENALTY_ITEM_CAP } from "@squirrelscan/utils/constants";
 
 import {
@@ -120,7 +121,9 @@ export interface SampledStoreMarker {
 }
 
 /** True when `marker` asks for, and can support, the sampled-store estimate. */
-export function isSampledStoreMarker(marker: unknown): marker is SampledStoreMarker {
+export function isSampledStoreMarker(
+  marker: unknown
+): marker is SampledStoreMarker {
   if (!marker || typeof marker !== "object") return false;
   const m = marker as Partial<SampledStoreMarker>;
   return (
@@ -211,7 +214,11 @@ export class SampledStoreEstimator {
     this.scope = scope;
     this.marker = scope.marker;
     for (const page of scope.priorPages) {
-      if (page.state !== "active" || page.lastSeenCrawlId !== this.marker.crawlId) continue;
+      if (
+        page.state !== "active" ||
+        page.lastSeenCrawlId !== this.marker.crawlId
+      )
+        continue;
       this.priorRunPages.add(page.normalizedUrl);
     }
     for (const url of this.priorRunPages) {
@@ -221,7 +228,9 @@ export class SampledStoreEstimator {
     }
     const audited = this.marker.pagesAudited;
     this.pagesAudited =
-      typeof audited === "number" && Number.isSafeInteger(audited) && audited >= 0
+      typeof audited === "number" &&
+      Number.isSafeInteger(audited) &&
+      audited >= 0
         ? Math.max(audited, this.priorRunPages.size)
         : undefined;
   }
@@ -234,7 +243,11 @@ export class SampledStoreEstimator {
   }
 
   /** The row is one the sampled audit wrote (and no later audit has touched). */
-  isSampledRow(row: { normalizedUrl: string; ruleId: string; lastSeenCrawlId: string }): boolean {
+  isSampledRow(row: {
+    normalizedUrl: string;
+    ruleId: string;
+    lastSeenCrawlId: string;
+  }): boolean {
     return (
       row.lastSeenCrawlId === this.marker.crawlId &&
       this.priorRunPages.has(row.normalizedUrl) &&
@@ -255,7 +268,11 @@ export class SampledStoreEstimator {
     if (this.carriedPages.has(url)) return;
     let rule = this.leaving.get(ruleId);
     if (!rule) {
-      rule = { dirtyPages: new Set(), byName: new Map(), dirtyByName: new Map() };
+      rule = {
+        dirtyPages: new Set(),
+        byName: new Map(),
+        dirtyByName: new Map(),
+      };
       this.leaving.set(ruleId, rule);
     }
     rule.dirtyPages.add(url);
@@ -271,7 +288,11 @@ export class SampledStoreEstimator {
     dirty.add(url);
     // A crawled page this run did not evaluate the check on still carries the row:
     // it has not left the carried side for that check.
-    if (!this.scope.removed(url) && !this.scope.evaluated(url, ruleId, checkName)) return;
+    if (
+      !this.scope.removed(url) &&
+      !this.scope.evaluated(url, ruleId, checkName)
+    )
+      return;
     let sets = rule.byName.get(checkName);
     if (!sets) {
       sets = { fail: new Set(), warn: new Set() };
@@ -283,10 +304,18 @@ export class SampledStoreEstimator {
 
   /** A prior the merge carried, and the view of it the union was given. */
   noteCarried(
-    finding: { normalizedUrl: string; ruleId: string; checkName: string; lastSeenCrawlId: string },
-    carried: CarriedFinding,
+    finding: {
+      normalizedUrl: string;
+      ruleId: string;
+      checkName: string;
+      lastSeenCrawlId: string;
+    },
+    carried: CarriedFinding
   ): void {
-    if (this.isSampledRow(finding) && this.tallyFor(finding.ruleId, finding.checkName)) {
+    if (
+      this.isSampledRow(finding) &&
+      this.tallyFor(finding.ruleId, finding.checkName)
+    ) {
       this.sampledRows.add(carried);
     }
   }
@@ -317,10 +346,12 @@ export class SampledStoreEstimator {
      */
     carriedChecksPerPage?: (ruleId: string) => number;
   }): void {
-    const { scoringTallies, reportTotals, unionCarried, unionCarriedPages } = input;
+    const { scoringTallies, reportTotals, unionCarried, unionCarriedPages } =
+      input;
     // Carried pages that earn a clean pass in the union.
     const passPages: string[] = [];
-    for (const url of this.carriedPages) if (unionCarriedPages.has(url)) passPages.push(url);
+    for (const url of this.carriedPages)
+      if (unionCarriedPages.has(url)) passPages.push(url);
     const passPageSet = new Set(passPages);
 
     // The union's carried rows of each tallied rule, by page.
@@ -344,10 +375,16 @@ export class SampledStoreEstimator {
       const entry = scoringTallies.get(ruleId);
       if (!entry || entry.meta.scope !== "page") continue;
       const advisory = entry.meta.severity === "info";
-      const byName = this.marker.checkTallies[ruleId] as Record<string, CheckTally>;
+      const byName = this.marker.checkTallies[ruleId] as Record<
+        string,
+        CheckTally
+      >;
       if (!byName || typeof byName !== "object") continue;
       // As the union read it (buildScoringResultsFromMerged).
-      const perPage = Math.max(1, Math.floor(input.carriedChecksPerPage?.(ruleId) ?? 1));
+      const perPage = Math.max(
+        1,
+        Math.floor(input.carriedChecksPerPage?.(ruleId) ?? 1)
+      );
 
       // ── What the union counted for the rows this replaces ─────────────────
       // The sampled rows still carried for their check (the estimate stands in
@@ -392,7 +429,7 @@ export class SampledStoreEstimator {
             otherAsFailures,
             // An advisory warning scores nothing either way.
             advisory ? other : other.map(carriedCheckAsFailure),
-            advisory,
+            advisory
           );
         }
       }
@@ -429,7 +466,7 @@ export class SampledStoreEstimator {
           const knownPages = leaving?.dirtyByName.get(name)?.size ?? 0;
           estimatedPassNames += Math.min(
             passCandidates,
-            Math.max(0, failed + warnings + advisoryPages - knownPages),
+            Math.max(0, failed + warnings + advisoryPages - knownPages)
           );
         }
 
@@ -446,12 +483,28 @@ export class SampledStoreEstimator {
 
         // In checks, one per (page, check name), as the union counts carried rows
         // (repo#3360); the items go in the fail units below.
-        const failMass = Math.min(carriedPages, Math.max(0, failed - knownFail));
-        const warnHi = Math.min(carriedPages, Math.max(0, warnings - knownWarn));
-        const warnLo = warnBound ? Math.min(warnHi, Math.max(0, warnings - offCarried)) : 0;
-        const failUnitHi = Math.min(carriedPages * ISSUE_PENALTY_ITEM_CAP, Math.max(0, failUnits - knownFail));
-        const warnUnitHi = Math.min(carriedPages, Math.max(0, warnUnits - knownWarn));
-        const warnUnitLo = warnBound ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried)) : 0;
+        const failMass = Math.min(
+          carriedPages,
+          Math.max(0, failed - knownFail)
+        );
+        const warnHi = Math.min(
+          carriedPages,
+          Math.max(0, warnings - knownWarn)
+        );
+        const warnLo = warnBound
+          ? Math.min(warnHi, Math.max(0, warnings - offCarried))
+          : 0;
+        const failUnitHi = Math.min(
+          carriedPages * ISSUE_PENALTY_ITEM_CAP,
+          Math.max(0, failUnits - knownFail)
+        );
+        const warnUnitHi = Math.min(
+          carriedPages,
+          Math.max(0, warnUnits - knownWarn)
+        );
+        const warnUnitLo = warnBound
+          ? Math.min(warnUnitHi, Math.max(0, warnUnits - offCarried))
+          : 0;
 
         estimate.warnings += warnLo;
         estimate.failed += failMass + (warnHi - warnLo);
@@ -462,12 +515,20 @@ export class SampledStoreEstimator {
       // ── Clean carried pages ───────────────────────────────────────────────
       const rulePages = this.marker.rulePageCounts?.[ruleId];
       const dirtyPages =
-        typeof rulePages === "number" && Number.isFinite(rulePages) && rulePages >= 0
+        typeof rulePages === "number" &&
+        Number.isFinite(rulePages) &&
+        rulePages >= 0
           ? Math.floor(rulePages)
           : classPages;
       const knownDirty = leaving?.dirtyPages.size ?? 0;
-      const sampledDirty = Math.min(passCandidates, Math.max(0, dirtyPages - knownDirty));
-      const estimatedDirty = Math.min(passCandidates, sampledDirty + otherDirtyPassPages);
+      const sampledDirty = Math.min(
+        passCandidates,
+        Math.max(0, dirtyPages - knownDirty)
+      );
+      const estimatedDirty = Math.min(
+        passCandidates,
+        sampledDirty + otherDirtyPassPages
+      );
       // Passes the union gave that the estimate does not. Never negative: the
       // estimate only ever takes passes away. A rule with K > 1 checks per page
       // (repo#3360) loses one pass per (page, check name) holding a row, capped
@@ -478,7 +539,7 @@ export class SampledStoreEstimator {
         perPage > 1
           ? Math.min(
               Math.max(0, perPage * passCandidates - unionPassNames),
-              Math.max(0, estimatedPassNames + otherPassNames - unionPassNames),
+              Math.max(0, estimatedPassNames + otherPassNames - unionPassNames)
             )
           : Math.max(0, estimatedDirty - dirtyPassPages);
 
@@ -491,11 +552,19 @@ export class SampledStoreEstimator {
 
       reportTotals.warnings = Math.max(
         0,
-        reportTotals.warnings - replaced.warnings - otherAsCounted.warnings + otherAsFailures.warnings + estimate.warnings,
+        reportTotals.warnings -
+          replaced.warnings -
+          otherAsCounted.warnings +
+          otherAsFailures.warnings +
+          estimate.warnings
       );
       reportTotals.failed = Math.max(
         0,
-        reportTotals.failed - replaced.failed - otherAsCounted.failed + otherAsFailures.failed + estimate.failed,
+        reportTotals.failed -
+          replaced.failed -
+          otherAsCounted.failed +
+          otherAsFailures.failed +
+          estimate.failed
       );
     }
   }

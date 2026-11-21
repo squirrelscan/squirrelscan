@@ -2,7 +2,11 @@
 // Public consumer types (IntelContext, IntelUrlVerdict, SignatureMatch, …) live
 // in @squirrelscan/core-contracts and are re-exported from the package index.
 
-import type { IntelProviderId, IntelSource, IntelUrlVerdict } from "@squirrelscan/core-contracts";
+import type {
+  IntelProviderId,
+  IntelSource,
+  IntelUrlVerdict,
+} from "@squirrelscan/core-contracts";
 
 /**
  * Minimal fetch transport. Defaults to the global `fetch`; tests inject a stub so
@@ -15,7 +19,7 @@ export type IntelTransport = (
     method?: string;
     headers?: Record<string, string>;
     body?: string;
-  },
+  }
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -49,7 +53,10 @@ export interface IntelConfig {
 export interface FeedProvider {
   id: IntelProviderId;
   /** Pull the current blocklist. Returns the raw entries to index. */
-  fetchFeed(transport: IntelTransport, config: ProviderConfig): Promise<FeedEntry[]>;
+  fetchFeed(
+    transport: IntelTransport,
+    config: ProviderConfig
+  ): Promise<FeedEntry[]>;
 }
 
 /** One entry in a pulled blocklist feed. */
@@ -65,7 +72,11 @@ export interface FeedEntry {
 export interface LookupProvider {
   id: IntelProviderId;
   /** Query the provider for one URL. Returns sources when flagged, [] when clean. */
-  lookup(url: string, transport: IntelTransport, config: ProviderConfig): Promise<IntelSource[]>;
+  lookup(
+    url: string,
+    transport: IntelTransport,
+    config: ProviderConfig
+  ): Promise<IntelSource[]>;
 }
 
 /** A point-in-time, fully-resolved view of feeds + lookups for one audit run. */

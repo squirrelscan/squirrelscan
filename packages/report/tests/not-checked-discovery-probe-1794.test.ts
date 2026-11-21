@@ -1,13 +1,13 @@
 // #1794: a rule whose discovery probe was not approved, not sent or refused is listed under `notChecked`
 // with outcome `coverage_gap` and its reason code, in the JSON report, even when the rule is info severity.
 
+import { DISCOVERY_PROBE_SKIP_REASONS } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { DISCOVERY_PROBE_SKIP_REASONS } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 import { notCheckedRules } from "../src/not-checked";
 import { renderJson } from "../src/output/json";
-import type { AuditReport } from "../src/types";
 
 function report(severity: "info" | "warning", skipReason: string): AuditReport {
   return {
@@ -32,7 +32,8 @@ function report(severity: "info" | "warning", skipReason: string): AuditReport {
           {
             name: "agents-md-present",
             status: "skipped",
-            message: "AGENTS.md not checked: path not approved ([crawler] discovery_probe_paths)",
+            message:
+              "AGENTS.md not checked: path not approved ([crawler] discovery_probe_paths)",
             value: "not-checked",
             skipReason,
           },
@@ -46,22 +47,34 @@ describe("discovery probe not-checked reasons", () => {
   for (const reason of DISCOVERY_PROBE_SKIP_REASONS) {
     test(`${reason} on an info rule is a not-checked coverage gap with its own hint`, () => {
       const [rule] = notCheckedRules(report("info", reason));
-      expect(rule).toMatchObject({ ruleId: "ax/agents-md", reason, outcome: "coverage_gap" });
+      expect(rule).toMatchObject({
+        ruleId: "ax/agents-md",
+        reason,
+        outcome: "coverage_gap",
+      });
       expect(rule?.hint.length).toBeGreaterThan(20);
       const json = JSON.parse(renderJson(report("info", reason))) as {
         notChecked?: Array<{ ruleId: string; reason: string; outcome: string }>;
       };
       expect(json.notChecked).toEqual([
-        expect.objectContaining({ ruleId: "ax/agents-md", reason, outcome: "coverage_gap" }),
+        expect.objectContaining({
+          ruleId: "ax/agents-md",
+          reason,
+          outcome: "coverage_gap",
+        }),
       ]);
     });
   }
 
   test("another not-checked reason on an info rule is still left out", () => {
-    expect(notCheckedRules(report("info", "external-links-not-checked"))).toEqual([]);
+    expect(
+      notCheckedRules(report("info", "external-links-not-checked"))
+    ).toEqual([]);
   });
 
   test("a warning-severity rule is listed as before", () => {
-    expect(notCheckedRules(report("warning", "discovery-probe-refused"))).toHaveLength(1);
+    expect(
+      notCheckedRules(report("warning", "discovery-probe-refused"))
+    ).toHaveLength(1);
   });
 });

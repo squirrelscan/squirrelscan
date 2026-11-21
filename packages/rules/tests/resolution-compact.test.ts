@@ -8,10 +8,11 @@
 //    toward resolving one: dropped keys are listed in `truncated`, and a clipped
 //    page list says so (`crawledComplete: false`) and still counts every page.
 
-import { describe, expect, test } from "bun:test";
-import { deflateRawSync } from "node:zlib";
+import type {
+  CheckResult,
+  ResolutionSignal,
+} from "@squirrelscan/core-contracts";
 
-import type { CheckResult, ResolutionSignal } from "@squirrelscan/core-contracts";
 import {
   RESOLUTION_PUBLISH_LIMITS,
   RESOLUTION_SIGNAL_LIMITS,
@@ -23,6 +24,8 @@ import {
 } from "@squirrelscan/core-contracts/resolution";
 import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
+import { deflateRawSync } from "node:zlib";
 
 import {
   buildCompactResolutionSignal,
@@ -42,7 +45,9 @@ const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value));
 /** A signal as sets, so two shapes compare on content rather than order. */
 function asSets(signal: ResolutionSignal) {
   const sets = (record: Record<string, string[]> | undefined) =>
-    Object.fromEntries(Object.entries(record ?? {}).map(([k, v]) => [k, new Set(v)]));
+    Object.fromEntries(
+      Object.entries(record ?? {}).map(([k, v]) => [k, new Set(v)])
+    );
   return {
     crawled: new Set(signal.crawledUrls.map(normalizePageUrl)),
     failing: sets(signal.failing),
@@ -73,14 +78,16 @@ function rng(seed: number): () => number {
   };
 }
 
-const SYLLABLES = "ka lo mi ne ra su te vo zi bu da fe gi ho ju ly mo pi qu sa".split(" ");
+const SYLLABLES =
+  "ka lo mi ne ra su te vo zi bu da fe gi ho ju ly mo pi qu sa".split(" ");
 
 function vocabulary(random: () => number, size: number): string[] {
   const words = new Set<string>();
   while (words.size < size) {
     let word = "";
     const n = 2 + Math.floor(random() * 3);
-    for (let i = 0; i < n; i++) word += SYLLABLES[Math.floor(random() * SYLLABLES.length)];
+    for (let i = 0; i < n; i++)
+      word += SYLLABLES[Math.floor(random() * SYLLABLES.length)];
     words.add(word);
   }
   return [...words];
@@ -89,15 +96,24 @@ function vocabulary(random: () => number, size: number): string[] {
 function shopUrls(count: number, seed = 1): string[] {
   const random = rng(seed);
   const words = vocabulary(random, 400);
-  const sections = ["products", "collections", "pages", "blogs/news", "en-gb/products"];
+  const sections = [
+    "products",
+    "collections",
+    "pages",
+    "blogs/news",
+    "en-gb/products",
+  ];
   const urls = new Set<string>();
   while (urls.size < count) {
     const section = sections[Math.floor(random() * sections.length)];
     const slug = Array.from(
       { length: 2 + Math.floor(random() * 3) },
-      () => words[Math.floor(random() * words.length)],
+      () => words[Math.floor(random() * words.length)]
     ).join("-");
-    const variant = random() < 0.1 ? `?variant=${4_000_000 + Math.floor(random() * 99_999)}` : "";
+    const variant =
+      random() < 0.1
+        ? `?variant=${4_000_000 + Math.floor(random() * 99_999)}`
+        : "";
     urls.add(`https://shop.example.test/${section}/${slug}${variant}`);
   }
   return [...urls];
@@ -113,7 +129,7 @@ function newsUrls(count: number, seed = 2): string[] {
     const id = 24_000_000 + Math.floor(random() * 999_999);
     const slug = Array.from(
       { length: 5 + Math.floor(random() * 6) },
-      () => words[Math.floor(random() * words.length)],
+      () => words[Math.floor(random() * words.length)]
     ).join("-");
     urls.add(`https://news.example.test/2024/${month}/${day}/${id}/${slug}`);
   }
@@ -130,7 +146,11 @@ function newsUrls(count: number, seed = 2): string[] {
 function fixtureShapedResults(urls: string[], seed = 3): Rules {
   const random = rng(seed);
   const results: Rules = {};
-  const aggregate = (name: string, status: "pass" | "fail" | "warn", pages: string[]) => {
+  const aggregate = (
+    name: string,
+    status: "pass" | "fail" | "warn",
+    pages: string[]
+  ) => {
     const out: CheckResult[] = [];
     for (let i = 0; i < pages.length; i += 1000) {
       const chunk = pages.slice(i, i + 1000);
@@ -151,12 +171,18 @@ function fixtureShapedResults(urls: string[], seed = 3): Rules {
     const failing: string[] = [];
     const passing: string[] = [];
     for (const url of urls) (random() < density ? failing : passing).push(url);
-    if (failing.length > 0) checks.push(...aggregate("check", r % 2 ? "warn" : "fail", failing));
+    if (failing.length > 0)
+      checks.push(...aggregate("check", r % 2 ? "warn" : "fail", failing));
     if (r === 45) {
       // A rule that could not evaluate some pages (no timing data, say).
       const skipped = passing.splice(0, Math.min(25, passing.length));
       for (const url of skipped) {
-        checks.push({ name: "check", status: "skipped", message: "no data", pageUrl: url });
+        checks.push({
+          name: "check",
+          status: "skipped",
+          message: "no data",
+          pageUrl: url,
+        });
       }
     }
     if (passing.length > 0) checks.push(...aggregate("check", "pass", passing));
@@ -179,7 +205,12 @@ describe("under the budget it carries exactly the original signal", () => {
       "perf/ttfb": {
         checks: [
           { name: "ttfb", status: "pass", message: "ok", pageUrl: P1 },
-          { name: "ttfb", status: "skipped", message: "no timing", pageUrl: P2 },
+          {
+            name: "ttfb",
+            status: "skipped",
+            message: "no timing",
+            pageUrl: P2,
+          },
         ],
       },
       "images/alt": {
@@ -218,16 +249,20 @@ describe("under the budget it carries exactly the original signal", () => {
     expect(decoded.crawledComplete).toBeUndefined();
     // The fixture exercises every map: a failing set, a not-evaluated complement,
     // and a key the fold had already clipped.
-    expect(decoded.notEvaluated?.[resolutionCheckKey("perf/ttfb", "ttfb")]).toEqual(
-      expect.arrayContaining([h(P2)]),
-    );
-    expect(decoded.truncated).toEqual([resolutionCheckKey("links/broken", "broken")]);
+    expect(
+      decoded.notEvaluated?.[resolutionCheckKey("perf/ttfb", "ttfb")]
+    ).toEqual(expect.arrayContaining([h(P2)]));
+    expect(decoded.truncated).toEqual([
+      resolutionCheckKey("links/broken", "broken"),
+    ]);
   });
 
   test("a failing page the crawl never listed still rides along, as the original hashed it", async () => {
     const outside = "https://x.test/never-crawled";
     const ruleResults: Rules = {
-      r: { checks: [{ name: "c", status: "fail", message: "m", pageUrl: outside }] },
+      r: {
+        checks: [{ name: "c", status: "fail", message: "m", pageUrl: outside }],
+      },
     };
     const { legacy, decoded } = await roundTrip(ruleResults, [P1, P2]);
     expect(asSets(decoded)).toEqual(asSets(legacy));
@@ -238,7 +273,10 @@ describe("under the budget it carries exactly the original signal", () => {
   test("fixture-shaped crawls at 50 and 500 pages decode to the original signal", async () => {
     for (const pages of [50, 500]) {
       const urls = shopUrls(pages);
-      const { legacy, decoded } = await roundTrip(fixtureShapedResults(urls), urls);
+      const { legacy, decoded } = await roundTrip(
+        fixtureShapedResults(urls),
+        urls
+      );
       expect(asSets(decoded)).toEqual(asSets(legacy));
     }
   });
@@ -256,14 +294,23 @@ describe("under the budget it carries exactly the original signal", () => {
       else pair = [seen, i];
     }
     const cap = RESOLUTION_SIGNAL_LIMITS.maxHashesPerCheck;
-    const urls = Array.from({ length: cap - 2 }, (_, i) => `https://x.test/q/${i}`);
+    const urls = Array.from(
+      { length: cap - 2 },
+      (_, i) => `https://x.test/q/${i}`
+    );
     urls.push(`https://x.test/p/${pair[0]}`, `https://x.test/p/${pair[1]}`);
     const ruleResults: Rules = {};
     const failingEverywhere = RESOLUTION_SIGNAL_LIMITS.maxHashesTotal / cap;
     for (let r = 0; r < failingEverywhere; r++) {
       ruleResults[`wide-${r}`] = {
         checks: [
-          { name: "c", status: "fail", message: "m", pages: urls, details: { aggregated: true } },
+          {
+            name: "c",
+            status: "fail",
+            message: "m",
+            pages: urls,
+            details: { aggregated: true },
+          },
         ],
       };
     }
@@ -279,7 +326,7 @@ describe("under the budget it carries exactly the original signal", () => {
     const urls = shopUrls(300);
     const results = fixtureShapedResults(urls);
     expect(buildCompactResolutionSignal(results, urls)).toEqual(
-      buildCompactResolutionSignal(results, urls)!,
+      buildCompactResolutionSignal(results, urls)!
     );
   });
 
@@ -289,16 +336,28 @@ describe("under the budget it carries exactly the original signal", () => {
     const aggregate = (pages: string[]): Rules => ({
       r: {
         checks: [
-          { name: "c", status: "fail", message: "x", pages, details: { aggregated: true } },
+          {
+            name: "c",
+            status: "fail",
+            message: "x",
+            pages,
+            details: { aggregated: true },
+          },
         ],
       },
     });
-    const forward = buildCompactResolutionSignal(aggregate([P1, P3, P4]), [P1, P2])!;
-    const backward = buildCompactResolutionSignal(aggregate([P4, P3, P1]), [P1, P2])!;
+    const forward = buildCompactResolutionSignal(aggregate([P1, P3, P4]), [
+      P1,
+      P2,
+    ])!;
+    const backward = buildCompactResolutionSignal(aggregate([P4, P3, P1]), [
+      P1,
+      P2,
+    ])!;
     expect(backward).toEqual(forward);
-    expect((await decodeResolutionSignal(forward)).failing["r|c"]!.sort()).toEqual(
-      [h(P1), h(P3), h(P4)].sort(),
-    );
+    expect(
+      (await decodeResolutionSignal(forward)).failing["r|c"]!.sort()
+    ).toEqual([h(P1), h(P3), h(P4)].sort());
   });
 
   test("nothing to signal → undefined, as before", () => {
@@ -322,10 +381,16 @@ describe("the byte budget", () => {
           url,
           statusCode: i % 20 === 0 ? (i % 40 === 0 ? 404 : 301) : 200,
         }));
-        const out = buildPublishResolution(fixtureShapedResults(crawl), reportPages);
-        const used = bytes(out.resolutionSignalCompact) + bytes(out.pageStatuses ?? []);
+        const out = buildPublishResolution(
+          fixtureShapedResults(crawl),
+          reportPages
+        );
+        const used =
+          bytes(out.resolutionSignalCompact) + bytes(out.pageStatuses ?? []);
         expect(used).toBeLessThanOrEqual(budget);
-        const decoded = await decodeResolutionSignal(out.resolutionSignalCompact!);
+        const decoded = await decodeResolutionSignal(
+          out.resolutionSignalCompact!
+        );
         if (label === "shop" || pages === 2_800) {
           // A typical site lists every page, with every key the count caps allow.
           expect(decoded.crawledComplete).toBeUndefined();
@@ -341,13 +406,22 @@ describe("the byte budget", () => {
           // The capper, which sends tallies, asks for them: the rest of the crawl
           // rides by hash, at the cost of fewer listed pages.
           const capped = await decodeResolutionSignal(
-            buildPublishResolution(fixtureShapedResults(crawl), reportPages, RESOLUTION_PUBLISH_LIMITS, {
-              pageHashes: true,
-            }).resolutionSignalCompact!,
+            buildPublishResolution(
+              fixtureShapedResults(crawl),
+              reportPages,
+              RESOLUTION_PUBLISH_LIMITS,
+              {
+                pageHashes: true,
+              }
+            ).resolutionSignalCompact!
           );
           expect(capped.crawledUrls.length).toBeGreaterThan(2_500);
-          expect(capped.crawledUrls.length).toBeLessThan(decoded.crawledUrls.length);
-          expect(capped.crawledHashes).toHaveLength(pages - capped.crawledUrls.length);
+          expect(capped.crawledUrls.length).toBeLessThan(
+            decoded.crawledUrls.length
+          );
+          expect(capped.crawledHashes).toHaveLength(
+            pages - capped.crawledUrls.length
+          );
         }
       }
     }
@@ -359,10 +433,17 @@ describe("the byte budget", () => {
    * exact for those pages; a key it dropped is listed in `truncated`. Each loss
    * therefore reads as "no evidence" (carry), never as "crawled clean".
    */
-  function expectSafeDegrade(urls: string[], legacy: ResolutionSignal, decoded: ResolutionSignal) {
+  function expectSafeDegrade(
+    urls: string[],
+    legacy: ResolutionSignal,
+    decoded: ResolutionSignal
+  ) {
     const listed = decoded.crawledUrls;
-    expect(new Set(listed)).toEqual(new Set(urls.slice(0, listed.length).map(normalizePageUrl)));
-    if (decoded.crawledComplete === false) expect(decoded.crawledCount).toBe(urls.length);
+    expect(new Set(listed)).toEqual(
+      new Set(urls.slice(0, listed.length).map(normalizePageUrl))
+    );
+    if (decoded.crawledComplete === false)
+      expect(decoded.crawledCount).toBe(urls.length);
     else expect(listed).toHaveLength(urls.length);
     const listedHashes = new Set(listed.map((u) => resolutionUrlHash(u)));
     const onListed = (hashes: string[] | undefined) =>
@@ -374,10 +455,12 @@ describe("the byte budget", () => {
         expect(truncated.has(key)).toBe(true);
         continue;
       }
-      expect(new Set(decoded.failing[key])).toEqual(onListed(legacy.failing[key]));
+      expect(new Set(decoded.failing[key])).toEqual(
+        onListed(legacy.failing[key])
+      );
       if (!truncated.has(key) && !legacyTruncated.has(key)) {
         expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(
-          onListed(legacy.notEvaluated?.[key]),
+          onListed(legacy.notEvaluated?.[key])
         );
       }
     }
@@ -388,7 +471,11 @@ describe("the byte budget", () => {
     const results = fixtureShapedResults(urls);
     const legacy = buildResolutionSignal(results, urls)!;
     const whole = bytes(buildCompactResolutionSignal(results, urls));
-    for (const budget of [whole - 2_000, Math.floor(whole / 2), Math.floor(whole / 4)]) {
+    for (const budget of [
+      whole - 2_000,
+      Math.floor(whole / 2),
+      Math.floor(whole / 4),
+    ]) {
       const signal = buildCompactResolutionSignal(results, urls, budget)!;
       expect(bytes(signal)).toBeLessThanOrEqual(budget);
       expectSafeDegrade(urls, legacy, await decodeResolutionSignal(signal));
@@ -402,7 +489,13 @@ describe("the byte budget", () => {
     for (let r = 0; r < 100; r++) {
       results[`clean-${r}`] = {
         checks: [
-          { name: "c", status: "pass", message: "ok", pages: urls, details: { aggregated: true } },
+          {
+            name: "c",
+            status: "pass",
+            message: "ok",
+            pages: urls,
+            details: { aggregated: true },
+          },
         ],
       };
     }
@@ -436,7 +529,9 @@ describe("the byte budget", () => {
     const decoded = await decodeResolutionSignal(signal);
     expectSafeDegrade(urls, legacy, decoded);
     expect(decoded.crawledComplete).toBeUndefined();
-    const dropped = Object.keys(legacy.failing).filter((key) => !(key in decoded.failing));
+    const dropped = Object.keys(legacy.failing).filter(
+      (key) => !(key in decoded.failing)
+    );
     expect(dropped.length).toBeGreaterThan(0);
     expect(dropped.every((key) => key.startsWith("noisy-"))).toBe(true);
   });
@@ -452,12 +547,17 @@ describe("the byte budget", () => {
     expectSafeDegrade(urls, buildResolutionSignal(results, urls)!, decoded);
     // Nothing outside the list is named failing: the merge gives an unlisted
     // page no authority, so its evidence would be dead weight.
-    const listedHashes = new Set(decoded.crawledUrls.map((u) => resolutionUrlHash(u)));
+    const listedHashes = new Set(
+      decoded.crawledUrls.map((u) => resolutionUrlHash(u))
+    );
     for (const hashes of Object.values(decoded.failing)) {
       for (const hash of hashes) expect(listedHashes.has(hash)).toBe(true);
     }
     // ...and the listed pages keep their failing evidence, not just a URL list.
-    expect(Object.values(decoded.failing).filter((hashes) => hashes.length > 0).length).toBe(40);
+    expect(
+      Object.values(decoded.failing).filter((hashes) => hashes.length > 0)
+        .length
+    ).toBe(40);
     expect(decoded.crawledHashes).toBeUndefined();
   });
 
@@ -470,9 +570,13 @@ describe("the byte budget", () => {
       skipped
         ? { name: "c", status: "skipped", message: "no data", pageUrl: url }
         : { name: "c", status: "pass", message: "ok", pageUrl: url };
-    results.sevenths = { checks: urls.map((url, i) => check(url, i % 7 === 0)) };
+    results.sevenths = {
+      checks: urls.map((url, i) => check(url, i % 7 === 0)),
+    };
     results.tail = { checks: urls.map((url, i) => check(url, i >= 2_990)) };
-    const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], { pageHashes: true })!;
+    const signal = buildCompactResolutionSignal(results, urls, 24 * 1024, [], {
+      pageHashes: true,
+    })!;
     expect(bytes(signal)).toBeLessThanOrEqual(24 * 1024);
     const decoded = await decodeResolutionSignal(signal);
     expect(decoded.crawledComplete).toBe(false);
@@ -480,9 +584,13 @@ describe("the byte budget", () => {
     // The listed pages are a crawl-order prefix, as without hashes.
     const norm = urls.map(normalizePageUrl);
     const listedCount = decoded.crawledUrls.length;
-    expect(new Set(decoded.crawledUrls)).toEqual(new Set(norm.slice(0, listedCount)));
+    expect(new Set(decoded.crawledUrls)).toEqual(
+      new Set(norm.slice(0, listedCount))
+    );
     // Every page the list leaves out is named by hash, sorted and distinct.
-    expect(decoded.crawledHashes).toEqual([...new Set(norm.slice(listedCount).map(resolutionUrlHash))].sort());
+    expect(decoded.crawledHashes).toEqual(
+      [...new Set(norm.slice(listedCount).map(resolutionUrlHash))].sort()
+    );
     // A listed page keeps exactly its original failing evidence, and every key
     // names exactly the pages, listed or not, the original says it did not evaluate.
     const legacy = buildResolutionSignal(results, urls)!;
@@ -491,19 +599,31 @@ describe("the byte budget", () => {
     for (const [key, hashes] of Object.entries(legacy.failing)) {
       expect(key in decoded.failing).toBe(true);
       expect(truncated.has(key)).toBe(false);
-      expect(new Set(decoded.failing[key])).toEqual(new Set(hashes.filter((h) => listedHashes.has(h))));
-      expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(new Set(legacy.notEvaluated?.[key] ?? []));
+      expect(new Set(decoded.failing[key])).toEqual(
+        new Set(hashes.filter((h) => listedHashes.has(h)))
+      );
+      expect(new Set(decoded.notEvaluated?.[key] ?? [])).toEqual(
+        new Set(legacy.notEvaluated?.[key] ?? [])
+      );
     }
     expect(decoded.notEvaluated?.["tail|c"]).toHaveLength(10);
-    expect(decoded.notEvaluated?.["tail|c"]?.some((hash) => listedHashes.has(hash))).toBe(false);
+    expect(
+      decoded.notEvaluated?.["tail|c"]?.some((hash) => listedHashes.has(hash))
+    ).toBe(false);
   });
 
   test("(#2673) a crawl past the collection cap sends no hashes: they could not be complete", async () => {
     const urls = newsUrls(RESOLUTION_SIGNAL_LIMITS.maxCrawledUrls + 1);
     const decoded = await decodeResolutionSignal(
-      buildCompactResolutionSignal(fixtureShapedResults(urls.slice(0, 500)), urls, 120 * 1024, [], {
-        pageHashes: true,
-      })!,
+      buildCompactResolutionSignal(
+        fixtureShapedResults(urls.slice(0, 500)),
+        urls,
+        120 * 1024,
+        [],
+        {
+          pageHashes: true,
+        }
+      )!
     );
     expect(decoded.crawledComplete).toBe(false);
     expect(decoded.crawledHashes).toBeUndefined();
@@ -512,7 +632,13 @@ describe("the byte budget", () => {
   test("(#2673) a whole list carries no hashes", async () => {
     const urls = newsUrls(300);
     const decoded = await decodeResolutionSignal(
-      buildCompactResolutionSignal(fixtureShapedResults(urls), urls, undefined, [], { pageHashes: true })!,
+      buildCompactResolutionSignal(
+        fixtureShapedResults(urls),
+        urls,
+        undefined,
+        [],
+        { pageHashes: true }
+      )!
     );
     expect(decoded.crawledComplete).toBeUndefined();
     expect(decoded.crawledHashes).toBeUndefined();
@@ -523,7 +649,10 @@ describe("the byte budget", () => {
     // bare list's own size (so no key can be dropped to make room), only a
     // clipped list WITHOUT hashes fits: the builder falls back to one rather
     // than sending no signal.
-    const urls = Array.from({ length: 2_000 }, (_, i) => `https://x.test/p/${i}`);
+    const urls = Array.from(
+      { length: 2_000 },
+      (_, i) => `https://x.test/p/${i}`
+    );
     const results: Rules = {
       r: {
         checks: [
@@ -538,7 +667,9 @@ describe("the byte budget", () => {
       },
     };
     const budget = bytes(buildCompactResolutionSignal({}, urls)) - 64;
-    const signal = buildCompactResolutionSignal(results, urls, budget, [], { pageHashes: true })!;
+    const signal = buildCompactResolutionSignal(results, urls, budget, [], {
+      pageHashes: true,
+    })!;
     expect(signal).toBeDefined();
     expect(bytes(signal)).toBeLessThanOrEqual(budget);
     const decoded = await decodeResolutionSignal(signal);
@@ -554,48 +685,69 @@ describe("the byte budget", () => {
     }));
     const out = buildPublishResolution(fixtureShapedResults(urls), pages);
     const statuses = out.pageStatuses!;
-    expect(bytes(statuses)).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes);
+    expect(bytes(statuses)).toBeLessThanOrEqual(
+      RESOLUTION_PUBLISH_LIMITS.maxPageStatusBytes
+    );
     // All 1,000 removed pages do not fit either, but they lead the list.
-    expect(statuses.every((s) => s.status === 404 || s.status === 410)).toBe(true);
+    expect(statuses.every((s) => s.status === 404 || s.status === 410)).toBe(
+      true
+    );
     expect(statuses.length).toBeLessThan(1_000);
     // The body holds both fields, keys included, within the budget.
     expect(
-      bytes({ pageStatuses: statuses, resolutionSignalCompact: out.resolutionSignalCompact }),
+      bytes({
+        pageStatuses: statuses,
+        resolutionSignalCompact: out.resolutionSignalCompact,
+      })
     ).toBeLessThanOrEqual(RESOLUTION_PUBLISH_LIMITS.maxBytes);
     // ...and the signal still names every removed page, with its status.
     const decoded = await decodeResolutionSignal(out.resolutionSignalCompact!);
     const removed = pages
       .filter((p) => p.statusCode !== 301)
       .map((p) => `${normalizePageUrl(p.url)} ${p.statusCode}`);
-    expect(decoded.removedPages!.map((p) => `${p.url} ${p.status}`).sort()).toEqual(removed.sort());
+    expect(
+      decoded.removedPages!.map((p) => `${p.url} ${p.status}`).sort()
+    ).toEqual(removed.sort());
     expect(decoded.removedCount).toBe(1_000);
   });
 
   test("a clipped page list still counts the removed pages it cannot name", async () => {
     const urls = newsUrls(3_000);
-    const pages = urls.map((url, i) => ({ url, statusCode: i % 10 === 0 ? 404 : 200 }));
+    const pages = urls.map((url, i) => ({
+      url,
+      statusCode: i % 10 === 0 ? 404 : 200,
+    }));
     const removed = pages.filter((p) => p.statusCode === 404);
     const signal = buildCompactResolutionSignal(
       fixtureShapedResults(urls),
       urls,
       24 * 1024,
-      removed.map((p) => ({ url: p.url, status: p.statusCode })),
+      removed.map((p) => ({ url: p.url, status: p.statusCode }))
     )!;
     const decoded = await decodeResolutionSignal(signal);
     expect(decoded.crawledComplete).toBe(false);
     expect(decoded.removedCount).toBe(300);
     // Only listed pages are named, and every listed removed page is.
     const listed = new Set(decoded.crawledUrls);
-    const listedRemoved = removed.map((p) => normalizePageUrl(p.url)).filter((u) => listed.has(u));
+    const listedRemoved = removed
+      .map((p) => normalizePageUrl(p.url))
+      .filter((u) => listed.has(u));
     expect(listedRemoved.length).toBeGreaterThan(0);
     expect(listedRemoved.length).toBeLessThan(300);
-    expect(decoded.removedPages!.map((p) => p.url).sort()).toEqual(listedRemoved.sort());
+    expect(decoded.removedPages!.map((p) => p.url).sort()).toEqual(
+      listedRemoved.sort()
+    );
   }, 60_000);
 
   test("a healthy site's pageStatuses are untouched and in crawl order", () => {
     const urls = shopUrls(50);
-    const pages = urls.map((url, i) => ({ url, statusCode: i === 7 ? 500 : i === 3 ? 404 : 200 }));
-    expect(buildPublishResolution(fixtureShapedResults(urls), pages).pageStatuses).toEqual([
+    const pages = urls.map((url, i) => ({
+      url,
+      statusCode: i === 7 ? 500 : i === 3 ? 404 : 200,
+    }));
+    expect(
+      buildPublishResolution(fixtureShapedResults(urls), pages).pageStatuses
+    ).toEqual([
       { url: urls[3]!, status: 404 },
       { url: urls[7]!, status: 500 },
     ]);
@@ -605,21 +757,35 @@ describe("the byte budget", () => {
 describe("decodeResolutionSignal refuses what it cannot bound", () => {
   const encode = (payload: unknown): CompactResolutionSignal => ({
     v: 1,
-    data: deflateRawSync(Buffer.from(JSON.stringify(payload))).toString("base64"),
+    data: deflateRawSync(Buffer.from(JSON.stringify(payload))).toString(
+      "base64"
+    ),
   });
-  const ok = { v: 1, urls: [P1, P2], complete: true, pages: 2, failing: { "r|c": [1] } };
+  const ok = {
+    v: 1,
+    urls: [P1, P2],
+    complete: true,
+    pages: 2,
+    failing: { "r|c": [1] },
+  };
 
   test("a well-formed payload decodes", async () => {
     const decoded = await decodeResolutionSignal(encode(ok));
     expect(decoded.failing["r|c"]).toEqual([resolutionUrlHash(P2)]);
     expect(decoded.removedPages).toBeUndefined();
     const withRemoved = await decodeResolutionSignal(
-      encode({ ...ok, complete: false, pages: 5, removed: { "410": [1] }, removedCount: 2 }),
+      encode({
+        ...ok,
+        complete: false,
+        pages: 5,
+        removed: { "410": [1] },
+        removedCount: 2,
+      })
     );
     expect(withRemoved.removedPages).toEqual([{ url: P2, status: 410 }]);
     expect(withRemoved.removedCount).toBe(2);
     const withHashes = await decodeResolutionSignal(
-      encode({ ...ok, complete: false, pages: 4, hashes: "0000000100000002" }),
+      encode({ ...ok, complete: false, pages: 4, hashes: "0000000100000002" })
     );
     expect(withHashes.crawledHashes).toEqual(["00000001", "00000002"]);
     // (#2688) The unlisted pages a key did not evaluate join its listed ones.
@@ -631,7 +797,7 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
         notEvaluated: { "r|c": [0] },
         hashes: "0000000100000002",
         hashesNotEvaluated: { "r|c": [1], "r|d": [0] },
-      }),
+      })
     );
     expect(withSkips.notEvaluated).toEqual({
       "r|c": [resolutionUrlHash(P1), "00000002"],
@@ -649,23 +815,43 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
       complete: false,
       pages: 10_000,
       failing: Object.fromEntries(keys.map((key) => [key, []])),
-      notEvaluated: Object.fromEntries(keys.map((key) => [key, new Array(1_000).fill(0)])),
+      notEvaluated: Object.fromEntries(
+        keys.map((key) => [key, new Array(1_000).fill(0)])
+      ),
       hashes: "0".repeat(8 * 9_000),
-      hashesNotEvaluated: Object.fromEntries(keys.map((key) => [key, new Array(9_000).fill(0)])),
+      hashesNotEvaluated: Object.fromEntries(
+        keys.map((key) => [key, new Array(9_000).fill(0)])
+      ),
     };
-    expect(11 * 9_000).toBeLessThanOrEqual(RESOLUTION_SIGNAL_LIMITS.maxHashesTotal);
-    await expect(decodeResolutionSignal(encode(payload))).rejects.toThrow(/notEvaluated size/);
+    expect(11 * 9_000).toBeLessThanOrEqual(
+      RESOLUTION_SIGNAL_LIMITS.maxHashesTotal
+    );
+    await expect(decodeResolutionSignal(encode(payload))).rejects.toThrow(
+      /notEvaluated size/
+    );
     const fewer = { ...payload, notEvaluated: { "r|0": [0] } };
-    expect((await decodeResolutionSignal(encode(fewer))).notEvaluated?.["r|0"]).toHaveLength(9_001);
+    expect(
+      (await decodeResolutionSignal(encode(fewer))).notEvaluated?.["r|0"]
+    ).toHaveLength(9_001);
   });
 
   test("(#2673) a hashes string past what the crawl can hold is refused cheaply", async () => {
     // ~4 MiB of hex in one string deflates to a few KB: refused before it is
     // parsed, on the longest string a payload may hold (10,000 hashes)...
-    const huge = encode({ ...ok, complete: false, pages: 10_000, hashes: "0".repeat(4_000_000) });
+    const huge = encode({
+      ...ok,
+      complete: false,
+      pages: 10_000,
+      hashes: "0".repeat(4_000_000),
+    });
     await expect(decodeResolutionSignal(huge)).rejects.toThrow(/shape past/);
     // ...and one within that but past the pages the list leaves out, on its count.
-    const many = encode({ ...ok, complete: false, pages: 100, hashes: "0".repeat(8 * 99) });
+    const many = encode({
+      ...ok,
+      complete: false,
+      pages: 100,
+      hashes: "0".repeat(8 * 99),
+    });
     await expect(decodeResolutionSignal(many)).rejects.toThrow(/bad hashes/);
   });
 
@@ -673,28 +859,67 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
     ["an index past the list", { ...ok, failing: { "r|c": [2] } }],
     ["a negative gap", { ...ok, failing: { "r|c": [-1] } }],
     ["a fractional gap", { ...ok, failing: { "r|c": [0.5] } }],
-    ["a not-evaluated index into `other`", { ...ok, other: [P3], notEvaluated: { "r|c": [2] } }],
+    [
+      "a not-evaluated index into `other`",
+      { ...ok, other: [P3], notEvaluated: { "r|c": [2] } },
+    ],
     ["fewer pages than listed", { ...ok, pages: 1 }],
     ["a complete list with pages it does not list", { ...ok, pages: 3 }],
-    ["`other` beside a partial list", { ...ok, complete: false, pages: 3, other: [P3] }],
-    ["a removed status other than 404/410", { ...ok, removed: { "301": [0] }, removedCount: 1 }],
-    ["more removed pages named than counted", { ...ok, removed: { "404": [0, 0] }, removedCount: 1 }],
-    ["a complete list with removed pages it does not name", { ...ok, removedCount: 1 }],
+    [
+      "`other` beside a partial list",
+      { ...ok, complete: false, pages: 3, other: [P3] },
+    ],
+    [
+      "a removed status other than 404/410",
+      { ...ok, removed: { "301": [0] }, removedCount: 1 },
+    ],
+    [
+      "more removed pages named than counted",
+      { ...ok, removed: { "404": [0, 0] }, removedCount: 1 },
+    ],
+    [
+      "a complete list with removed pages it does not name",
+      { ...ok, removedCount: 1 },
+    ],
     ["hashes beside a complete list", { ...ok, hashes: "00000001" }],
-    ["hashes that are not 8-hex", { ...ok, complete: false, pages: 4, hashes: "0000001" }],
-    ["hashes that are not hex", { ...ok, complete: false, pages: 4, hashes: "0000000g" }],
-    ["more hashes than unlisted pages", { ...ok, complete: false, pages: 3, hashes: "0000000100000002" }],
-    ["hashes that are not a string", { ...ok, complete: false, pages: 4, hashes: ["00000001"] }],
+    [
+      "hashes that are not 8-hex",
+      { ...ok, complete: false, pages: 4, hashes: "0000001" },
+    ],
+    [
+      "hashes that are not hex",
+      { ...ok, complete: false, pages: 4, hashes: "0000000g" },
+    ],
+    [
+      "more hashes than unlisted pages",
+      { ...ok, complete: false, pages: 3, hashes: "0000000100000002" },
+    ],
+    [
+      "hashes that are not a string",
+      { ...ok, complete: false, pages: 4, hashes: ["00000001"] },
+    ],
     [
       "unlisted not-evaluated pages without hashes",
       { ...ok, complete: false, pages: 4, hashesNotEvaluated: { "r|c": [0] } },
     ],
     [
       "an unlisted not-evaluated index past the hashes",
-      { ...ok, complete: false, pages: 4, hashes: "00000001", hashesNotEvaluated: { "r|c": [1] } },
+      {
+        ...ok,
+        complete: false,
+        pages: 4,
+        hashes: "00000001",
+        hashesNotEvaluated: { "r|c": [1] },
+      },
     ],
-    ["more removed pages than pages", { ...ok, complete: false, pages: 2, removedCount: 3 }],
-    ["more pages than a crawl can have", { ...ok, complete: false, pages: 1e9 }],
+    [
+      "more removed pages than pages",
+      { ...ok, complete: false, pages: 2, removedCount: 3 },
+    ],
+    [
+      "more pages than a crawl can have",
+      { ...ok, complete: false, pages: 1e9 },
+    ],
     ["no failing map", { v: 1, urls: [P1], complete: true, pages: 1 }],
     ["a non-string url", { ...ok, urls: [P1, 7] }],
     ["an unknown version", { ...ok, v: 2 }],
@@ -703,7 +928,10 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
       {
         ...ok,
         failing: Object.fromEntries(
-          Array.from({ length: RESOLUTION_SIGNAL_LIMITS.maxChecks + 1 }, (_, i) => [`r|${i}`, []]),
+          Array.from(
+            { length: RESOLUTION_SIGNAL_LIMITS.maxChecks + 1 },
+            (_, i) => [`r|${i}`, []]
+          )
         ),
       },
     ],
@@ -713,11 +941,13 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
 
   test("a payload that inflates past the cap is refused without reading it all", async () => {
     // ~5 MiB of zeros deflates to a few KB: the shape of a decompression bomb.
-    const bomb = deflateRawSync(Buffer.alloc(RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes + 1024));
-    expect(bomb.byteLength).toBeLessThan(16 * 1024);
-    await expect(decodeResolutionSignal({ v: 1, data: bomb.toString("base64") })).rejects.toThrow(
-      /inflates past/,
+    const bomb = deflateRawSync(
+      Buffer.alloc(RESOLUTION_PUBLISH_LIMITS.maxInflatedBytes + 1024)
     );
+    expect(bomb.byteLength).toBeLessThan(16 * 1024);
+    await expect(
+      decodeResolutionSignal({ v: 1, data: bomb.toString("base64") })
+    ).rejects.toThrow(/inflates past/);
   });
 
   test("a small body whose JSON no valid payload has is refused before it is parsed", async () => {
@@ -727,38 +957,56 @@ describe("decodeResolutionSignal refuses what it cannot bound", () => {
       v: 1,
       data: deflateRawSync(Buffer.from(body)).toString("base64"),
     });
-    const objects = raw(`{"v":1,"x":[${"{},".repeat(1_300_000)}{}],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const objects = raw(
+      `{"v":1,"x":[${"{},".repeat(1_300_000)}{}],"urls":[],"complete":true,"pages":0,"failing":{}}`
+    );
     expect(objects.data.length).toBeLessThan(32 * 1024);
     await expect(decodeResolutionSignal(objects)).rejects.toThrow(/shape past/);
     // A flat list of more elements than every list together may hold.
-    const zeros = raw(`{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const zeros = raw(
+      `{"v":1,"x":[${"0,".repeat(600_000)}0],"urls":[],"complete":true,"pages":0,"failing":{}}`
+    );
     await expect(decodeResolutionSignal(zeros)).rejects.toThrow(/shape past/);
     // More strings than every URL list and key together may hold: ~10 KB
     // deflated, which JSON.parse would make 416k strings of.
-    const strings = raw(`{"v":1,"x":[${'"a",'.repeat(416_000)}"a"],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const strings = raw(
+      `{"v":1,"x":[${'"a",'.repeat(416_000)}"a"],"urls":[],"complete":true,"pages":0,"failing":{}}`
+    );
     await expect(decodeResolutionSignal(strings)).rejects.toThrow(/shape past/);
     // Nesting deeper than root → map → list.
-    const deep = raw(`{"v":1,"x":[[[0]]],"urls":[],"complete":true,"pages":0,"failing":{}}`);
+    const deep = raw(
+      `{"v":1,"x":[[[0]]],"urls":[],"complete":true,"pages":0,"failing":{}}`
+    );
     await expect(decodeResolutionSignal(deep)).rejects.toThrow(/shape past/);
     // Brackets inside strings are text, not structure.
-    const quoted = raw(`{"v":1,"urls":["https://x.test/[{\\"}]"],"complete":true,"pages":1,"failing":{}}`);
+    const quoted = raw(
+      `{"v":1,"urls":["https://x.test/[{\\"}]"],"complete":true,"pages":1,"failing":{}}`
+    );
     expect((await decodeResolutionSignal(quoted)).crawledUrls).toHaveLength(1);
   });
 
   test("data past the signal's byte budget is refused before it is decoded", async () => {
     const data = "A".repeat(RESOLUTION_PUBLISH_LIMITS.maxBytes + 1);
-    await expect(decodeResolutionSignal({ v: 1, data })).rejects.toThrow(/byte budget/);
+    await expect(decodeResolutionSignal({ v: 1, data })).rejects.toThrow(
+      /byte budget/
+    );
   });
 
   test("garbage that is not deflate data is refused", async () => {
-    await expect(decodeResolutionSignal({ v: 1, data: "bm90IGRlZmxhdGU=" })).rejects.toThrow();
+    await expect(
+      decodeResolutionSignal({ v: 1, data: "bm90IGRlZmxhdGU=" })
+    ).rejects.toThrow();
   });
 });
 
 // pub#935: a `<check>-unconfirmed` row is evaluation evidence for `<check>` on
 // its page, in both signal shapes, and never failing evidence or a key of its own.
 describe("an unconfirmed row counts as its base check evaluated (pub#935)", () => {
-  const row = (name: string, url: string, status: CheckResult["status"]): CheckResult => ({
+  const row = (
+    name: string,
+    url: string,
+    status: CheckResult["status"]
+  ): CheckResult => ({
     name,
     status,
     message: name,
@@ -768,7 +1016,9 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
 
   test("only unconfirmed on P1: P1 evaluated and not failing for c, both shapes", async () => {
     const rules: Rules = {
-      "a11y/r": { checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass")] },
+      "a11y/r": {
+        checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass")],
+      },
     };
     const { legacy, decoded } = await roundTrip(rules, [P1, P2, P3]);
     for (const signal of [legacy, decoded]) {
@@ -781,7 +1031,11 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
   test("a page that reports c without an unconfirmed row is evaluated for c-unconfirmed", async () => {
     const rules: Rules = {
       "a11y/r": {
-        checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass"), row("c", P3, "fail")],
+        checks: [
+          row("c-unconfirmed", P1, "warn"),
+          row("c", P2, "pass"),
+          row("c", P3, "fail"),
+        ],
       },
     };
     const { legacy, decoded } = await roundTrip(rules, [P1, P2, P3, P4]);
@@ -796,7 +1050,11 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
   test("a page failing c and also unconfirmed for it stays failing", async () => {
     const rules: Rules = {
       "a11y/r": {
-        checks: [row("c", P1, "fail"), row("c-unconfirmed", P1, "warn"), row("c", P2, "pass")],
+        checks: [
+          row("c", P1, "fail"),
+          row("c-unconfirmed", P1, "warn"),
+          row("c", P2, "pass"),
+        ],
       },
     };
     const { legacy, decoded } = await roundTrip(rules, [P1, P2]);
@@ -806,7 +1064,9 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
   });
 
   test("no page reports c itself: the unconfirmed row creates no c key", () => {
-    const rules: Rules = { "a11y/r": { checks: [row("c-unconfirmed", P1, "warn")] } };
+    const rules: Rules = {
+      "a11y/r": { checks: [row("c-unconfirmed", P1, "warn")] },
+    };
     const legacy = buildResolutionSignal(rules, [P1, P2])!;
     expect(legacy.failing).not.toHaveProperty(KEY);
     expect(legacy.notEvaluated ?? {}).not.toHaveProperty(KEY);
@@ -820,7 +1080,9 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
       pages: [P1, P3],
       details: { aggregated: true },
     };
-    const rules: Rules = { "a11y/r": { checks: [folded, row("c", P2, "pass")] } };
+    const rules: Rules = {
+      "a11y/r": { checks: [folded, row("c", P2, "pass")] },
+    };
     const legacy = buildResolutionSignal(rules, [P1, P2, P3, P4])!;
     expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P4)]));
   });
@@ -834,7 +1096,13 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
       pageUrl: P3,
     };
     const rules: Rules = {
-      "a11y/r": { checks: [row("c-unconfirmed", P1, "warn"), row("c", P2, "pass"), truncated] },
+      "a11y/r": {
+        checks: [
+          row("c-unconfirmed", P1, "warn"),
+          row("c", P2, "pass"),
+          truncated,
+        ],
+      },
     };
     const legacy = buildResolutionSignal(rules, [P1, P2, P3])!;
     expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P3)]));
@@ -844,12 +1112,17 @@ describe("an unconfirmed row counts as its base check evaluated (pub#935)", () =
     const timedOut: CheckResult = {
       name: "a11y/r-error",
       status: "skipped",
-      message: "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned",
+      message:
+        "Rule not evaluated: exceeded its 1000 ms time budget and was abandoned",
       skipReason: "rule-timed-out",
       pageUrl: P3,
       details: { timedOut: true, budgetMs: 1000, pages: 1 },
     };
-    const rules: Rules = { "a11y/r": { checks: [row("c", P1, "fail"), row("c", P2, "pass"), timedOut] } };
+    const rules: Rules = {
+      "a11y/r": {
+        checks: [row("c", P1, "fail"), row("c", P2, "pass"), timedOut],
+      },
+    };
     const legacy = buildResolutionSignal(rules, [P1, P2, P3])!;
     // P3 is neither failing nor evaluated for `c`, so the merge carries it.
     expect(new Set(legacy.notEvaluated?.[KEY] ?? [])).toEqual(new Set([h(P3)]));

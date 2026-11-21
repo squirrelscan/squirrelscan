@@ -2,12 +2,12 @@
 // gets a hint with no advice about networks, proxies or --offline; a local one
 // keeps the existing hint.
 
+import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
-import { TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 import { notCheckedRules } from "../src/not-checked";
-import type { AuditReport } from "../src/types";
 
 function report(details?: Record<string, unknown>): AuditReport {
   return {
@@ -27,7 +27,8 @@ function report(details?: Record<string, unknown>): AuditReport {
           {
             name: "tls-certificate",
             status: "skipped",
-            message: "TLS certificate not checked: the hosted audit could not open a TLS connection to the site",
+            message:
+              "TLS certificate not checked: the hosted audit could not open a TLS connection to the site",
             value: "not-checked",
             skipReason: TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
             ...(details ? { details } : {}),
@@ -47,7 +48,9 @@ describe("security/tls-certificate hint by environment (#3922)", () => {
 
   test("a local check keeps the existing hint", () => {
     const [rule] = notCheckedRules(report());
-    expect(rule!.hint).toContain("Run the audit again from a network that can open a direct TLS connection");
+    expect(rule!.hint).toContain(
+      "Run the audit again from a network that can open a direct TLS connection"
+    );
     expect(rule!.hint).toContain("--offline");
   });
 });

@@ -6,12 +6,22 @@
 // fetched, from the records it holds. It makes no request of its own, and a
 // target the crawl did not fetch is counted as not checked, never passed or failed.
 
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult, SiteData } from "../types";
-
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
-import { buildHreflangSignal, type HreflangPageSignal } from "./hreflang-signal";
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+  SiteData,
+} from "../types";
+
 import { didRedirect, documentUrl } from "../shared/redirect-evidence";
+import {
+  buildHreflangSignal,
+  type HreflangPageSignal,
+} from "./hreflang-signal";
 
 /** Items kept per check; the count in `value` is always the full total. */
 const MAX_ITEMS = 200;
@@ -31,7 +41,10 @@ type Target =
   | { kind: "unchecked" };
 
 function pageIdentities(page: SitePage): Set<string> {
-  const ids = new Set<string>([normalizePageUrl(page.url), normalizePageUrl(documentUrl(page))]);
+  const ids = new Set<string>([
+    normalizePageUrl(page.url),
+    normalizePageUrl(documentUrl(page)),
+  ]);
   if (page.finalUrl) ids.add(normalizePageUrl(page.finalUrl));
   return ids;
 }
@@ -51,10 +64,16 @@ function issueCheck(
   noun: string,
   findings: Finding[],
   passMessage: string,
-  checkedTargets: number,
+  checkedTargets: number
 ): CheckResult {
   if (findings.length === 0) {
-    return { name, status: "pass", message: passMessage, value: 0, details: { checkedTargets } };
+    return {
+      name,
+      status: "pass",
+      message: passMessage,
+      value: 0,
+      details: { checkedTargets },
+    };
   }
   const { items, omitted } = cap(findings);
   return {
@@ -63,7 +82,10 @@ function issueCheck(
     message: `${findings.length} hreflang link(s) ${noun}`,
     value: findings.length,
     items,
-    details: { checkedTargets, ...(omitted > 0 ? { omittedItems: omitted } : {}) },
+    details: {
+      checkedTargets,
+      ...(omitted > 0 ? { omittedItems: omitted } : {}),
+    },
   };
 }
 
@@ -84,13 +106,18 @@ export const hreflangTargetsRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const pages = ctx.site?.pages ?? [];
-    const collected = new Map((ctx.collectedSignals?.pages ?? []).map((r) => [r.url, r.hreflang]));
+    const collected = new Map(
+      (ctx.collectedSignals?.pages ?? []).map((r) => [r.url, r.hreflang])
+    );
     const signalOf = (page: SitePage): HreflangPageSignal =>
-      collected.get(page.url) ?? buildHreflangSignal(page.parsed, page.headers, page.url);
+      collected.get(page.url) ??
+      buildHreflangSignal(page.parsed, page.headers, page.url);
 
     // Every page the crawl holds, by the URL the crawl requested. Sorted so the
     // first claimant of an identity does not depend on crawl order.
-    const sorted = [...pages].sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+    const sorted = [...pages].sort((a, b) =>
+      a.url < b.url ? -1 : a.url > b.url ? 1 : 0
+    );
     const byIdentity = new Map<string, Target>();
     for (const page of sorted) {
       const target: Target = page.parsed
@@ -109,7 +136,7 @@ export const hreflangTargetsRule: Rule = {
         id,
         fetched.rateLimited || fetched.wafChallenge
           ? { kind: "unchecked" }
-          : { kind: "fetched", status: fetched.status },
+          : { kind: "fetched", status: fetched.status }
       );
     }
 
@@ -136,7 +163,8 @@ export const hreflangTargetsRule: Rule = {
         seenPairs.add(targetId);
         linkCount++;
 
-        const target = byIdentity.get(targetId) ?? ({ kind: "unchecked" } as Target);
+        const target =
+          byIdentity.get(targetId) ?? ({ kind: "unchecked" } as Target);
 
         if (target.kind === "unchecked") {
           notChecked.add(alt.href);
@@ -167,7 +195,10 @@ export const hreflangTargetsRule: Rule = {
           });
           continue;
         }
-        if (page.statusCode >= 300 || didRedirect(page.url, page.finalUrl, page.redirectChain)) {
+        if (
+          page.statusCode >= 300 ||
+          didRedirect(page.url, page.finalUrl, page.redirectChain)
+        ) {
           const finalUrl = page.redirectChain?.finalUrl ?? page.finalUrl;
           redirects.push({
             source: source.url,
@@ -180,7 +211,10 @@ export const hreflangTargetsRule: Rule = {
         // Why a search engine would drop this target from the index.
         const reasons: string[] = [];
         if (signal.noindex) reasons.push(`noindex (${signal.noindex})`);
-        if (signal.canonical && !pageIdentities(page).has(normalizePageUrl(signal.canonical))) {
+        if (
+          signal.canonical &&
+          !pageIdentities(page).has(normalizePageUrl(signal.canonical))
+        ) {
           reasons.push(`canonical is ${signal.canonical}`);
         }
         if (reasons.length > 0) {
@@ -194,7 +228,7 @@ export const hreflangTargetsRule: Rule = {
         // The target names other versions but not this page.
         if (signal.alternates.length > 0) {
           const returns = signal.alternates.some((back) =>
-            sourceIds.has(normalizePageUrl(back.href)),
+            sourceIds.has(normalizePageUrl(back.href))
           );
           if (!returns) {
             noReturn.push({
@@ -227,7 +261,7 @@ export const hreflangTargetsRule: Rule = {
         "point at a URL that redirects",
         redirects,
         "No hreflang link points at a redirect",
-        checked.size,
+        checked.size
       ),
       issueCheck(
         "hreflang-to-broken",
@@ -235,7 +269,7 @@ export const hreflangTargetsRule: Rule = {
         "point at a URL that returns an error",
         broken,
         "No hreflang link points at a 4xx or 5xx page",
-        checked.size,
+        checked.size
       ),
       issueCheck(
         "hreflang-to-non-indexable",
@@ -243,7 +277,7 @@ export const hreflangTargetsRule: Rule = {
         "point at a page search engines will not index",
         nonIndexable,
         "Every checked hreflang target is indexable and canonical to itself",
-        checked.size,
+        checked.size
       ),
       issueCheck(
         "hreflang-no-return-link",
@@ -251,7 +285,7 @@ export const hreflangTargetsRule: Rule = {
         "have no return link from the target",
         noReturn,
         "Every checked hreflang target links back",
-        checked.size,
+        checked.size
       ),
     ];
 
@@ -263,7 +297,9 @@ export const hreflangTargetsRule: Rule = {
         message: `${list.length} hreflang target(s) were not checked: the crawl did not fetch them, or they have no page markup to judge`,
         value: list.length,
         items: list.slice(0, MAX_ITEMS).map((url) => ({ id: url })),
-        ...(list.length > MAX_ITEMS ? { details: { omittedItems: list.length - MAX_ITEMS } } : {}),
+        ...(list.length > MAX_ITEMS
+          ? { details: { omittedItems: list.length - MAX_ITEMS } }
+          : {}),
       });
     }
 

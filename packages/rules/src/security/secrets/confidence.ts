@@ -1,5 +1,5 @@
-import { createHmac } from "node:crypto";
 import { trimTrailing } from "@squirrelscan/utils/trim";
+import { createHmac } from "node:crypto";
 
 // security/leaked-secrets — token decoders (#361).
 //
@@ -86,16 +86,21 @@ const PRESIGNED_LEAD_RE = /(?:x-amz-credential|awsaccesskeyid)=$/i;
 const PRESIGNED_SIGNATURE_RE = /[?&](?:x-amz-)?signature=[^&\s]/i;
 const PRESIGNED_EXPIRY_RE = /[?&](?:x-amz-expires|expires)=\d/i;
 
-function isPresigned(before: string | undefined, after: string | undefined): boolean {
+function isPresigned(
+  before: string | undefined,
+  after: string | undefined
+): boolean {
   if (before === undefined || !PRESIGNED_LEAD_RE.test(before)) return false;
   const around = before + (after ?? "");
-  return PRESIGNED_SIGNATURE_RE.test(around) && PRESIGNED_EXPIRY_RE.test(around);
+  return (
+    PRESIGNED_SIGNATURE_RE.test(around) && PRESIGNED_EXPIRY_RE.test(around)
+  );
 }
 
 function refineAwsAccessKeyId(
   value: string,
   before: string | undefined,
-  after: string | undefined,
+  after: string | undefined
 ): Refinement {
   const accountId = decodeAwsAccountId(value);
   const presigned = isPresigned(before, after);
@@ -104,7 +109,8 @@ function refineAwsAccessKeyId(
     prefix: value.slice(0, 4),
   };
   if (presigned) extra.presigned = true;
-  if (accountId === null) return { confidence: presigned ? "info" : "medium", extra };
+  if (accountId === null)
+    return { confidence: presigned ? "info" : "medium", extra };
   return { confidence: presigned ? "info" : "high", extra };
 }
 
@@ -137,7 +143,8 @@ const PLACEHOLDER_SECRET_RE =
   /^(?:your|my|the|db|database|user|app|redis|mongo|postgres|mysql)?(?:password|passwd|pass|pwd|pw|secret)$/;
 const PLACEHOLDER_HOST_RE =
   /^(?:your|my|the|db|database)?(?:host|hostname|server|cluster|endpoint|address)(?:name)?$/;
-const PLACEHOLDER_DB_RE = /^(?:your|my|the)?(?:db|dbname|database|databasename|mydb|name)$/;
+const PLACEHOLDER_DB_RE =
+  /^(?:your|my|the)?(?:db|dbname|database|databasename|mydb|name)$/;
 
 function foldPlaceholder(part: string): string {
   return part.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -149,14 +156,19 @@ function foldPlaceholder(part: string): string {
  */
 function isPlaceholderSecret(part: string): boolean {
   const folded = foldPlaceholder(part);
-  return /^[*•.]+$/.test(part) || /^x+$/.test(folded) || PLACEHOLDER_SECRET_RE.test(folded);
+  return (
+    /^[*•.]+$/.test(part) ||
+    /^x+$/.test(folded) ||
+    PLACEHOLDER_SECRET_RE.test(folded)
+  );
 }
 
 // A password that is nothing but a placeholder for one: `${pass}`, `{{ pass }}`,
 // `{password}`, `%s`, `%(pw)s`. Tested on the password alone and on the whole of
 // it: a hard-coded password next to a templated host (`@${DB_HOST}`), or a real
 // password that merely contains `%s` or `{abc}`, is still a credential.
-const TEMPLATE_PASSWORD_RE = /^(?:\$\{[^}]{1,64}\}|\{\{[^}]{1,64}\}\}|\{[a-z_]{1,32}\}|%[sd]|%\([A-Za-z_]\w{0,32}\)[sd])$/;
+const TEMPLATE_PASSWORD_RE =
+  /^(?:\$\{[^}]{1,64}\}|\{\{[^}]{1,64}\}\}|\{[a-z_]{1,32}\}|%[sd]|%\([A-Za-z_]\w{0,32}\)[sd])$/;
 
 // Hosts that name this machine or a name no resolver hands out: loopback and
 // the reserved `.localhost`, `.test`, `.example` and `.invalid` (RFC 2606 and
@@ -175,10 +187,37 @@ function isUnroutableHosts(authority: string, at: number): boolean {
 // a separator (`example-password`). Short, all letters once those are undone,
 // and containing a word that names itself a placeholder. A random password has
 // no such word in it.
-const LEET: Record<string, string> = { "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", $: "s" };
+const LEET: Record<string, string> = {
+  "0": "o",
+  "1": "l",
+  "3": "e",
+  "4": "a",
+  "5": "s",
+  "7": "t",
+  "@": "a",
+  $: "s",
+};
 const DOCUMENTATION_STEMS = [
-  "secret", "password", "passwd", "pass", "pwd", "admin", "root", "test", "changeme", "example",
-  "sample", "demo", "dummy", "default", "letmein", "postgres", "mysql", "redis", "mongo", "qwerty",
+  "secret",
+  "password",
+  "passwd",
+  "pass",
+  "pwd",
+  "admin",
+  "root",
+  "test",
+  "changeme",
+  "example",
+  "sample",
+  "demo",
+  "dummy",
+  "default",
+  "letmein",
+  "postgres",
+  "mysql",
+  "redis",
+  "mongo",
+  "qwerty",
 ];
 
 /** Is `text` nothing but whole stems end to end (`examplepassword`, `testpass`)? */
@@ -238,7 +277,12 @@ function refineConnectionString(value: string): Refinement {
     // A password that is itself a template placeholder (`${pass}`, `%s`) is a
     // driver's own connection builder, not a credential (#1227).
     const candidate = colon === -1 ? "" : userinfo.slice(colon + 1);
-    if (colon !== -1 && colon !== userinfo.length - 1 && !isPlaceholderSecret(candidate) && !TEMPLATE_PASSWORD_RE.test(candidate)) {
+    if (
+      colon !== -1 &&
+      colon !== userinfo.length - 1 &&
+      !isPlaceholderSecret(candidate) &&
+      !TEMPLATE_PASSWORD_RE.test(candidate)
+    ) {
       credential = true;
       password = userinfo.slice(colon + 1);
     }
@@ -254,21 +298,33 @@ function refineConnectionString(value: string): Refinement {
   }
   if (!credential) return { drop: true };
 
-  const host = (at === -1 ? authority : authority.slice(at + 1)).replace(/:\d*$/, "");
+  const host = (at === -1 ? authority : authority.slice(at + 1)).replace(
+    /:\d*$/,
+    ""
+  );
   // `user:s3cret@localhost` is a documentation example: a word a person
   // chose, on a machine that is not reachable. A random password on the same
   // host is a development credential somebody shipped, and stays (#1227).
   // A `host=` or `hostaddr=` query parameter overrides the authority in libpq
   // and other drivers: `@localhost/db?host=db.acme-prod.net` connects there.
   const hostOverride = /[?&](?:host|hostaddr|server)=/i.test(rest);
-  if (password !== undefined && isDocumentationPassword(password) && !hostOverride && isUnroutableHosts(authority, at)) {
+  if (
+    password !== undefined &&
+    isDocumentationPassword(password) &&
+    !hostOverride &&
+    isUnroutableHosts(authority, at)
+  ) {
     return { drop: true };
   }
   const database = /^[^/?#]*\/([^/?#]*)/.exec(rest)?.[1] ?? "";
   const placeholderHost = PLACEHOLDER_HOST_RE.test(foldPlaceholder(host));
-  const placeholderDb = database !== "" && PLACEHOLDER_DB_RE.test(foldPlaceholder(database));
+  const placeholderDb =
+    database !== "" && PLACEHOLDER_DB_RE.test(foldPlaceholder(database));
   if (placeholderHost || placeholderDb) {
-    return { confidence: "medium", extra: { placeholder: placeholderHost ? "host" : "database" } };
+    return {
+      confidence: "medium",
+      extra: { placeholder: placeholderHost ? "host" : "database" },
+    };
   }
   return {};
 }
@@ -345,7 +401,8 @@ function decodeJwtPart(part: string): Record<string, unknown> | null {
   try {
     const json = Buffer.from(part, "base64url").toString("utf8");
     const parsed: unknown = JSON.parse(json);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
     return parsed as Record<string, unknown>;
   } catch {
     return null;
@@ -353,7 +410,10 @@ function decodeJwtPart(part: string): Record<string, unknown> | null {
 }
 
 /** Header and payload of a JWT, decoded; null when either is not JSON. */
-export function decodeJwt(token: string): { header: Record<string, unknown>; payload: Record<string, unknown> } | null {
+export function decodeJwt(token: string): {
+  header: Record<string, unknown>;
+  payload: Record<string, unknown>;
+} | null {
   const [head, body] = token.split(".");
   if (!head || !body) return null;
   const header = decodeJwtPart(head);
@@ -371,7 +431,11 @@ export function decodeJwt(token: string): { header: Record<string, unknown>; pay
 export function jwtMatchIsSuspect(value: string): boolean {
   if (value.startsWith("eyJ", value.lastIndexOf(".") + 1)) return true;
   const decoded = decodeJwt(value);
-  return !decoded || typeof decoded.header.alg !== "string" || typeof decoded.payload.alg === "string";
+  return (
+    !decoded ||
+    typeof decoded.header.alg !== "string" ||
+    typeof decoded.payload.alg === "string"
+  );
 }
 
 const ADMIN_WORD_RE = /\badmin\b|\bsuperuser\b|\bservice_role\b/i;
@@ -379,11 +443,13 @@ const ADMIN_WORD_RE = /\badmin\b|\bsuperuser\b|\bservice_role\b/i;
 // Issuers whose tokens are credentials the site holds as a CLIENT of the
 // service: a token from one of these on a page is something someone embedded,
 // not the visitor's own session, however short-lived it looks.
-const THIRD_PARTY_ISSUER_RE = /auth0|clerk|firebase|securetoken\.google|cognito|okta|supabase/i;
+const THIRD_PARTY_ISSUER_RE =
+  /auth0|clerk|firebase|securetoken\.google|cognito|okta|supabase/i;
 
 // A Supabase project's own auth issuer: the project ref as the host label,
 // under supabase.co or supabase.in, on the auth path. Anchored at both ends.
-const SUPABASE_AUTH_ISSUER_RE = /^https:\/\/[a-z0-9-]+\.supabase\.(?:co|in)\/auth\/v1\/?$/i;
+const SUPABASE_AUTH_ISSUER_RE =
+  /^https:\/\/[a-z0-9-]+\.supabase\.(?:co|in)\/auth\/v1\/?$/i;
 
 // The longest a token can live and still read as a session. A crawler is an
 // anonymous visitor, and what it sees is at most its own session.
@@ -413,7 +479,8 @@ const CREDENTIAL_KEY_WORDS = new Set([
 ]);
 // Ends in `\s*(?:["'`]\s*)?$` rather than the equivalent `\s*["'`]?\s*$`, whose
 // two adjacent `\s*` made it cubic in the look-back window (leaked-secrets.ts).
-const PRECEDING_KEY_RE = /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
+const PRECEDING_KEY_RE =
+  /["'`]?([A-Za-z_$][A-Za-z0-9_$.-]*)(?:["'`]\s*\]|["'`]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*(?:["'`]\s*)?$/;
 
 /** Does the look-behind put the token in an Authorization literal or under a credential key? */
 export function heldAsCredential(before: string): boolean {
@@ -430,9 +497,20 @@ export function heldAsCredential(before: string): boolean {
 
 /** Does the payload name a subject the way a session token does? */
 function hasSessionSubject(payload: Record<string, unknown>): boolean {
-  for (const key of ["sub", "sid", "session_id", "user_id", "userId", "uid", "email"]) {
+  for (const key of [
+    "sub",
+    "sid",
+    "session_id",
+    "user_id",
+    "userId",
+    "uid",
+    "email",
+  ]) {
     const claim = payload[key];
-    if (typeof claim === "string" ? claim.length > 0 : typeof claim === "number") return true;
+    if (
+      typeof claim === "string" ? claim.length > 0 : typeof claim === "number"
+    )
+      return true;
   }
   return false;
 }
@@ -441,7 +519,9 @@ function hasSessionSubject(payload: Record<string, unknown>): boolean {
 function hasAdminScope(payload: Record<string, unknown>): boolean {
   for (const key of ["scope", "scopes", "roles", "permissions", "role"]) {
     const claim = payload[key];
-    const text = Array.isArray(claim) ? claim.filter((c) => typeof c === "string").join(" ") : claim;
+    const text = Array.isArray(claim)
+      ? claim.filter((c) => typeof c === "string").join(" ")
+      : claim;
     if (typeof text === "string" && ADMIN_WORD_RE.test(text)) return true;
   }
   return false;
@@ -461,8 +541,18 @@ function hasAdminScope(payload: Record<string, unknown>): boolean {
  * (`your-256-bit-secret` and its siblings). A token with the sample's claims
  * and any other signature is read like any other token.
  */
-const JWT_IO_SECRETS = ["your-256-bit-secret", "your-384-bit-secret", "your-512-bit-secret", "secret", "your-secret"];
-const HMAC_ALGS: Record<string, string> = { HS256: "sha256", HS384: "sha384", HS512: "sha512" };
+const JWT_IO_SECRETS = [
+  "your-256-bit-secret",
+  "your-384-bit-secret",
+  "your-512-bit-secret",
+  "secret",
+  "your-secret",
+];
+const HMAC_ALGS: Record<string, string> = {
+  HS256: "sha256",
+  HS384: "sha384",
+  HS512: "sha512",
+};
 
 // The published payload and nothing else: `{"sub":"1234567890","name":
 // "John Doe","iat":1516239022}`, with `"admin":true` in the editor's version.
@@ -479,13 +569,20 @@ function isJwtIoSampleClaims(payload: Record<string, unknown>): boolean {
   );
 }
 
-function verifiesUnderSampleSecret(token: string, header: Record<string, unknown>): boolean {
-  const hash = typeof header.alg === "string" ? HMAC_ALGS[header.alg] : undefined;
+function verifiesUnderSampleSecret(
+  token: string,
+  header: Record<string, unknown>
+): boolean {
+  const hash =
+    typeof header.alg === "string" ? HMAC_ALGS[header.alg] : undefined;
   const lastDot = token.lastIndexOf(".");
   if (hash === undefined || lastDot === -1) return false;
   const signed = token.slice(0, lastDot);
   const signature = trimTrailing(token.slice(lastDot + 1), 61);
-  return JWT_IO_SECRETS.some((secret) => createHmac(hash, secret).update(signed).digest("base64url") === signature);
+  return JWT_IO_SECRETS.some(
+    (secret) =>
+      createHmac(hash, secret).update(signed).digest("base64url") === signature
+  );
 }
 
 // Tokens a platform or a vendor script puts on a page for the browser to read
@@ -501,7 +598,11 @@ function mentionsShopSessions(text: string): boolean {
   for (const candidate of text.match(URL_CANDIDATE_RE) ?? []) {
     try {
       const url = new URL(candidate);
-      if (url.hostname === SHOPIFY_SESSIONS_HOST && url.pathname.startsWith("/sessions")) return true;
+      if (
+        url.hostname === SHOPIFY_SESSIONS_HOST &&
+        url.pathname.startsWith("/sessions")
+      )
+        return true;
     } catch {
       // not a URL after all
     }
@@ -517,7 +618,9 @@ const NETLIFY_CWV_ATTR_RE = /data-netlify-cwv-token\s*=\s*["']?$/i;
 const REGISTERED_CLAIMS = ["iss", "aud", "iat", "exp", "nbf", "jti", "sub"];
 
 function onlyClaims(payload: Record<string, unknown>, own: string[]): boolean {
-  return Object.keys(payload).every((key) => REGISTERED_CLAIMS.includes(key) || own.includes(key));
+  return Object.keys(payload).every(
+    (key) => REGISTERED_CLAIMS.includes(key) || own.includes(key)
+  );
 }
 
 /** The platform or beacon token a payload is, if it is one of the known shapes. */
@@ -525,17 +628,23 @@ function publicBeaconToken(
   header: Record<string, unknown>,
   payload: Record<string, unknown>,
   before: (() => string) | undefined,
-  after: (() => string) | undefined,
+  after: (() => string) | undefined
 ): { type: string; extra: FindingExtra } | undefined {
-  if (hasAdminScope(payload) || typeof payload.role === "string") return undefined;
+  if (hasAdminScope(payload) || typeof payload.role === "string")
+    return undefined;
   // An unsigned token (`alg: none`, no `alg`) is whatever its sender writes.
-  if (typeof header.alg !== "string" || header.alg.toLowerCase() === "none") return undefined;
+  if (typeof header.alg !== "string" || header.alg.toLowerCase() === "none")
+    return undefined;
   if (
-    (typeof payload.merchantId === "string" || typeof payload.merchantId === "number") &&
+    (typeof payload.merchantId === "string" ||
+      typeof payload.merchantId === "number") &&
     typeof payload.merchantOrigin === "string" &&
     onlyClaims(payload, ["merchantId", "merchantOrigin", "expiresAt"])
   ) {
-    return { type: "Shopify Wallet Token", extra: { platform: "Shopify", kind: "per-request wallet token" } };
+    return {
+      type: "Shopify Wallet Token",
+      extra: { platform: "Shopify", kind: "per-request wallet token" },
+    };
   }
   if (
     typeof payload.client_id === "string" &&
@@ -545,7 +654,10 @@ function publicBeaconToken(
     // The sessions URL beside the token is the evidence: the claim names alone
     // are what any custom app's own session token could be made of.
     if (mentionsShopSessions((before?.() ?? "") + " " + (after?.() ?? ""))) {
-      return { type: "Shopify Shop Session Token", extra: { platform: "Shopify", kind: "client session token" } };
+      return {
+        type: "Shopify Shop Session Token",
+        extra: { platform: "Shopify", kind: "client session token" },
+      };
     }
   }
   const iss = typeof payload.iss === "string" ? payload.iss : undefined;
@@ -555,7 +667,10 @@ function publicBeaconToken(
     NETLIFY_CWV_ATTR_RE.test(before()) &&
     onlyClaims(payload, ["site_id", "account_id", "deploy_id"])
   ) {
-    return { type: "Netlify Web Vitals Token", extra: { platform: "Netlify", kind: "web vitals beacon" } };
+    return {
+      type: "Netlify Web Vitals Token",
+      extra: { platform: "Netlify", kind: "web vitals beacon" },
+    };
   }
   return undefined;
 }
@@ -568,7 +683,11 @@ function hygraphIssuerHost(iss: string | undefined): string | undefined {
   if (iss === undefined) return undefined;
   try {
     const host = new URL(iss).hostname.toLowerCase();
-    return host === "hygraph.com" || host.endsWith(".hygraph.com") || host.endsWith(".graphcms.com") ? host : undefined;
+    return host === "hygraph.com" ||
+      host.endsWith(".hygraph.com") ||
+      host.endsWith(".graphcms.com")
+      ? host
+      : undefined;
   } catch {
     return undefined;
   }
@@ -579,7 +698,8 @@ function hygraphIssuerHost(iss: string | undefined): string | undefined {
 // `/storage/v1/object/sign/<bucket>/<path>?token=eyJ...`), valid for a GET on
 // that one object and put in the page so the browser can fetch it (#1293).
 // Matched on the text right before the value: the parameter name and the `=`.
-const SIGNED_URL_LEAD_RE = /[?&](?:token|jwt|sig|signature|access_token|x-amz-[a-z-]+)=$/i;
+const SIGNED_URL_LEAD_RE =
+  /[?&](?:token|jwt|sig|signature|access_token|x-amz-[a-z-]+)=$/i;
 
 /**
  * The `iss` claim is the token's author's text: it goes into the report bounded,
@@ -596,7 +716,9 @@ function displayIssuer(iss: string): string {
   } catch {
     // not a URL: shown as is, bounded below
   }
-  return shown.length > ISSUER_MAX_LENGTH ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...` : shown;
+  return shown.length > ISSUER_MAX_LENGTH
+    ? `${shown.slice(0, ISSUER_MAX_LENGTH)}...`
+    : shown;
 }
 
 type JwtPartVerdict = "object" | "not-json" | "not-object" | "inconclusive";
@@ -614,7 +736,9 @@ function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
   } catch (error) {
     return error instanceof SyntaxError ? "not-json" : "inconclusive";
   }
-  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? "object" : "not-object";
+  return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+    ? "object"
+    : "not-object";
 }
 
 /**
@@ -624,31 +748,52 @@ function jwtPartVerdict(part: string | undefined): JwtPartVerdict {
  */
 function isNotAJwt(value: string): boolean {
   const [head, body] = value.split(".");
-  return [jwtPartVerdict(head), jwtPartVerdict(body)].some((verdict) => verdict === "not-json" || verdict === "not-object");
+  return [jwtPartVerdict(head), jwtPartVerdict(body)].some(
+    (verdict) => verdict === "not-json" || verdict === "not-object"
+  );
 }
 
 function classifyJwt(
   value: string,
   now: number,
   before: (() => string) | undefined,
-  after?: () => string,
+  after?: () => string
 ): Refinement {
   const decoded = decodeJwt(value);
-  if (decoded && isJwtIoSampleClaims(decoded.payload) && verifiesUnderSampleSecret(value, decoded.header)) {
+  if (
+    decoded &&
+    isJwtIoSampleClaims(decoded.payload) &&
+    verifiesUnderSampleSecret(value, decoded.header)
+  ) {
     return { drop: true };
   }
   if (decoded) {
-    const beacon = publicBeaconToken(decoded.header, decoded.payload, before, after);
+    const beacon = publicBeaconToken(
+      decoded.header,
+      decoded.payload,
+      before,
+      after
+    );
     if (beacon) {
       const iss = decoded.payload.iss;
-      const extra: FindingExtra = { ...beacon.extra, ...(typeof iss === "string" ? { issuer: displayIssuer(iss) } : {}) };
-      return { type: beacon.type, confidence: "medium", publicByDesign: true, extra };
+      const extra: FindingExtra = {
+        ...beacon.extra,
+        ...(typeof iss === "string" ? { issuer: displayIssuer(iss) } : {}),
+      };
+      return {
+        type: beacon.type,
+        confidence: "medium",
+        publicByDesign: true,
+        extra,
+      };
     }
   }
   // Dropped only on proof it is not a token (see `isNotAJwt`): an `eyJ` run with two dots that is a base64 payload or text (#1283).
   // An undecided part (too long to read, nested too deeply, empty) is reported at medium.
   if (!decoded) {
-    return isNotAJwt(value) ? { drop: true } : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
+    return isNotAJwt(value)
+      ? { drop: true }
+      : { type: "JSON Web Token", confidence: "medium", publicByDesign: false };
   }
   const { payload } = decoded;
   const role = typeof payload.role === "string" ? payload.role : undefined;
@@ -657,11 +802,15 @@ function classifyJwt(
   // A claim past what `Date` can represent (8.64e12 seconds) is not an expiry
   // anyone set; read it as absent rather than let toISOString throw below.
   const exp =
-    typeof payload.exp === "number" && Number.isFinite(payload.exp) && Math.abs(payload.exp) <= 8.64e12
+    typeof payload.exp === "number" &&
+    Number.isFinite(payload.exp) &&
+    Math.abs(payload.exp) <= 8.64e12
       ? payload.exp
       : undefined;
   const iat =
-    typeof payload.iat === "number" && Number.isFinite(payload.iat) && Math.abs(payload.iat) <= 8.64e12
+    typeof payload.iat === "number" &&
+    Number.isFinite(payload.iat) &&
+    Math.abs(payload.iat) <= 8.64e12
       ? payload.iat
       : undefined;
   const expired = exp !== undefined && exp * 1000 < now;
@@ -670,7 +819,9 @@ function classifyJwt(
   // else is some other issuer's token, whatever its role says: an issuer that
   // merely MENTIONS supabase (`https://evil.test/supabase`) must not be able
   // to talk its way into the public anon tier.
-  const supabase = iss === "supabase" || (iss !== undefined && SUPABASE_AUTH_ISSUER_RE.test(iss));
+  const supabase =
+    iss === "supabase" ||
+    (iss !== undefined && SUPABASE_AUTH_ISSUER_RE.test(iss));
 
   const extra: FindingExtra = {};
   if (iss !== undefined) extra.issuer = displayIssuer(iss);
@@ -693,17 +844,28 @@ function classifyJwt(
   if (hygraphHost !== undefined) {
     const management = hygraphHost.startsWith("management-");
     return {
-      type: management ? "Hygraph Management Token" : "Hygraph Content API Token",
+      type: management
+        ? "Hygraph Management Token"
+        : "Hygraph Content API Token",
       confidence: management ? "high" : "medium",
       publicByDesign: false,
-      extra: { ...extra, provider: "Hygraph", keyKind: management ? "management" : "content" },
+      extra: {
+        ...extra,
+        provider: "Hygraph",
+        keyKind: management ? "management" : "content",
+      },
     };
   }
   // Shopify's boot code embeds a storefront JWT on every page of a Shopify
   // shop, issued by the shop's own `*.myshopify.com` domain: public by design,
   // the same tier as the storefront access token.
   if (iss !== undefined && /\.myshopify\.com$/i.test(iss)) {
-    return { type: "Shopify Storefront JWT", confidence: "medium", publicByDesign: true, extra };
+    return {
+      type: "Shopify Storefront JWT",
+      confidence: "medium",
+      publicByDesign: true,
+      extra,
+    };
   }
   // A signed URL's grant expires: a token with no `exp` is a long-lived credential.
   // A storage grant says what it grants: a `url` claim naming the object, and it
@@ -734,20 +896,45 @@ function classifyJwt(
   };
   if (supabase) {
     if (role === "service_role") {
-      return { type: "Supabase Service Role JWT", confidence: "high", publicByDesign: false, extra };
+      return {
+        type: "Supabase Service Role JWT",
+        confidence: "high",
+        publicByDesign: false,
+        extra,
+      };
     }
     if (signedUrl) return signedUrlNote;
     if (role === "anon") {
-      return { type: "Supabase Anon Key", confidence: "medium", publicByDesign: true, extra };
+      return {
+        type: "Supabase Anon Key",
+        confidence: "medium",
+        publicByDesign: true,
+        extra,
+      };
     }
-    return { type: "Supabase JWT", confidence: "medium", publicByDesign: false, extra };
+    return {
+      type: "Supabase JWT",
+      confidence: "medium",
+      publicByDesign: false,
+      extra,
+    };
   }
   if (hasAdminScope(payload)) {
-    return { type: "JSON Web Token (admin scope)", confidence: "high", publicByDesign: false, extra };
+    return {
+      type: "JSON Web Token (admin scope)",
+      confidence: "high",
+      publicByDesign: false,
+      extra,
+    };
   }
   if (signedUrl) return signedUrlNote;
   if (role === "anon") {
-    return { type: "JSON Web Token (anon role)", confidence: "medium", publicByDesign: true, extra };
+    return {
+      type: "JSON Web Token (anon role)",
+      confidence: "medium",
+      publicByDesign: true,
+      extra,
+    };
   }
 
   // A session token: it expires within 30 days of when it was issued (or of
@@ -759,14 +946,16 @@ function classifyJwt(
   // is a credential someone embedded and stays medium.
   const shortLived =
     exp !== undefined &&
-    ((iat !== undefined && exp - iat <= SESSION_MAX_SECONDS) || exp - now / 1000 <= SESSION_MAX_SECONDS);
+    ((iat !== undefined && exp - iat <= SESSION_MAX_SECONDS) ||
+      exp - now / 1000 <= SESSION_MAX_SECONDS);
   const thirdParty = iss !== undefined && THIRD_PARTY_ISSUER_RE.test(iss);
   // Only a token that stands alone is "the visitor's own session": one being
   // sent in an Authorization header, or held under a key that calls it a
   // credential, is a credential the page hands out, minimum medium. That
   // rule needs the look-behind; without one, the subject claim has to vouch.
   const standalone = before !== undefined && !heldAsCredential(before());
-  const sessionShaped = standalone || (before === undefined && hasSessionSubject(payload));
+  const sessionShaped =
+    standalone || (before === undefined && hasSessionSubject(payload));
   if (sessionShaped && shortLived && !thirdParty) {
     return {
       type: "Session Token (JWT)",
@@ -775,11 +964,20 @@ function classifyJwt(
       extra: { ...extra, kind: "session" },
     };
   }
-  return { type: "JSON Web Token", confidence: "medium", publicByDesign: false, extra };
+  return {
+    type: "JSON Web Token",
+    confidence: "medium",
+    publicByDesign: false,
+    extra,
+  };
 }
 
 /** What a JWT-shaped match with no string `alg` in its header may be and still be dropped: a plain generic token. */
-const PLAIN_JWT_TYPES = new Set(["JSON Web Token", "JSON Web Token (expired)", "Session Token (JWT)"]);
+const PLAIN_JWT_TYPES = new Set([
+  "JSON Web Token",
+  "JSON Web Token (expired)",
+  "Session Token (JWT)",
+]);
 
 /**
  * A header with no string `alg` (missing, null, a number, an array, an object) is malformed, which alone proves nothing: the payload is
@@ -790,17 +988,27 @@ function refineJwt(
   value: string,
   now: number,
   before: (() => string) | undefined,
-  after?: () => string,
+  after?: () => string
 ): Refinement {
   // A decoy `eyJ…` segment right before a real token is consumed by the pattern as its first part: the match is decoy.header.payload.
   // When the match does not decode but the two parts after the first do, the real token is classified.
   const parts = value.split(".");
   const asMatched = decodeJwt(value);
-  const token = !asMatched && parts.length === 3 && decodeJwt(`${parts[1]}.${parts[2]}`) ? `${parts[1]}.${parts[2]}` : value;
+  const token =
+    !asMatched && parts.length === 3 && decodeJwt(`${parts[1]}.${parts[2]}`)
+      ? `${parts[1]}.${parts[2]}`
+      : value;
   const result = classifyJwt(token, now, before, after);
-  if (result.drop || result.type === undefined || !PLAIN_JWT_TYPES.has(result.type)) return result;
+  if (
+    result.drop ||
+    result.type === undefined ||
+    !PLAIN_JWT_TYPES.has(result.type)
+  )
+    return result;
   const decoded = decodeJwt(token);
-  return decoded && typeof decoded.header.alg !== "string" ? { drop: true } : result;
+  return decoded && typeof decoded.header.alg !== "string"
+    ? { drop: true }
+    : result;
 }
 
 // ── Algolia ─────────────────────────────────────────────────────────────────
@@ -824,7 +1032,9 @@ const ALGOLIA_RESTRICTION_KEYS = new Set([
 ]);
 
 /** The restrictions an Algolia secured key encodes, or null if it is not one. */
-export function decodeAlgoliaSecuredKey(value: string): Record<string, string> | null {
+export function decodeAlgoliaSecuredKey(
+  value: string
+): Record<string, string> | null {
   if (value.length > JWT_MAX_PART_CHARS) return null;
   let decoded: string;
   try {
@@ -859,16 +1069,28 @@ function refineAlgoliaSecuredKey(value: string): Refinement {
   for (const key of keys) extra[key] = restrictions[key]!;
   if (keys.length === 0) {
     // Secured, but with nothing restricted: it can do whatever its parent can.
-    return { structural: true, confidence: "medium", publicByDesign: false, extra: { ...extra, restrictions: "none" } };
+    return {
+      structural: true,
+      confidence: "medium",
+      publicByDesign: false,
+      extra: { ...extra, restrictions: "none" },
+    };
   }
-  return { structural: true, confidence: "medium", publicByDesign: true, extra };
+  return {
+    structural: true,
+    confidence: "medium",
+    publicByDesign: true,
+    extra,
+  };
 }
 
 function refineAlgoliaHexKey(): Refinement {
   // 32 hex is the shape of both the admin key and a search-only key; nothing
   // in the value says which. The keyword window said "algolia", the key
   // context said "credential", and that is as far as an offline read goes.
-  return { extra: { keyType: "admin-or-search-shaped", restrictions: "unknown" } };
+  return {
+    extra: { keyType: "admin-or-search-shaped", restrictions: "unknown" },
+  };
 }
 
 // ── Stripe, Slack, Sentry ───────────────────────────────────────────────────
@@ -887,8 +1109,16 @@ const STRIPE_SECRET_PREFIX_RE = /^(?:sk|rk)_(?:live|test)_/;
 
 function refineStripeKey(value: string): Refinement {
   const prefix = STRIPE_SECRET_PREFIX_RE.exec(value)?.[0];
-  if (prefix !== undefined && STRIPE_DOC_SAMPLE_TAILS.has(value.slice(prefix.length))) return { drop: true };
-  const kind = value.startsWith("sk_") ? "secret" : value.startsWith("rk_") ? "restricted" : "publishable";
+  if (
+    prefix !== undefined &&
+    STRIPE_DOC_SAMPLE_TAILS.has(value.slice(prefix.length))
+  )
+    return { drop: true };
+  const kind = value.startsWith("sk_")
+    ? "secret"
+    : value.startsWith("rk_")
+      ? "restricted"
+      : "publishable";
   const mode = value.slice(3, 8) === "live_" ? "live" : "test";
   return { extra: { kind, mode } };
 }
@@ -909,12 +1139,16 @@ function refineSlackToken(value: string): Refinement {
   const numericLead = /^\d+$/.test(segments[0] ?? "");
   const extra: FindingExtra = { kind, segments: segments.length };
   if (!numericLead) {
-    return { confidence: "medium", extra: { ...extra, structure: "no numeric workspace id" } };
+    return {
+      confidence: "medium",
+      extra: { ...extra, structure: "no numeric workspace id" },
+    };
   }
   return { confidence: "high", extra };
 }
 
-const SENTRY_DSN_RE = /^https:\/\/[a-f0-9]+@([a-z0-9]+)\.ingest\.sentry\.io\/([0-9]+)$/i;
+const SENTRY_DSN_RE =
+  /^https:\/\/[a-f0-9]+@([a-z0-9]+)\.ingest\.sentry\.io\/([0-9]+)$/i;
 
 function refineSentryDsn(value: string): Refinement {
   const match = SENTRY_DSN_RE.exec(value);
@@ -957,15 +1191,17 @@ export function refineFinding(
   type: string,
   value: string,
   now: number = Date.now(),
-  context: FindingContext = {},
+  context: FindingContext = {}
 ): Refinement | null {
   try {
     if (type === "AWS Access Key ID")
       return refineAwsAccessKeyId(value, context.before?.(), context.after?.());
     if (CONNECTION_STRING_TYPES.has(type)) return refineConnectionString(value);
     if (GITHUB_TYPES.has(type)) return refineGithubToken(value);
-    if (type === "JSON Web Token" || type === "Supabase Anon Key") return refineJwt(value, now, context.before, context.after);
-    if (type === "Algolia Secured API Key") return refineAlgoliaSecuredKey(value);
+    if (type === "JSON Web Token" || type === "Supabase Anon Key")
+      return refineJwt(value, now, context.before, context.after);
+    if (type === "Algolia Secured API Key")
+      return refineAlgoliaSecuredKey(value);
     if (type === "Algolia API Key") return refineAlgoliaHexKey();
     if (STRIPE_TYPES.has(type)) return refineStripeKey(value);
     if (type === "Slack Token") return refineSlackToken(value);

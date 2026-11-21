@@ -43,7 +43,9 @@ function u16le(b: Uint8Array, i: number): number {
 }
 
 function u24le(b: Uint8Array, i: number): number {
-  return i >= 0 && i + 3 <= b.length ? b[i]! | (b[i + 1]! << 8) | (b[i + 2]! << 16) : -1;
+  return i >= 0 && i + 3 <= b.length
+    ? b[i]! | (b[i + 1]! << 8) | (b[i + 2]! << 16)
+    : -1;
 }
 
 function u32be(b: Uint8Array, i: number): number {
@@ -65,7 +67,8 @@ function info(
   height: number,
   animated: boolean | null
 ): ImageHeaderInfo | null {
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height)) return null;
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height))
+    return null;
   if (width <= 0 || height <= 0) return null;
   return { format, width, height, animated };
 }
@@ -172,7 +175,8 @@ function parseWebp(b: Uint8Array): ImageHeaderInfo | null {
   const chunk = ascii(b, 12, 4);
   if (chunk === "VP8 ") {
     // 3-byte frame tag, then the 9d 01 2a start code, then 14-bit sizes.
-    if (u8(b, 23) !== 0x9d || u8(b, 24) !== 0x01 || u8(b, 25) !== 0x2a) return null;
+    if (u8(b, 23) !== 0x9d || u8(b, 24) !== 0x01 || u8(b, 25) !== 0x2a)
+      return null;
     const width = u16le(b, 26);
     const height = u16le(b, 28);
     if (width < 0 || height < 0) return null;
@@ -234,7 +238,11 @@ function boxes(b: Uint8Array, start: number, end: number): Box[] {
       size = end - offset;
     }
     if (size < header) break;
-    out.push({ type, body: offset + header, end: Math.min(offset + size, limit) });
+    out.push({
+      type,
+      body: offset + header,
+      end: Math.min(offset + size, limit),
+    });
     offset += size;
   }
   return out;
@@ -250,7 +258,10 @@ function fullBoxChildren(b: Uint8Array, box: Box): Box[] {
 }
 
 /** Width and height of an `ispe` property, or null when it is cut off. */
-function ispe(b: Uint8Array, box: Box): { width: number; height: number } | null {
+function ispe(
+  b: Uint8Array,
+  box: Box
+): { width: number; height: number } | null {
   const width = u32be(b, box.body + 4);
   const height = u32be(b, box.body + 8);
   if (box.body + 12 > box.end || width <= 0 || height <= 0) return null;
@@ -258,7 +269,11 @@ function ispe(b: Uint8Array, box: Box): { width: number; height: number } | null
 }
 
 /** The 1-based `ipco` property indexes `ipma` associates with `itemId`. */
-function itemProperties(b: Uint8Array, ipma: Box, itemId: number): number[] | null {
+function itemProperties(
+  b: Uint8Array,
+  ipma: Box,
+  itemId: number
+): number[] | null {
   const version = u8(b, ipma.body);
   const flags = u8(b, ipma.body + 3);
   const count = u32be(b, ipma.body + 4);
@@ -283,7 +298,10 @@ function itemProperties(b: Uint8Array, ipma: Box, itemId: number): number[] | nu
   return null;
 }
 
-function avifStillSize(b: Uint8Array, meta: Box): { width: number; height: number } | null {
+function avifStillSize(
+  b: Uint8Array,
+  meta: Box
+): { width: number; height: number } | null {
   const metaChildren = fullBoxChildren(b, meta);
   const iprp = find(metaChildren, "iprp");
   if (!iprp) return null;
@@ -297,7 +315,8 @@ function avifStillSize(b: Uint8Array, meta: Box): { width: number; height: numbe
   const ipma = find(iprpChildren, "ipma");
   if (pitm && ipma) {
     const version = u8(b, pitm.body);
-    const primary = version === 0 ? u16be(b, pitm.body + 4) : u32be(b, pitm.body + 4);
+    const primary =
+      version === 0 ? u16be(b, pitm.body + 4) : u32be(b, pitm.body + 4);
     const indexes = primary >= 0 ? itemProperties(b, ipma, primary) : null;
     for (const index of indexes ?? []) {
       const property = properties[index - 1];
@@ -317,14 +336,18 @@ function avifStillSize(b: Uint8Array, meta: Box): { width: number; height: numbe
     if (property.type !== "ispe") continue;
     const size = ispe(b, property);
     if (!size) continue;
-    if (only && (only.width !== size.width || only.height !== size.height)) return null;
+    if (only && (only.width !== size.width || only.height !== size.height))
+      return null;
     only = size;
   }
   return only;
 }
 
 /** The largest track header's size, for a sequence with no still image item. */
-function avifTrackSize(b: Uint8Array, moov: Box): { width: number; height: number } | null {
+function avifTrackSize(
+  b: Uint8Array,
+  moov: Box
+): { width: number; height: number } | null {
   let best: { width: number; height: number } | null = null;
   for (const trak of boxes(b, moov.body, moov.end)) {
     if (trak.type !== "trak") continue;
@@ -337,7 +360,8 @@ function avifTrackSize(b: Uint8Array, moov: Box): { width: number; height: numbe
     const width = Math.floor(u32be(b, at) / 0x10000);
     const height = Math.floor(u32be(b, at + 4) / 0x10000);
     if (width <= 0 || height <= 0) continue;
-    if (!best || width * height > best.width * best.height) best = { width, height };
+    if (!best || width * height > best.width * best.height)
+      best = { width, height };
   }
   return best;
 }
@@ -347,7 +371,8 @@ function parseAvif(b: Uint8Array): ImageHeaderInfo | null {
   const ftyp = top[0];
   if (ftyp?.type !== "ftyp") return null;
   const brands = new Set<string>([ascii(b, ftyp.body, 4)]);
-  for (let i = ftyp.body + 8; i + 4 <= ftyp.end; i += 4) brands.add(ascii(b, i, 4));
+  for (let i = ftyp.body + 8; i + 4 <= ftyp.end; i += 4)
+    brands.add(ascii(b, i, 4));
   const sequence = brands.has("avis");
   if (!sequence && !brands.has("avif")) return null;
 
@@ -366,7 +391,11 @@ function parseAvif(b: Uint8Array): ImageHeaderInfo | null {
 function isStartOfFrame(marker: number): boolean {
   // SOF0-SOF15, less DHT (c4), JPG (c8) and DAC (cc), which share the range.
   return (
-    marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+    marker >= 0xc0 &&
+    marker <= 0xcf &&
+    marker !== 0xc4 &&
+    marker !== 0xc8 &&
+    marker !== 0xcc
   );
 }
 
@@ -416,7 +445,8 @@ export function parseImageHeader(bytes: Uint8Array): ImageHeaderInfo | null {
   if (startsWith(bytes, PNG_SIGNATURE)) return parsePng(bytes);
   const magic = ascii(bytes, 0, 6);
   if (magic === "GIF87a" || magic === "GIF89a") return parseGif(bytes);
-  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP") return parseWebp(bytes);
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP")
+    return parseWebp(bytes);
   if (ascii(bytes, 4, 4) === "ftyp") return parseAvif(bytes);
   if (startsWith(bytes, [0xff, 0xd8, 0xff])) return parseJpeg(bytes);
   return null;

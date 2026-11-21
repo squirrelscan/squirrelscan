@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { ogImageSizeRule } from "../src/social/og-image-size";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const PAGE_URL = "https://example.com/pricing";
 
@@ -24,7 +25,9 @@ const meta = (property: string, content: string) =>
 describe("social/og-image-size image formats", () => {
   test("warns for an SVG og:image URL and names the image", () => {
     const url = "https://upload.wikimedia.org/mascot.svg?rev=4";
-    const check = run(meta("og:image", url)).find((row) => row.name === "og-image-format");
+    const check = run(meta("og:image", url)).find(
+      (row) => row.name === "og-image-format"
+    );
 
     expect(check).toMatchObject({
       status: "warn",
@@ -36,24 +39,29 @@ describe("social/og-image-size image formats", () => {
 
   test("warns when og:image:type declares SVG on an extensionless URL", () => {
     const url = "https://cdn.example.com/share?id=pricing";
-    const checks = run(`${meta("og:image", url)}${meta("og:image:type", "image/svg+xml")}`);
+    const checks = run(
+      `${meta("og:image", url)}${meta("og:image:type", "image/svg+xml")}`
+    );
     const check = checks.find((row) => row.name === "og-image-format");
 
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe(url);
   });
 
-  test.each(["share.png", "share.jpg"])("passes a supported %s og:image", (file) => {
-    const check = run(meta("og:image", `https://cdn.example.com/${file}`)).find(
-      (row) => row.name === "og-image-format",
-    );
+  test.each(["share.png", "share.jpg"])(
+    "passes a supported %s og:image",
+    (file) => {
+      const check = run(
+        meta("og:image", `https://cdn.example.com/${file}`)
+      ).find((row) => row.name === "og-image-format");
 
-    expect(check?.status).toBe("pass");
-  });
+      expect(check?.status).toBe("pass");
+    }
+  );
 
   test("reports AVIF as having inconsistent preview support", () => {
     const check = run(meta("og:image", "/share.avif")).find(
-      (row) => row.name === "og-image-format",
+      (row) => row.name === "og-image-format"
     );
 
     expect(check?.status).toBe("info");
@@ -67,14 +75,18 @@ describe("social/og-image-size image formats", () => {
 
     expect(check?.status).toBe("warn");
     expect(check?.items?.[0]?.id).toBe(url);
-    expect(checks.find((row) => row.name === "og-image-size")?.status).toBe("info");
+    expect(checks.find((row) => row.name === "og-image-size")?.status).toBe(
+      "info"
+    );
   });
 
   test("checks the property form of twitter:image", () => {
     const url = "https://cdn.example.com/twitter-card.svg";
     const checks = run(meta("twitter:image", url));
 
-    expect(checks.find((row) => row.name === "twitter-image-format")).toMatchObject({
+    expect(
+      checks.find((row) => row.name === "twitter-image-format")
+    ).toMatchObject({
       status: "warn",
       items: [{ id: url, label: `twitter:image: ${url}` }],
     });

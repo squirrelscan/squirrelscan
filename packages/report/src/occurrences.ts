@@ -8,7 +8,9 @@
  * (issue trackers, badges, rankings) must use this or a folded 600-page rule
  * reads as a single occurrence.
  */
-export function checkOccurrences(check: { details?: Record<string, unknown> }): number {
+export function checkOccurrences(check: {
+  details?: Record<string, unknown>;
+}): number {
   const folded = check.details?.occurrences;
   return typeof folded === "number" && Number.isFinite(folded) && folded > 1
     ? Math.floor(folded)

@@ -1,14 +1,15 @@
 // ax/commerce-readiness: offer completeness, advisory feed and manifest detection, and the site-type gate (repo#3881).
 
+import type { SiteMetadata } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { SiteMetadata } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { commerceReadinessRule } from "../src/ax/commerce-readiness";
 import { buildResolutionSignal } from "../src/resolution";
 import { RuleRunner, type RulesConfig } from "../src/runner";
-import type { CheckResult, RuleContext } from "../src/types";
 
 const URL_ = "https://example.com/p/widget";
 
@@ -45,7 +46,8 @@ const fullProduct = {
     },
     hasMerchantReturnPolicy: {
       "@type": "MerchantReturnPolicy",
-      returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+      returnPolicyCategory:
+        "https://schema.org/MerchantReturnFiniteReturnWindow",
     },
   },
 };
@@ -64,10 +66,12 @@ describe("ax/commerce-readiness offer completeness", () => {
       name: "Widget",
       offers: { "@type": "Offer", price: "19.99" },
     };
-    const c = (await run(page(ld(product)))).find((x) => x.name === "offer-completeness");
+    const c = (await run(page(ld(product)))).find(
+      (x) => x.name === "offer-completeness"
+    );
     expect(c?.status).toBe("warn");
     expect(c?.items?.map((i) => i.id).sort()).toEqual(
-      ["availability", "currency", "identifier", "returns", "shipping"].sort(),
+      ["availability", "currency", "identifier", "returns", "shipping"].sort()
     );
   });
 
@@ -99,7 +103,9 @@ describe("ax/commerce-readiness offer completeness", () => {
         },
       ],
     };
-    const c = (await run(page(ld(graph)))).find((x) => x.name === "offer-completeness");
+    const c = (await run(page(ld(graph)))).find(
+      (x) => x.name === "offer-completeness"
+    );
     expect(c?.status).toBe("pass");
   });
 
@@ -110,7 +116,9 @@ describe("ax/commerce-readiness offer completeness", () => {
   });
 
   test("a page with no Product markup is informational", async () => {
-    const c = (await run(page(""))).find((x) => x.name === "offer-completeness");
+    const c = (await run(page(""))).find(
+      (x) => x.name === "offer-completeness"
+    );
     expect(c?.status).toBe("info");
   });
 });
@@ -120,27 +128,34 @@ describe("ax/commerce-readiness feed and manifest detection", () => {
     const checks = await run(
       page(
         `<link rel="alternate" type="application/rss+xml" href="/product-feed.xml">`,
-        `<a href="/.well-known/ucp">ucp</a><a href="/.well-known/acp.json">acp</a>`,
-      ),
+        `<a href="/.well-known/ucp">ucp</a><a href="/.well-known/acp.json">acp</a>`
+      )
     );
     const feed = checks.find((x) => x.name === "commerce-feed");
     const manifest = checks.find((x) => x.name === "commerce-manifest");
     expect(feed?.status).toBe("info");
     expect(manifest?.status).toBe("info");
     expect(manifest?.items?.length).toBe(2);
-    expect(checks.every((c) => c.status !== "warn" && c.status !== "fail")).toBe(true);
+    expect(
+      checks.every((c) => c.status !== "warn" && c.status !== "fail")
+    ).toBe(true);
   });
 
   test("an unrelated feed is not a product feed", async () => {
     const checks = await run(
-      page(`<link rel="alternate" type="application/rss+xml" href="/blog/feed.xml">`),
+      page(
+        `<link rel="alternate" type="application/rss+xml" href="/blog/feed.xml">`
+      )
     );
     expect(checks.some((x) => x.name === "commerce-feed")).toBe(false);
   });
 });
 
 describe("ax/commerce-readiness gate and override", () => {
-  function runner(siteType: SiteMetadata["siteType"] | null, applies?: string): RuleRunner {
+  function runner(
+    siteType: SiteMetadata["siteType"] | null,
+    applies?: string
+  ): RuleRunner {
     const config: RulesConfig = {
       rule_options: applies ? { "ax/commerce-readiness": { applies } } : {},
       rules: { enable: ["ax/commerce-readiness"] },
@@ -169,7 +184,8 @@ describe("ax/commerce-readiness gate and override", () => {
       parsed: parsePage(html, URL_),
     } as never);
     return result.checks.filter(
-      (c) => c.name === "ax/commerce-readiness" || c.name === "offer-completeness",
+      (c) =>
+        c.name === "ax/commerce-readiness" || c.name === "offer-completeness"
     );
   }
 
@@ -181,7 +197,9 @@ describe("ax/commerce-readiness gate and override", () => {
 
   test("an ecommerce site runs the rule", async () => {
     const checks = await runPage(runner("ecommerce"));
-    expect(checks.some((c) => c.name === "offer-completeness" && c.status === "pass")).toBe(true);
+    expect(
+      checks.some((c) => c.name === "offer-completeness" && c.status === "pass")
+    ).toBe(true);
   });
 
   test("applies = on forces it on for a blog", async () => {
@@ -209,7 +227,9 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
     const checks = (await run(html)).map((c) => ({ ...c, pageUrl: URL_ }));
     return {
       checks,
-      signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [URL_])!,
+      signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [
+        URL_,
+      ])!,
     };
   }
 
@@ -233,7 +253,8 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
     for (const html of [page(ld(fullProduct)), page("")]) {
       const { checks, signal } = await signalFor(html);
       expect(
-        checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive,
+        checks.find((x) => x.name === "offer-completeness")?.details
+          ?.inconclusive
       ).toBeUndefined();
       expect(signal.failing[KEY]).toEqual([]);
       expect(signal.notEvaluated?.[KEY] ?? []).toHaveLength(0);
@@ -242,10 +263,12 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
 
   test("JSON-LD that stops parsing keeps the stored finding open", async () => {
     const broken = page(
-      `<script type="application/ld+json">{"@type": "Product", "name": </script>`,
+      `<script type="application/ld+json">{"@type": "Product", "name": </script>`
     );
     const { checks, signal } = await signalFor(broken);
-    expect(checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive).toBe(true);
+    expect(
+      checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive
+    ).toBe(true);
     expect(signal.notEvaluated?.[KEY]).toHaveLength(1);
   });
 
@@ -253,9 +276,14 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
     const { hasMerchantReturnPolicy: _unused, ...offer } = fullProduct.offers;
     const graph = {
       "@context": "https://schema.org",
-      "@graph": [{ "@type": "MerchantReturnPolicy" }, { ...fullProduct, offers: offer }],
+      "@graph": [
+        { "@type": "MerchantReturnPolicy" },
+        { ...fullProduct, offers: offer },
+      ],
     };
-    const c = (await run(page(ld(graph)))).find((x) => x.name === "offer-completeness");
+    const c = (await run(page(ld(graph)))).find(
+      (x) => x.name === "offer-completeness"
+    );
     expect(c?.status).toBe("warn");
     expect(c?.items?.map((i) => i.id)).toEqual(["returns"]);
   });

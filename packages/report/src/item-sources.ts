@@ -10,6 +10,7 @@ import {
 } from "@squirrelscan/core-contracts";
 
 import type { PageTypeScopeCheck } from "./page-type-scope";
+
 import { itemRegionScope, type RegionScope } from "./region-scope";
 
 export interface ItemSourceRow {
@@ -29,15 +30,19 @@ export interface ItemSourceList {
 
 /** The item's source pages as rows, each page once, with the detail its `sources` entry gives. */
 export function itemSourceList(item: CheckItem): ItemSourceList {
-  const sources = new Map((item.sources ?? []).map((source) => [source.page, source]));
-  const rows = [...new Set(item.sourcePages ?? [])].map((page): ItemSourceRow => {
-    const source = sources.get(page);
-    return {
-      page,
-      detail: source ? itemSourceDetail(source) : "",
-      ...(source?.sections ? { sections: source.sections } : {}),
-    };
-  });
+  const sources = new Map(
+    (item.sources ?? []).map((source) => [source.page, source])
+  );
+  const rows = [...new Set(item.sourcePages ?? [])].map(
+    (page): ItemSourceRow => {
+      const source = sources.get(page);
+      return {
+        page,
+        detail: source ? itemSourceDetail(source) : "",
+        ...(source?.sections ? { sections: source.sections } : {}),
+      };
+    }
+  );
   const total = item.pageCount;
   const unlisted =
     typeof total === "number" && Number.isFinite(total) && total > rows.length
@@ -66,7 +71,7 @@ export interface ItemSourceView {
 export function itemSourceView(
   item: CheckItem,
   structure: ReportStructure | undefined,
-  check?: PageTypeScopeCheck,
+  check?: PageTypeScopeCheck
 ): ItemSourceView {
   const { rows, unlisted } = itemSourceList(item);
   const scope = itemRegionScope(item, structure, check);
@@ -75,7 +80,8 @@ export function itemSourceView(
     .filter((row) => !row.sections?.[scope.region])
     .slice(0, scope.otherPages);
   // The region line already counts the other pages; a "+N more" only follows rows it lists.
-  const total = outside.length > 0 ? Math.max(scope.otherPages, outside.length) : 0;
+  const total =
+    outside.length > 0 ? Math.max(scope.otherPages, outside.length) : 0;
   return { scope, rows: outside, total, all: rows };
 }
 
@@ -99,7 +105,11 @@ export function hasItemSources(check: { items?: CheckItem[] }): boolean {
  * so the summary keeps the links and the pages apart; " (3 pages)" for other checks on more than
  * one page; "" otherwise.
  */
-export function affectedPagesSuffix(check: { items?: CheckItem[] }, count: number): string {
-  if (hasItemSources(check) && count > 0) return `, found on ${count} ${count === 1 ? "page" : "pages"}`;
+export function affectedPagesSuffix(
+  check: { items?: CheckItem[] },
+  count: number
+): string {
+  if (hasItemSources(check) && count > 0)
+    return `, found on ${count} ${count === 1 ? "page" : "pages"}`;
   return count > 1 ? ` (${count} pages)` : "";
 }

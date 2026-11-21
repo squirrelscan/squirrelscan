@@ -15,7 +15,10 @@ async function runtimeImports(name: string): Promise<string[]> {
     const braces = m[3]!.match(/^\{([\s\S]*)\}$/);
     // `import { type A, type B }` is erased at runtime.
     if (braces) {
-      const names = braces[1]!.split(",").map((s) => s.trim()).filter(Boolean);
+      const names = braces[1]!
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (names.every((n) => n.startsWith("type "))) continue;
     }
     out.push(m[4]!);
@@ -38,7 +41,8 @@ describe("audit-engine runtime import cycle (#1409)", () => {
         return;
       }
       visiting.add(n);
-      for (const d of graph.get(n) ?? []) if (MODULES.includes(d)) walk(d, [...path, n]);
+      for (const d of graph.get(n) ?? [])
+        if (MODULES.includes(d)) walk(d, [...path, n]);
       visiting.delete(n);
       done.add(n);
     };

@@ -7,4 +7,8 @@ import { consentModeRule } from "./consent-mode";
 import { duplicateTagsRule } from "./duplicate-tags";
 import { gtmPresentRule } from "./gtm-present";
 
-export const rules: Rule[] = [gtmPresentRule, consentModeRule, duplicateTagsRule];
+export const rules: Rule[] = [
+  gtmPresentRule,
+  consentModeRule,
+  duplicateTagsRule,
+];

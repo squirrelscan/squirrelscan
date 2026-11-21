@@ -1,4 +1,8 @@
-import type { RedirectChain, RenderedRequest } from "@squirrelscan/core-contracts";
+import type {
+  RedirectChain,
+  RenderedRequest,
+} from "@squirrelscan/core-contracts";
+
 import {
   DEFAULT_MAX_DOCUMENT_BODY_BYTES,
   fetchUndecoded,
@@ -29,14 +33,16 @@ import {
  * (#1510). Producers that follow redirects by hand only ever append a hop after
  * seeing a 3xx, so they satisfy this by construction and do not need it.
  */
-export function withObservedHopStatuses(hops: RedirectChain["hops"]): RedirectChain["hops"] {
+export function withObservedHopStatuses(
+  hops: RedirectChain["hops"]
+): RedirectChain["hops"] {
   return hops.map((hop, i) =>
     i < hops.length - 1 &&
     hop.type === "http" &&
     hop.statusCode >= 200 &&
     hop.statusCode < 300
       ? { ...hop, statusCode: 0 }
-      : hop,
+      : hop
   );
 }
 
@@ -206,7 +212,8 @@ type Send = (url: string, init: RequestInit) => Promise<Response>;
 // `decompress: false` is a Bun fetch option returning the undecoded bytes.
 // Plain fetch, not fetchUndecoded, on purpose: the decode fallbacks read this
 // body raw, as identity, which is their whole point.
-const fetchRaw: Send = (url, init) => fetch(url, { ...init, decompress: false } as RequestInit);
+const fetchRaw: Send = (url, init) =>
+  fetch(url, { ...init, decompress: false } as RequestInit);
 
 /** `send`, vetted and pinned by `egress` when there is one (repo#2830). */
 function guardedBy(send: Send, egress: EgressPolicy | undefined): Send {
@@ -220,7 +227,7 @@ function guardedBy(send: Send, egress: EgressPolicy | undefined): Send {
 async function fetchTolerant(
   url: string,
   init: RequestInit,
-  egress?: EgressPolicy,
+  egress?: EgressPolicy
 ): Promise<Response> {
   try {
     return await guardedBy(fetchUndecoded, egress)(url, init);
@@ -286,7 +293,11 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
           // that let it through below (repo#2830), and the page itself, which
           // the policy trusts by name unless the crawl pins its own hosts
           // (repo#3430).
-          const response = await fetchTolerant(currentUrl, requestInit, req.egress);
+          const response = await fetchTolerant(
+            currentUrl,
+            requestInit,
+            req.egress
+          );
 
           responseAt = Date.now();
           finalStatus = response.status;
@@ -297,7 +308,11 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             type: "http",
           });
 
-          if (followRedirects && response.status >= 300 && response.status < 400) {
+          if (
+            followRedirects &&
+            response.status >= 300 &&
+            response.status < 400
+          ) {
             const location = response.headers.get("location");
             if (!location) {
               endsInError = true;
@@ -329,12 +344,18 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
             // nothing is sent unvetted.
             if (
               req.egress &&
-              (await egressRefuses(nextUrl, req.egress, signal).catch(() => false))
+              (await egressRefuses(nextUrl, req.egress, signal).catch(
+                () => false
+              ))
             ) {
               endsInError = true;
               break;
             }
-            requestHeaders = headersForRedirect(requestHeaders, currentUrl, nextUrl);
+            requestHeaders = headersForRedirect(
+              requestHeaders,
+              currentUrl,
+              nextUrl
+            );
             currentUrl = nextUrl;
             continue;
           }
@@ -344,7 +365,10 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
           }
 
           try {
-            finalBody = await readBodyCapped(response, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
+            finalBody = await readBodyCapped(
+              response,
+              DEFAULT_MAX_DOCUMENT_BODY_BYTES
+            );
           } catch (error) {
             // Body-time decode failure (large/streamed bodies) — recover the raw body, else keep an empty page.
             if (!isDecompressionError(error)) throw error;
@@ -353,9 +377,12 @@ export function createFetchDocumentFetcher(): DocumentFetcher {
               // repo#3430): a fresh lookup here could answer differently.
               const raw = await guardedBy(fetchRaw, req.egress)(
                 currentUrl,
-                requestInit,
+                requestInit
               );
-              finalBody = await readBodyCapped(raw, DEFAULT_MAX_DOCUMENT_BODY_BYTES);
+              finalBody = await readBodyCapped(
+                raw,
+                DEFAULT_MAX_DOCUMENT_BODY_BYTES
+              );
             } catch {
               finalBody = "";
             }
@@ -432,12 +459,15 @@ function isTimeoutError(error: unknown): boolean {
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  timeoutMessage: string,
+  timeoutMessage: string
 ): Promise<T> {
   const boundedTimeoutMs = Math.max(1, timeoutMs);
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => reject(new Error(timeoutMessage)), boundedTimeoutMs);
+    timeout = setTimeout(
+      () => reject(new Error(timeoutMessage)),
+      boundedTimeoutMs
+    );
   });
 
   try {
@@ -452,20 +482,20 @@ async function withTimeout<T>(
 async function parseJsonWithTimeout<T>(
   response: Response,
   timeoutMs: number,
-  label: string,
+  label: string
 ): Promise<T> {
   const boundedTimeoutMs = Math.max(1, timeoutMs);
   return await withTimeout(
     response.json() as Promise<T>,
     boundedTimeoutMs,
-    `${label} response timed out after ${boundedTimeoutMs}ms`,
+    `${label} response timed out after ${boundedTimeoutMs}ms`
   );
 }
 
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs: number,
+  timeoutMs: number
 ): Promise<Response> {
   const boundedTimeoutMs = Math.max(1, timeoutMs);
   const controller = new AbortController();
@@ -507,7 +537,7 @@ async function fetchWithTimeout(
 }
 
 export function createBrowserQueueDocumentFetcher(
-  config: BrowserQueueFetcherConfig,
+  config: BrowserQueueFetcherConfig
 ): DocumentFetcher {
   const serviceUrl = config.serviceUrl.replace(/\/$/, "");
   const pollIntervalMs = config.pollIntervalMs ?? 800;
@@ -527,7 +557,7 @@ export function createBrowserQueueDocumentFetcher(
       // render-job polling loop.
       const overallTimeoutMs = Math.max(
         1,
-        Math.min(req.timeoutMs ?? defaultTimeoutMs, defaultTimeoutMs),
+        Math.min(req.timeoutMs ?? defaultTimeoutMs, defaultTimeoutMs)
       );
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -536,7 +566,8 @@ export function createBrowserQueueDocumentFetcher(
         headers.Authorization = `Bearer ${config.apiKey}`;
       }
 
-      const remainingMs = (): number => Math.max(0, overallTimeoutMs - (Date.now() - startedAt));
+      const remainingMs = (): number =>
+        Math.max(0, overallTimeoutMs - (Date.now() - startedAt));
       const boundedRequestTimeoutMs = (capMs: number): number =>
         Math.max(1, Math.min(capMs, remainingMs()));
 
@@ -558,17 +589,19 @@ export function createBrowserQueueDocumentFetcher(
             followRedirects: req.followRedirects ?? true,
           }),
         },
-        boundedRequestTimeoutMs(10_000),
+        boundedRequestTimeoutMs(10_000)
       );
 
       if (!createResponse.ok) {
-        throw new Error(`Failed to enqueue browser render job (${createResponse.status})`);
+        throw new Error(
+          `Failed to enqueue browser render job (${createResponse.status})`
+        );
       }
 
       const createData = await parseJsonWithTimeout<RenderJobCreateResponse>(
         createResponse,
         boundedRequestTimeoutMs(5_000),
-        "Render job enqueue",
+        "Render job enqueue"
       );
       if (!createData.jobId) {
         throw new Error("Browser render enqueue response missing jobId");
@@ -583,16 +616,18 @@ export function createBrowserQueueDocumentFetcher(
           const statusResponse = await fetchWithTimeout(
             `${serviceUrl}/internal/render-jobs/${createData.jobId}`,
             { headers, signal: req.signal },
-            boundedRequestTimeoutMs(8_000),
+            boundedRequestTimeoutMs(8_000)
           );
           if (!statusResponse.ok) {
-            throw new Error(`Failed to read browser render job (${statusResponse.status})`);
+            throw new Error(
+              `Failed to read browser render job (${statusResponse.status})`
+            );
           }
 
           statusData = await parseJsonWithTimeout<RenderJobStatusResponse>(
             statusResponse,
             boundedRequestTimeoutMs(2_000),
-            "Render job status",
+            "Render job status"
           );
         } catch (error) {
           if (isTimeoutError(error)) {
@@ -630,7 +665,9 @@ export function createBrowserQueueDocumentFetcher(
             redirectChain: statusData.result.redirectChain
               ? {
                   ...statusData.result.redirectChain,
-                  hops: withObservedHopStatuses(statusData.result.redirectChain.hops),
+                  hops: withObservedHopStatuses(
+                    statusData.result.redirectChain.hops
+                  ),
                 }
               : {
                   sourceUrl,
@@ -639,8 +676,12 @@ export function createBrowserQueueDocumentFetcher(
                   chainLength: Math.max(0, fallbackHops.length - 1),
                   isLoop: false,
                   endsInError: status >= 400,
-                  httpsToHttp: sourceUrl.startsWith("https://") && finalUrl.startsWith("http://"),
-                  httpToHttps: sourceUrl.startsWith("http://") && finalUrl.startsWith("https://"),
+                  httpsToHttp:
+                    sourceUrl.startsWith("https://") &&
+                    finalUrl.startsWith("http://"),
+                  httpToHttps:
+                    sourceUrl.startsWith("http://") &&
+                    finalUrl.startsWith("https://"),
                 },
             timing: {
               startedAt: statusData.result.startedAt,

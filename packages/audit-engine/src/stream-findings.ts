@@ -10,7 +10,11 @@
 // Worker-clean (no node/linkedom): flatten + fingerprint + url only. Surfaced via
 // the package's `./smart-audits` entry so the container can import it.
 
-import type { CheckResult, PageFindingRecord } from "@squirrelscan/core-contracts";
+import type {
+  CheckResult,
+  PageFindingRecord,
+} from "@squirrelscan/core-contracts";
+
 import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { unfoldAggregateCheck } from "@squirrelscan/rules/fold";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
@@ -24,7 +28,10 @@ import { findingKey, flattenChecks } from "./merge-core";
  * `lastSeenCrawlId` (the session supplies those). `severity` comes from the rule
  * meta; `fingerprint` is the portable change hash (CLI+server parity).
  */
-export type StreamFindingLine = Omit<PageFindingRecord, "siteKey" | "lastSeenCrawlId">;
+export type StreamFindingLine = Omit<
+  PageFindingRecord,
+  "siteKey" | "lastSeenCrawlId"
+>;
 
 /**
  * Safety net for an over-cap payload carrying component evidence.
@@ -36,13 +43,17 @@ export type StreamFindingLine = Omit<PageFindingRecord, "siteKey" | "lastSeenCra
  * `itemFindingPayload`'s ladder exactly: evidence, then a marker, then the
  * untouched legacy fields.
  */
-function clampComponentEvidenceForStream(payload: string | null): string | null {
-  if (!payload || payload.length <= REPORT_LIMITS.maxFindingPayload) return payload;
+function clampComponentEvidenceForStream(
+  payload: string | null
+): string | null {
+  if (!payload || payload.length <= REPORT_LIMITS.maxFindingPayload)
+    return payload;
 
   let parsed: Record<string, unknown>;
   try {
     const value: unknown = JSON.parse(payload);
-    if (!value || typeof value !== "object" || Array.isArray(value)) return payload;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return payload;
     parsed = value as Record<string, unknown>;
   } catch {
     return payload;
@@ -84,7 +95,8 @@ function clampComponentEvidenceForStream(payload: string | null): string | null 
         occurrenceCount: occurrences.length,
       },
     });
-    if (resourceKept.length <= REPORT_LIMITS.maxFindingPayload) return resourceKept;
+    if (resourceKept.length <= REPORT_LIMITS.maxFindingPayload)
+      return resourceKept;
   }
 
   const omitted = JSON.stringify({
@@ -125,8 +137,11 @@ function siteResourceOccurrenceCount(value: unknown): number {
 export function buildStreamFindings(
   // Accepts both the report's ReportRuleResult (RuleMetaLite) and the engine's
   // RuleRunResult (RuleMeta) — only `meta.severity` is read.
-  ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
-  now: number,
+  ruleResults: Record<
+    string,
+    { meta: { severity: string }; checks: CheckResult[] }
+  >,
+  now: number
 ): StreamFindingLine[] {
   // Dedupe by the page_findings PK (normalizedUrl, ruleId, checkName, locator),
   // LAST wins — the store upsert collapses key collisions (status is NOT part of
@@ -153,23 +168,31 @@ export function buildStreamFindings(
     }
     for (const [u, cs] of byUrl) {
       for (const f of flattenChecks(u, ruleId, cs)) {
-        byKey.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), {
-          normalizedUrl: f.normalizedUrl,
-          ruleId: f.ruleId,
-          checkName: f.checkName,
-          locator: f.locator,
-          status: f.status,
-          severity,
-          message: f.message,
-          value: f.value,
-          expected: f.expected,
-          payload: clampComponentEvidenceForStream(f.payload),
-          fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
-          firstSeenAt: now,
-          lastSeenAt: now,
-          provenance: "fresh",
-          state: "open",
-        });
+        byKey.set(
+          findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+          {
+            normalizedUrl: f.normalizedUrl,
+            ruleId: f.ruleId,
+            checkName: f.checkName,
+            locator: f.locator,
+            status: f.status,
+            severity,
+            message: f.message,
+            value: f.value,
+            expected: f.expected,
+            payload: clampComponentEvidenceForStream(f.payload),
+            fingerprint: findingFingerprint(
+              f.status,
+              f.message,
+              f.value,
+              f.expected
+            ),
+            firstSeenAt: now,
+            lastSeenAt: now,
+            provenance: "fresh",
+            state: "open",
+          }
+        );
       }
     }
   }
@@ -200,7 +223,7 @@ export type SkippedPassCounts = Record<string, Record<string, number>>;
  * their sampled checks verbatim, so their passes are already counted.
  */
 export function buildSkippedPassCounts(
-  ruleResults: Record<string, { checks: CheckResult[] }>,
+  ruleResults: Record<string, { checks: CheckResult[] }>
 ): SkippedPassCounts {
   const out: SkippedPassCounts = {};
   for (const [ruleId, r] of Object.entries(ruleResults)) {
@@ -288,9 +311,12 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  * fingerprint, so a hash collision can never merge two distinct rows.
  */
 export function buildGroupedStreamFindings(
-  ruleResults: Record<string, { meta: { severity: string }; checks: CheckResult[] }>,
+  ruleResults: Record<
+    string,
+    { meta: { severity: string }; checks: CheckResult[] }
+  >,
   now: number,
-  opts?: { maxLineChars?: number },
+  opts?: { maxLineChars?: number }
 ): GroupedStreamFindingLine[] {
   const budget = opts?.maxLineChars ?? GROUPED_STREAM_MAX_LINE_CHARS;
   const groups = new Map<string, GroupAcc>();
@@ -310,7 +336,10 @@ export function buildGroupedStreamFindings(
       // Last wins per (checkName, locator): status is not part of the PK.
       const local = new Map<string, ReturnType<typeof flattenChecks>[number]>();
       for (const f of flattenChecks(u, ruleId, cs)) {
-        local.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), f);
+        local.set(
+          findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+          f
+        );
       }
       for (const f of local.values()) {
         const key = JSON.stringify([
@@ -329,7 +358,12 @@ export function buildGroupedStreamFindings(
               ruleId: f.ruleId,
               checkName: f.checkName,
               locator: f.locator,
-              fingerprint: findingFingerprint(f.status, f.message, f.value, f.expected),
+              fingerprint: findingFingerprint(
+                f.status,
+                f.message,
+                f.value,
+                f.expected
+              ),
               status: f.status,
               severity,
               message: f.message,
@@ -367,7 +401,8 @@ export function buildGroupedStreamFindings(
     // Fixed overhead of the line without pages/payloads. Slack covers the digits of
     // part/parts, which are not known until the split is decided.
     const base =
-      JSON.stringify({ ...g.head, payloads: [], pages: [], part: 0, parts: 0 }).length + 24;
+      JSON.stringify({ ...g.head, payloads: [], pages: [], part: 0, parts: 0 })
+        .length + 24;
     const partsOut: string[][] = [];
     let cur: string[] = [];
     let curSize = base;
@@ -413,7 +448,9 @@ export function buildGroupedStreamFindings(
  * Inverse of {@link buildGroupedStreamFindings} for one line: the per-page rows
  * {@link buildStreamFindings} would have produced for the pages it carries.
  */
-export function expandGroupedStreamFinding(line: GroupedStreamFindingLine): StreamFindingLine[] {
+export function expandGroupedStreamFinding(
+  line: GroupedStreamFindingLine
+): StreamFindingLine[] {
   const { payloads, pages, part: _part, parts: _parts, ...head } = line;
   return pages.map(([normalizedUrl, idx]) => ({
     ...head,

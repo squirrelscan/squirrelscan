@@ -6,12 +6,15 @@
 // pages disagreeing on a logo, and a page whose JSON-LD carries an own property
 // literally named `__proto__`.
 
+import { Value } from "@sinclair/typebox/value";
+import { EntityMapSchema } from "@squirrelscan/core-contracts/entity-map";
 import { describe, expect, test } from "bun:test";
 
-import { EntityMapSchema } from "@squirrelscan/core-contracts/entity-map";
-import { Value } from "@sinclair/typebox/value";
-
-import { buildEntityMap, toJsonLd, type EntityMapPageInput } from "../src/entity-map";
+import {
+  buildEntityMap,
+  toJsonLd,
+  type EntityMapPageInput,
+} from "../src/entity-map";
 
 const SITE = "https://example.com/";
 const AT = "2026-01-01T00:00:00.000Z";
@@ -26,7 +29,10 @@ function page(url: string, jsonLd: unknown): EntityMapPageInput {
 
 function nodeByName(map: ReturnType<typeof build>, name: string) {
   const found = map.nodes.find((node) => node.name === name);
-  if (!found) throw new Error(`no node named ${name}: ${map.nodes.map((n) => n.name).join(", ")}`);
+  if (!found)
+    throw new Error(
+      `no node named ${name}: ${map.nodes.map((n) => n.name).join(", ")}`
+    );
   return found;
 }
 
@@ -88,7 +94,10 @@ describe("buildEntityMap", () => {
       ],
     });
 
-    const map = build([page("https://example.com/", graph("/")), page("https://example.com/a", graph("/a"))]);
+    const map = build([
+      page("https://example.com/", graph("/")),
+      page("https://example.com/a", graph("/a")),
+    ]);
 
     expect(Value.Check(EntityMapSchema, map)).toBe(true);
     // Two WebPages (page-scoped @id) plus one WebSite and one Organization.
@@ -181,9 +190,13 @@ describe("buildEntityMap", () => {
     expect(edge?.predicate).toBe("publisher");
     expect(edge?.target).toBe("id:https://example.com/#organization");
     // The dangling target is deliberately not a node — nothing declares it.
-    expect(map.nodes.map((n) => n.key)).not.toContain("id:https://example.com/#organization");
+    expect(map.nodes.map((n) => n.key)).not.toContain(
+      "id:https://example.com/#organization"
+    );
     expect(nodeByName(map, "A post").danglingRefs).toBe(1);
-    expect(map.pages[0]!.references).toContain("id:https://example.com/#organization");
+    expect(map.pages[0]!.references).toContain(
+      "id:https://example.com/#organization"
+    );
   });
 
   test("reports a property two pages disagree on", () => {
@@ -195,8 +208,14 @@ describe("buildEntityMap", () => {
       logo,
     });
     const map = build([
-      page("https://example.com/a", organization("https://example.com/logo-a.png")),
-      page("https://example.com/b", organization("https://example.com/logo-b.png")),
+      page(
+        "https://example.com/a",
+        organization("https://example.com/logo-a.png")
+      ),
+      page(
+        "https://example.com/b",
+        organization("https://example.com/logo-b.png")
+      ),
     ]);
 
     const node = map.nodes[0]!;
@@ -226,17 +245,26 @@ describe("buildEntityMap", () => {
     expect(map.nodes).toHaveLength(1);
     expect(map.nodes[0]!.name).toBe("Acme");
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(map.summary.countsByType, "Organization")).toBe(
-      true,
-    );
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        map.summary.countsByType,
+        "Organization"
+      )
+    ).toBe(true);
   });
 
   test("a __proto__ type name lands as an own property of countsByType", () => {
-    const raw = '{"@context":"https://schema.org","@type":"__proto__","name":"Weird"}';
+    const raw =
+      '{"@context":"https://schema.org","@type":"__proto__","name":"Weird"}';
     const map = build([{ url: "https://example.com/", raw }]);
 
     expect(map.nodes).toHaveLength(1);
-    expect(Object.prototype.hasOwnProperty.call(map.summary.countsByType, "__proto__")).toBe(true);
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        map.summary.countsByType,
+        "__proto__"
+      )
+    ).toBe(true);
     expect(Value.Check(EntityMapSchema, map)).toBe(true);
   });
 
@@ -268,8 +296,16 @@ describe("buildEntityMap", () => {
       page("https://example.com/a", {
         "@context": "https://schema.org",
         "@graph": [
-          { "@type": "Organization", "@id": "https://example.com/#org", name: "Acme" },
-          { "@type": "WebPage", "@id": "https://example.com/a", name: "A page" },
+          {
+            "@type": "Organization",
+            "@id": "https://example.com/#org",
+            name: "Acme",
+          },
+          {
+            "@type": "WebPage",
+            "@id": "https://example.com/a",
+            name: "A page",
+          },
           { "@type": "BreadcrumbList", "@id": "https://example.com/a#crumb" },
           { "@type": "Question", name: "Is it free?" },
           { "@type": "ImageObject", "@id": "https://example.com/a#img" },
@@ -289,7 +325,9 @@ describe("buildEntityMap", () => {
     expect(byName("id:https://example.com/a#img").pageLocal).toBe(true);
     // A named image is a thing a reader can reason about, so it is not hidden.
     expect(byName("id:https://example.com/a#named").pageLocal).toBe(false);
-    expect(map.nodes.find((n) => n.name === "Is it free?")!.pageLocal).toBe(true);
+    expect(map.nodes.find((n) => n.name === "Is it free?")!.pageLocal).toBe(
+      true
+    );
     expect(map.summary.pageLocalCount).toBe(4);
   });
 
@@ -351,7 +389,11 @@ describe("buildEntityMap", () => {
       page("https://example.com/a", {
         "@context": "https://schema.org",
         "@graph": [
-          { "@type": "Article", "@id": "https://example.com/a#art", author: { "@id": "_:p1" } },
+          {
+            "@type": "Article",
+            "@id": "https://example.com/a#art",
+            author: { "@id": "_:p1" },
+          },
           { "@type": "Person", "@id": "_:p1", name: "Ada" },
         ],
       }),
@@ -366,8 +408,12 @@ describe("buildEntityMap", () => {
     const edges = map.edges.filter((e) => e.predicate === "author");
     expect(edges).toHaveLength(2);
     // Page a declares its own `_:p1`; page b references one it never declared.
-    expect(edges.find((e) => e.source === "id:https://example.com/a#art")!.dangling).toBe(false);
-    expect(edges.find((e) => e.source === "id:https://example.com/b#art")!.dangling).toBe(true);
+    expect(
+      edges.find((e) => e.source === "id:https://example.com/a#art")!.dangling
+    ).toBe(false);
+    expect(
+      edges.find((e) => e.source === "id:https://example.com/b#art")!.dangling
+    ).toBe(true);
   });
 
   test("@type order does not split one entity into two", () => {
@@ -406,7 +452,11 @@ describe("buildEntityMap", () => {
 
   test("counts pages that declare no entities", () => {
     const map = build([
-      page("https://example.com/", { "@context": "https://schema.org", "@type": "WebSite", name: "S" }),
+      page("https://example.com/", {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "S",
+      }),
       { url: "https://example.com/empty", raw: null },
       { url: "https://example.com/broken", raw: "{not json" },
     ]);
@@ -424,7 +474,12 @@ describe("buildEntityMap", () => {
             "@type": "BreadcrumbList",
             "@id": "https://example.com/a#breadcrumb",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: { "@id": "https://example.com/#home" } },
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: { "@id": "https://example.com/#home" },
+              },
               { "@type": "ListItem", position: 2, name: "A" },
             ],
           },
@@ -483,12 +538,18 @@ describe("toJsonLd", () => {
     expect(jsonLd["@context"]).toBe("https://schema.org");
     expect(jsonLd["@graph"]).toHaveLength(map.nodes.length);
 
-    const article = jsonLd["@graph"].find((member) => member["@id"] === "https://example.com/post#article");
+    const article = jsonLd["@graph"].find(
+      (member) => member["@id"] === "https://example.com/post#article"
+    );
     expect(article?.["@type"]).toBe("Article");
-    expect(article?.publisher).toEqual({ "@id": "https://example.com/#organization" });
+    expect(article?.publisher).toEqual({
+      "@id": "https://example.com/#organization",
+    });
 
     // The inline Person had no @id, so the export mints a stable one.
-    const person = jsonLd["@graph"].find((member) => member.name === "Ada Lovelace");
+    const person = jsonLd["@graph"].find(
+      (member) => member.name === "Ada Lovelace"
+    );
     expect(typeof person?.["@id"]).toBe("string");
     expect(String(person?.["@id"])).toContain("#entity-ada-lovelace-");
     expect(article?.author).toEqual({ "@id": person?.["@id"] });
@@ -535,7 +596,9 @@ describe("toJsonLd", () => {
         name: "Ada Lovelace",
       }),
     ];
-    expect(JSON.stringify(toJsonLd(build(input)))).toBe(JSON.stringify(toJsonLd(build(input))));
+    expect(JSON.stringify(toJsonLd(build(input)))).toBe(
+      JSON.stringify(toJsonLd(build(input)))
+    );
   });
 });
 
@@ -567,7 +630,9 @@ describe("conflict values are bounded and order-independent", () => {
     const shuffled = build([...pages].sort((a, b) => (a.url > b.url ? -1 : 1)));
 
     const values = (map: ReturnType<typeof build>) =>
-      map.nodes[0]!.conflicts.find((c) => c.property === "name")?.values.map((v) => v.value);
+      map.nodes[0]!.conflicts.find((c) => c.property === "name")?.values.map(
+        (v) => v.value
+      );
 
     expect(values(forward)).toEqual(values(reversed));
     expect(values(forward)).toEqual(values(shuffled));
@@ -575,9 +640,9 @@ describe("conflict values are bounded and order-independent", () => {
 
   test("it keeps the lowest-sorted values rather than the first seen", () => {
     const map = build([...many(80)].reverse());
-    const names = map.nodes[0]!.conflicts.find((c) => c.property === "name")!.values.map(
-      (v) => v.value
-    );
+    const names = map.nodes[0]!.conflicts.find(
+      (c) => c.property === "name"
+    )!.values.map((v) => v.value);
     // 80 distinct names, capped at 50. Reversed input means "Example 0079"
     // arrived first, and it is not kept; "Example 0000" arrived last, and is.
     expect(names).toHaveLength(50);
@@ -646,7 +711,9 @@ describe("conflict values are bounded and order-independent", () => {
         name: "Example Ltd",
       }),
     ]);
-    expect(map.nodes[0]!.conflicts.some((c) => c.property === "@type")).toBe(false);
+    expect(map.nodes[0]!.conflicts.some((c) => c.property === "@type")).toBe(
+      false
+    );
   });
 });
 
@@ -678,8 +745,14 @@ describe("legal identifier conflicts (#1615)", () => {
 
   test("the same registry number written with other spacing is not a conflict", () => {
     const map = build([
-      page("https://example.com/en", service({ vatID: "DE 123 456 789", taxID: "12-345.678" })),
-      page("https://example.com/dk", service({ vatID: "de123456789", taxID: "12345678" })),
+      page(
+        "https://example.com/en",
+        service({ vatID: "DE 123 456 789", taxID: "12-345.678" })
+      ),
+      page(
+        "https://example.com/dk",
+        service({ vatID: "de123456789", taxID: "12345678" })
+      ),
     ]);
     expect(map.nodes[0]!.conflicts).toEqual([]);
   });
@@ -688,11 +761,21 @@ describe("legal identifier conflicts (#1615)", () => {
     const map = build([
       page(
         "https://example.com/en",
-        service({ legalName: "Example Ltd", leiCode: "AAAA", duns: "1", iso6523Code: "0060:1" }),
+        service({
+          legalName: "Example Ltd",
+          leiCode: "AAAA",
+          duns: "1",
+          iso6523Code: "0060:1",
+        })
       ),
       page(
         "https://example.com/dk",
-        service({ legalName: "Example ApS", leiCode: "BBBB", duns: "2", iso6523Code: "0060:2" }),
+        service({
+          legalName: "Example ApS",
+          leiCode: "BBBB",
+          duns: "2",
+          iso6523Code: "0060:2",
+        })
       ),
     ]);
     expect(map.nodes[0]!.conflicts.map((c) => c.property).sort()).toEqual([
@@ -713,10 +796,19 @@ describe("legal identifier conflicts (#1615)", () => {
   test("the conflict shows the page's own spelling, trimmed and bounded", () => {
     const long = `${"X".repeat(300)}`;
     const map = build([
-      page("https://example.com/en", service({ vatID: "  de 123.456  ", legalName: long })),
-      page("https://example.com/dk", service({ vatID: "DK-1", legalName: "Other" })),
+      page(
+        "https://example.com/en",
+        service({ vatID: "  de 123.456  ", legalName: long })
+      ),
+      page(
+        "https://example.com/dk",
+        service({ vatID: "DK-1", legalName: "Other" })
+      ),
     ]);
-    expect(conflictOf(map, "vatID")?.values.map((v) => v.value)).toEqual(["de 123.456", "DK-1"]);
+    expect(conflictOf(map, "vatID")?.values.map((v) => v.value)).toEqual([
+      "de 123.456",
+      "DK-1",
+    ]);
     const legal = conflictOf(map, "legalName")!.values.map((v) => v.value);
     expect(legal.every((value) => value.length <= 200)).toBe(true);
   });
@@ -727,8 +819,13 @@ describe("legal identifier conflicts (#1615)", () => {
       page("https://example.com/b", service({ vatID: "de-123" })),
       page("https://example.com/c", service({ vatID: "FR 9" })),
     ];
-    const forward = conflictOf(build(pages), "vatID")!.values.map((v) => v.value);
-    const backward = conflictOf(build([...pages].reverse()), "vatID")!.values.map((v) => v.value);
+    const forward = conflictOf(build(pages), "vatID")!.values.map(
+      (v) => v.value
+    );
+    const backward = conflictOf(
+      build([...pages].reverse()),
+      "vatID"
+    )!.values.map((v) => v.value);
     expect(forward).toEqual(["DE 123", "FR 9"]);
     expect(backward).toEqual(forward);
   });
@@ -737,8 +834,14 @@ describe("legal identifier conflicts (#1615)", () => {
     // The map never translates or guesses: two names are two values, so a localized pair that also
     // translates its legalName is reported and its url alias is not excused.
     const map = build([
-      page("https://example.com/en", service({ legalName: "Example Trading Ltd" })),
-      page("https://example.com/de", service({ legalName: "Beispiel Handels GmbH" })),
+      page(
+        "https://example.com/en",
+        service({ legalName: "Example Trading Ltd" })
+      ),
+      page(
+        "https://example.com/de",
+        service({ legalName: "Beispiel Handels GmbH" })
+      ),
     ]);
     expect(conflictOf(map, "legalName")?.values).toHaveLength(2);
   });
@@ -761,7 +864,10 @@ describe("identity guard conflicts (#1615)", () => {
   const DK = "https://example.com/en-dk/service";
 
   test("identical bare-string providers on every page: no guard", () => {
-    const map = build([svc(EN, { provider: "Acme GmbH" }), svc(DK, { provider: " acme  gmbh " })]);
+    const map = build([
+      svc(EN, { provider: "Acme GmbH" }),
+      svc(DK, { provider: " acme  gmbh " }),
+    ]);
     expect(map.nodes[0]!.conflicts.map((c) => c.property)).toEqual(["url"]);
   });
 
@@ -778,7 +884,9 @@ describe("identity guard conflicts (#1615)", () => {
   });
 
   test("a provider on one page only, or a string against a reference, is a guard conflict", () => {
-    expect(guard(build([svc(EN, { provider: "Acme GmbH" }), svc(DK)]))?.values).toHaveLength(2);
+    expect(
+      guard(build([svc(EN, { provider: "Acme GmbH" }), svc(DK)]))?.values
+    ).toHaveLength(2);
     const mixed = build([
       svc(EN, { provider: "Acme GmbH" }),
       svc(DK, { provider: { "@id": "https://example.com/#p" } }),
@@ -794,8 +902,18 @@ describe("identity guard conflicts (#1615)", () => {
   });
 
   test("every identity predicate is compared", () => {
-    for (const predicate of ["brand", "publisher", "creator", "author", "worksFor", "member"]) {
-      const map = build([svc(EN, { [predicate]: "One" }), svc(DK, { [predicate]: "Two" })]);
+    for (const predicate of [
+      "brand",
+      "publisher",
+      "creator",
+      "author",
+      "worksFor",
+      "member",
+    ]) {
+      const map = build([
+        svc(EN, { [predicate]: "One" }),
+        svc(DK, { [predicate]: "Two" }),
+      ]);
       expect(guard(map)).toBeDefined();
     }
   });
@@ -817,7 +935,10 @@ describe("identity guard conflicts (#1615)", () => {
 
   test("a long token stays distinguishable once shortened", () => {
     const base = "p".repeat(300);
-    const map = build([svc(EN, { provider: `${base}a` }), svc(DK, { provider: `${base}b` })]);
+    const map = build([
+      svc(EN, { provider: `${base}a` }),
+      svc(DK, { provider: `${base}b` }),
+    ]);
     expect(guard(map)?.values).toHaveLength(2);
     expect(guard(map)!.values.every((v) => v.value.length < 200)).toBe(true);
   });
@@ -835,14 +956,18 @@ describe("bounded identity signature and legal identifier spellings (#1615)", ()
       ...extra,
     });
   const members = (prefix: string, n: number) =>
-    Array.from({ length: n }, (_, i) => ({ "@id": `https://example.com/${prefix}/member-${i}` }));
+    Array.from({ length: n }, (_, i) => ({
+      "@id": `https://example.com/${prefix}/member-${i}`,
+    }));
 
   test("a huge member array gives one bounded signature that still tells two lists apart", () => {
     const map = build([
       svc("https://example.com/en/service", { member: members("a", 400) }),
       svc("https://example.com/dk/service", { member: members("b", 400) }),
     ]);
-    const guard = map.nodes[0]!.conflicts.find((c) => c.property === "@identity")!;
+    const guard = map.nodes[0]!.conflicts.find(
+      (c) => c.property === "@identity"
+    )!;
     expect(guard.values).toHaveLength(2);
     expect(guard.values.every((v) => v.value.length <= 500)).toBe(true);
     // Identical long lists are still one signature.
@@ -855,15 +980,21 @@ describe("bounded identity signature and legal identifier spellings (#1615)", ()
 
   test("more than 50 distinct vatIDs keep the 50 lowest, each with its own spelling", () => {
     const pages = Array.from({ length: 80 }, (_, i) =>
-      svc(`https://example.com/p${i}`, { vatID: `XX ${String(i).padStart(3, "0")}` }),
+      svc(`https://example.com/p${i}`, {
+        vatID: `XX ${String(i).padStart(3, "0")}`,
+      })
     );
-    const forward = build(pages).nodes[0]!.conflicts.find((c) => c.property === "vatID")!;
+    const forward = build(pages).nodes[0]!.conflicts.find(
+      (c) => c.property === "vatID"
+    )!;
     const backward = build([...pages].reverse()).nodes[0]!.conflicts.find(
-      (c) => c.property === "vatID",
+      (c) => c.property === "vatID"
     )!;
     expect(forward.values).toHaveLength(50);
     expect(forward.values[0]!.value).toBe("XX 000");
     expect(forward.values[49]!.value).toBe("XX 049");
-    expect(backward.values.map((v) => v.value)).toEqual(forward.values.map((v) => v.value));
+    expect(backward.values.map((v) => v.value)).toEqual(
+      forward.values.map((v) => v.value)
+    );
   });
 });

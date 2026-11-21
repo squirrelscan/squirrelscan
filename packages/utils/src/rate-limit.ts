@@ -32,7 +32,7 @@ export function isRateLimitStatus(status: number | null | undefined): boolean {
  */
 export function isRateLimitedResponse(
   status: number | null | undefined,
-  retryAfterHeader?: string | null,
+  retryAfterHeader?: string | null
 ): boolean {
   if (isRateLimitStatus(status)) return true;
   return status === 503 && hasRetryAfter(retryAfterHeader);
@@ -58,7 +58,7 @@ const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
  */
 export function parseRetryAfterMs(
   value: string | null | undefined,
-  now: number = Date.now(),
+  now: number = Date.now()
 ): number | undefined {
   if (!hasRetryAfter(value)) return undefined;
   const raw = value!.trim();

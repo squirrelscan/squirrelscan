@@ -6,6 +6,10 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import {
   buildLabelIndex,
   fieldSelector,
@@ -18,8 +22,6 @@ import {
   isDataField,
   isNumberHostile,
 } from "../shared/form-fields";
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 /** Below this a form is a search box or a login, not a form worth a hint. */
 const MULTI_FIELD_THRESHOLD = 3;
@@ -44,7 +46,15 @@ const CONSTRAINT_ATTRIBUTES = [
 ];
 
 /** Input types with built-in validation of their own. */
-const VALIDATING_TYPES = new Set(["email", "url", "number", "date", "time", "month", "week"]);
+const VALIDATING_TYPES = new Set([
+  "email",
+  "url",
+  "number",
+  "date",
+  "time",
+  "month",
+  "week",
+]);
 
 /**
  * Markup that says "this form validates itself in JavaScript". Any one of
@@ -77,18 +87,22 @@ const CUSTOM_VALIDATION_SCRIPT_HINTS = [
 
 function hasConstraints(fields: Element[]): boolean {
   for (const field of fields) {
-    if (CONSTRAINT_ATTRIBUTES.some((attr) => field.hasAttribute(attr))) return true;
+    if (CONSTRAINT_ATTRIBUTES.some((attr) => field.hasAttribute(attr)))
+      return true;
     if (VALIDATING_TYPES.has(inputType(field))) return true;
   }
   return false;
 }
 
 function hasCustomValidation(form: Element, scriptText: string): boolean {
-  if (form.hasAttribute("onsubmit") || form.hasAttribute("oninvalid")) return true;
+  if (form.hasAttribute("onsubmit") || form.hasAttribute("oninvalid"))
+    return true;
   for (const selector of CUSTOM_VALIDATION_SELECTORS) {
     if (form.querySelector(selector)) return true;
   }
-  return CUSTOM_VALIDATION_SCRIPT_HINTS.some((hint) => scriptText.includes(hint));
+  return CUSTOM_VALIDATION_SCRIPT_HINTS.some((hint) =>
+    scriptText.includes(hint)
+  );
 }
 
 export const inputTypesRule: Rule = {
@@ -174,7 +188,9 @@ export const inputTypesRule: Rule = {
         name: "input-types",
         status: "fail",
         message: `${hostileNumber.length} digit-string field(s) use type="number"${
-          wrongType.length > 0 ? `, ${wrongType.length} other field(s) use the wrong type` : ""
+          wrongType.length > 0
+            ? `, ${wrongType.length} other field(s) use the wrong type`
+            : ""
         }`,
         items: [...hostileNumber, ...wrongType],
         details: { fieldsChecked: typedFieldsChecked },
@@ -205,7 +221,12 @@ export const inputTypesRule: Rule = {
       const fields = formDataFields(form);
       if (fields.length < MULTI_FIELD_THRESHOLD) return;
       multiFieldForms++;
-      if (fields.some((field) => (field.getAttribute("enterkeyhint") || "").trim() !== "")) return;
+      if (
+        fields.some(
+          (field) => (field.getAttribute("enterkeyhint") || "").trim() !== ""
+        )
+      )
+        return;
       withoutHint.push({
         id: formSelector(form, index),
         label: `${fields.length}-field form, no field sets enterkeyhint`,
@@ -239,7 +260,9 @@ export const inputTypesRule: Rule = {
     }
 
     // --- novalidate intent mismatch ---------------------------------------
-    const novalidateForms = forms.filter((form) => form.hasAttribute("novalidate"));
+    const novalidateForms = forms.filter((form) =>
+      form.hasAttribute("novalidate")
+    );
     const mismatches: CheckItem[] = [];
 
     if (novalidateForms.length > 0) {
@@ -257,7 +280,8 @@ export const inputTypesRule: Rule = {
         if (hasCustomValidation(form, scriptText)) continue;
         mismatches.push({
           id: formSelector(form, index),
-          label: "novalidate disables the browser's error messages, but the form still declares constraints and no custom validation",
+          label:
+            "novalidate disables the browser's error messages, but the form still declares constraints and no custom validation",
           snippet: fieldSnippet(form, 240),
           meta: { reason: "novalidate-mismatch", fields: fields.length },
         });

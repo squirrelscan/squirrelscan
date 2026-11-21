@@ -25,17 +25,24 @@ const groups = new Map<string, string[]>();
 let totalMs = 0;
 let count = 0;
 
-for await (const entry of new Bun.Glob("*.html").scan({ cwd: dir, absolute: true })) {
+for await (const entry of new Bun.Glob("*.html").scan({
+  cwd: dir,
+  absolute: true,
+})) {
   const html = await Bun.file(entry).text();
   const started = performance.now();
   const normalized = normalizeHtmlForFingerprint(html);
   totalMs += performance.now() - started;
   count++;
-  const hash = new Bun.CryptoHasher("sha256").update(normalized).digest("hex").slice(0, 12);
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 12);
   groups.set(hash, [...(groups.get(hash) ?? []), entry.split("/").pop()!]);
 }
 
 console.log(
-  `${count} bodies, ${groups.size} distinct hashes, ${(totalMs / count).toFixed(1)} ms each`,
+  `${count} bodies, ${groups.size} distinct hashes, ${(totalMs / count).toFixed(1)} ms each`
 );
-for (const [hash, files] of groups) console.log(`  ${hash}  ${files.sort().join(" ")}`);
+for (const [hash, files] of groups)
+  console.log(`  ${hash}  ${files.sort().join(" ")}`);

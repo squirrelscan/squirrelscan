@@ -244,7 +244,6 @@ export function readPageMapRows(
   });
 }
 
-
 /**
  * The published `pageMap` of audit `crawl`: its rows (failed pages included) bounded to
  * {@link PAGE_MAP_PUBLISH_LIMITS}. Null for an audit with no pages. The one call the CLI publish

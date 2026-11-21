@@ -1,6 +1,7 @@
+import type { ReactElement, ReactNode } from "react";
+
 // Classic JSX in the CLI build needs React in scope.
 import React from "react";
-import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "./utils";
 
@@ -77,7 +78,7 @@ export function Badge({
         APPEARANCE[appearance],
         SIZE[size],
         color && COLOR_CLASSES[color],
-        className,
+        className
       )}
     >
       {icon}

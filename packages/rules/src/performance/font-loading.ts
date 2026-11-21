@@ -1,12 +1,16 @@
 // perf/font-loading - Font loading optimization
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { getCWVHints } from "./cwv";
 
-function hasHostname(rawUrl: string, baseUrl: string, hostnames: readonly string[]): boolean {
+function hasHostname(
+  rawUrl: string,
+  baseUrl: string,
+  hostnames: readonly string[]
+): boolean {
   try {
     return hostnames.includes(new URL(rawUrl, baseUrl).hostname.toLowerCase());
   } catch {
@@ -51,13 +55,19 @@ export const fontLoadingRule: Rule = {
 
     // Check for Google Fonts preconnect
     const hasGoogleFontsPreconnect = hints.preconnectTags.some((url) =>
-      hasHostname(url, ctx.page.url, ["fonts.googleapis.com", "fonts.gstatic.com"]),
+      hasHostname(url, ctx.page.url, [
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+      ])
     );
-    const usesGoogleFonts = (ctx.parsed.document
-      ? querySelectorAllOutsideNoscript(ctx.parsed.document, "link[href]")
-      : []
+    const usesGoogleFonts = (
+      ctx.parsed.document
+        ? querySelectorAllOutsideNoscript(ctx.parsed.document, "link[href]")
+        : []
     ).some((link) =>
-      hasHostname(link.getAttribute("href") ?? "", ctx.page.url, ["fonts.googleapis.com"]),
+      hasHostname(link.getAttribute("href") ?? "", ctx.page.url, [
+        "fonts.googleapis.com",
+      ])
     );
 
     if (usesGoogleFonts && !hasGoogleFontsPreconnect) {
@@ -65,7 +75,8 @@ export const fontLoadingRule: Rule = {
         name: "font-preconnect",
         status: "warn",
         message: "Using Google Fonts without preconnect",
-        value: "Add <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>",
+        value:
+          "Add <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>",
       });
     } else if (usesGoogleFonts) {
       checks.push({

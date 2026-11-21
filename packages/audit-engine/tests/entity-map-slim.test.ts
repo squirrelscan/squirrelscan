@@ -2,8 +2,6 @@
 // a hard size gate. What it drops, and what it must never drop, is the contract
 // with the cloud side.
 
-import { describe, expect, test } from "bun:test";
-
 import {
   ENTITY_MAP_FORMAT,
   ENTITY_MAP_PUBLISH_LIMITS,
@@ -13,15 +11,17 @@ import {
   type EntityMapEdge,
   type EntityMapNode,
 } from "@squirrelscan/core-contracts/entity-map";
+import { describe, expect, test } from "bun:test";
 
+import { projectEntityMap, slimEntityMapForViewer } from "../src/entity-map";
 import { createEntityMapBuilder } from "../src/entity-map/build";
 import { diffEntityMaps } from "../src/entity-map/diff";
-import { projectEntityMap, slimEntityMapForViewer } from "../src/entity-map";
 
 // These tests pin the SAMPLING fallback (what survives when nothing summarizes),
 // so they run the publish limits with summarization off. Summarization has its
 // own file: entity-map-summarize.test.ts (#407).
-const { summarize: _summarize, ...SAMPLING_PUBLISH_LIMITS } = ENTITY_MAP_PUBLISH_LIMITS;
+const { summarize: _summarize, ...SAMPLING_PUBLISH_LIMITS } =
+  ENTITY_MAP_PUBLISH_LIMITS;
 function slimEntityMapForPublish(map: EntityMap): EntityMap {
   return projectEntityMap(map, SAMPLING_PUBLISH_LIMITS, "publish");
 }
@@ -29,7 +29,7 @@ function slimEntityMapForPublish(map: EntityMap): EntityMap {
 function node(
   key: string,
   occurrences: number,
-  extra: Partial<EntityMapNode> = {},
+  extra: Partial<EntityMapNode> = {}
 ): EntityMapNode {
   return {
     key,
@@ -59,7 +59,11 @@ function edge(source: string, target: string, dangling = false): EntityMapEdge {
   };
 }
 
-function map(nodes: EntityMapNode[], edges: EntityMapEdge[], pageCount = 0): EntityMap {
+function map(
+  nodes: EntityMapNode[],
+  edges: EntityMapEdge[],
+  pageCount = 0
+): EntityMap {
   return {
     format: ENTITY_MAP_FORMAT,
     version: ENTITY_MAP_VERSION,
@@ -105,10 +109,10 @@ describe("slimEntityMapForPublish", () => {
     const slim = slimEntityMapForPublish(map([huge], []));
 
     expect(slim.nodes[0]!.name!.length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength
     );
     expect(slim.nodes[0]!.properties.description!.length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength
     );
   });
 
@@ -125,7 +129,10 @@ describe("slimEntityMapForPublish", () => {
         property: `p${c}`,
         values: Array.from({ length: 8 }, (_, v) => ({
           value: "z".repeat(4000),
-          pages: Array.from({ length: 20 }, (_, p) => `https://example.com/${v}/${p}`),
+          pages: Array.from(
+            { length: 20 },
+            (_, p) => `https://example.com/${v}/${p}`
+          ),
           morePages: 0,
         })),
       }));
@@ -134,7 +141,7 @@ describe("slimEntityMapForPublish", () => {
     const slim = slimEntityMapForPublish(map(fat, []));
 
     expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes
     );
     // The busiest entities are the ones that survived.
     expect(slim.nodes.length).toBeGreaterThan(0);
@@ -143,13 +150,20 @@ describe("slimEntityMapForPublish", () => {
 
   test("counts the pages it dropped rather than losing them", () => {
     const wide = node("a", 60);
-    wide.pages = Array.from({ length: 50 }, (_, i) => `https://example.com/${i}`);
+    wide.pages = Array.from(
+      { length: 50 },
+      (_, i) => `https://example.com/${i}`
+    );
     wide.morePages = 10;
     const slim = slimEntityMapForPublish(map([wide], []));
 
-    expect(slim.nodes[0]!.pages).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxPages);
+    expect(slim.nodes[0]!.pages).toHaveLength(
+      ENTITY_MAP_PUBLISH_LIMITS.maxPages
+    );
     // 10 already beyond the document cap, plus the 45 this projection dropped.
-    expect(slim.nodes[0]!.morePages).toBe(10 + 50 - ENTITY_MAP_PUBLISH_LIMITS.maxPages);
+    expect(slim.nodes[0]!.morePages).toBe(
+      10 + 50 - ENTITY_MAP_PUBLISH_LIMITS.maxPages
+    );
   });
 
   test("keeps a compact page index, and the viewer still drops pages", () => {
@@ -181,7 +195,9 @@ describe("slimEntityMapForPublish", () => {
     expect(keys.has("n0000")).toBe(false);
     expect(keys.has(`n${String(many.length - 1).padStart(4, "0")}`)).toBe(true);
     // Still sorted by key, like the document it came from.
-    expect(slim.nodes.map((n) => n.key)).toEqual([...slim.nodes.map((n) => n.key)].sort());
+    expect(slim.nodes.map((n) => n.key)).toEqual(
+      [...slim.nodes.map((n) => n.key)].sort()
+    );
     // And the true totals survive so a reader can see it was clipped.
     expect(slim.summary.nodeCount).toBe(many.length);
   });
@@ -210,7 +226,7 @@ describe("slimEntityMapForPublish", () => {
     }
     const source = map(many, []);
     expect(JSON.stringify(slimEntityMapForPublish(source))).toBe(
-      JSON.stringify(slimEntityMapForPublish(source)),
+      JSON.stringify(slimEntityMapForPublish(source))
     );
   });
 });
@@ -244,7 +260,12 @@ describe("projection truncation", () => {
     // "nothing was dropped".
     const slim = slimEntityMapForViewer(map([node("a", 1)], [], 3));
     expect(slim.pages).toEqual([]);
-    expect(slim.truncated).toEqual({ reason: "viewer", nodes: 0, edges: 0, pages: 3 });
+    expect(slim.truncated).toEqual({
+      reason: "viewer",
+      nodes: 0,
+      edges: 0,
+      pages: 3,
+    });
   });
 
   test("names which projection clipped it", () => {
@@ -266,19 +287,24 @@ describe("slimEntityMapForViewer", () => {
     const viewer = slimEntityMapForViewer(full);
 
     expect(viewer.nodes).toHaveLength(ENTITY_MAP_VIEWER_LIMITS.maxNodes);
-    expect(viewer.truncated!.nodes).toBe(20_001 - ENTITY_MAP_VIEWER_LIMITS.maxNodes);
+    expect(viewer.truncated!.nodes).toBe(
+      20_001 - ENTITY_MAP_VIEWER_LIMITS.maxNodes
+    );
     expect(JSON.stringify(viewer).length).toBeLessThanOrEqual(
-      ENTITY_MAP_VIEWER_LIMITS.maxBytes,
+      ENTITY_MAP_VIEWER_LIMITS.maxBytes
     );
     // An order of magnitude, not a few percent — the point of the projection.
     expect(JSON.stringify(viewer).length).toBeLessThan(
-      JSON.stringify(full).length / 5,
+      JSON.stringify(full).length / 5
     );
   });
 
   test("keeps more per node than the publish copy, because this one is read", () => {
     const wide = node("a", 3);
-    wide.pages = Array.from({ length: 50 }, (_, i) => `https://example.com/p${i}`);
+    wide.pages = Array.from(
+      { length: 50 },
+      (_, i) => `https://example.com/p${i}`
+    );
     wide.morePages = 10;
     wide.properties = { description: "d".repeat(1500) };
 
@@ -286,15 +312,21 @@ describe("slimEntityMapForViewer", () => {
     const published = slimEntityMapForPublish(map([wide], []));
 
     // The detail panel lists twelve pages; the publish copy keeps five.
-    expect(viewer.nodes[0]!.pages).toHaveLength(ENTITY_MAP_VIEWER_LIMITS.maxPages);
-    expect(published.nodes[0]!.pages).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxPages);
+    expect(viewer.nodes[0]!.pages).toHaveLength(
+      ENTITY_MAP_VIEWER_LIMITS.maxPages
+    );
+    expect(published.nodes[0]!.pages).toHaveLength(
+      ENTITY_MAP_PUBLISH_LIMITS.maxPages
+    );
     // Both still account for every page they did not list.
     expect(viewer.nodes[0]!.pages.length + viewer.nodes[0]!.morePages).toBe(60);
-    expect(published.nodes[0]!.pages.length + published.nodes[0]!.morePages).toBe(60);
+    expect(
+      published.nodes[0]!.pages.length + published.nodes[0]!.morePages
+    ).toBe(60);
     // A description survives at viewer width and is cut at publish width.
     expect(viewer.nodes[0]!.properties.description).toHaveLength(1500);
     expect(published.nodes[0]!.properties.description).toHaveLength(
-      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength,
+      ENTITY_MAP_PUBLISH_LIMITS.maxStringLength
     );
   });
 
@@ -315,7 +347,7 @@ describe("slimEntityMapForViewer", () => {
     }
     const source = map(many, []);
     expect(JSON.stringify(slimEntityMapForViewer(source))).toBe(
-      JSON.stringify(slimEntityMapForViewer(source)),
+      JSON.stringify(slimEntityMapForViewer(source))
     );
   });
 });
@@ -343,7 +375,8 @@ const SITE = "https://shop.test";
 
 function countsByType(nodes: EntityMapNode[]): Record<string, number> {
   const counts = new Map<string, number>();
-  for (const n of nodes) counts.set(n.types[0]!, (counts.get(n.types[0]!) ?? 0) + 1);
+  for (const n of nodes)
+    counts.set(n.types[0]!, (counts.get(n.types[0]!) ?? 0) + 1);
   return Object.fromEntries(counts);
 }
 
@@ -408,7 +441,10 @@ function storePageJsonLd(i: number, blankLocals: boolean): string {
 function storeMap(pages: number, blankLocals: boolean): EntityMap {
   const builder = createEntityMapBuilder();
   for (let i = 0; i < pages; i += 1) {
-    builder.addPage(`${SITE}/products/item-${i}`, storePageJsonLd(i, blankLocals));
+    builder.addPage(
+      `${SITE}/products/item-${i}`,
+      storePageJsonLd(i, blankLocals)
+    );
   }
   return builder.finish(SITE, { generatedAt: "2026-01-01T00:00:00.000Z" });
 }
@@ -427,20 +463,26 @@ for (const shape of [
       // Every assertion below is only interesting because these hold: one entity
       // of each type per page, all of them occurring exactly once.
       expect(thousand.nodes.length).toBe(4_002);
-      expect(thousand.nodes.filter((n) => n.occurrences === 1).length).toBe(4_000);
+      expect(thousand.nodes.filter((n) => n.occurrences === 1).length).toBe(
+        4_000
+      );
 
       // And the key order really is the one that broke the old ranking. Without
       // an `@id` the page-local nodes sort ahead of everything; with one, the
       // catalogue sorts by page and the types interleave.
       const sorted = [...thousand.nodes].sort((a, b) =>
-        a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+        a.key < b.key ? -1 : a.key > b.key ? 1 : 0
       );
       if (shape.blankLocals) {
         expect(sorted.slice(0, 20).every((n) => n.pageLocal)).toBe(true);
       } else {
         // Past the two site-wide `@id`s, one page's entities sit together.
         const head = new Set(sorted.slice(2, 8).map((n) => n.types[0]!));
-        expect([...head].sort()).toEqual(["BreadcrumbList", "Product", "WebPage"]);
+        expect([...head].sort()).toEqual([
+          "BreadcrumbList",
+          "Product",
+          "WebPage",
+        ]);
       }
     });
 
@@ -465,7 +507,9 @@ for (const shape of [
       // round-robin over the types present could have handed it. The tier of
       // one-off subjects is where the old ranking collapsed: it gave one type a
       // third of the entire body, or all of it, and another type nothing.
-      const oneOff = published.nodes.filter((n) => !n.pageLocal && n.occurrences === 1);
+      const oneOff = published.nodes.filter(
+        (n) => !n.pageLocal && n.occurrences === 1
+      );
       const types = new Set(oneOff.map((n) => n.types[0]!));
       const quota = Math.ceil(oneOff.length / types.size);
       expect(types.size).toBe(2);
@@ -486,7 +530,9 @@ for (const shape of [
       const pageLocal = published.nodes.filter((n) => n.pageLocal);
       expect(pageLocal.length).toBeGreaterThan(0);
       expect(pageLocal.length).toBeLessThanOrEqual(
-        Math.ceil(published.nodes.length * ENTITY_MAP_PUBLISH_LIMITS.maxPageLocalShare),
+        Math.ceil(
+          published.nodes.length * ENTITY_MAP_PUBLISH_LIMITS.maxPageLocalShare
+        )
       );
       // Both page-local types are represented inside that slice.
       const localTypes = countsByType(pageLocal);
@@ -499,7 +545,7 @@ for (const shape of [
       // on the first attempt, so nothing here is decided by the byte loop.
       expect(published.nodes).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxNodes);
       expect(JSON.stringify(published).length).toBeLessThanOrEqual(
-        ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
+        ENTITY_MAP_PUBLISH_LIMITS.maxBytes
       );
     });
 
@@ -514,7 +560,7 @@ for (const shape of [
       }
       expect(published.summary.nodeCount).toBe(thousand.nodes.length);
       expect(published.nodes.length + published.truncated!.nodes).toBe(
-        thousand.nodes.length,
+        thousand.nodes.length
       );
     });
 
@@ -522,20 +568,22 @@ for (const shape of [
       // The old sampler published the same alphabetical nodes at 500 pages and
       // at 5,000, so the map stopped describing the store somewhere around 500.
       for (const pages of [200, 2_000]) {
-        const slim = slimEntityMapForPublish(storeMap(pages, shape.blankLocals));
+        const slim = slimEntityMapForPublish(
+          storeMap(pages, shape.blankLocals)
+        );
         const types = countsByType(slim.nodes);
         expect(types.Offer).toBeGreaterThan(0);
         expect(types.Product).toBeGreaterThan(0);
         expect(types.Organization).toBe(1);
         expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
-          ENTITY_MAP_PUBLISH_LIMITS.maxBytes,
+          ENTITY_MAP_PUBLISH_LIMITS.maxBytes
         );
       }
     }, 30_000);
 
     test("is deterministic", () => {
       expect(JSON.stringify(slimEntityMapForPublish(thousand))).toBe(
-        JSON.stringify(published),
+        JSON.stringify(published)
       );
     });
   });
@@ -551,13 +599,13 @@ describe("publish sample tiers", () => {
         node(`local:${String(i).padStart(4, "0")}`, 1, {
           types: ["WebPage"],
           pageLocal: true,
-        }),
+        })
       ),
     ];
     const slim = slimEntityMapForPublish(map(nodes, []));
     expect(slim.nodes).toHaveLength(ENTITY_MAP_PUBLISH_LIMITS.maxNodes);
     expect(slim.nodes.filter((n) => n.pageLocal)).toHaveLength(
-      ENTITY_MAP_PUBLISH_LIMITS.maxNodes - 1,
+      ENTITY_MAP_PUBLISH_LIMITS.maxNodes - 1
     );
   });
 
@@ -568,7 +616,10 @@ describe("publish sample tiers", () => {
     const heavy = Array.from({ length: 1_000 }, (_, i) => {
       const n = node(`n${String(i).padStart(4, "0")}`, 1_000 - i);
       n.properties = { description: "d".repeat(600) };
-      n.pages = Array.from({ length: 5 }, (_, p) => `https://example.com/page-${p}`);
+      n.pages = Array.from(
+        { length: 5 },
+        (_, p) => `https://example.com/page-${p}`
+      );
       return n;
     });
     const slim = slimEntityMapForPublish(map(heavy, []));
@@ -579,7 +630,8 @@ describe("publish sample tiers", () => {
     expect(slim.nodes.length).toBeGreaterThan(450);
     // The graph is fitted to the limit minus the page index's own budget.
     const graphBudget =
-      ENTITY_MAP_PUBLISH_LIMITS.maxBytes - ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes;
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes -
+      ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes;
     expect(bytes).toBeGreaterThan(graphBudget * 0.9);
   });
 
@@ -589,7 +641,7 @@ describe("publish sample tiers", () => {
     const nodes = [
       node("hub", 5),
       ...Array.from({ length: 1_000 }, (_, i) =>
-        node(`off:${String(i).padStart(4, "0")}`, 1, { types: ["Offer"] }),
+        node(`off:${String(i).padStart(4, "0")}`, 1, { types: ["Offer"] })
       ),
     ];
     // Only the LAST of them is referenced, so alphabetical order would drop it.
@@ -620,14 +672,18 @@ describe("problem nodes survive the publish sample", () => {
   // otherwise keep a lone Organization on its own merits and prove nothing.
   const crowd = (type = "Product") =>
     Array.from({ length: 1_000 }, (_, i) =>
-      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, { types: [type] }),
+      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, { types: [type] })
     );
 
   const keysOf = (nodes: EntityMapNode[]) => map(nodes, []);
-  const kept = (m: EntityMap) => slimEntityMapForPublish(m).nodes.map((n) => n.key);
+  const kept = (m: EntityMap) =>
+    slimEntityMapForPublish(m).nodes.map((n) => n.key);
 
   test("the only conflicted entity, with the lowest reach, survives", () => {
-    const lone = node("id:lone", 2, { types: ["Product"], conflicts: [conflict] });
+    const lone = node("id:lone", 2, {
+      types: ["Product"],
+      conflicts: [conflict],
+    });
     expect(kept(keysOf([...crowd(), lone]))).toContain("id:lone");
 
     // Negative control: without the conflict the same node is sampled out.
@@ -648,12 +704,19 @@ describe("problem nodes survive the publish sample", () => {
       node("anon:org", 2, {
         types: ["Organization"],
         name: "Acme",
-        pages: ["https://example.com/a", "https://example.com/b"].slice(0, pages),
+        pages: ["https://example.com/a", "https://example.com/b"].slice(
+          0,
+          pages
+        ),
       });
-    expect(kept(keysOf([...crowd("Organization"), noId(2)]))).toContain("anon:org");
+    expect(kept(keysOf([...crowd("Organization"), noId(2)]))).toContain(
+      "anon:org"
+    );
 
     // Negative control: one declaring page is ordinary, not a finding.
-    expect(kept(keysOf([...crowd("Organization"), noId(1)]))).not.toContain("anon:org");
+    expect(kept(keysOf([...crowd("Organization"), noId(1)]))).not.toContain(
+      "anon:org"
+    );
   });
 
   test("split-identity twins that share a page survive", () => {
@@ -661,8 +724,14 @@ describe("problem nodes survive the publish sample", () => {
       node(`id:${id}`, 2, { id, types: ["Organization"], name: "Acme", pages });
     // Two declaring pages each, so neither twin is an orphan on its own account.
     const together = [
-      twin("https://example.com/#org", ["https://example.com/", "https://example.com/a"]),
-      twin("https://data.example.org/acme", ["https://example.com/", "https://example.com/b"]),
+      twin("https://example.com/#org", [
+        "https://example.com/",
+        "https://example.com/a",
+      ]),
+      twin("https://data.example.org/acme", [
+        "https://example.com/",
+        "https://example.com/b",
+      ]),
     ];
     const keys = kept(keysOf([...crowd("Organization"), ...together]));
     expect(keys).toContain("id:https://example.com/#org");
@@ -671,8 +740,14 @@ describe("problem nodes survive the publish sample", () => {
     // Negative control: same name and type but never declared together is two
     // different things, not a split (what the rule itself concludes).
     const apart = [
-      twin("https://example.com/#org", ["https://example.com/a", "https://example.com/a2"]),
-      twin("https://data.example.org/acme", ["https://example.com/b", "https://example.com/b2"]),
+      twin("https://example.com/#org", [
+        "https://example.com/a",
+        "https://example.com/a2",
+      ]),
+      twin("https://data.example.org/acme", [
+        "https://example.com/b",
+        "https://example.com/b2",
+      ]),
     ];
     const apartKeys = kept(keysOf([...crowd("Organization"), ...apart]));
     expect(apartKeys).not.toContain("id:https://example.com/#org");
@@ -686,10 +761,15 @@ describe("problem nodes survive the publish sample", () => {
   test("an identified entity nothing references survives, a referenced one does not", () => {
     const orphan = (id = "https://example.com/#orphan") =>
       node(`id:${id}`, 1, { id, types: ["Offer"], pages: [pageUrl("p1")] });
-    expect(kept(keysOf([...crowd("Offer"), orphan()]))).toContain("id:https://example.com/#orphan");
+    expect(kept(keysOf([...crowd("Offer"), orphan()]))).toContain(
+      "id:https://example.com/#orphan"
+    );
 
     // Referenced by another node: not an orphan, sampled out.
-    const referenced = map([...crowd("Offer"), orphan()], [edge("id:crowd-0000", "id:https://example.com/#orphan")]);
+    const referenced = map(
+      [...crowd("Offer"), orphan()],
+      [edge("id:crowd-0000", "id:https://example.com/#orphan")]
+    );
     expect(kept(referenced)).not.toContain("id:https://example.com/#orphan");
 
     // A page subject is expected to be unreferenced.
@@ -699,16 +779,24 @@ describe("problem nodes survive the publish sample", () => {
       pages: [pageUrl("p1")],
     });
     // (Offer leads, Article is a page-subject type among the node's types.)
-    expect(kept(keysOf([...crowd("Offer"), subject]))).not.toContain("id:https://example.com/#sub");
+    expect(kept(keysOf([...crowd("Offer"), subject]))).not.toContain(
+      "id:https://example.com/#sub"
+    );
   });
 
   test("an @id that is not an absolute URL survives, an absolute one does not", () => {
     const shaped = (id: string) =>
-      node("id:shaped", 2, { id, types: ["Offer"], pages: [pageUrl("a"), pageUrl("b")] });
-    expect(kept(keysOf([...crowd("Offer"), shaped("#offer")]))).toContain("id:shaped");
-    expect(kept(keysOf([...crowd("Offer"), shaped("https://example.com/#offer")]))).not.toContain(
-      "id:shaped",
+      node("id:shaped", 2, {
+        id,
+        types: ["Offer"],
+        pages: [pageUrl("a"), pageUrl("b")],
+      });
+    expect(kept(keysOf([...crowd("Offer"), shaped("#offer")]))).toContain(
+      "id:shaped"
     );
+    expect(
+      kept(keysOf([...crowd("Offer"), shaped("https://example.com/#offer")]))
+    ).not.toContain("id:shaped");
   });
 
   test("a primary organization with no sameAs survives, one with sameAs does not", () => {
@@ -716,55 +804,85 @@ describe("problem nodes survive the publish sample", () => {
     // the budget reach, so only the reservation can keep it.
     const primary = (properties: EntityMapNode["properties"]) =>
       node("id:primary", 1, { types: ["Organization"], properties });
-    expect(kept(keysOf([...crowd(), primary({})]))).toContain(
-      "id:primary",
-    );
+    expect(kept(keysOf([...crowd(), primary({})]))).toContain("id:primary");
     expect(
-      kept(keysOf([...crowd(), primary({ sameAs: ["https://x.com/a"] })])),
+      kept(keysOf([...crowd(), primary({ sameAs: ["https://x.com/a"] })]))
     ).not.toContain("id:primary");
   });
 
   test("an outlier publisher survives, a lone consistent publisher does not", () => {
-    const publisherEdge = (source: string, target: string, occurrences: number): EntityMapEdge => ({
+    const publisherEdge = (
+      source: string,
+      target: string,
+      occurrences: number
+    ): EntityMapEdge => ({
       ...edge(source, target),
       predicate: "publisher",
       occurrences,
     });
     const sameAs = { sameAs: ["https://x.com/a"] };
-    const main = node("id:pub-main", 1, { types: ["Organization"], properties: sameAs });
-    const stray = node("id:pub-stray", 1, { types: ["Organization"], properties: sameAs });
+    const main = node("id:pub-main", 1, {
+      types: ["Organization"],
+      properties: sameAs,
+    });
+    const stray = node("id:pub-stray", 1, {
+      types: ["Organization"],
+      properties: sameAs,
+    });
     const base = crowd();
 
-    const withStray = map([...base, main, stray], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 9),
-      publisherEdge("id:crowd-0001", "id:pub-stray", 1),
-    ]);
+    const withStray = map(
+      [...base, main, stray],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 9),
+        publisherEdge("id:crowd-0001", "id:pub-stray", 1),
+      ]
+    );
     expect(kept(withStray)).toContain("id:pub-stray");
 
     // Negative control: the same stray node with no publisher reference at all.
-    const noStray = map([...base, main, stray], [publisherEdge("id:crowd-0000", "id:pub-main", 10)]);
+    const noStray = map(
+      [...base, main, stray],
+      [publisherEdge("id:crowd-0000", "id:pub-main", 10)]
+    );
     expect(kept(noStray)).not.toContain("id:pub-stray");
   });
 
   test("a balanced publisher split reserves nothing", () => {
-    const publisherEdge = (source: string, target: string, occurrences: number): EntityMapEdge => ({
+    const publisherEdge = (
+      source: string,
+      target: string,
+      occurrences: number
+    ): EntityMapEdge => ({
       ...edge(source, target),
       predicate: "publisher",
       occurrences,
     });
     const sameAs = { sameAs: ["https://x.com/a"] };
-    const main = node("id:pub-main", 1, { types: ["Organization"], properties: sameAs });
-    const other = node("id:pub-other", 1, { types: ["Organization"], properties: sameAs });
-    const balanced = map([...crowd(), main, other], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 5),
-      publisherEdge("id:crowd-0001", "id:pub-other", 5),
-    ]);
+    const main = node("id:pub-main", 1, {
+      types: ["Organization"],
+      properties: sameAs,
+    });
+    const other = node("id:pub-other", 1, {
+      types: ["Organization"],
+      properties: sameAs,
+    });
+    const balanced = map(
+      [...crowd(), main, other],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 5),
+        publisherEdge("id:crowd-0001", "id:pub-other", 5),
+      ]
+    );
     expect(kept(balanced)).not.toContain("id:pub-other");
     // Control: the same two publishers at 9/1 reserve the outlier.
-    const lopsided = map([...crowd(), main, other], [
-      publisherEdge("id:crowd-0000", "id:pub-main", 9),
-      publisherEdge("id:crowd-0001", "id:pub-other", 1),
-    ]);
+    const lopsided = map(
+      [...crowd(), main, other],
+      [
+        publisherEdge("id:crowd-0000", "id:pub-main", 9),
+        publisherEdge("id:crowd-0001", "id:pub-other", 1),
+      ]
+    );
     expect(kept(lopsided)).toContain("id:pub-other");
   });
 
@@ -773,7 +891,7 @@ describe("problem nodes survive the publish sample", () => {
       node("id:person", 1, { types: ["Person"], properties });
     expect(kept(keysOf([...crowd(), person({})]))).toContain("id:person");
     expect(
-      kept(keysOf([...crowd(), person({ url: "https://example.com/ada" })])),
+      kept(keysOf([...crowd(), person({ url: "https://example.com/ada" })]))
     ).not.toContain("id:person");
   });
 
@@ -795,7 +913,7 @@ describe("problem nodes survive the publish sample", () => {
   test("a dangling edge of a kept problem node is kept with it", () => {
     const lone = node("id:dangler", 2, { types: ["Product"], danglingRefs: 1 });
     const slim = slimEntityMapForPublish(
-      map([...crowd(), lone], [edge("id:dangler", "id:missing", true)]),
+      map([...crowd(), lone], [edge("id:dangler", "id:missing", true)])
     );
     expect(slim.edges.map((e) => e.target)).toContain("id:missing");
   });
@@ -805,15 +923,22 @@ describe("problem nodes survive the publish sample", () => {
       node(`id:flood-${String(i).padStart(4, "0")}`, 1, {
         types: ["Product"],
         conflicts: [conflict],
-      }),
+      })
     );
-    const dangler = node("id:one-dangler", 1, { types: ["Product"], danglingRefs: 2 });
-    const slim = slimEntityMapForPublish(map([...crowd(), ...flood, dangler], []));
+    const dangler = node("id:one-dangler", 1, {
+      types: ["Product"],
+      danglingRefs: 2,
+    });
+    const slim = slimEntityMapForPublish(
+      map([...crowd(), ...flood, dangler], [])
+    );
 
-    const problems = slim.nodes.filter((n) => n.conflicts.length > 0 || n.danglingRefs > 0);
+    const problems = slim.nodes.filter(
+      (n) => n.conflicts.length > 0 || n.danglingRefs > 0
+    );
     const share = ENTITY_MAP_PUBLISH_LIMITS.maxProblemShare;
     expect(problems.length).toBeLessThanOrEqual(
-      Math.ceil(ENTITY_MAP_PUBLISH_LIMITS.maxNodes * share),
+      Math.ceil(ENTITY_MAP_PUBLISH_LIMITS.maxNodes * share)
     );
     // The healthy majority of the budget is still spent on the rest of the site.
     expect(slim.nodes.length - problems.length).toBeGreaterThan(400);
@@ -827,10 +952,16 @@ describe("problem nodes survive the publish sample", () => {
         conflicts: [
           {
             property: "name",
-            values: [{ value: "v".repeat(400), pages: ["https://example.com/a"], morePages: 0 }],
+            values: [
+              {
+                value: "v".repeat(400),
+                pages: ["https://example.com/a"],
+                morePages: 0,
+              },
+            ],
           },
         ],
-      }),
+      })
     );
     const input = map([...crowd(), ...fat], []);
     const limits = { ...ENTITY_MAP_PUBLISH_LIMITS, maxBytes: 60_000 };
@@ -848,10 +979,21 @@ describe("problem nodes survive the publish sample", () => {
     const classes = [
       node("id:c", 1, { conflicts: [conflict] }),
       node("id:d", 1, { danglingRefs: 1 }),
-      node("anon:n", 2, { types: ["Organization"], pages: ["https://example.com/a", "https://example.com/b"] }),
-      node("id:e", 1, { id: "#relative", types: ["Offer"], pages: ["https://example.com/a", "https://example.com/b"] }),
+      node("anon:n", 2, {
+        types: ["Organization"],
+        pages: ["https://example.com/a", "https://example.com/b"],
+      }),
+      node("id:e", 1, {
+        id: "#relative",
+        types: ["Offer"],
+        pages: ["https://example.com/a", "https://example.com/b"],
+      }),
     ];
-    const slim = projectEntityMap(map(classes, []), ENTITY_PUBLISH_TINY, "publish");
+    const slim = projectEntityMap(
+      map(classes, []),
+      ENTITY_PUBLISH_TINY,
+      "publish"
+    );
     expect(slim.nodes.length).toBeLessThanOrEqual(3);
     expect(slim.truncated!.nodes).toBe(classes.length - slim.nodes.length);
   });
@@ -861,18 +1003,24 @@ describe("problem nodes survive the publish sample", () => {
     // evidence for the finding (a one-off Person with no url or sameAs) has the
     // lowest reach. It survives only if the viewer gets the whole map.
     const many = Array.from({ length: 2_500 }, (_, i) =>
-      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, { types: ["Product"] }),
+      node(`id:crowd-${String(i).padStart(4, "0")}`, 500 + i, {
+        types: ["Product"],
+      })
     );
     const lone = node("id:person", 1, { types: ["Person"], properties: {} });
     const full = map([...many, lone], []);
     const viewer = slimEntityMapForViewer(full);
-    expect(viewer.nodes.length).toBeLessThanOrEqual(ENTITY_MAP_VIEWER_LIMITS.maxNodes);
+    expect(viewer.nodes.length).toBeLessThanOrEqual(
+      ENTITY_MAP_VIEWER_LIMITS.maxNodes
+    );
     expect(viewer.nodes.map((n) => n.key)).toContain("id:person");
 
     // Negative control: classified from a map that was already clipped to the
     // viewer budget, the finding's node is gone before the projection can see it.
     const clipped = map(many.slice(-ENTITY_MAP_VIEWER_LIMITS.maxNodes), []);
-    expect(slimEntityMapForViewer(clipped).nodes.map((n) => n.key)).not.toContain("id:person");
+    expect(
+      slimEntityMapForViewer(clipped).nodes.map((n) => n.key)
+    ).not.toContain("id:person");
   });
 });
 
@@ -880,8 +1028,11 @@ describe("problem nodes survive the publish sample", () => {
 // prefix, so late-alphabet entities published unconnected.
 describe("edges past maxEdges (#405)", () => {
   const TWO_EDGES = { ...ENTITY_MAP_PUBLISH_LIMITS, maxEdges: 2 };
-  const thing = (key: string, occurrences: number, extra: Partial<EntityMapNode> = {}) =>
-    node(key, occurrences, { types: ["Product"], ...extra });
+  const thing = (
+    key: string,
+    occurrences: number,
+    extra: Partial<EntityMapNode> = {}
+  ) => node(key, occurrences, { types: ["Product"], ...extra });
   // Map order, as the builder sorts edges: (source, target, predicate).
   const nodes = [
     thing("id:a0", 1),
@@ -924,8 +1075,12 @@ describe("edges past maxEdges (#405)", () => {
     expect(slim.truncated?.edges).toBe(edges.length);
   });
 
-    test("under the cap every edge is kept, in map order", () => {
-    const slim = projectEntityMap(map(nodes, edges), ENTITY_MAP_PUBLISH_LIMITS, "publish");
+  test("under the cap every edge is kept, in map order", () => {
+    const slim = projectEntityMap(
+      map(nodes, edges),
+      ENTITY_MAP_PUBLISH_LIMITS,
+      "publish"
+    );
     expect(pairs(slim)).toEqual(edges.map((e) => `${e.source}>${e.target}`));
   });
 });
@@ -962,10 +1117,11 @@ describe("publish page index", () => {
     expect(kept).toContain("k39");
     expect(kept).not.toContain("k0");
     expect(JSON.stringify(slim.pages).length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes,
+      ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes
     );
     expect(JSON.stringify(slim).length).toBeLessThanOrEqual(
-      ENTITY_MAP_PUBLISH_LIMITS.maxBytes + ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes,
+      ENTITY_MAP_PUBLISH_LIMITS.maxBytes +
+        ENTITY_MAP_PUBLISH_LIMITS.maxPageIndexBytes
     );
   });
 
@@ -979,7 +1135,11 @@ describe("publish page index", () => {
 
 describe("compare after publish projection", () => {
   function pair(extra = 5) {
-    const anon = node("anon:org", 3, { name: "Acme", types: ["Organization"], pages: ["https://example.com/0"] });
+    const anon = node("anon:org", 3, {
+      name: "Acme",
+      types: ["Organization"],
+      pages: ["https://example.com/0"],
+    });
     const withId = node("id:https://example.com/#org", 3, {
       id: "https://example.com/#org",
       name: "Acme",
@@ -989,7 +1149,8 @@ describe("compare after publish projection", () => {
     const older = map([anon], [], 3 + extra);
     const newer = map([withId], [], 3 + extra);
     for (const page of older.pages) page.declares = ["anon:org"];
-    for (const page of newer.pages) page.declares = ["id:https://example.com/#org"];
+    for (const page of newer.pages)
+      page.declares = ["id:https://example.com/#org"];
     anon.morePages = 0;
     anon.occurrences = 3;
     anon.pages = older.pages.map((p) => p.url);
@@ -1001,7 +1162,7 @@ describe("compare after publish projection", () => {
     const { older, newer } = pair();
     const diff = diffEntityMaps(
       slimEntityMapForPublish(older),
-      slimEntityMapForPublish(newer),
+      slimEntityMapForPublish(newer)
     );
     expect(diff.gainedId).toHaveLength(1);
     expect(diff.gainedId[0]!.coverage).toBe("proven");
@@ -1010,7 +1171,10 @@ describe("compare after publish projection", () => {
   test("matches the verdict on the uncapped maps when the index is complete", () => {
     const { older, newer } = pair();
     const full = diffEntityMaps(older, newer);
-    const published = diffEntityMaps(slimEntityMapForPublish(older), slimEntityMapForPublish(newer));
+    const published = diffEntityMaps(
+      slimEntityMapForPublish(older),
+      slimEntityMapForPublish(newer)
+    );
     expect(published.gainedId).toEqual(full.gainedId);
   });
 

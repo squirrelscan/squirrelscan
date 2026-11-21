@@ -22,11 +22,19 @@ describe("AgentRunStatus", () => {
   });
 
   test("the terminal statuses are exactly the three that were", () => {
-    expect([...TERMINAL_AGENT_RUN_STATUSES].sort()).toEqual(["cancelled", "completed", "failed"]);
+    expect([...TERMINAL_AGENT_RUN_STATUSES].sort()).toEqual([
+      "cancelled",
+      "completed",
+      "failed",
+    ]);
   });
 
   test("every non-terminal status is not terminal", () => {
-    for (const s of ["queued", "pending", "running"] satisfies AgentRunStatus[]) {
+    for (const s of [
+      "queued",
+      "pending",
+      "running",
+    ] satisfies AgentRunStatus[]) {
       expect(TERMINAL_AGENT_RUN_STATUSES.has(s), s).toBe(false);
     }
   });
@@ -40,8 +48,10 @@ describe("AgentRunStatus", () => {
 
 describe("RunPhase and RunNotice", () => {
   test("the two lists are disjoint", () => {
-    for (const phase of RUN_PHASES) expect(isRunNotice(phase), phase).toBe(false);
-    for (const notice of RUN_NOTICES) expect(isRunPhase(notice), notice).toBe(false);
+    for (const phase of RUN_PHASES)
+      expect(isRunNotice(phase), phase).toBe(false);
+    for (const notice of RUN_NOTICES)
+      expect(isRunPhase(notice), notice).toBe(false);
   });
 
   test("the notices named in the issue are notices", () => {
@@ -57,14 +67,31 @@ describe("RunPhase and RunNotice", () => {
 });
 
 describe("nextVisiblePhase", () => {
-  const table: Array<[string, RunPhase | null, string | null | undefined, RunPhase | null]> = [
+  const table: Array<
+    [string, RunPhase | null, string | null | undefined, RunPhase | null]
+  > = [
     ["a phase replaces nothing", null, "crawling", "crawling"],
     ["a phase replaces the current phase", "crawling", "rules", "rules"],
     ["the same phase stays", "rules", "rules", "rules"],
-    ["a notice does not overwrite the phase", "crawling", "memory_pressure", "crawling"],
+    [
+      "a notice does not overwrite the phase",
+      "crawling",
+      "memory_pressure",
+      "crawling",
+    ],
     ["the other notice does not either", "cloud", "crawl_scope", "cloud"],
-    ["a notice with no phase yet shows no phase", null, "memory_pressure", null],
-    ["an unknown stage name leaves the phase alone", "rules", "editor_summary", "rules"],
+    [
+      "a notice with no phase yet shows no phase",
+      null,
+      "memory_pressure",
+      null,
+    ],
+    [
+      "an unknown stage name leaves the phase alone",
+      "rules",
+      "editor_summary",
+      "rules",
+    ],
     ["null leaves the phase alone", "rules", null, "rules"],
     ["undefined leaves the phase alone", "rules", undefined, "rules"],
     ["an empty string leaves the phase alone", "rules", "", "rules"],
@@ -77,7 +104,8 @@ describe("nextVisiblePhase", () => {
   }
 
   test("every phase is reachable from every other phase", () => {
-    for (const from of RUN_PHASES) for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
+    for (const from of RUN_PHASES)
+      for (const to of RUN_PHASES) expect(nextVisiblePhase(from, to)).toBe(to);
   });
 });
 
@@ -88,7 +116,14 @@ describe("visiblePhaseOf (#2077)", () => {
   });
 
   test("every raw publish stage maps to publishing", () => {
-    for (const raw of ["complete", "editor_summary", "publish-init", "publish-chunk", "publish-finalize", "publish-finalizing"]) {
+    for (const raw of [
+      "complete",
+      "editor_summary",
+      "publish-init",
+      "publish-chunk",
+      "publish-finalize",
+      "publish-finalizing",
+    ]) {
       expect(visiblePhaseOf(raw), raw).toBe("publishing");
     }
   });
@@ -96,7 +131,8 @@ describe("visiblePhaseOf (#2077)", () => {
   test("other phases map to themselves, crawl to crawling, unknowns to null", () => {
     expect(visiblePhaseOf("rules")).toBe("rules");
     expect(visiblePhaseOf("crawl")).toBe("crawling");
-    for (const v of ["memory_pressure", "", null, undefined, "nope"]) expect(visiblePhaseOf(v), String(v)).toBe(null);
+    for (const v of ["memory_pressure", "", null, undefined, "nope"])
+      expect(visiblePhaseOf(v), String(v)).toBe(null);
   });
 
   test("nextVisiblePhase moves to publishing", () => {

@@ -13,11 +13,12 @@
 //
 // See ./leaked-secrets/README.md for how to run and how to update the snapshot.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext, RuleResult } from "../../src/types";
 
 import {
   CONTEXT_KEYWORD_GAP,
@@ -29,10 +30,19 @@ import {
   selectFastPatterns,
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
-import type { RuleContext, RuleResult } from "../../src/types";
-import { CASES, HARNESS_ERRORS, type Case, type Check, type Expectation } from "./leaked-secrets/cases";
+import {
+  CASES,
+  HARNESS_ERRORS,
+  type Case,
+  type Check,
+  type Expectation,
+} from "./leaked-secrets/cases";
 import { CONTEXTS } from "./leaked-secrets/contexts";
-import { GENERATORS, GENERATORS_BY_PATTERN, seededRng } from "./leaked-secrets/generators";
+import {
+  GENERATORS,
+  GENERATORS_BY_PATTERN,
+  seededRng,
+} from "./leaked-secrets/generators";
 
 const SNAPSHOT_PATH = join(import.meta.dir, "leaked-secrets", "expected.json");
 const UPDATE = process.env.UPDATE_SECRETS_SNAPSHOT === "1";
@@ -41,7 +51,9 @@ function ctxFor(c: Case): RuleContext {
   return {
     site: {
       baseUrl: "https://app.acme.test",
-      pages: [{ url: c.url, statusCode: 200, parsed: parsePage(c.html, c.url) }],
+      pages: [
+        { url: c.url, statusCode: 200, parsed: parsePage(c.html, c.url) },
+      ],
       robotsTxt: null,
       sitemaps: null,
       scripts: (c.scripts ?? []).map((s) => ({
@@ -71,21 +83,33 @@ const CHECK_NAMES: Record<Check, string> = {
 const LOCATION_RE = /^Found in ([a-z-]+(?: \(base64\))?)/;
 
 /** What the rule reported, in the same shape as a case's `expect`. */
-async function observed(c: Case): Promise<{ findings: Expectation[]; ids: string[]; passed: boolean }> {
+async function observed(
+  c: Case
+): Promise<{ findings: Expectation[]; ids: string[]; passed: boolean }> {
   const { checks } = (await leakedSecretsRule.run(ctxFor(c))) as RuleResult;
   const findings: Expectation[] = [];
   const ids: string[] = [];
-  for (const [check, name] of Object.entries(CHECK_NAMES) as Array<[Check, string]>) {
+  for (const [check, name] of Object.entries(CHECK_NAMES) as Array<
+    [Check, string]
+  >) {
     const found = checks.find((k) => k.name === name);
     for (const item of found?.items ?? []) {
       // id = `${type}: ${masked}`; label = `Found in ${location} (${url})`
       const pattern = item.id.slice(0, item.id.lastIndexOf(": "));
-      const location = LOCATION_RE.exec(item.label ?? "")?.[1] as Expectation["location"];
+      const location = LOCATION_RE.exec(
+        item.label ?? ""
+      )?.[1] as Expectation["location"];
       findings.push({ pattern, check, location });
       ids.push(item.id);
     }
   }
-  return { findings, ids, passed: checks.some((k) => k.name === "leaked-secrets" && k.status === "pass") };
+  return {
+    findings,
+    ids,
+    passed: checks.some(
+      (k) => k.name === "leaked-secrets" && k.status === "pass"
+    ),
+  };
 }
 
 const key = (e: Expectation) => `${e.pattern}|${e.check}|${e.location}`;
@@ -95,7 +119,8 @@ const sorted = (xs: Expectation[]) => xs.map(key).sort();
 function rawScan(c: Case): LeakedSecret[] {
   const doc = parsePage(c.html, c.url).document!;
   const out = scanPageForSecrets(doc, c.url);
-  for (const s of c.scripts ?? []) out.push(...scanContent(s.content, "external-script", s.url));
+  for (const s of c.scripts ?? [])
+    out.push(...scanContent(s.content, "external-script", s.url));
   return out;
 }
 
@@ -106,7 +131,9 @@ describe("security/leaked-secrets corpus: coverage", () => {
   test("every FAST and CONTEXT pattern has a generator, and no generator is stale", () => {
     const names = [...FAST_PATTERNS, ...CONTEXT_PATTERNS].map((p) => p.name);
     const missing = names.filter((n) => !GENERATORS_BY_PATTERN.has(n));
-    const stale = GENERATORS.map((g) => g.pattern).filter((n) => !names.includes(n));
+    const stale = GENERATORS.map((g) => g.pattern).filter(
+      (n) => !names.includes(n)
+    );
     expect({ missing, stale }).toEqual({ missing: [], stale: [] });
   });
 
@@ -142,9 +169,15 @@ describe("security/leaked-secrets corpus: coverage", () => {
     for (const g of GENERATORS) {
       const v = g.make(seededRng(7));
       const keyName = g.keyName ?? "value";
-      const js = g.tier === "assignment" ? `var c={${v.text}};` : `var c={${keyName}:${JSON.stringify(v.text)}};`;
+      const js =
+        g.tier === "assignment"
+          ? `var c={${v.text}};`
+          : `var c={${keyName}:${JSON.stringify(v.text)}};`;
       const types = scanContent(js, "inline-script").map((f) => f.type);
-      const expected = g.pattern === "Clerk Secret Key" ? "Stripe Live Key" : (g.reportedAs ?? g.pattern);
+      const expected =
+        g.pattern === "Clerk Secret Key"
+          ? "Stripe Live Key"
+          : (g.reportedAs ?? g.pattern);
       if (!types.includes(expected)) {
         wrong.push(`${g.pattern}: got [${types.join(", ")}]`);
       }
@@ -163,11 +196,15 @@ describe("security/leaked-secrets corpus: coverage", () => {
 // (prefixed tier), a duplicate that collapses to one finding, and for the
 // context tier the three directions of the bounded look-behind.
 describe("security/leaked-secrets corpus: meta (every pattern, derived from its generator)", () => {
-  const CLAIMED: Record<string, string> = { "Clerk Secret Key": "Stripe Live Key" };
+  const CLAIMED: Record<string, string> = {
+    "Clerk Secret Key": "Stripe Live Key",
+  };
 
   /** The bare embedding every generator fires in: `var c={key:"value"};`. */
   const bare = (g: (typeof GENERATORS)[number], text: string) =>
-    g.tier === "assignment" ? `var c={${text}};` : `var c={${g.keyName ?? "value"}:${JSON.stringify(text)}};`;
+    g.tier === "assignment"
+      ? `var c={${text}};`
+      : `var c={${g.keyName ?? "value"}:${JSON.stringify(text)}};`;
 
   /** The keywords the detector declares for a pattern, whichever tier. */
   const keywordsOf = (name: string): string[] => {
@@ -178,14 +215,26 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
   };
 
   test("every FAST pattern declares at least one keyword, and none is an English word", () => {
-    const missing = FAST_PATTERNS.filter((p) => !p.keywords || p.keywords.length === 0).map((p) => p.name);
+    const missing = FAST_PATTERNS.filter(
+      (p) => !p.keywords || p.keywords.length === 0
+    ).map((p) => p.name);
     expect(missing).toEqual([]);
     const words = FAST_PATTERNS.flatMap((p) => p.keywords ?? []);
     expect(words.every((k) => k === k.toLowerCase())).toBe(true);
     // The tier is prefix tokens; a bare dictionary word here would gate
     // nothing. `bearer`/`basic`/`secret`/`password` are the generic
     // patterns' own literals and the one exception the tier has.
-    const english = ["key", "token", "api", "auth", "user", "id", "data", "value", "name"];
+    const english = [
+      "key",
+      "token",
+      "api",
+      "auth",
+      "user",
+      "id",
+      "data",
+      "value",
+      "name",
+    ];
     expect(words.filter((k) => english.includes(k))).toEqual([]);
   });
 
@@ -197,18 +246,28 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
     const isFast = FAST_PATTERNS.some((p) => p.name === g.pattern);
 
     test(`${g.pattern}: positive, and its input carries a declared keyword`, () => {
-      expect(scanContent(input, "inline-script").map((f) => f.type)).toContain(expected);
+      expect(scanContent(input, "inline-script").map((f) => f.type)).toContain(
+        expected
+      );
       const lower = input.toLowerCase();
       expect(keywords.some((k) => lower.includes(k))).toBe(true);
     });
 
     // Keywords are plain substrings, never regexes: every occurrence is
     // found case-insensitively by indexOf and rewritten in place.
-    const rewrite = (text: string, needle: string, by: (m: string) => string) => {
+    const rewrite = (
+      text: string,
+      needle: string,
+      by: (m: string) => string
+    ) => {
       const lower = text.toLowerCase();
       let out = "";
       let pos = 0;
-      for (let at = lower.indexOf(needle, pos); at !== -1; at = lower.indexOf(needle, pos)) {
+      for (
+        let at = lower.indexOf(needle, pos);
+        at !== -1;
+        at = lower.indexOf(needle, pos)
+      ) {
         out += text.slice(pos, at) + by(text.slice(at, at + needle.length));
         pos = at + needle.length;
       }
@@ -217,7 +276,8 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
     // Every keyword occurrence with its last character replaced.
     const corrupt = (text: string) => {
       let out = text;
-      for (const k of keywords) out = rewrite(out, k, (m) => m.slice(0, -1) + "#");
+      for (const k of keywords)
+        out = rewrite(out, k, (m) => m.slice(0, -1) + "#");
       return out;
     };
     // The gram index is only built past 256 characters; pad so the prefilter
@@ -248,13 +308,17 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
     test(`${g.pattern}: one corrupted character in the keyword and it no longer fires`, () => {
       const corrupted = corrupt(input);
       expect(corrupted).not.toBe(input);
-      expect(scanContent(corrupted, "inline-script").map((f) => f.type)).not.toContain(expected);
+      expect(
+        scanContent(corrupted, "inline-script").map((f) => f.type)
+      ).not.toContain(expected);
     });
 
     if (g.tier === "prefixed") {
       test(`${g.pattern}: the prefix mid-token (foo…) does not fire`, () => {
         const midToken = bare(g, `foo${value.text}`);
-        expect(scanContent(midToken, "inline-script").map((f) => f.type)).not.toContain(expected);
+        expect(
+          scanContent(midToken, "inline-script").map((f) => f.type)
+        ).not.toContain(expected);
       });
     }
 
@@ -262,8 +326,12 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       // Two complete fixtures, each detectable on its own (the keyed tier
       // needs its keyword in front of BOTH), so the one finding is dedup's.
       const once = bare(g, value.text);
-      expect(scanContent(once, "inline-script").filter((f) => f.type === expected)).toHaveLength(1);
-      const found = scanContent(`${once}\n${once}`, "inline-script").filter((f) => f.type === expected);
+      expect(
+        scanContent(once, "inline-script").filter((f) => f.type === expected)
+      ).toHaveLength(1);
+      const found = scanContent(`${once}\n${once}`, "inline-script").filter(
+        (f) => f.type === expected
+      );
       expect(found).toHaveLength(1);
     });
 
@@ -274,11 +342,24 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       const at = (gap: number) =>
         `/* ${keyword} */${"x".repeat(gap - 3 - 1 - 'credential:"'.length)};credential:${JSON.stringify(value.text)}`;
       test(`${g.pattern}: keyword 30 before the value fires, 60 before does not, after does not`, () => {
-        expect(scanContent(at(30), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
-        expect(scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map((f) => f.type)).toEqual([g.pattern]);
-        expect(scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")).toEqual([]);
+        expect(scanContent(at(30), "inline-script").map((f) => f.type)).toEqual(
+          [g.pattern]
+        );
+        expect(
+          scanContent(at(CONTEXT_KEYWORD_GAP), "inline-script").map(
+            (f) => f.type
+          )
+        ).toEqual([g.pattern]);
+        expect(
+          scanContent(at(CONTEXT_KEYWORD_GAP + 1), "inline-script")
+        ).toEqual([]);
         expect(scanContent(at(60), "inline-script")).toEqual([]);
-        expect(scanContent(`credential:${JSON.stringify(value.text)}; /* ${keyword} */`, "inline-script")).toEqual([]);
+        expect(
+          scanContent(
+            `credential:${JSON.stringify(value.text)}; /* ${keyword} */`,
+            "inline-script"
+          )
+        ).toEqual([]);
       });
     }
   }
@@ -287,13 +368,15 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
 describe("security/leaked-secrets corpus: rule output", () => {
   for (const c of ok) {
     test(c.id, async () => {
-      const got = (await observed(c));
+      const got = await observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
       }
       // A page with only public-tier or expired findings still passes the rule.
-      const leaks = c.expect.filter((e) => e.check !== "public" && e.check !== "info");
+      const leaks = c.expect.filter(
+        (e) => e.check !== "public" && e.check !== "info"
+      );
       expect(got.passed).toBe(leaks.length === 0);
       // Masked output never carries the sensitive core.
       if (c.secret && c.secret.length > 12) {
@@ -306,16 +389,21 @@ describe("security/leaked-secrets corpus: rule output", () => {
 describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviour; each fix is its own PR)", () => {
   test("the gap list (printed, since bun hides todo names)", () => {
     const distinct = new Map<string, number>();
-    for (const c of gaps) distinct.set(c.knownGap!, (distinct.get(c.knownGap!) ?? 0) + 1);
-    const lines = [...distinct].map(([gap, n]) => `  [${String(n).padStart(2)} cases] ${gap}`);
-    console.log(`\nleaked-secrets known gaps (${distinct.size}):\n${lines.join("\n")}\n`);
+    for (const c of gaps)
+      distinct.set(c.knownGap!, (distinct.get(c.knownGap!) ?? 0) + 1);
+    const lines = [...distinct].map(
+      ([gap, n]) => `  [${String(n).padStart(2)} cases] ${gap}`
+    );
+    console.log(
+      `\nleaked-secrets known gaps (${distinct.size}):\n${lines.join("\n")}\n`
+    );
     expect(distinct.size).toBeGreaterThan(0);
   });
 
   for (const c of gaps) {
     // The 5 MB size-cap probe scans in full: an explicit budget under load.
     test(`${c.id} — today: ${c.expect.map((e) => `${e.pattern} (${e.check})`).join(", ") || "nothing"}`, async () => {
-      const got = (await observed(c));
+      const got = await observed(c);
       expect(sorted(got.findings)).toEqual(sorted(c.expect));
       for (const pattern of c.mustNotFire ?? []) {
         expect(got.findings.map((f) => f.pattern)).not.toContain(pattern);
@@ -329,26 +417,36 @@ describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviou
 
 describe("security/leaked-secrets corpus: invariants", () => {
   test("the same value in three locations is reported once, at the last location scanned", async () => {
-    const c = CASES.find((k) => k.id === "probe:same-value-in-three-locations-reports-once")!;
+    const c = CASES.find(
+      (k) => k.id === "probe:same-value-in-three-locations-reports-once"
+    )!;
     const raw = rawScan(c);
     // html (meta) + html (script, via the serialized document) is one html
     // scan with one value, then the inline script, then the external script.
-    expect(raw.map((f) => f.location)).toEqual(["html", "inline-script", "external-script"]);
+    expect(raw.map((f) => f.location)).toEqual([
+      "html",
+      "inline-script",
+      "external-script",
+    ]);
     expect(new Set(raw.map((f) => f.value)).size).toBe(1);
-    const got = (await observed(c));
+    const got = await observed(c);
     expect(got.findings).toHaveLength(1);
     expect(got.findings[0]?.location).toBe("external-script");
   });
 
   test("an inline script is scanned once: the HTML pass blanks the script bodies the inline pass read (#1864)", () => {
-    const c = CASES.find((k) => k.id === "github-personal-access-token@inline-config-object")!;
+    const c = CASES.find(
+      (k) => k.id === "github-personal-access-token@inline-config-object"
+    )!;
     const raw = rawScan(c);
     expect(raw).toHaveLength(1);
     expect(raw.map((f) => f.location)).toEqual(["inline-script"]);
   });
 
   test("masking keeps the head and tail only", async () => {
-    const c = CASES.find((k) => k.id === "github-personal-access-token@window-env")!;
+    const c = CASES.find(
+      (k) => k.id === "github-personal-access-token@window-env"
+    )!;
     const [id] = (await observed(c)).ids;
     const masked = id!.slice(id!.lastIndexOf(": ") + 2);
     expect(masked).toMatch(/^.{6}\*{10,20}.{4}$/);
@@ -360,7 +458,9 @@ describe("security/leaked-secrets corpus: invariants", () => {
     // Every positive case is built by a context that declares a location; the
     // per-case tests already check it, this makes the mapping explicit.
     for (const ctx of CONTEXTS) {
-      const sample = CASES.find((c) => c.id.endsWith(`@${ctx.id}`) && !c.knownGap)!;
+      const sample = CASES.find(
+        (c) => c.id.endsWith(`@${ctx.id}`) && !c.knownGap
+      )!;
       expect(sample.expect[0]?.location).toBe(ctx.location);
     }
   });
@@ -370,7 +470,8 @@ describe("security/leaked-secrets corpus: cost on a large base64 body (pub#365)"
   // A 200 KB image data URI with no `+` or `/` in it: one alphanumeric run,
   // which is the worst case for any pattern that opens on a wide class and
   // has to backtrack. Discord's unbounded `{23,}` took 2.7 s here.
-  const alnum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const alnum =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   const dataUri = (kb: number) => {
     const r = seededRng(365);
     let s = "";
@@ -418,7 +519,9 @@ type Snapshot = Record<string, SnapshotRow[]>;
 function mask(value: string): string {
   return value.length <= 12
     ? value.slice(0, 4) + "*".repeat(value.length - 4)
-    : value.slice(0, 6) + "*".repeat(Math.min(value.length - 10, 20)) + value.slice(-4);
+    : value.slice(0, 6) +
+        "*".repeat(Math.min(value.length - 10, 20)) +
+        value.slice(-4);
 }
 
 describe("security/leaked-secrets corpus: snapshot", () => {
@@ -439,7 +542,10 @@ describe("security/leaked-secrets corpus: snapshot", () => {
     if (UPDATE) {
       // One row per line: a detector change then diffs as one line per finding.
       const body = Object.entries(current)
-        .map(([id, rows]) => `  ${JSON.stringify(id)}: [${rows.length ? "\n" + rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n") + "\n  " : ""}]`)
+        .map(
+          ([id, rows]) =>
+            `  ${JSON.stringify(id)}: [${rows.length ? "\n" + rows.map((r) => `    ${JSON.stringify(r)}`).join(",\n") + "\n  " : ""}]`
+        )
         .join(",\n");
       writeFileSync(SNAPSHOT_PATH, `{\n${body}\n}\n`);
     }

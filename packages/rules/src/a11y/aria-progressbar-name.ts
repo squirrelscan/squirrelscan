@@ -1,9 +1,11 @@
 // a11y/aria-progressbar-name - Progressbar elements have accessible names
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+
 import { labelsFor } from "../shared/attribute-lookup";
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 function hasAccessibleName(el: Element, doc: Document): boolean {
   // Check aria-label
@@ -86,7 +88,13 @@ export const ariaProgressbarNameRule: Rule = {
       });
     }
     if (unnamed.unconfirmed.length > 0) {
-      checks.push(unconfirmedRow("aria-progressbar-name", "progressbar element(s) without accessible names", unnamed.unconfirmed));
+      checks.push(
+        unconfirmedRow(
+          "aria-progressbar-name",
+          "progressbar element(s) without accessible names",
+          unnamed.unconfirmed
+        )
+      );
     }
     if (missingNames.length === 0 && unnamed.unconfirmed.length === 0) {
       if (progressRoles.length > 0 || progressElements.length > 0) {
@@ -97,7 +105,9 @@ export const ariaProgressbarNameRule: Rule = {
             unnamed.hidden > 0
               ? "All progressbar elements in the accessibility tree have accessible names"
               : "All progressbar elements have accessible names",
-          ...(unnamed.hidden > 0 ? { details: { hiddenWithoutName: unnamed.hidden } } : {}),
+          ...(unnamed.hidden > 0
+            ? { details: { hiddenWithoutName: unnamed.hidden } }
+            : {}),
         });
       } else {
         checks.push({

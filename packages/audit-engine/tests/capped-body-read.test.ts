@@ -13,7 +13,7 @@ import { readBodyCapped } from "../src/lib/capped-body-read";
 function countingStream(
   chunkCount: number,
   chunkSize: number,
-  fill: number,
+  fill: number
 ): { stream: ReadableStream<Uint8Array>; bytesPulled: () => number } {
   let pulled = 0;
   let i = 0;
@@ -41,7 +41,7 @@ function responseFromStream(stream: ReadableStream<Uint8Array>): Response {
  * ran without permanently mutating a shared global prototype. */
 function spyOnMethod<T extends object, K extends keyof T>(
   proto: T,
-  method: K,
+  method: K
 ): { calls: unknown[][]; restore: () => void } {
   const original = proto[method] as unknown as (...args: unknown[]) => unknown;
   const calls: unknown[][] = [];
@@ -72,7 +72,11 @@ describe("readBodyCapped", () => {
     const CAP = 1000;
     const CHUNK_SIZE = 100;
     const TOTAL_CHUNKS = 100_000; // 10MB if fully drained — must not happen
-    const { stream, bytesPulled } = countingStream(TOTAL_CHUNKS, CHUNK_SIZE, 0x62 /* 'b' */);
+    const { stream, bytesPulled } = countingStream(
+      TOTAL_CHUNKS,
+      CHUNK_SIZE,
+      0x62 /* 'b' */
+    );
     const res = responseFromStream(stream);
 
     const body = await readBodyCapped(res, CAP);

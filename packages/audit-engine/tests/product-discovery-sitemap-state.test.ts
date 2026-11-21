@@ -2,12 +2,15 @@
 // product-discovery check on BOTH rule paths (batch runRulesOnStorage and streaming runStreamingRules),
 // and a crawl stored before the state existed must read "unknown", never "complete".
 
+import type { Config } from "@squirrelscan/config";
+import type {
+  CheckResult,
+  SitemapReadState,
+} from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import type { CheckResult, SitemapReadState } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import {
   buildSiteContext,
@@ -24,7 +27,11 @@ const CONFIG = {
   rules: { enable: [RULE] },
 } as unknown as Config;
 
-const EMPTY_ASSETS = { css: new Map(), js: new Map(), images: new Map() } as unknown as PreFetchedAssets;
+const EMPTY_ASSETS = {
+  css: new Map(),
+  js: new Map(),
+  images: new Map(),
+} as unknown as PreFetchedAssets;
 
 const BASE_STATS = {
   pagesTotal: 3,
@@ -39,13 +46,20 @@ const BASE_STATS = {
 };
 
 function productHtml(n: number): string {
-  const ld = JSON.stringify({ "@context": "https://schema.org", "@type": "Product", name: `Item ${n}` });
+  const ld = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `Item ${n}`,
+  });
   return `<!doctype html><html><head><title>Item ${n}</title><script type="application/ld+json">${ld}</script></head><body><h1>Item ${n}</h1></body></html>`;
 }
 
 type Path = "batch" | "streaming";
 
-async function productDiscovery(path: Path, readState?: SitemapReadState): Promise<CheckResult | undefined> {
+async function productDiscovery(
+  path: Path,
+  readState?: SitemapReadState
+): Promise<CheckResult | undefined> {
   const storage = new SQLiteStorage(":memory:");
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -56,7 +70,10 @@ async function productDiscovery(path: Path, readState?: SitemapReadState): Promi
         startedAt: Date.now(),
         status: "completed",
         config: {} as never,
-        stats: { ...BASE_STATS, ...(readState ? { sitemapReadState: readState } : {}) },
+        stats: {
+          ...BASE_STATS,
+          ...(readState ? { sitemapReadState: readState } : {}),
+        },
       });
       for (const n of [1, 2, 3]) {
         const html = productHtml(n);
@@ -89,19 +106,39 @@ async function productDiscovery(path: Path, readState?: SitemapReadState): Promi
       });
       yield* storage.addSitemapUrls(
         crawlId,
-        [1, 2, 3].map((n) => ({ sitemapUrl: `${BASE}/sitemap.xml`, loc: `${BASE}/products/item-${n}` })),
+        [1, 2, 3].map((n) => ({
+          sitemapUrl: `${BASE}/sitemap.xml`,
+          loc: `${BASE}/products/item-${n}`,
+        }))
       );
       const result =
         path === "batch"
           ? yield* Effect.gen(function* () {
               const pages = yield* storage.getPages(crawlId);
               const siteContext = yield* buildSiteContext(pages);
-              return yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, EMPTY_ASSETS);
+              return yield* runRulesOnStorage(
+                storage,
+                crawlId,
+                siteContext,
+                CONFIG,
+                EMPTY_ASSETS
+              );
             })
-          : yield* runStreamingRules(storage, crawlId, CONFIG, EMPTY_ASSETS, undefined, { batchSize: 2 });
-      return result.ruleResultsMap.get(RULE)?.checks.find((c) => c.name === "product-discovery");
-    }).pipe(// close errors are ignored: some bun versions throw on closing an :memory: db after a run
-    Effect.ensuring(storage.close().pipe(Effect.ignore))),
+          : yield* runStreamingRules(
+              storage,
+              crawlId,
+              CONFIG,
+              EMPTY_ASSETS,
+              undefined,
+              { batchSize: 2 }
+            );
+      return result.ruleResultsMap
+        .get(RULE)
+        ?.checks.find((c) => c.name === "product-discovery");
+    }).pipe(
+      // close errors are ignored: some bun versions throw on closing an :memory: db after a run
+      Effect.ensuring(storage.close().pipe(Effect.ignore))
+    )
   );
 }
 
@@ -111,7 +148,10 @@ describe("product-discovery sees the persisted sitemap read state (#1651)", () =
       test(`${path}: ${state}`, async () => {
         const check = await productDiscovery(path, state);
         expect(check).toBeDefined();
-        expect(check!.details).toMatchObject({ sitemapState: state, crawledProductPages: 3 });
+        expect(check!.details).toMatchObject({
+          sitemapState: state,
+          crawledProductPages: 3,
+        });
       });
     }
     test(`${path}: a crawl stored without the state reads unknown, not complete`, async () => {

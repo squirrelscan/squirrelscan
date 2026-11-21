@@ -23,8 +23,25 @@ function isLeapYear(year: number): boolean {
 // Regex range-checks each field independently, so "2026-02-31" or
 // "2026-04-31" (April has 30 days) pass the shape check — verify the day
 // actually exists in that month/year.
-function isValidCalendarDate(year: number, month: number, day: number): boolean {
-  const daysInMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+function isValidCalendarDate(
+  year: number,
+  month: number,
+  day: number
+): boolean {
+  const daysInMonth = [
+    31,
+    isLeapYear(year) ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
   return day <= daysInMonth[month - 1];
 }
 
@@ -32,7 +49,11 @@ function isValidIso8601Date(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const match = ISO_8601_PATTERN.exec(value.trim());
   if (!match) return false;
-  return isValidCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
+  return isValidCalendarDate(
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3])
+  );
 }
 
 export const articleSchemaRule: Rule = {
@@ -73,7 +94,9 @@ export const articleSchemaRule: Rule = {
         type === "NewsArticle" ||
         type === "BlogPosting" ||
         (Array.isArray(type) &&
-          type.some((t: string) => ["Article", "NewsArticle", "BlogPosting"].includes(t)))
+          type.some((t: string) =>
+            ["Article", "NewsArticle", "BlogPosting"].includes(t)
+          ))
       ) {
         articleSchema = schema;
       }

@@ -1,4 +1,5 @@
 import type { TechFingerprint } from "../types";
+
 import { inBundle, inBundleString } from "./helpers";
 
 export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
@@ -110,13 +111,17 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /clarity\(['"]set['"]/i },
       // The API call in a script, not only in inline HTML: `window.clarity("identify", ...)` or `clarity("set", ...)`
       // from a bundled first-party file (#1996). The call needs a known Clarity command as its first string argument.
-      { type: "script-content", pattern: /\bclarity\(\s*["'](?:set|identify|consent|event|upgrade|start|stop)["']/ },
+      {
+        type: "script-content",
+        pattern:
+          /\bclarity\(\s*["'](?:set|identify|consent|event|upgrade|start|stop)["']/,
+      },
       // The standard loader bundled into a first-party script: `t.src="https://www.clarity.ms/tag/"+i`, the
       // `setAttribute("src", ...)` form or a template literal. The assignment is code, the URL after it is a string, so
       // the match starts in code and a docs string, comment or prose that only names the URL does not match (#1488).
       inBundle(
         String.raw`(?:\.src\s*=|setAttribute\s*\(\s*["']src["']\s*,)\s*["'\x60](?:https?:)?\/\/(?:www\.)?clarity\.ms\/tag\/`,
-        "clarity.ms/tag/",
+        "clarity.ms/tag/"
       ),
       // The standard snippet as the text of an inline script a framework renders: a template literal `__html:` or a
       // `children:'...'` of a `next/script` props object. The quotes of the loader may be escaped in a JSON-style
@@ -125,7 +130,7 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
         String.raw`\.src\s*=\s*\\?["'\x60](?:https?:)?\\?\/\\?\/(?:www\.)?clarity\.ms\\?\/tag\\?\/`,
         "clarity.ms",
         // The standard snippet's own signature, or a script element created and given the loader in the same string.
-        /function\s*\(\s*c\s*,\s*l\s*,\s*a\s*,\s*r\s*,\s*i\s*,\s*t\s*,\s*y\s*\)|createElement\s*\(\s*\\?["'\x60]script\\?["'\x60]\s*\)/,
+        /function\s*\(\s*c\s*,\s*l\s*,\s*a\s*,\s*r\s*,\s*i\s*,\s*t\s*,\s*y\s*\)|createElement\s*\(\s*\\?["'\x60]script\\?["'\x60]\s*\)/
       ),
     ],
   },

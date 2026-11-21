@@ -1,6 +1,7 @@
 // a11y/td-headers-attr - Table cells reference valid headers
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { ownTableCells } from "../shared/own-table-cells";
@@ -39,7 +40,9 @@ export const tdHeadersAttrRule: Rule = {
       const cells = own.get(table)?.cells ?? [];
       // Get all th ids in this table
       const validIds = new Set(
-        cells.filter((cell) => isThWithId.has(cell)).map((th) => th.getAttribute("id"))
+        cells
+          .filter((cell) => isThWithId.has(cell))
+          .map((th) => th.getAttribute("id"))
       );
 
       // Check all td elements with headers attribute

@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { renderHtml, spriteSymbol } from "../src/output/html";
 
 function report(overrides: Partial<AuditReport> = {}): AuditReport {
@@ -55,7 +56,15 @@ function report(overrides: Partial<AuditReport> = {}): AuditReport {
       overall: 72,
       categories: [],
       groups: [
-        { group: "seo", name: "SEO", score: 60, passed: 2, warnings: 1, failed: 1, total: 4 },
+        {
+          group: "seo",
+          name: "SEO",
+          score: 60,
+          passed: 2,
+          warnings: 1,
+          failed: 1,
+          total: 4,
+        },
       ],
       errorCount: 1,
       warningCount: 1,
@@ -74,7 +83,12 @@ function report(overrides: Partial<AuditReport> = {}): AuditReport {
           weight: 5,
         },
         checks: [
-          { name: "t", status: "fail", message: "Missing title", pages: ["https://example.com/a"] },
+          {
+            name: "t",
+            status: "fail",
+            message: "Missing title",
+            pages: ["https://example.com/a"],
+          },
         ],
       },
     },
@@ -86,12 +100,14 @@ function report(overrides: Partial<AuditReport> = {}): AuditReport {
 function remoteLoads(html: string): string[] {
   const found: string[] = [];
   for (const m of html.matchAll(
-    /<(img|script|iframe|source|video|audio|embed|object)\b[^>]*\b(src|data|srcset|poster)="([^"]*)"/g,
+    /<(img|script|iframe|source|video|audio|embed|object)\b[^>]*\b(src|data|srcset|poster)="([^"]*)"/g
   ))
     found.push(`${m[1]} ${m[2]}=${m[3]}`);
   for (const m of html.matchAll(/<link\b[^>]*>/g)) found.push(m[0]);
-  for (const m of html.matchAll(/url\(\s*['"]?(https?:|\/\/)[^)]*\)/g)) found.push(m[0]);
-  for (const m of html.matchAll(/@import\s+(url\()?['"]?(https?:|\/\/)/g)) found.push(m[0]);
+  for (const m of html.matchAll(/url\(\s*['"]?(https?:|\/\/)[^)]*\)/g))
+    found.push(m[0]);
+  for (const m of html.matchAll(/@import\s+(url\()?['"]?(https?:|\/\/)/g))
+    found.push(m[0]);
   return found;
 }
 
@@ -114,7 +130,9 @@ describe("offline (default)", () => {
       faviconUrl: "https://assets.squirrelscan.com/favicons/x.png",
     });
     expect(html).not.toContain("assets.squirrelscan.com/favicons");
-    expect(html).toMatch(/<span class="site-favicon [^"]*" aria-hidden="true">E<\/span>/);
+    expect(html).toMatch(
+      /<span class="site-favicon [^"]*" aria-hidden="true">E<\/span>/
+    );
     expect(remoteLoads(html)).toEqual([]);
   });
 
@@ -129,12 +147,16 @@ describe("offline (default)", () => {
     expect(html).toContain('id="fix-prompts"');
     expect(html).toMatch(/<script\b[^>]*>[^<]*navigator\.clipboard/i);
     expect(html).toContain('href="https://example.com/a"');
-    expect(html).toContain('href="https://docs.squirrelscan.com/rules/core/meta-title"');
+    expect(html).toContain(
+      'href="https://docs.squirrelscan.com/rules/core/meta-title"'
+    );
   });
 
   test("the stylesheet is inlined, with no remote font or image", () => {
     const html = renderHtml(report());
-    const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("");
+    const css = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)]
+      .map((m) => m[1])
+      .join("");
     expect(css.length).toBeGreaterThan(10_000);
     expect(css).not.toMatch(/url\(/);
     expect(css).not.toContain("@font-face");
@@ -145,7 +167,10 @@ describe("the offline default and the cloud's offline: false", () => {
   const FAVICON = "https://assets.squirrelscan.com/favicons/example.png";
 
   test("no options at all means offline: no remote image, even when a favicon is passed", () => {
-    for (const html of [renderHtml(report()), renderHtml(report(), { faviconUrl: FAVICON })]) {
+    for (const html of [
+      renderHtml(report()),
+      renderHtml(report(), { faviconUrl: FAVICON }),
+    ]) {
       expect(html).not.toContain("<img");
       expect(html).not.toContain("squirrelscan.com/tech-icons");
       expect(html).not.toContain(FAVICON);
@@ -155,11 +180,14 @@ describe("the offline default and the cloud's offline: false", () => {
 
   test("offline: false emits the first-party tech icons and the given faviconUrl", () => {
     const html = renderHtml(report(), { offline: false, faviconUrl: FAVICON });
-    const imgs = [...html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map((m) => m[1]);
+    const imgs = [...html.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/g)].map(
+      (m) => m[1]
+    );
     expect(imgs).toContain(FAVICON);
     expect(imgs).toContain("https://squirrelscan.com/tech-icons/react.png");
     // Only first-party hosts: nothing else is loaded.
-    for (const src of imgs) expect(src).toMatch(/^https:\/\/(assets\.)?squirrelscan\.com\//);
+    for (const src of imgs)
+      expect(src).toMatch(/^https:\/\/(assets\.)?squirrelscan\.com\//);
   });
 });
 
@@ -178,13 +206,17 @@ describe("a hostile site title and rule message", () => {
     expect(closes).toBe(opens);
     expect(html).not.toContain("<script>alert(1)");
     // Inside every script block (code and JSON), no raw closing tag.
-    for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi)) {
+    for (const m of html.matchAll(
+      /<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi
+    )) {
       expect(m[1]!.toLowerCase()).not.toContain("</script");
       expect(m[1]!).not.toContain("alert(1)</");
     }
     // The JSON block still carries the text, decoded, for the copy prompt.
     const json =
-      /<script type="application\/json" id="fix-prompts">([\s\S]*?)<\/script[^>]*>/i.exec(html);
+      /<script type="application\/json" id="fix-prompts">([\s\S]*?)<\/script[^>]*>/i.exec(
+        html
+      );
     expect(JSON.stringify(JSON.parse(json![1]!))).toContain("alert(1)");
     // The title and the message render as escaped text.
     const escaped = "&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;";
@@ -199,9 +231,11 @@ describe("online (offline: false, the cloud)", () => {
       offline: false,
       faviconUrl: "https://assets.squirrelscan.com/favicons/x.png",
     });
-    expect(html).toContain('src="https://squirrelscan.com/tech-icons/react.png"');
+    expect(html).toContain(
+      'src="https://squirrelscan.com/tech-icons/react.png"'
+    );
     expect(html).toMatch(
-      /<img [^>]*src="https:\/\/assets\.squirrelscan\.com\/favicons\/x\.png"[^>]*data-favicon/,
+      /<img [^>]*src="https:\/\/assets\.squirrelscan\.com\/favicons\/x\.png"[^>]*data-favicon/
     );
     // Each image hides itself (not a broken icon) if it fails to load.
     expect(html).toMatch(/<img [^>]*react\.png"[^>]*data-hide-broken/);
@@ -231,7 +265,10 @@ describe("online (offline: false, the cloud)", () => {
 
 describe("caller-supplied URLs", () => {
   test("a non-http white-label logo is refused; the org name shows instead", () => {
-    for (const orgLogoUrl of ["javascript:alert(1)", "data:image/svg+xml,<svg/onload=alert(1)>"]) {
+    for (const orgLogoUrl of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/onload=alert(1)>",
+    ]) {
       const html = renderHtml(report(), {
         branding: { whiteLabel: true, orgName: "Acme Inc", orgLogoUrl },
       });
@@ -244,7 +281,11 @@ describe("caller-supplied URLs", () => {
 
   test("an http(s) white-label logo renders", () => {
     const html = renderHtml(report(), {
-      branding: { whiteLabel: true, orgName: "Acme Inc", orgLogoUrl: "https://example.com/l.png" },
+      branding: {
+        whiteLabel: true,
+        orgName: "Acme Inc",
+        orgLogoUrl: "https://example.com/l.png",
+      },
     });
     expect(html).toMatch(/<img [^>]*src="https:\/\/example\.com\/l\.png"/);
   });
@@ -254,16 +295,26 @@ describe("icon sprite", () => {
   test("every row icon is a symbol with a viewBox and drawable markup", () => {
     const html = renderHtml(report());
     for (const id of ["caret", "out", "copy", "check"]) {
-      expect(html).toMatch(new RegExp(`<symbol id="i-${id}" viewBox="[^"]+"><path `));
+      expect(html).toMatch(
+        new RegExp(`<symbol id="i-${id}" viewBox="[^"]+"><path `)
+      );
     }
   });
 
   test("changed icon markup fails loudly instead of shipping a blank icon", () => {
-    expect(() => spriteSymbol("x", "<svg><path d='M0 0'/></svg>")).toThrow(/no viewBox/);
-    expect(() => spriteSymbol("x", '<svg viewBox="0 0 1 1"></svg>')).toThrow(/no drawable/);
-    expect(() => spriteSymbol("x", '<span viewBox="0 0 1 1"><path/></span>')).toThrow();
-    expect(spriteSymbol("x", '<svg viewBox="0 0 2 2"><path d="M0 0"></path></svg>')).toBe(
-      '<symbol id="i-x" viewBox="0 0 2 2"><path d="M0 0"></path></symbol>',
+    expect(() => spriteSymbol("x", "<svg><path d='M0 0'/></svg>")).toThrow(
+      /no viewBox/
+    );
+    expect(() => spriteSymbol("x", '<svg viewBox="0 0 1 1"></svg>')).toThrow(
+      /no drawable/
+    );
+    expect(() =>
+      spriteSymbol("x", '<span viewBox="0 0 1 1"><path/></span>')
+    ).toThrow();
+    expect(
+      spriteSymbol("x", '<svg viewBox="0 0 2 2"><path d="M0 0"></path></svg>')
+    ).toBe(
+      '<symbol id="i-x" viewBox="0 0 2 2"><path d="M0 0"></path></symbol>'
     );
   });
 });
@@ -276,12 +327,23 @@ describe("odd report data", () => {
       report({
         timestamp: "not a date",
         totalPages: Number.NaN,
-        coverage: { auditedPages: 1, knownPages: Number.POSITIVE_INFINITY, carriedFindings: 0 },
-        scanScope: { origin: "cli", maxPages: Number.NaN, pagesCrawled: 1, capped: true },
-      }),
+        coverage: {
+          auditedPages: 1,
+          knownPages: Number.POSITIVE_INFINITY,
+          carriedFindings: 0,
+        },
+        scanScope: {
+          origin: "cli",
+          maxPages: Number.NaN,
+          pagesCrawled: 1,
+          capped: true,
+        },
+      })
     );
     // The page script's own isNaN() is code, not copy: look at the markup only.
-    const markup = html.split(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/i).join("");
+    const markup = html
+      .split(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/i)
+      .join("");
     expect(markup).toContain("not a date");
     expect(markup).not.toContain("NaN");
     expect(markup).not.toContain("Infinity");
@@ -329,12 +391,17 @@ describe("odd report data", () => {
       report({
         totalPages: 10,
         coverage: { auditedPages: 10, knownPages: 40, carriedFindings: 0 },
-        scanScope: { origin: "cli", maxPages: 10, pagesCrawled: 10, capped: true },
-      }),
+        scanScope: {
+          origin: "cli",
+          maxPages: 10,
+          pagesCrawled: 10,
+          capped: true,
+        },
+      })
     );
     // pub#1046: the one-line notice names them as carried, not as unknown pages.
     expect(html).toContain(
-      "This report may not cover the whole site (30 more known pages carried from earlier audits).",
+      "This report may not cover the whole site (30 more known pages carried from earlier audits)."
     );
     expect(html).not.toContain("more pages known");
     expect(html).not.toContain("are not in this report");
@@ -352,7 +419,7 @@ describe("odd report data", () => {
           hitsByReason: {},
           pages: { total: 5, hits: 2, bytesSaved: 1024 },
         } as unknown as AuditReport["cacheStats"],
-      }),
+      })
     );
     expect(html).toContain("Cache: 50% hit rate");
   });

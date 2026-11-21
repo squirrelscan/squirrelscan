@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { ALL_FINGERPRINTS } from "../src/fingerprints";
-import { detectTechnologies } from "../src/detect";
+
 import type { TechDetectInput } from "../src/types";
+
+import { detectTechnologies } from "../src/detect";
+import { ALL_FINGERPRINTS } from "../src/fingerprints";
 
 const VALID_CATEGORIES = new Set([
   "cms",
@@ -68,8 +70,14 @@ function input(partial: Partial<TechDetectInput>): TechDetectInput {
 
 describe("detection (sample of researched fingerprints)", () => {
   const cases: Array<{ id: string; input: TechDetectInput }> = [
-    { id: "alpinejs", input: input({ html: `<div x-data="{open:false}"></div>` }) },
-    { id: "magento", input: input({ html: `<script type="text/x-magento-init">{}</script>` }) },
+    {
+      id: "alpinejs",
+      input: input({ html: `<div x-data="{open:false}"></div>` }),
+    },
+    {
+      id: "magento",
+      input: input({ html: `<script type="text/x-magento-init">{}</script>` }),
+    },
     {
       id: "mailchimp",
       input: input({
@@ -79,19 +87,28 @@ describe("detection (sample of researched fingerprints)", () => {
     },
     {
       id: "cloudinary",
-      input: input({ html: `<img src="https://res.cloudinary.com/demo/x.jpg">` }),
+      input: input({
+        html: `<img src="https://res.cloudinary.com/demo/x.jpg">`,
+      }),
     },
-    { id: "hugo", input: input({ meta: { generator: "Hugo 0.123.0" }, html: "" }) },
+    {
+      id: "hugo",
+      input: input({ meta: { generator: "Hugo 0.123.0" }, html: "" }),
+    },
     {
       id: "bigcommerce",
-      input: input({ html: `<link href="https://cdn11.bigcommerce.com/x.css">` }),
+      input: input({
+        html: `<link href="https://cdn11.bigcommerce.com/x.css">`,
+      }),
     },
     { id: "prestashop", input: input({ meta: { generator: "PrestaShop" } }) },
     {
       id: "rudderstack",
       input: input({
         html: `<script src="https://cdn.rudderlabs.com/v1.1/rudder-analytics.min.js"></script>`,
-        scripts: [{ url: "https://cdn.rudderlabs.com/v1.1/rudder-analytics.min.js" }],
+        scripts: [
+          { url: "https://cdn.rudderlabs.com/v1.1/rudder-analytics.min.js" },
+        ],
       }),
     },
     {
@@ -103,13 +120,17 @@ describe("detection (sample of researched fingerprints)", () => {
     },
     {
       id: "jsdelivr",
-      input: input({ html: `<script src="https://cdn.jsdelivr.net/npm/x"></script>` }),
+      input: input({
+        html: `<script src="https://cdn.jsdelivr.net/npm/x"></script>`,
+      }),
     },
     {
       id: "braintree",
       input: input({
         html: `<script src="https://js.braintreegateway.com/web/3.0/js/client.js"></script>`,
-        scripts: [{ url: "https://js.braintreegateway.com/web/3.0/js/client.js" }],
+        scripts: [
+          { url: "https://js.braintreegateway.com/web/3.0/js/client.js" },
+        ],
       }),
     },
     {
@@ -137,14 +158,16 @@ describe("detection (sample of researched fingerprints)", () => {
 
   test("does not flag a bare unrelated page", () => {
     const res = detectTechnologies(
-      input({ html: `<!doctype html><html><body><h1>Hello</h1></body></html>` }),
+      input({ html: `<!doctype html><html><body><h1>Hello</h1></body></html>` })
     );
     // A trivial page should not match a pile of vendors (guards over-broad detectors).
     expect(res.length).toBeLessThan(3);
   });
 
   test("extracts a version when a versionPattern matches", () => {
-    const res = detectTechnologies(input({ meta: { generator: "Hugo 0.123.0" } }));
+    const res = detectTechnologies(
+      input({ meta: { generator: "Hugo 0.123.0" } })
+    );
     const hugo = res.find((t) => t.id === "hugo");
     expect(hugo?.version).toBe("0.123.0");
   });
@@ -153,7 +176,7 @@ describe("detection (sample of researched fingerprints)", () => {
     const res = detectTechnologies(
       input({
         html: `<script src="/_next/static/app.js"></script><p>This site is built with Next.js. Enjoy!</p>`,
-      }),
+      })
     );
     const next = res.find((t) => t.id === "nextjs");
     expect(next).toBeDefined();
@@ -179,7 +202,12 @@ describe("detection (sample of researched fingerprints)", () => {
         url: `https://example.com/${"a".repeat(2000)}`,
         headers: { server: "x".repeat(2000) },
         html,
-        scripts: [{ url: `https://x.com/${"a".repeat(3000)}`, content: "y".repeat(50_000) }],
+        scripts: [
+          {
+            url: `https://x.com/${"a".repeat(3000)}`,
+            content: "y".repeat(50_000),
+          },
+        ],
       });
       expect(performance.now() - start).toBeLessThan(2000);
     }
@@ -191,29 +219,31 @@ describe("meta auto-extraction from HTML (#407)", () => {
     // No meta map and no static.wixstatic.com html marker → detection MUST come
     // from the auto-parsed <meta generator> tag.
     const ids = detectTechnologies(
-      input({ html: `<head><meta name="generator" content="Wix.com Website Builder"></head>` }),
+      input({
+        html: `<head><meta name="generator" content="Wix.com Website Builder"></head>`,
+      })
     ).map((t) => t.id);
     expect(ids).toContain("wix");
   });
 
   test("handles reversed meta attribute order (content before name)", () => {
     const ids = detectTechnologies(
-      input({ html: `<meta content="WordPress 6.5.2" name="generator">` }),
+      input({ html: `<meta content="WordPress 6.5.2" name="generator">` })
     ).map((t) => t.id);
     expect(ids).toContain("wordpress");
   });
 
   test("extracts a version from an auto-parsed generator tag", () => {
     const res = detectTechnologies(
-      input({ html: `<meta name="generator" content="Hugo 0.123.0">` }),
+      input({ html: `<meta name="generator" content="Hugo 0.123.0">` })
     );
     expect(res.find((t) => t.id === "hugo")?.version).toBe("0.123.0");
   });
 
   test("a caller-supplied non-empty meta map still works", () => {
-    const ids = detectTechnologies(input({ meta: { generator: "Wix" }, html: "" })).map(
-      (t) => t.id,
-    );
+    const ids = detectTechnologies(
+      input({ meta: { generator: "Wix" }, html: "" })
+    ).map((t) => t.id);
     expect(ids).toContain("wix");
   });
 });
@@ -237,35 +267,35 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
       input({
         html: `<script src="/vendor/timezone.js"></script>`,
         scripts: [{ url: "https://example.com/vendor/timezone.js" }],
-      }),
+      })
     ).map((t) => t.id);
     expect(ids).not.toContain("angular");
   });
 
   test("ng-version attribute still detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<app-root ng-version="17.0.0"></app-root>` }),
+      input({ html: `<app-root ng-version="17.0.0"></app-root>` })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
 
   test("ng-app bootstrap attribute (AngularJS 1.x) still detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<html ng-app="myApp"><body></body></html>` }),
+      input({ html: `<html ng-app="myApp"><body></body></html>` })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
 
   test("data-ng-app (HTML5-safe attribute form) detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<html data-ng-app="myApp"><body></body></html>` }),
+      input({ html: `<html data-ng-app="myApp"><body></body></html>` })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
 
   test("x-ng-app (HTML5-safe attribute form) detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<html x-ng-app="myApp"><body></body></html>` }),
+      input({ html: `<html x-ng-app="myApp"><body></body></html>` })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
@@ -278,14 +308,18 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
 
   test("ng-star-inserted class still detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<div class="ng-star-inserted">structural directive output</div>` }),
+      input({
+        html: `<div class="ng-star-inserted">structural directive output</div>`,
+      })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
 
   test("ng-star-inserted with a single-quoted class attribute still detects Angular", () => {
     const ids = detectTechnologies(
-      input({ html: `<div class='x ng-star-inserted'>structural directive output</div>` }),
+      input({
+        html: `<div class='x ng-star-inserted'>structural directive output</div>`,
+      })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
@@ -301,7 +335,7 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
       input({
         html: `<script src="/zone.js"></script>`,
         scripts: [{ url: "https://example.com/zone.js" }],
-      }),
+      })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
@@ -314,7 +348,9 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
   // works on the one page a scripts array happens to be supplied for.
   test("zone.js script src detects Angular via the HTML fallback path (no scripts array)", () => {
     const ids = detectTechnologies(
-      input({ html: `<html><body><script src="/zone.js"></script></body></html>` }),
+      input({
+        html: `<html><body><script src="/zone.js"></script></body></html>`,
+      })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
@@ -323,14 +359,16 @@ describe("Angular false positive on Tailwind class soup (#1097)", () => {
     const ids = detectTechnologies(
       input({
         html: `<html><body><script src='https://cdn.example.com/vendor/zone-evergreen.min.js'></script></body></html>`,
-      }),
+      })
     ).map((t) => t.id);
     expect(ids).toContain("angular");
   });
 
   test("timezone.js in HTML still does NOT detect Angular via the HTML fallback path", () => {
     const ids = detectTechnologies(
-      input({ html: `<html><body><script src="/vendor/timezone.js"></script></body></html>` }),
+      input({
+        html: `<html><body><script src="/vendor/timezone.js"></script></body></html>`,
+      })
     ).map((t) => t.id);
     expect(ids).not.toContain("angular");
   });

@@ -1,8 +1,6 @@
 // Types for Document-based extractors
 // These extractors receive a pre-parsed Document instead of raw HTML
 
-import type { Document } from "linkedom";
-
 import type {
   ContentAnalysis,
   HeadingHierarchy,
@@ -15,6 +13,7 @@ import type {
   SchemaData,
   TwitterData,
 } from "@squirrelscan/core-contracts";
+import type { Document } from "linkedom";
 
 export type { ClassifierSource, LinkSection };
 

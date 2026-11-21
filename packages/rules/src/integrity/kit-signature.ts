@@ -19,7 +19,9 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 function scriptsForPage(ctx: RuleContext): string[] {
   const scripts = ctx.site?.scripts;
   if (!scripts || scripts.length === 0) return [];
-  const pageUrls = new Set([ctx.page.url, ctx.page.finalUrl].filter(Boolean) as string[]);
+  const pageUrls = new Set(
+    [ctx.page.url, ctx.page.finalUrl].filter(Boolean) as string[]
+  );
   const out: string[] = [];
   for (const s of scripts) {
     if (!s.content) continue;

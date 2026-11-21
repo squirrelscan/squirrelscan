@@ -13,28 +13,34 @@
 // then the merge as the cloud runs it, with the signal both publish producers
 // build.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
 import { createRunner } from "@squirrelscan/rules";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
 class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -43,7 +49,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -56,12 +65,16 @@ class MemStore implements SmartAuditStore {
   }
 }
 
-describeSitePagesContract("unconfirmed-resolves-prior-935.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "unconfirmed-resolves-prior-935.test.ts MemStore",
+  () => new MemStore()
+);
 
 const A = "https://example.com/a";
 const B = "https://example.com/b";
 const C = "https://example.com/c";
-const HEAD = '<link rel="stylesheet" href="/site.css"><style>.drawer{display:none}</style>';
+const HEAD =
+  '<link rel="stylesheet" href="/site.css"><style>.drawer{display:none}</style>';
 
 /** Rule, its base check, page A's markup (a control a style rule may hide), page B's (named). */
 const CASES: Array<[string, string, string, string]> = [
@@ -126,8 +139,15 @@ const pageMeta = (id: string) => ({
 });
 
 /** The checks the CURRENT rule emits on one page of the fixture. */
-async function ruleChecks(ruleId: string, url: string, body: string): Promise<CheckResult[]> {
-  const runner = createRunner({ rule_options: {}, rules: { enable: [ruleId] } });
+async function ruleChecks(
+  ruleId: string,
+  url: string,
+  body: string
+): Promise<CheckResult[]> {
+  const runner = createRunner({
+    rule_options: {},
+    rules: { enable: [ruleId] },
+  });
   const html = `<!doctype html><html lang="en"><head><title>t</title>${HEAD}</head><body><main>${body}</main></body></html>`;
   const page = { url, html, statusCode: 200, loadTime: 0, headers: {} };
   const result = await runner.runPageRules(page, {
@@ -158,7 +178,12 @@ const pass = (name: string, url: string): CheckResult => ({
  * crawled but the rule says nothing about it. Returns run 2's open and resolved
  * findings for the base check.
  */
-async function rerun(ruleId: string, check: string, aBody: string, bBody: string) {
+async function rerun(
+  ruleId: string,
+  check: string,
+  aBody: string,
+  bBody: string
+) {
   const store = new MemStore();
   const meta = pageMeta(ruleId);
   const statuses = [A, B, C].map((url) => ({ url, status: 200 }));
@@ -166,7 +191,12 @@ async function rerun(ruleId: string, check: string, aBody: string, bBody: string
     store,
     siteKey: "web_935",
     crawlId: "audit_1",
-    ruleResults: { [ruleId]: { meta, checks: [fail(check, A), pass(check, B), fail(check, C)] } },
+    ruleResults: {
+      [ruleId]: {
+        meta,
+        checks: [fail(check, A), pass(check, B), fail(check, C)],
+      },
+    },
     pageStatuses: statuses,
   });
 
@@ -175,12 +205,12 @@ async function rerun(ruleId: string, check: string, aBody: string, bBody: string
     ...(await ruleChecks(ruleId, B, bBody)),
   ];
   // The fixture is what the issue describes: A only unconfirmed, B passing.
-  expect(current.filter((c) => c.pageUrl === A).map((c) => `${c.name}:${c.status}`)).toEqual([
-    `${check}-unconfirmed:warn`,
-  ]);
-  expect(current.filter((c) => c.pageUrl === B).map((c) => `${c.name}:${c.status}`)).toEqual([
-    `${check}:pass`,
-  ]);
+  expect(
+    current.filter((c) => c.pageUrl === A).map((c) => `${c.name}:${c.status}`)
+  ).toEqual([`${check}-unconfirmed:warn`]);
+  expect(
+    current.filter((c) => c.pageUrl === B).map((c) => `${c.name}:${c.status}`)
+  ).toEqual([`${check}:pass`]);
 
   const ruleResults = { [ruleId]: { meta, checks: current } };
   await runCloudSmartAudits({
@@ -208,7 +238,12 @@ async function rerun(ruleId: string, check: string, aBody: string, bBody: string
 describe("a finding that became unconfirmed resolves its prior fail (pub#935)", () => {
   for (const [ruleId, check, aBody, bBody] of CASES) {
     test(`${ruleId} ${check}: A's prior fail resolves, C (not evaluated) still carries`, async () => {
-      const { open, resolved, unconfirmed } = await rerun(ruleId, check, aBody, bBody);
+      const { open, resolved, unconfirmed } = await rerun(
+        ruleId,
+        check,
+        aBody,
+        bBody
+      );
       expect(resolved).toEqual([normalizePageUrl(A)]);
       expect(open).toEqual([normalizePageUrl(C)]);
       expect(unconfirmed).toEqual([normalizePageUrl(A)]);
@@ -232,7 +267,10 @@ describe("a finding that became unconfirmed resolves its prior fail (pub#935)", 
       siteKey: "web_935b",
       crawlId: "audit_1",
       ruleResults: {
-        [ruleId]: { meta, checks: [...first, ...(await ruleChecks(ruleId, C, aBody))] },
+        [ruleId]: {
+          meta,
+          checks: [...first, ...(await ruleChecks(ruleId, C, aBody))],
+        },
       },
       pageStatuses: statuses,
     });
@@ -256,7 +294,9 @@ describe("a finding that became unconfirmed resolves its prior fail (pub#935)", 
         .map((f) => f.normalizedUrl)
         .sort();
     expect(await unconfirmed("resolved")).toEqual([normalizePageUrl(A)]);
-    expect(await unconfirmed("open")).toEqual([normalizePageUrl(B), normalizePageUrl(C)].sort());
+    expect(await unconfirmed("open")).toEqual(
+      [normalizePageUrl(B), normalizePageUrl(C)].sort()
+    );
   });
 
   test("the signal lists A as evaluated, and C as not evaluated, for the base check", async () => {

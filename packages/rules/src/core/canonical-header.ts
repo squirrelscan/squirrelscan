@@ -1,7 +1,8 @@
 // core/canonical-header - Validates Link header canonical matches HTML canonical
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Parse Link header for canonical URL
 // Format: Link: <https://example.com/page>; rel="canonical"

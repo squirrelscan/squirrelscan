@@ -27,11 +27,12 @@
 // Both feed ONE accumulator and ONE check builder, so the output is byte-identical
 // by construction (same shape as content/duplicate-title, #1021/#1022).
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
 
-import { WORD_COUNT_MIN_WORDS } from "./word-count";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import { WORD_COUNT_MIN_WORDS } from "./word-count";
 
 /** Crawl-wide page floor: below this there is no site norm to judge against. */
 export const THIN_NORM_MIN_PAGES = 10;
@@ -118,7 +119,12 @@ interface JudgedGroup {
 }
 
 function emptyRollup(): ThinRollup {
-  return { pageCount: 0, skippedNoindexPages: 0, sampleCount: 0, groups: new Map() };
+  return {
+    pageCount: 0,
+    skippedNoindexPages: 0,
+    sampleCount: 0,
+    groups: new Map(),
+  };
 }
 
 /**
@@ -152,7 +158,9 @@ function accumulatePage(rollup: ThinRollup, record: ThinPageRecord): void {
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
-  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return sorted.length % 2 === 1
+    ? sorted[mid]!
+    : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
 function skip(message: string, skippedNoindexPages?: number): CheckResult {
@@ -160,7 +168,9 @@ function skip(message: string, skippedNoindexPages?: number): CheckResult {
     name: CHECK_NAME,
     status: "skipped",
     message,
-    ...(skippedNoindexPages === undefined ? {} : { details: { skippedNoindexPages } }),
+    ...(skippedNoindexPages === undefined
+      ? {}
+      : { details: { skippedNoindexPages } }),
   };
 }
 
@@ -176,7 +186,7 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
     return [
       skip(
         `Only ${sitePageCount} page(s) crawled; ${THIN_NORM_MIN_PAGES} needed to establish a site norm`,
-        rollup.skippedNoindexPages,
+        rollup.skippedNoindexPages
       ),
     ];
   }
@@ -194,7 +204,7 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
 
     // Heterogeneous groups have no norm: say nothing rather than pick a side.
     const inBand = group.wordCounts.filter(
-      (wc) => Math.abs(wc - med) <= THIN_NORM_BAND * med,
+      (wc) => Math.abs(wc - med) <= THIN_NORM_BAND * med
     ).length;
     if (inBand / group.wordCounts.length < THIN_NORM_MIN_AGREEMENT) continue;
 
@@ -202,13 +212,19 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
     const sigma = Math.max(MAD_TO_SIGMA * mad, THIN_NORM_SIGMA_FLOOR * med);
     const zFloor = med - THIN_NORM_MIN_Z * sigma;
 
-    judged.push({ pageType: group.pageType, pages: group.wordCounts.length, median: med, mad });
+    judged.push({
+      pageType: group.pageType,
+      pages: group.wordCounts.length,
+      median: med,
+      mad,
+    });
     judgedPages += group.wordCounts.length;
 
     for (const [i, wordCount] of group.wordCounts.entries()) {
       // content/word-count owns everything under its absolute floor.
       if (wordCount < WORD_COUNT_MIN_WORDS) continue;
-      if (wordCount >= THIN_NORM_MAX_RATIO * med || wordCount >= zFloor) continue;
+      if (wordCount >= THIN_NORM_MAX_RATIO * med || wordCount >= zFloor)
+        continue;
       outliers.push({
         url: group.urls[i]!,
         pageType: group.pageType,
@@ -223,12 +239,14 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
     return [
       skip(
         `No page type has ${THIN_NORM_MIN_GROUP_PAGES}+ comparable pages with a clear word-count norm`,
-        rollup.skippedNoindexPages,
+        rollup.skippedNoindexPages
       ),
     ];
   }
 
-  judged.sort((a, b) => (a.pageType < b.pageType ? -1 : a.pageType > b.pageType ? 1 : 0));
+  judged.sort((a, b) =>
+    a.pageType < b.pageType ? -1 : a.pageType > b.pageType ? 1 : 0
+  );
   const typeSummary = judged
     .slice(0, THIN_NORM_MAX_GROUPS)
     .map((g) => `${g.pageType} ${Math.round(g.median)}`)
@@ -259,17 +277,21 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
   }
 
   // Worst offenders first; url breaks ties so the list never depends on crawl order.
-  outliers.sort((a, b) => a.ratio - b.ratio || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
-  const items: CheckItem[] = outliers.slice(0, THIN_NORM_MAX_ITEMS).map((o) => ({
-    id: o.url,
-    label: `${o.wordCount} words vs the ${o.pageType} norm of ${Math.round(o.median)} (${Math.round(o.ratio * 100)}%)`,
-    sourcePages: [o.url],
-    meta: {
-      pageType: o.pageType,
-      wordCount: o.wordCount,
-      medianWords: o.median,
-    },
-  }));
+  outliers.sort(
+    (a, b) => a.ratio - b.ratio || (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)
+  );
+  const items: CheckItem[] = outliers
+    .slice(0, THIN_NORM_MAX_ITEMS)
+    .map((o) => ({
+      id: o.url,
+      label: `${o.wordCount} words vs the ${o.pageType} norm of ${Math.round(o.median)} (${Math.round(o.ratio * 100)}%)`,
+      sourcePages: [o.url],
+      meta: {
+        pageType: o.pageType,
+        wordCount: o.wordCount,
+        medianWords: o.median,
+      },
+    }));
 
   const share = outliers.length / judgedPages;
   return [
@@ -296,7 +318,10 @@ function buildChecks(rollup: ThinRollup, sitePageCount: number): CheckResult[] {
  * property of this seam shared with every site rule on it (see
  * content/duplicate-title), not something specific to this rule.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {
@@ -315,7 +340,8 @@ export const thinVsSiteNormRule: Rule = {
   meta: {
     id: "content/thin-vs-site-norm",
     name: "Thin Content vs Site Norm",
-    description: "Finds pages far shorter than the site's own norm for their page type",
+    description:
+      "Finds pages far shorter than the site's own norm for their page type",
     solution:
       "These pages are much shorter than the other pages of the same type on your own site, which is a stronger thin-content signal than any absolute word count: your articles set the expectation for what an article on this site looks like. Either expand each page to the depth its siblings have, consolidate it into a fuller page, or noindex it if it exists only for navigation. If a page is deliberately short (a stub, a redirect landing page), that is fine - the point is that it does not match what the rest of its page type promises.",
     category: "content",

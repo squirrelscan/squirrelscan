@@ -1,6 +1,7 @@
 // a11y/html-xml-lang-mismatch - HTML lang and xml:lang match
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 export const htmlXmlLangMismatchRule: Rule = {

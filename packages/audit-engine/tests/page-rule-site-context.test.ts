@@ -19,16 +19,17 @@
 // fixtures contain). It covers the default rule surface over a mixed synthetic
 // site, which is the same standard the streaming engine's own golden gates hold.
 
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import { createRunner, type SiteData } from "@squirrelscan/rules";
+import {
+  generateSiteModel,
+  writeCrawlToStorage,
+} from "@squirrelscan/synthetic-site";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { Effect } from "effect";
-
-import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner, type SiteData } from "@squirrelscan/rules";
 
 import {
   PAGE_RULE_RESOURCE_FIELDS,
@@ -117,7 +118,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
                 lastModified: null,
                 vary: null,
               },
-              resourceFieldReads,
+              resourceFieldReads
             ),
           ],
           images: [
@@ -141,7 +142,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
                 naturalHeight: 1200,
                 animated: false,
               },
-              resourceFieldReads,
+              resourceFieldReads
             ),
           ],
         },
@@ -160,7 +161,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
               sourceMapHeader: "app.js.map",
               contentEncoding: null,
             },
-            scriptFieldReads,
+            scriptFieldReads
           ),
         ],
         pdfSizes: [],
@@ -176,19 +177,19 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       });
 
       const result = await run(
-        streamPageRules(storage, crawlId, runner, recording, { batchSize: 20 }),
+        streamPageRules(storage, crawlId, runner, recording, { batchSize: 20 })
       );
       // Guard against a vacuous pass: rules must actually have run.
       expect(result.pageUrls.length).toBeGreaterThan(20);
 
       const undeclared = [...readKeys].filter(
-        (key) => !(PAGE_RULE_SITE_FIELDS as readonly string[]).includes(key),
+        (key) => !(PAGE_RULE_SITE_FIELDS as readonly string[]).includes(key)
       );
       const undeclaredScript = [...scriptFieldReads].filter(
-        (key) => !(PAGE_RULE_SCRIPT_FIELDS as readonly string[]).includes(key),
+        (key) => !(PAGE_RULE_SCRIPT_FIELDS as readonly string[]).includes(key)
       );
       const undeclaredResource = [...resourceFieldReads].filter(
-        (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key),
+        (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key)
       );
       // Not vacuous: rules must have looked at the entries at all.
       expect(scriptFieldReads.size).toBeGreaterThan(0);
@@ -200,7 +201,7 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
           `page rules read SiteData fields the rule-result cache key does not cover: ` +
             `${undeclared.join(", ")}. Either add them to PAGE_RULE_SITE_FIELDS (and accept ` +
             `that a change to one invalidates every cached page) or stop reading them from a ` +
-            `page rule. Leaving this unfixed means #1990 replays stale verdicts.`,
+            `page rule. Leaving this unfixed means #1990 replays stale verdicts.`
         );
       }
       expect(undeclared).toEqual([]);
@@ -223,7 +224,14 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
           return Reflect.get(target, key, receiver);
         },
       });
-    const entry = (path: string, header: { naturalWidth: number | null; naturalHeight: number | null; animated: boolean | null }) =>
+    const entry = (
+      path: string,
+      header: {
+        naturalWidth: number | null;
+        naturalHeight: number | null;
+        animated: boolean | null;
+      }
+    ) =>
       recordFields({
         url: `http://synthetic.example.com/${path}`,
         status: 206,
@@ -254,8 +262,16 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       resourceSizes: {
         css: [],
         images: [
-          entry("pixels.jpg", { naturalWidth: 1200, naturalHeight: 1200, animated: false }),
-          entry("bytes.jpg", { naturalWidth: null, naturalHeight: null, animated: null }),
+          entry("pixels.jpg", {
+            naturalWidth: 1200,
+            naturalHeight: 1200,
+            animated: false,
+          }),
+          entry("bytes.jpg", {
+            naturalWidth: null,
+            naturalHeight: null,
+            animated: null,
+          }),
         ],
       },
       scripts: [],
@@ -279,14 +295,21 @@ describe("page rules read only the SiteData fields the cache key covers", () => 
       siteData
     );
     // Not vacuous: the rule took both paths, and read the header fields to do it.
-    const findings = result.ruleResults.get("images/responsive-size")?.checks ?? [];
-    expect(findings.find((c) => c.name === "images-possibly-oversized")?.items?.map((i) => i.id)).toEqual([
+    const findings =
+      result.ruleResults.get("images/responsive-size")?.checks ?? [];
+    expect(
+      findings
+        .find((c) => c.name === "images-possibly-oversized")
+        ?.items?.map((i) => i.id)
+    ).toEqual([
       "pixels.jpg (64x64, no srcset)",
       "bytes.jpg (64x64, no srcset)",
     ]);
-    expect([...reads]).toEqual(expect.arrayContaining(["naturalWidth", "naturalHeight", "animated"]));
+    expect([...reads]).toEqual(
+      expect.arrayContaining(["naturalWidth", "naturalHeight", "animated"])
+    );
     const undeclared = [...reads].filter(
-      (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key),
+      (key) => !(PAGE_RULE_RESOURCE_FIELDS as readonly string[]).includes(key)
     );
     expect(undeclared).toEqual([]);
   });

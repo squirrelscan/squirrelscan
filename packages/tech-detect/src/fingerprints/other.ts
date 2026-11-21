@@ -1,5 +1,13 @@
 import type { TechFingerprint } from "../types";
-import { inBundle, inBundleWith, inScript, inStyle, resourceAttr, scriptSrc } from "./helpers";
+
+import {
+  inBundle,
+  inBundleWith,
+  inScript,
+  inStyle,
+  resourceAttr,
+  scriptSrc,
+} from "./helpers";
 
 const KLAVIYO_SCRIPT_PATH = String.raw`(?:static|static-tracking)\.klaviyo\.com\/onsite\/js\/(?:[A-Za-z0-9]+\/)?klaviyo\.js`;
 const KLAVIYO_SCRIPT_URL = String.raw`(?:https?:)?\/\/${KLAVIYO_SCRIPT_PATH}`;
@@ -40,32 +48,56 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "klaviyo",
     detectors: [
       // A listed script URL, direct or passed through a proxy. The pattern stays anchored for CodeQL.
-      { type: "script-url", pattern: new RegExp(`^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`, "i") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          `^(?:https?:)?\\/\\/[^\\r\\n]{0,2048}${KLAVIYO_SCRIPT_PATH}`,
+          "i"
+        ),
+      },
       // pageMarkup strips comments and prose/code samples, then keeps complete resource tags and short inline loaders.
-      { type: "script-url", pattern: new RegExp(`^<script\\b${TAG_BODY}{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`, "im") },
+      {
+        type: "script-url",
+        pattern: new RegExp(
+          `^<script\\b${TAG_BODY}{0,65536}\\s(?:src|data-src)\\s*=\\s*${KLAVIYO_ATTR_VALUE}`,
+          "im"
+        ),
+      },
       // A link only loads the script when it is a preload (a stylesheet or a prefetch hint does not run it); `rel` may
       // sit before or after the `href`.
       {
         type: "script-url",
         pattern: new RegExp(
           `^<link\\b(?=${TAG_BODY}{0,65536}\\srel\\s*=\\s*["']?(?:module)?preload\\b)${TAG_BODY}{0,65536}\\shref\\s*=\\s*${KLAVIYO_ATTR_VALUE}`,
-          "im",
+          "im"
         ),
       },
       {
         type: "script-url",
         pattern: new RegExp(
           `^<script\\b${TAG_BODY}{0,65536}>${OWN_BODY}{0,16384}?\\b[A-Za-z_$][\\w$]{0,63}\\.src\\s*=\\s*["']${KLAVIYO_SCRIPT_URL}`,
-          "im",
+          "im"
         ),
       },
       { type: "script-content", pattern: /_learnq\.push\(/i },
       // The Shopify theme app block of Klaviyo's onsite embed.
       // It sits in a comment (`<!-- BEGIN app block: shopify://apps/... -->`): the one Klaviyo detector that reads comments (#1550).
-      { type: "html", pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i, requires: "shopify://apps/", comments: true },
+      {
+        type: "html",
+        pattern: /shopify:\/\/apps\/klaviyo-email-marketing-sms\//i,
+        requires: "shopify://apps/",
+        comments: true,
+      },
       // The inline onsite loader: `window._klOnsite=window._klOnsite||[]` and the `window.klaviyo` proxy.
-      { type: "script-content", pattern: /window\._klOnsite\s*=\s*window\._klOnsite\s*\|\|/ },
-      { type: "script-content", pattern: /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/ },
+      {
+        type: "script-content",
+        pattern: /window\._klOnsite\s*=\s*window\._klOnsite\s*\|\|/,
+      },
+      {
+        type: "script-content",
+        pattern:
+          /window\.klaviyo\s*=\s*(?:window\.klaviyo\s*\|\||new\s+Proxy\s*\()/,
+      },
     ],
     confidence: "high",
   },
@@ -122,9 +154,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "video",
     website: "https://vimeo.com",
     icon: "vimeo",
-    detectors: [
-      { type: "html", pattern: /player\.vimeo\.com\/video\//i },
-    ],
+    detectors: [{ type: "html", pattern: /player\.vimeo\.com\/video\//i }],
   },
   {
     id: "wistia",
@@ -200,13 +230,18 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "meta", name: "author", pattern: /^Lovable$/i },
       { type: "meta", name: "twitter:site", pattern: /^@lovable(?:_dev)?$/i },
-      ...scriptSrc(String.raw`(?:https:)?\/\/cdn\.gpteng\.co\/(?:gptengineer|lovable)\.js`),
+      ...scriptSrc(
+        String.raw`(?:https:)?\/\/cdn\.gpteng\.co\/(?:gptengineer|lovable)\.js`
+      ),
       ...scriptSrc(String.raw`\/__l5e\/events\.[0-9a-f]{8,64}\.js`),
-      inStyle(String.raw`#lovable-badge(?:-[a-z]{1,12})?\s*[{,:]`, "#lovable-badge"),
+      inStyle(
+        String.raw`#lovable-badge(?:-[a-z]{1,12})?\s*[{,:]`,
+        "#lovable-badge"
+      ),
       resourceAttr(
         "img|source",
         "src|srcset|data-src",
-        String.raw`https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\/`,
+        String.raw`https:\/\/storage\.googleapis\.com\/gpt-engineer-file-uploads\/`
       ),
       // Social image meta: the URL must be the whole start of the value, in either
       // attribute order, so prose in a description that links the bucket is not a hit.
@@ -231,11 +266,15 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://base44.com",
     icon: "base44",
     detectors: [
-      { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}base44\.app(?:[:/?#]|$)/i },
+      {
+        type: "url-path",
+        pattern:
+          /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}base44\.app(?:[:/?#]|$)/i,
+      },
       inScript(String.raw`base44_access_token`, "base44_access_token"),
       inScript(
         String.raw`\/api\/app-logs\/(?:[0-9a-f]{24}|\$\{\w{1,30}\})\/log-user-in-app`,
-        "/api/app-logs/",
+        "/api/app-logs/"
       ),
     ],
     ignoreComments: true,
@@ -250,7 +289,11 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       // Bolt's app hosting. The page host only: anchored at the URL start, so a
       // look-alike host or a page that links to a .bolt.host app does not match.
-      { type: "url-path", pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}bolt\.host(?:[:/?#]|$)/i },
+      {
+        type: "url-path",
+        pattern:
+          /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,3}bolt\.host(?:[:/?#]|$)/i,
+      },
       // The "Made in Bolt" badge an app can carry: an anchor whose href is the Bolt
       // referral URL AND whose content is the badge (an image or svg, or the words
       // "Made in Bolt"). A plain referral link in a post (`<a href="...?rid=x">try
@@ -275,11 +318,21 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       {
         type: "url-path",
-        pattern: /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,6}(?:replit\.app|repl\.co|replit\.dev)(?:[:/?#]|$)/i,
+        pattern:
+          /^https?:\/\/(?:[a-z0-9-]{1,63}\.){1,6}(?:replit\.app|repl\.co|replit\.dev)(?:[:/?#]|$)/i,
       },
-      ...scriptSrc(String.raw`https:\/\/replit\.com\/public\/js\/replit-dev-banner\.js`),
-      resourceAttr("link|script|img|source", "href|src", String.raw`\/__replco\/static\/`),
-      inStyle(String.raw`url\(\s*["']?\/__replco\/static\/`, "/__replco/static/"),
+      ...scriptSrc(
+        String.raw`https:\/\/replit\.com\/public\/js\/replit-dev-banner\.js`
+      ),
+      resourceAttr(
+        "link|script|img|source",
+        "href|src",
+        String.raw`\/__replco\/static\/`
+      ),
+      inStyle(
+        String.raw`url\(\s*["']?\/__replco\/static\/`,
+        "/__replco/static/"
+      ),
     ],
     ignoreComments: true,
     confidence: "high",
@@ -290,7 +343,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "cms",
     website: "https://v0.app",
     icon: "v0",
-    detectors: [{ type: "meta", name: "generator", pattern: /^v0\.(?:app|dev)$/i }],
+    detectors: [
+      { type: "meta", name: "generator", pattern: /^v0\.(?:app|dev)$/i },
+    ],
     confidence: "high",
   },
   {
@@ -307,7 +362,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       resourceAttr(
         "img|source|video|script|link|iframe",
         "src|srcset|data-src|poster|href",
-        String.raw`https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/(?:storage|rest|auth|realtime|functions|graphql)\/v1`,
+        String.raw`https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co\/(?:storage|rest|auth|realtime|functions|graphql)\/v1`
       ),
       // A bare project origin in a `<link href>`: a `preconnect` or `dns-prefetch` names the origin with no /rest/v1 path. Only a
       // link whose `rel` loads or connects counts (#1539), so `alternate` and `canonical` do not; the ref is not a placeholder
@@ -317,7 +372,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
         type: "tag-attr",
         tags: ["link"],
         attrs: ["href"],
-        pattern: /^https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?$/i,
+        pattern:
+          /^https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?$/i,
       },
       {
         type: "html",
@@ -326,10 +382,10 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       },
       inScript(
         String.raw`createClient\(\s*["']https:\/\/(?!your)[a-z0-9]{20}\.supabase\.co["']`,
-        ".supabase.co",
+        ".supabase.co"
       ),
       ...scriptSrc(
-        String.raw`https:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/@supabase\/supabase-js`,
+        String.raw`https:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/@supabase\/supabase-js`
       ),
       // A bundle. Production minifiers mangle `createClient`, so the anchor is the
       // quoted project URL itself, as a call argument or an object value that
@@ -338,15 +394,15 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       // fetch to a path never matches, and the match must start in code.
       inBundle(
         String.raw`["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,\s*(?:[\w$]{1,20}\s*[:=]\s*)?["'\x60](?:eyJ[A-Za-z0-9_-]{10,}|sb_(?:publishable|secret)_[A-Za-z0-9_-]{10,})`,
-        ".supabase.co",
+        ".supabase.co"
       ),
       inBundle(
         String.raw`\b(?:supabaseUrl|SUPABASE_URL)["']?\s*[:=]\s*["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]`,
-        ".supabase.co",
+        ".supabase.co"
       ),
       inBundle(
         String.raw`\bcreateClient\)?\(\s*["'\x60]https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?["'\x60]\s*,`,
-        ".supabase.co",
+        ".supabase.co"
       ),
       // A bundle that ships supabase-js (its Node.js deprecation notice linking
       // github.com/orgs/supabase/discussions/<n>, or its `sb-${ref}-auth-token`
@@ -359,8 +415,8 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
           String.raw`${quote}https:\/\/(?!your)(?!([a-z0-9])\1{19}\.)[a-z0-9]{20}\.supabase\.co\/?${quote}`,
           `.supabase.co${quote}`,
           String.raw`github\.com\/orgs\/supabase\/discussions\/\d|["'\x60]sb-\$\{[^}]{1,40}\}-auth-token`,
-          ["github.com/orgs/supabase/discussions/", "-auth-token"],
-        ),
+          ["github.com/orgs/supabase/discussions/", "-auth-token"]
+        )
       ),
     ],
     ignoreComments: true,
@@ -376,10 +432,24 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://clerk.com",
     icon: "clerk",
     detectors: [
-      ...scriptSrc(String.raw`https:\/\/[a-z0-9.-]{1,120}\/npm\/@clerk\/clerk-js@`),
-      ...scriptSrc(String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`),
-      { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-js-script"], pattern: /^/ },
-      { type: "tag-attr", tags: ["script"], attrs: ["data-clerk-publishable-key"], pattern: /^pk_(?:test|live)_/i },
+      ...scriptSrc(
+        String.raw`https:\/\/[a-z0-9.-]{1,120}\/npm\/@clerk\/clerk-js@`
+      ),
+      ...scriptSrc(
+        String.raw`https:\/\/[a-z0-9-]{1,63}\.clerk\.accounts\.dev\/`
+      ),
+      {
+        type: "tag-attr",
+        tags: ["script"],
+        attrs: ["data-clerk-js-script"],
+        pattern: /^/,
+      },
+      {
+        type: "tag-attr",
+        tags: ["script"],
+        attrs: ["data-clerk-publishable-key"],
+        pattern: /^pk_(?:test|live)_/i,
+      },
       // A bundle: the publishable key handed to the provider or client, as an
       // object property (quoted or not), an assignment, or the literal Next.js
       // inlines in place of `process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` in a
@@ -387,12 +457,12 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
       inBundle(
         String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_test_([A-Za-z0-9+/_-]{12,200}={0,2})["'\x60]`,
         "pk_test_",
-        isClerkPublishableKey,
+        isClerkPublishableKey
       ),
       inBundle(
         String.raw`(?:["'](?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY)["']|\b(?:publishableKey|NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY|CLERK_PUBLISHABLE_KEY))\s*(?:[:=]\s*(?:[\w$.]{1,60}\s*(?:\|\||\?\?)\s*)?|(?:\|\||\?\?)\s*)["'\x60]pk_live_([A-Za-z0-9+/_-]{12,200}={0,2})["'\x60]`,
         "pk_live_",
-        isClerkPublishableKey,
+        isClerkPublishableKey
       ),
     ],
     versionPattern: /@clerk\/clerk-js@(\d+(?:\.\d+){0,2})/i,
@@ -408,24 +478,24 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       ...scriptSrc(String.raw`https:\/\/www\.gstatic\.com\/firebasejs\/\d`),
       ...scriptSrc(
-        String.raw`\/__\/firebase\/(?:\d+(?:\.\d+){0,2}\/)?(?:init\.js|firebase-app(?:-compat)?\.js)`,
+        String.raw`\/__\/firebase\/(?:\d+(?:\.\d+){0,2}\/)?(?:init\.js|firebase-app(?:-compat)?\.js)`
       ),
       inScript(
         String.raw`authDomain["']?\s*:\s*["'](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["']`,
-        ".firebaseapp.com",
+        ".firebaseapp.com"
       ),
       // A bundle: the web app config passed to initializeApp (a key may be quoted).
       inBundle(
         String.raw`(?:["']authDomain["']|\bauthDomain)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebaseapp\.com["'\x60]`,
-        ".firebaseapp.com",
+        ".firebaseapp.com"
       ),
       inBundle(
         String.raw`(?:["']storageBucket["']|\bstorageBucket)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.appspot\.com["'\x60]`,
-        ".appspot.com",
+        ".appspot.com"
       ),
       inBundle(
         String.raw`(?:["']storageBucket["']|\bstorageBucket)\s*:\s*["'\x60](?!your|my-project|project)[a-z0-9-]{1,63}\.firebasestorage\.app["'\x60]`,
-        ".firebasestorage.app",
+        ".firebasestorage.app"
       ),
     ],
     versionPattern: /\/firebasejs\/(\d+\.\d+\.\d+)\/firebase-/i,
@@ -440,7 +510,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "analytics",
     website: "https://www.debugbear.com",
     icon: "debugbear",
-    detectors: scriptSrc(String.raw`(?:https?:)?\/\/(?:cdn|rum)\.debugbear\.com\/`),
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:cdn|rum)\.debugbear\.com\/`
+    ),
     confidence: "high",
   },
   {
@@ -450,8 +522,15 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://partytown.builder.io",
     icon: "partytown",
     detectors: [
-      ...scriptSrc(String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js(?![\w.-])`),
-      { type: "tag-attr", tags: ["script"], attrs: ["type"], pattern: /^text\/partytown$/i },
+      ...scriptSrc(
+        String.raw`(?:(?:https?:)?\/\/[^\/?#]+)?\/(?:[^\/?#]+\/)*~partytown\/(?:debug\/)?partytown(?:-[a-z-]+)?\.js(?![\w.-])`
+      ),
+      {
+        type: "tag-attr",
+        tags: ["script"],
+        attrs: ["type"],
+        pattern: /^text\/partytown$/i,
+      },
     ],
     confidence: "high",
   },
@@ -461,7 +540,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     category: "analytics",
     website: "https://www.appsflyer.com",
     icon: "appsflyer",
-    detectors: scriptSrc(String.raw`(?:https?:)?\/\/(?:websdk|onelinksmartscript|sdk)\.appsflyer\.com(?:[\/?#]|$)`),
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:websdk|onelinksmartscript|sdk)\.appsflyer\.com(?:[\/?#]|$)`
+    ),
     confidence: "high",
   },
   {
@@ -471,7 +552,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://reown.com",
     icon: "walletconnect",
     detectors: scriptSrc(
-      String.raw`(?:https?:)?\/\/(?:(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh|cdn\.skypack\.dev)\/(?:@walletconnect|@reown|@web3modal)\/|(?:[a-z0-9-]+\.)?(?:walletconnect\.(?:com|org)|reown\.com)\/)`,
+      String.raw`(?:https?:)?\/\/(?:(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh|cdn\.skypack\.dev)\/(?:@walletconnect|@reown|@web3modal)\/|(?:[a-z0-9-]+\.)?(?:walletconnect\.(?:com|org)|reown\.com)\/)`
     ),
     confidence: "high",
   },
@@ -482,7 +563,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://magic.link",
     icon: "magic",
     detectors: scriptSrc(
-      String.raw`(?:https?:)?\/\/(?:auth\.magic\.link\/|(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/magic-sdk(?:[@\/]|$))`,
+      String.raw`(?:https?:)?\/\/(?:auth\.magic\.link\/|(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|esm\.sh)\/magic-sdk(?:[@\/]|$))`
     ),
     confidence: "high",
   },
@@ -493,7 +574,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://vercel.com/analytics",
     icon: "vercel",
     detectors: scriptSrc(
-      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/script(?:\.debug)?\.js(?![\w.-]))`,
+      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/script(?:\.debug)?\.js(?![\w.-]))`
     ),
     confidence: "high",
   },
@@ -504,7 +585,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     website: "https://vercel.com/docs/speed-insights",
     icon: "vercel",
     detectors: scriptSrc(
-      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/speed-insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/speed-insights\/script(?:\.debug)?\.js(?![\w.-]))`,
+      String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/speed-insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/speed-insights\/script(?:\.debug)?\.js(?![\w.-]))`
     ),
     confidence: "high",
   },

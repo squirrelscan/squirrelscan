@@ -1,9 +1,13 @@
-import { describe, expect, test } from "bun:test";
-
 import type { SiteMetadata } from "@squirrelscan/core-contracts";
 
-import { APPLICABILITY_MIN_CONFIDENCE, ruleApplies } from "../src/applicability";
+import { describe, expect, test } from "bun:test";
+
 import type { RuleApplicability } from "../src/types";
+
+import {
+  APPLICABILITY_MIN_CONFIDENCE,
+  ruleApplies,
+} from "../src/applicability";
 
 // A high-confidence baseline profile; individual tests tweak fields.
 function meta(overrides: Partial<SiteMetadata> = {}): SiteMetadata {
@@ -33,7 +37,9 @@ describe("ruleApplies — backward-compat / graceful-degradation", () => {
   test("low confidence → applies (don't gate below threshold)", () => {
     const decl: RuleApplicability = { siteTypes: ["saas"] };
     // blog would otherwise fail siteTypes:[saas], but low confidence wins.
-    expect(ruleApplies(decl, meta({ confidence: "low" }))).toEqual({ applies: true });
+    expect(ruleApplies(decl, meta({ confidence: "low" }))).toEqual({
+      applies: true,
+    });
   });
 
   test("APPLICABILITY_MIN_CONFIDENCE is 'medium'", () => {
@@ -42,7 +48,10 @@ describe("ruleApplies — backward-compat / graceful-degradation", () => {
 
   test("medium confidence DOES gate (at threshold)", () => {
     const decl: RuleApplicability = { siteTypes: ["saas"] };
-    const v = ruleApplies(decl, meta({ confidence: "medium", siteType: "blog" }));
+    const v = ruleApplies(
+      decl,
+      meta({ confidence: "medium", siteType: "blog" })
+    );
     expect(v.applies).toBe(false);
   });
 });
@@ -54,18 +63,28 @@ describe("ruleApplies — requiresYMYL", () => {
     if (!v.applies) expect(v.reason).toContain("YMYL");
   });
   test("required + is YMYL → applies", () => {
-    expect(ruleApplies({ requiresYMYL: true }, meta({ isYMYL: true }))).toEqual({ applies: true });
+    expect(ruleApplies({ requiresYMYL: true }, meta({ isYMYL: true }))).toEqual(
+      { applies: true }
+    );
   });
 });
 
 describe("ruleApplies — requiresLocalBusiness", () => {
   test("required + not local → not applicable", () => {
-    const v = ruleApplies({ requiresLocalBusiness: true }, meta({ isLocalBusiness: false }));
+    const v = ruleApplies(
+      { requiresLocalBusiness: true },
+      meta({ isLocalBusiness: false })
+    );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toContain("local business");
   });
   test("required + is local → applies", () => {
-    expect(ruleApplies({ requiresLocalBusiness: true }, meta({ isLocalBusiness: true }))).toEqual({
+    expect(
+      ruleApplies(
+        { requiresLocalBusiness: true },
+        meta({ isLocalBusiness: true })
+      )
+    ).toEqual({
       applies: true,
     });
   });
@@ -73,12 +92,20 @@ describe("ruleApplies — requiresLocalBusiness", () => {
 
 describe("ruleApplies — requiresOwnership", () => {
   test("required + not verified → not applicable", () => {
-    const v = ruleApplies({ requiresOwnership: true }, meta({ hasOwnershipVerified: false }));
+    const v = ruleApplies(
+      { requiresOwnership: true },
+      meta({ hasOwnershipVerified: false })
+    );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toContain("ownership");
   });
   test("required + verified → applies", () => {
-    expect(ruleApplies({ requiresOwnership: true }, meta({ hasOwnershipVerified: true }))).toEqual({
+    expect(
+      ruleApplies(
+        { requiresOwnership: true },
+        meta({ hasOwnershipVerified: true })
+      )
+    ).toEqual({
       applies: true,
     });
   });
@@ -86,12 +113,17 @@ describe("ruleApplies — requiresOwnership", () => {
 
 describe("ruleApplies — siteTypes", () => {
   test("not in list → not applicable, reason names the type", () => {
-    const v = ruleApplies({ siteTypes: ["saas", "web_app"] }, meta({ siteType: "blog" }));
+    const v = ruleApplies(
+      { siteTypes: ["saas", "web_app"] },
+      meta({ siteType: "blog" })
+    );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toBe('site type is "blog"');
   });
   test("in list → applies", () => {
-    expect(ruleApplies({ siteTypes: ["blog", "news"] }, meta({ siteType: "blog" }))).toEqual({
+    expect(
+      ruleApplies({ siteTypes: ["blog", "news"] }, meta({ siteType: "blog" }))
+    ).toEqual({
       applies: true,
     });
   });
@@ -101,36 +133,49 @@ describe("ruleApplies — businessCategories", () => {
   test("category set + excluded → not applicable", () => {
     const v = ruleApplies(
       { businessCategories: ["legal", "fintech"] },
-      meta({ businessCategory: "restaurant" }),
+      meta({ businessCategory: "restaurant" })
     );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toContain("restaurant");
   });
   test("category set + included → applies", () => {
     expect(
-      ruleApplies({ businessCategories: ["legal"] }, meta({ businessCategory: "legal" })),
+      ruleApplies(
+        { businessCategories: ["legal"] },
+        meta({ businessCategory: "legal" })
+      )
     ).toEqual({ applies: true });
   });
   test("category null/unknown → does NOT gate (applies)", () => {
     expect(
-      ruleApplies({ businessCategories: ["legal"] }, meta({ businessCategory: null })),
+      ruleApplies(
+        { businessCategories: ["legal"] },
+        meta({ businessCategory: null })
+      )
     ).toEqual({ applies: true });
   });
 });
 
 describe("ruleApplies — countries", () => {
   test("country set + excluded → not applicable", () => {
-    const v = ruleApplies({ countries: ["US", "CA"] }, meta({ primaryCountry: "DE" }));
+    const v = ruleApplies(
+      { countries: ["US", "CA"] },
+      meta({ primaryCountry: "DE" })
+    );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toContain("DE");
   });
   test("country set + included → applies", () => {
-    expect(ruleApplies({ countries: ["US"] }, meta({ primaryCountry: "US" }))).toEqual({
+    expect(
+      ruleApplies({ countries: ["US"] }, meta({ primaryCountry: "US" }))
+    ).toEqual({
       applies: true,
     });
   });
   test("country null → does NOT gate (applies)", () => {
-    expect(ruleApplies({ countries: ["US"] }, meta({ primaryCountry: null }))).toEqual({
+    expect(
+      ruleApplies({ countries: ["US"] }, meta({ primaryCountry: null }))
+    ).toEqual({
       applies: true,
     });
   });
@@ -138,17 +183,25 @@ describe("ruleApplies — countries", () => {
 
 describe("ruleApplies — audiences", () => {
   test("audienceScope set + no overlap → not applicable", () => {
-    const v = ruleApplies({ audiences: ["global", "national"] }, meta({ audienceScope: "local" }));
+    const v = ruleApplies(
+      { audiences: ["global", "national"] },
+      meta({ audienceScope: "local" })
+    );
     expect(v.applies).toBe(false);
     if (!v.applies) expect(v.reason).toContain("local");
   });
   test("audienceScope set + overlap → applies", () => {
     expect(
-      ruleApplies({ audiences: ["local", "regional"] }, meta({ audienceScope: "local" })),
+      ruleApplies(
+        { audiences: ["local", "regional"] },
+        meta({ audienceScope: "local" })
+      )
     ).toEqual({ applies: true });
   });
   test("audienceScope null → does NOT gate (applies)", () => {
-    expect(ruleApplies({ audiences: ["global"] }, meta({ audienceScope: null }))).toEqual({
+    expect(
+      ruleApplies({ audiences: ["global"] }, meta({ audienceScope: null }))
+    ).toEqual({
       applies: true,
     });
   });
@@ -163,7 +216,11 @@ describe("ruleApplies — AND across keys", () => {
     };
     const v = ruleApplies(
       decl,
-      meta({ siteType: "healthcare_provider", isYMYL: true, primaryCountry: "US" }),
+      meta({
+        siteType: "healthcare_provider",
+        isYMYL: true,
+        primaryCountry: "US",
+      })
     );
     expect(v).toEqual({ applies: true });
   });

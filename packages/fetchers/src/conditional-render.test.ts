@@ -2,18 +2,19 @@
 // a matching normalized-source hash reuses the stored render, everything else
 // renders (without the conditional headers).
 
+import { normalizeHtmlForFingerprint } from "@squirrelscan/utils/fingerprint";
+import { describe, expect, test } from "bun:test";
 import { createHash } from "crypto";
 
-import { describe, expect, test } from "bun:test";
-
-import { normalizeHtmlForFingerprint } from "@squirrelscan/utils/fingerprint";
+import type { DocumentFetcher, FetchRequest, FetchResponse } from "./index";
 
 import { createConditionalRenderDocumentFetcher } from "./conditional-render";
-import type { DocumentFetcher, FetchRequest, FetchResponse } from "./index";
 
 // Mirror the gate's internal fingerprint so tests can supply a matching stored hash.
 function fingerprint(body: string): string {
-  return createHash("sha256").update(normalizeHtmlForFingerprint(body)).digest("hex");
+  return createHash("sha256")
+    .update(normalizeHtmlForFingerprint(body))
+    .digest("hex");
 }
 
 function resp(over: Partial<FetchResponse> = {}): FetchResponse {
@@ -41,7 +42,7 @@ function resp(over: Partial<FetchResponse> = {}): FetchResponse {
 function stub(
   id: string,
   reqs: FetchRequest[],
-  impl: (req: FetchRequest) => Promise<FetchResponse>,
+  impl: (req: FetchRequest) => Promise<FetchResponse>
 ): DocumentFetcher {
   return {
     id,
@@ -57,7 +58,10 @@ function stub(
   };
 }
 
-const COND = { "If-None-Match": '"abc"', "If-Modified-Since": "Wed, 21 Oct 2025 07:28:00 GMT" };
+const COND = {
+  "If-None-Match": '"abc"',
+  "If-Modified-Since": "Wed, 21 Oct 2025 07:28:00 GMT",
+};
 
 describe("createConditionalRenderDocumentFetcher", () => {
   test("no conditional headers, no stored hash → renders AND bootstraps source_hash via a parallel probe (#990)", async () => {
@@ -67,7 +71,7 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", httpReqs, async () => resp({ status: 200, body })),
       render: stub("cloud-render", renderReqs, async () =>
-        resp({ body: "rendered", fetcherMethod: "cloud-render" }),
+        resp({ body: "rendered", fetcherMethod: "cloud-render" })
       ),
     });
 
@@ -85,12 +89,19 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const reused: string[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
-      http: stub("fetch", httpReqs, async () => resp({ status: 304, body: "" })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      http: stub("fetch", httpReqs, async () =>
+        resp({ status: 304, body: "" })
+      ),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
       onReuse: (u) => reused.push(u),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(r.status).toBe(304);
     expect(renderReqs).toEqual([]); // 304 → no render, no credits
     expect(httpReqs.length).toBe(1);
@@ -100,8 +111,12 @@ describe("createConditionalRenderDocumentFetcher", () => {
   test("200 HTML probe → renders once, WITHOUT the conditional headers", async () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
-      http: stub("fetch", [], async () => resp({ status: 200, body: "changed" })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      http: stub("fetch", [], async () =>
+        resp({ status: 200, body: "changed" })
+      ),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({
@@ -121,10 +136,15 @@ describe("createConditionalRenderDocumentFetcher", () => {
       http: stub("fetch", [], async () => {
         throw new Error("probe network error");
       }),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(r.body).toBe("rendered");
     expect(renderReqs.length).toBe(1);
     expect(renderReqs[0]?.headers).toEqual({}); // conditional headers stripped
@@ -134,12 +154,21 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 200, body: "{}", headers: { "content-type": "application/json" } }),
+        resp({
+          status: 200,
+          body: "{}",
+          headers: { "content-type": "application/json" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/api", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/api",
+      headers: { ...COND },
+    });
     expect(r.body).toBe("{}"); // rendering non-HTML is pointless
     expect(renderReqs).toEqual([]);
   });
@@ -148,12 +177,21 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 200, body: "changed", headers: { "content-type": "Text/HTML" } }),
+        resp({
+          status: 200,
+          body: "changed",
+          headers: { "content-type": "Text/HTML" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(r.body).toBe("rendered");
     expect(renderReqs.length).toBe(1);
   });
@@ -161,11 +199,18 @@ describe("createConditionalRenderDocumentFetcher", () => {
   test("missing content-type probe → renders (bias to render when unsure)", async () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
-      http: stub("fetch", [], async () => resp({ status: 200, body: "changed", headers: {} })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      http: stub("fetch", [], async () =>
+        resp({ status: 200, body: "changed", headers: {} })
+      ),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(r.body).toBe("rendered");
     expect(renderReqs.length).toBe(1);
   });
@@ -174,12 +219,21 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 403, body: "blocked", headers: { "content-type": "text/html" } }),
+        resp({
+          status: 403,
+          body: "blocked",
+          headers: { "content-type": "text/html" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(r.body).toBe("rendered");
     expect(renderReqs.length).toBe(1);
   });
@@ -192,7 +246,9 @@ describe("createConditionalRenderDocumentFetcher", () => {
         controller.abort();
         throw new Error("aborted");
       }),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     await expect(
@@ -200,7 +256,7 @@ describe("createConditionalRenderDocumentFetcher", () => {
         url: "https://example.com/",
         headers: { ...COND },
         signal: controller.signal,
-      }),
+      })
     ).rejects.toThrow();
     expect(renderReqs).toEqual([]); // aborted probe must not start a render
   });
@@ -224,8 +280,12 @@ describe("createConditionalRenderDocumentFetcher", () => {
     // The stored hash was computed last run from a fetch with a DIFFERENT ray id.
     const storedSourceHash = fingerprint(cfPage("old-ray-id"));
     const fetcher = createConditionalRenderDocumentFetcher({
-      http: stub("fetch", [], async () => resp({ status: 200, body: cfPage("new-ray-id") })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      http: stub("fetch", [], async () =>
+        resp({ status: 200, body: cfPage("new-ray-id") })
+      ),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
       onReuse: (u) => reused.push(u),
     });
 
@@ -244,7 +304,9 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const body = cfPage("new-ray-id");
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () => resp({ status: 200, body })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({
@@ -264,7 +326,9 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const body = cfPage("ray");
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", httpReqs, async () => resp({ status: 200, body })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({
@@ -283,7 +347,9 @@ describe("createConditionalRenderDocumentFetcher", () => {
       http: stub("fetch", [], async () => {
         throw new Error("probe network error");
       }),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({ url: "https://example.com/", headers: {} });
@@ -297,7 +363,9 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const fetcher = createConditionalRenderDocumentFetcher({
       // A probe that never settles — the bounded grace must not let it stall us.
       http: stub("fetch", [], () => new Promise<FetchResponse>(() => {})),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
       bootstrapProbeGraceMs: 10,
     });
 
@@ -311,9 +379,15 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 500, body: "err", headers: { "content-type": "text/html" } }),
+        resp({
+          status: 500,
+          body: "err",
+          headers: { "content-type": "text/html" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({ url: "https://example.com/", headers: {} });
@@ -326,9 +400,15 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 200, body: "{}", headers: { "content-type": "application/json" } }),
+        resp({
+          status: 200,
+          body: "{}",
+          headers: { "content-type": "application/json" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({ url: "https://example.com/", headers: {} });
@@ -354,7 +434,11 @@ describe("createConditionalRenderDocumentFetcher", () => {
     });
 
     await expect(
-      fetcher.fetch({ url: "https://example.com/", headers: {}, signal: controller.signal }),
+      fetcher.fetch({
+        url: "https://example.com/",
+        headers: {},
+        signal: controller.signal,
+      })
     ).rejects.toThrow("render aborted");
   });
 
@@ -363,10 +447,15 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const body = cfPage("ray");
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () => resp({ status: 200, body })),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
-    const r = await fetcher.fetch({ url: "https://example.com/", headers: { ...COND } });
+    const r = await fetcher.fetch({
+      url: "https://example.com/",
+      headers: { ...COND },
+    });
     expect(renderReqs.length).toBe(1); // can't reuse without a prior hash
     expect(r.sourceHash).toBe(fingerprint(body)); // but store it so the NEXT run reuses
   });
@@ -378,9 +467,11 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const body = cfPage("ray");
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 302, body, headers: { "content-type": "text/html" } }),
+        resp({ status: 302, body, headers: { "content-type": "text/html" } })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({
@@ -397,9 +488,15 @@ describe("createConditionalRenderDocumentFetcher", () => {
     const renderReqs: FetchRequest[] = [];
     const fetcher = createConditionalRenderDocumentFetcher({
       http: stub("fetch", [], async () =>
-        resp({ status: 403, body: "blocked", headers: { "content-type": "text/html" } }),
+        resp({
+          status: 403,
+          body: "blocked",
+          headers: { "content-type": "text/html" },
+        })
       ),
-      render: stub("cloud-render", renderReqs, async () => resp({ body: "rendered" })),
+      render: stub("cloud-render", renderReqs, async () =>
+        resp({ body: "rendered" })
+      ),
     });
 
     const r = await fetcher.fetch({

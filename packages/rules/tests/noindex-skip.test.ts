@@ -8,25 +8,40 @@
 // skipped, and the publish resolution signal treats a noindex skip as a verdict so
 // an old finding on that page resolves instead of being carried forever.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
-import { resolutionCheckKey, resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
+
+import {
+  resolutionCheckKey,
+  resolutionUrlHash,
+} from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { normalizeUrl } from "@squirrelscan/utils/url";
+import { describe, expect, test } from "bun:test";
+
+import type {
+  PageData,
+  ParsedPage,
+  Rule,
+  RuleContext,
+  SiteData,
+} from "../src/types";
 
 import { duplicateDescriptionRule } from "../src/content/duplicate-description";
-import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "../src/fold";
 import { duplicateTitleRule } from "../src/content/duplicate-title";
 import { titleUniqueRule } from "../src/core/title-unique";
+import { DEFAULT_FOLD_LIMITS, foldOverflowChecks } from "../src/fold";
 import { orphanPagesRule } from "../src/links/orphan-pages";
 import { loadAllRules } from "../src/loader";
 import { buildResolutionSignal } from "../src/resolution";
 import { RuleRunner, type RulesConfig } from "../src/runner";
 import { isSiteIndexable, noindexSource } from "../src/shared/noindex";
-import type { PageData, ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
-const GATED = ["core/meta-title", "core/meta-description", "core/h1", "content/word-count"];
+const GATED = [
+  "core/meta-title",
+  "core/meta-description",
+  "core/h1",
+  "content/word-count",
+];
 // Rules that must keep running on a noindex page.
 const UNGATED = [
   "a11y/landmark-one-main",
@@ -35,14 +50,27 @@ const UNGATED = [
   "crawl/indexability",
 ];
 
-function html(opts: { robots?: string; title?: string; description?: string; h1?: string }) {
-  const robots = opts.robots ? `<meta name="robots" content="${opts.robots}">` : "";
-  const desc = opts.description ? `<meta name="description" content="${opts.description}">` : "";
+function html(opts: {
+  robots?: string;
+  title?: string;
+  description?: string;
+  h1?: string;
+}) {
+  const robots = opts.robots
+    ? `<meta name="robots" content="${opts.robots}">`
+    : "";
+  const desc = opts.description
+    ? `<meta name="description" content="${opts.description}">`
+    : "";
   const h1 = opts.h1 ? `<h1>${opts.h1}</h1>` : "";
   return `<!doctype html><html lang="en"><head><title>${opts.title ?? "Short"}</title>${robots}${desc}</head><body>${h1}<p>text</p></body></html>`;
 }
 
-function pageData(url: string, body: string, headers: Record<string, string> = {}): PageData {
+function pageData(
+  url: string,
+  body: string,
+  headers: Record<string, string> = {}
+): PageData {
   return { url, html: body, statusCode: 200, loadTime: 0, headers };
 }
 
@@ -62,7 +90,10 @@ function site(siteIndexable?: boolean): SiteData {
 }
 
 async function runPage(page: PageData, siteData?: SiteData) {
-  const { ruleResults } = await makeRunner([...GATED, ...UNGATED]).runPageRules(page, siteData);
+  const { ruleResults } = await makeRunner([...GATED, ...UNGATED]).runPageRules(
+    page,
+    siteData
+  );
   return (id: string): CheckResult[] => ruleResults.get(id)?.checks ?? [];
 }
 
@@ -94,8 +125,11 @@ describe("the skip list is explicit and conservative", () => {
 describe("runner noindex gate", () => {
   test("meta noindex: gated rules skip naming the meta tag, the rest still run", async () => {
     const checks = await runPage(
-      pageData("https://example.com/thanks", html({ robots: "noindex,nofollow" })),
-      site(true),
+      pageData(
+        "https://example.com/thanks",
+        html({ robots: "noindex,nofollow" })
+      ),
+      site(true)
     );
     for (const id of GATED) {
       expect(checks(id)).toEqual([
@@ -117,20 +151,25 @@ describe("runner noindex gate", () => {
   test("X-Robots-Tag noindex, including the googlebot-scoped form, skips naming the header", async () => {
     for (const value of ["noindex", "googlebot: noindex"]) {
       const checks = await runPage(
-        pageData("https://example.com/hdr", html({}), { "x-robots-tag": value }),
-        site(true),
+        pageData("https://example.com/hdr", html({}), {
+          "x-robots-tag": value,
+        }),
+        site(true)
       );
       for (const id of GATED) {
         expect(checks(id)[0]?.status).toBe("skipped");
         expect(checks(id)[0]?.message).toBe(
-          "Skipped: page is set to noindex via X-Robots-Tag header",
+          "Skipped: page is set to noindex via X-Robots-Tag header"
         );
       }
     }
   });
 
   test("an indexable page runs every rule", async () => {
-    const checks = await runPage(pageData("https://example.com/a", html({})), site(true));
+    const checks = await runPage(
+      pageData("https://example.com/a", html({})),
+      site(true)
+    );
     for (const id of GATED) {
       expect(checks(id).length).toBeGreaterThan(0);
       expect(checks(id).some((c) => c.status === "skipped")).toBe(false);
@@ -140,7 +179,7 @@ describe("runner noindex gate", () => {
   test("a noindex homepage (staging or preview host) keeps every rule running", async () => {
     const checks = await runPage(
       pageData("https://example.com/thanks", html({ robots: "noindex" })),
-      site(false),
+      site(false)
     );
     for (const id of GATED) {
       expect(checks(id).some((c) => c.status === "skipped")).toBe(false);
@@ -159,36 +198,50 @@ describe("runner noindex gate", () => {
   test("index, follow is not noindex", async () => {
     const checks = await runPage(
       pageData("https://example.com/x", html({ robots: "index, follow" })),
-      site(true),
+      site(true)
     );
     expect(checks("core/h1")[0]?.status).toBe("fail");
   });
 });
 
 describe("noindexSource and isSiteIndexable", () => {
-  const parsed = (body: string) => parsePage(body, "https://example.com/") as ParsedPage;
-  const noindex = { statusCode: 200, parsed: parsed(html({ robots: "noindex" })) };
+  const parsed = (body: string) =>
+    parsePage(body, "https://example.com/") as ParsedPage;
+  const noindex = {
+    statusCode: 200,
+    parsed: parsed(html({ robots: "noindex" })),
+  };
   const indexable = { statusCode: 200, parsed: parsed(html({})) };
   const BASE_URL = "https://example.com";
 
   test("meta wins over header when both are set; nothing is null", () => {
-    expect(noindexSource(parsed(html({ robots: "noindex" })), { "x-robots-tag": "noindex" })).toBe(
-      "robots meta tag",
-    );
+    expect(
+      noindexSource(parsed(html({ robots: "noindex" })), {
+        "x-robots-tag": "noindex",
+      })
+    ).toBe("robots meta tag");
     expect(noindexSource(parsed(html({})), { "x-robots-tag": "noindex" })).toBe(
-      "X-Robots-Tag header",
+      "X-Robots-Tag header"
     );
     expect(noindexSource(parsed(html({})), {})).toBeNull();
     expect(noindexSource(null, { "x-robots-tag": "noindex" })).toBeNull();
   });
 
   test("the homepage decides: noindex (meta or header) is false, indexable is true", () => {
-    expect(isSiteIndexable([{ url: "https://example.com/", ...noindex }], BASE_URL)).toBe(false);
+    expect(
+      isSiteIndexable([{ url: "https://example.com/", ...noindex }], BASE_URL)
+    ).toBe(false);
     expect(
       isSiteIndexable(
-        [{ url: "https://example.com/", ...indexable, headers: { "x-robots-tag": "noindex" } }],
-        BASE_URL,
-      ),
+        [
+          {
+            url: "https://example.com/",
+            ...indexable,
+            headers: { "x-robots-tag": "noindex" },
+          },
+        ],
+        BASE_URL
+      )
     ).toBe(false);
     // One noindex page elsewhere does not make the site noindex.
     expect(
@@ -197,8 +250,8 @@ describe("noindexSource and isSiteIndexable", () => {
           { url: "https://example.com/", ...indexable },
           { url: "https://example.com/thanks", ...noindex },
         ],
-        BASE_URL,
-      ),
+        BASE_URL
+      )
     ).toBe(true);
   });
 
@@ -210,58 +263,86 @@ describe("noindexSource and isSiteIndexable", () => {
           { url: "https://example.com/", ...indexable },
           { url: "https://example.com/?s=term", ...noindex },
         ],
-        BASE_URL,
-      ),
+        BASE_URL
+      )
     ).toBe(true);
-    expect(isSiteIndexable([{ url: "https://cdn.example.net/", ...noindex }], BASE_URL)).toBe(
-      undefined,
-    );
+    expect(
+      isSiteIndexable(
+        [{ url: "https://cdn.example.net/", ...noindex }],
+        BASE_URL
+      )
+    ).toBe(undefined);
     // www and apex, http and https are the same homepage.
-    expect(isSiteIndexable([{ url: "http://www.example.com/", ...noindex }], BASE_URL)).toBe(false);
+    expect(
+      isSiteIndexable(
+        [{ url: "http://www.example.com/", ...noindex }],
+        BASE_URL
+      )
+    ).toBe(false);
   });
 
   test("without a fetched homepage the entry page decides, matched by url or final url", () => {
-    const deep = (extra: typeof indexable) => ({ url: "https://example.com/docs/start", ...extra });
-    expect(isSiteIndexable([deep(noindex)], BASE_URL, ["https://example.com/docs/start"])).toBe(
-      false,
-    );
-    expect(isSiteIndexable([deep(indexable)], BASE_URL, ["https://example.com/docs/start"])).toBe(
-      true,
-    );
+    const deep = (extra: typeof indexable) => ({
+      url: "https://example.com/docs/start",
+      ...extra,
+    });
+    expect(
+      isSiteIndexable([deep(noindex)], BASE_URL, [
+        "https://example.com/docs/start",
+      ])
+    ).toBe(false);
+    expect(
+      isSiteIndexable([deep(indexable)], BASE_URL, [
+        "https://example.com/docs/start",
+      ])
+    ).toBe(true);
     expect(
       isSiteIndexable(
         [{ ...deep(indexable), finalUrl: "https://example.com/docs/start/" }],
         BASE_URL,
-        [undefined, "https://example.com/docs/start/"],
-      ),
+        [undefined, "https://example.com/docs/start/"]
+      )
     ).toBe(true);
     // A homepage that answered with an error is not fetched: the entry page decides.
     expect(
       isSiteIndexable(
-        [{ url: "https://example.com/", ...indexable, statusCode: 500 }, deep(noindex)],
+        [
+          { url: "https://example.com/", ...indexable, statusCode: 500 },
+          deep(noindex),
+        ],
         BASE_URL,
-        ["https://example.com/docs/start"],
-      ),
+        ["https://example.com/docs/start"]
+      )
     ).toBe(false);
     // An unparseable base still lets the entry page decide.
     expect(
-      isSiteIndexable([deep(indexable)], "not a url", ["https://example.com/docs/start"]),
+      isSiteIndexable([deep(indexable)], "not a url", [
+        "https://example.com/docs/start",
+      ])
     ).toBe(true);
   });
 
   test("neither the homepage nor the entry page fetched is unknown", () => {
     expect(isSiteIndexable([], BASE_URL)).toBeUndefined();
     expect(
-      isSiteIndexable([{ url: "https://example.com/docs/a", ...noindex }], BASE_URL, [
-        "https://example.com/docs/missing",
-      ]),
+      isSiteIndexable(
+        [{ url: "https://example.com/docs/a", ...noindex }],
+        BASE_URL,
+        ["https://example.com/docs/missing"]
+      )
     ).toBeUndefined();
     expect(
       isSiteIndexable(
-        [{ url: "https://example.com/docs/start", ...indexable, statusCode: 404 }],
+        [
+          {
+            url: "https://example.com/docs/start",
+            ...indexable,
+            statusCode: 404,
+          },
+        ],
         BASE_URL,
-        ["https://example.com/docs/start"],
-      ),
+        ["https://example.com/docs/start"]
+      )
     ).toBeUndefined();
   });
 });
@@ -279,7 +360,7 @@ function sitePage(
     robots?: string;
     header?: string;
     links?: string[];
-  },
+  }
 ) {
   const url = `https://example.com${path}`;
   const parsed = {
@@ -288,35 +369,67 @@ function sitePage(
       description: opts.description ?? null,
       robots: opts.robots ?? null,
     },
-    links: (opts.links ?? []).map((href) => ({ url: href, text: "l", isInternal: true })),
+    links: (opts.links ?? []).map((href) => ({
+      url: href,
+      text: "l",
+      isInternal: true,
+    })),
   } as unknown as ParsedPage;
   return {
     url,
     statusCode: 200,
     parsed,
-    headers: opts.header ? { "x-robots-tag": opts.header } : ({} as Record<string, string>),
+    headers: opts.header
+      ? { "x-robots-tag": opts.header }
+      : ({} as Record<string, string>),
   };
 }
 
 // Two indexable pages sharing a title/description, and two noindex pages (meta,
 // header) sharing the same title/description with them and with each other.
 const PAGES = [
-  sitePage("/", { title: "Home", description: "Home page", links: ["/a", "/a", "/b", "/b"] }),
-  sitePage("/a", { title: "Shared", description: "Shared desc", links: ["/b"] }),
-  sitePage("/b", { title: "Shared", description: "Shared desc", links: ["/a"] }),
-  sitePage("/meta", { title: "Hidden", description: "Hidden desc", robots: "noindex" }),
-  sitePage("/hdr", { title: "Hidden", description: "Hidden desc", header: "googlebot: noindex" }),
+  sitePage("/", {
+    title: "Home",
+    description: "Home page",
+    links: ["/a", "/a", "/b", "/b"],
+  }),
+  sitePage("/a", {
+    title: "Shared",
+    description: "Shared desc",
+    links: ["/b"],
+  }),
+  sitePage("/b", {
+    title: "Shared",
+    description: "Shared desc",
+    links: ["/a"],
+  }),
+  sitePage("/meta", {
+    title: "Hidden",
+    description: "Hidden desc",
+    robots: "noindex",
+  }),
+  sitePage("/hdr", {
+    title: "Hidden",
+    description: "Hidden desc",
+    header: "googlebot: noindex",
+  }),
 ];
 
 async function runSiteRule(
   rule: Rule,
   siteIndexable: boolean | undefined,
-  options: Record<string, unknown> = {},
+  options: Record<string, unknown> = {}
 ) {
   const ctx: RuleContext = {
     page: { url: BASE, html: "", statusCode: 200, loadTime: 0, headers: {} },
     parsed: {} as ParsedPage,
-    site: { baseUrl: BASE, pages: PAGES, robotsTxt: null, sitemaps: null, siteIndexable },
+    site: {
+      baseUrl: BASE,
+      pages: PAGES,
+      robotsTxt: null,
+      sitemaps: null,
+      siteIndexable,
+    },
     options,
   };
   return (await Promise.resolve(rule.run(ctx))).checks[0]!;
@@ -328,7 +441,9 @@ describe("site rules leave noindex pages out", () => {
   test("content/duplicate-title", async () => {
     const c = await runSiteRule(duplicateTitleRule, true);
     expect(c.message).toBe("1 duplicate title(s) found across 2 pages");
-    expect(itemPages(c)).toEqual([["https://example.com/a", "https://example.com/b"]]);
+    expect(itemPages(c)).toEqual([
+      ["https://example.com/a", "https://example.com/b"],
+    ]);
 
     const all = await runSiteRule(duplicateTitleRule, false);
     expect(all.message).toBe("2 duplicate title(s) found across 4 pages");
@@ -375,7 +490,12 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
       {
         "core/h1": {
           checks: [
-            { name: "h1", status: "fail", message: "No H1 tag found", pageUrl: P1 },
+            {
+              name: "h1",
+              status: "fail",
+              message: "No H1 tag found",
+              pageUrl: P1,
+            },
             {
               name: "core/h1",
               status: "skipped",
@@ -386,11 +506,15 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
           ],
         },
       },
-      [P1, P2],
+      [P1, P2]
     )!;
-    expect(signal.failing[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P1)]);
+    expect(signal.failing[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P1),
+    ]);
     // P2 is NOT listed as not-evaluated, so a prior "No H1" on it resolves.
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toBeUndefined();
+    expect(
+      signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]
+    ).toBeUndefined();
   });
 
   test("only the skipped page is marked: other pages of the same rule are untouched", () => {
@@ -399,7 +523,12 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
       {
         "core/h1": {
           checks: [
-            { name: "h1", status: "fail", message: "No H1 tag found", pageUrl: P1 },
+            {
+              name: "h1",
+              status: "fail",
+              message: "No H1 tag found",
+              pageUrl: P1,
+            },
             {
               name: "core/h1",
               status: "skipped",
@@ -412,10 +541,14 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
         },
       },
       // P3 was crawled but the rule produced nothing for it.
-      [P1, P2, P3],
+      [P1, P2, P3]
     )!;
-    expect(signal.failing[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P1)]);
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P3)]);
+    expect(signal.failing[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P1),
+    ]);
+    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P3),
+    ]);
   });
 
   test("a folded aggregate of noindex skips counts the same way", () => {
@@ -435,14 +568,20 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
           ],
         },
       },
-      [P1, P2],
+      [P1, P2]
     )!;
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toBeUndefined();
+    expect(
+      signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]
+    ).toBeUndefined();
   });
 
   test("folding keeps noindex skips apart from another gate's skips of the same rule", () => {
     const P3 = "https://x.test/gone";
-    const skip = (url: string, reason: string, foldKey?: string): CheckResult => ({
+    const skip = (
+      url: string,
+      reason: string,
+      foldKey?: string
+    ): CheckResult => ({
       name: "core/h1",
       status: "skipped",
       message: reason,
@@ -460,7 +599,7 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
         skip("https://x.test/thanks-2", "noindex", "noindex"),
       ],
       // Four checks over a cap of three folds each class to one check.
-      { ...DEFAULT_FOLD_LIMITS, maxChecks: 3 },
+      { ...DEFAULT_FOLD_LIMITS, maxChecks: 3 }
     );
     const noindexAggregate = folded.find((c) => c.skipReason === "noindex");
     expect(noindexAggregate?.details?.aggregated).toBe(true);
@@ -473,7 +612,9 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
       "https://x.test/thanks-2",
     ])!;
     // Only the soft-404 page is left unevaluated.
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P3)]);
+    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P3),
+    ]);
   });
 
   test("an aggregate without the noindex fold key is not trusted", () => {
@@ -493,9 +634,11 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
           ],
         },
       },
-      [P1, P2],
+      [P1, P2]
     )!;
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P2)]);
+    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P2),
+    ]);
   });
 
   test("any other skip still carries (soft-404 is not a verdict)", () => {
@@ -503,7 +646,12 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
       {
         "core/h1": {
           checks: [
-            { name: "h1", status: "fail", message: "No H1 tag found", pageUrl: P1 },
+            {
+              name: "h1",
+              status: "fail",
+              message: "No H1 tag found",
+              pageUrl: P1,
+            },
             {
               name: "core/h1",
               status: "skipped",
@@ -514,9 +662,11 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
           ],
         },
       },
-      [P1, P2],
+      [P1, P2]
     )!;
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([h(P2)]);
+    expect(signal.notEvaluated?.[resolutionCheckKey("core/h1", "h1")]).toEqual([
+      h(P2),
+    ]);
   });
 
   test("a noindex skip of one rule does not mark another rule's keys", () => {
@@ -534,13 +684,15 @@ describe("resolution signal: a noindex skip resolves, it does not carry", () => 
           ],
         },
         "core/meta-title": {
-          checks: [{ name: "meta-title", status: "pass", message: "ok", pageUrl: P1 }],
+          checks: [
+            { name: "meta-title", status: "pass", message: "ok", pageUrl: P1 },
+          ],
         },
       },
-      [P1, P2],
+      [P1, P2]
     )!;
-    expect(signal.notEvaluated?.[resolutionCheckKey("core/meta-title", "meta-title")]).toEqual([
-      h(P2),
-    ]);
+    expect(
+      signal.notEvaluated?.[resolutionCheckKey("core/meta-title", "meta-title")]
+    ).toEqual([h(P2)]);
   });
 });

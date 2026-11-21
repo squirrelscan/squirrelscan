@@ -1,11 +1,12 @@
 // a11y/form-labels - Form inputs have associated labels
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 import { elementSelector } from "../element-path";
 import { labelsFor } from "../shared/attribute-lookup";
+import { sortUnnamedControls, unconfirmedRow } from "../shared/static-hidden";
 
 export const formLabelsRule: Rule = {
   meta: {
@@ -63,7 +64,12 @@ export const formLabelsRule: Rule = {
       if (!hasLabel) {
         const type = input.getAttribute("type") || input.tagName.toLowerCase();
         const name = input.getAttribute("name") || id || type;
-        unlabeled.add(input, { id: name, ...(ctx.wantsItemSelectors ? { selector: elementSelector(input) } : {}) });
+        unlabeled.add(input, {
+          id: name,
+          ...(ctx.wantsItemSelectors
+            ? { selector: elementSelector(input) }
+            : {}),
+        });
       }
     }
 

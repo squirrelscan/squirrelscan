@@ -54,7 +54,10 @@ export function escapeMarkdownText(value: string): string {
  * value stays in its cell.
  */
 export function escapeMarkdownCell(value: string): string {
-  return value.split(/\r\n|\r|\n/).map(escapeSpecials).join("<br>");
+  return value
+    .split(/\r\n|\r|\n/)
+    .map(escapeSpecials)
+    .join("<br>");
 }
 
 /**
@@ -110,7 +113,9 @@ function isLinkable(url: string): boolean {
  */
 export function markdownLink(label: string, url: string): string {
   const text = escapeMarkdownText(label);
-  return isLinkable(url) ? `[${text}](${escapeMarkdownDestination(url)})` : text;
+  return isLinkable(url)
+    ? `[${text}](${escapeMarkdownDestination(url)})`
+    : text;
 }
 
 /**
@@ -119,7 +124,10 @@ export function markdownLink(label: string, url: string): string {
  */
 export function markdownCodeSpan(value: string): string {
   const flat = value.replace(/\s+/g, " ");
-  const longest = Math.max(0, ...Array.from(flat.matchAll(/`+/g), (m) => m[0].length));
+  const longest = Math.max(
+    0,
+    ...Array.from(flat.matchAll(/`+/g), (m) => m[0].length)
+  );
   const fence = "`".repeat(longest + 1);
   const pad = flat.startsWith("`") || flat.endsWith("`") ? " " : "";
   return `${fence}${pad}${flat}${pad}${fence}`;

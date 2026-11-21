@@ -2,19 +2,37 @@
 // index the entries by normalized URL / registrable-domain / host, and answer
 // synchronous membership queries against that snapshot.
 
-import type { IntelProviderId, IntelSource } from "@squirrelscan/core-contracts";
+import type {
+  IntelProviderId,
+  IntelSource,
+} from "@squirrelscan/core-contracts";
+
+import type { KvStore } from "./cache";
+import type {
+  FeedEntry,
+  FeedSnapshot,
+  IntelConfig,
+  IntelTransport,
+} from "./types";
 
 import { getOrRefresh } from "./cache";
-import type { KvStore } from "./cache";
 import { FEED_PROVIDERS, isProviderEnabled } from "./providers";
-import type { FeedEntry, FeedSnapshot, IntelConfig, IntelTransport } from "./types";
 import { hostOf, normalizeUrl, registrableDomain } from "./url";
 
 function emptySnapshot(): FeedSnapshot {
-  return { urls: new Map(), domains: new Map(), hosts: new Map(), providers: [] };
+  return {
+    urls: new Map(),
+    domains: new Map(),
+    hosts: new Map(),
+    providers: [],
+  };
 }
 
-function push(map: Map<string, IntelSource[]>, key: string, source: IntelSource): void {
+function push(
+  map: Map<string, IntelSource[]>,
+  key: string,
+  source: IntelSource
+): void {
   const existing = map.get(key);
   if (existing) existing.push(source);
   else map.set(key, [source]);
@@ -24,7 +42,7 @@ function push(map: Map<string, IntelSource[]>, key: string, source: IntelSource)
 function indexEntries(
   snapshot: FeedSnapshot,
   provider: IntelProviderId,
-  entries: FeedEntry[],
+  entries: FeedEntry[]
 ): void {
   for (const entry of entries) {
     const source: IntelSource = {
@@ -40,10 +58,16 @@ function indexEntries(
       // eTLD+1): a feed listing `phish.shared-host.com` must flag that host and
       // its subdomains, NOT every sibling under `shared-host.com`. Subdomain
       // matching is done by the suffix walk in lookupInSnapshot.
-      const dom = (hostOf(entry.value) ?? entry.value.toLowerCase()).replace(/\.$/, "");
+      const dom = (hostOf(entry.value) ?? entry.value.toLowerCase()).replace(
+        /\.$/,
+        ""
+      );
       if (dom) push(snapshot.domains, dom, source);
     } else {
-      const host = (hostOf(entry.value) ?? entry.value.toLowerCase()).replace(/\.$/, "");
+      const host = (hostOf(entry.value) ?? entry.value.toLowerCase()).replace(
+        /\.$/,
+        ""
+      );
       push(snapshot.hosts, host, source);
     }
   }
@@ -57,7 +81,7 @@ function indexEntries(
  */
 export async function refreshFeeds(
   config: IntelConfig,
-  deps: { transport: IntelTransport; kv: KvStore; now?: number },
+  deps: { transport: IntelTransport; kv: KvStore; now?: number }
 ): Promise<FeedSnapshot> {
   const snapshot = emptySnapshot();
   const providers: IntelProviderId[] = [];
@@ -71,7 +95,7 @@ export async function refreshFeeds(
         provider.id,
         config.feedTtlMs,
         () => provider.fetchFeed(deps.transport, pconfig ?? {}),
-        deps.now,
+        deps.now
       );
       indexEntries(snapshot, provider.id, entries);
       providers.push(provider.id);
@@ -94,7 +118,10 @@ export async function refreshFeeds(
  *      NOT `www.legit.com`, and no IOC ever collapses to a bare public suffix.
  * Returns the matched sources (deduped by provider) or `[]`.
  */
-export function lookupInSnapshot(snapshot: FeedSnapshot, url: string): IntelSource[] {
+export function lookupInSnapshot(
+  snapshot: FeedSnapshot,
+  url: string
+): IntelSource[] {
   const out: IntelSource[] = [];
   const urlHit = snapshot.urls.get(normalizeUrl(url));
   if (urlHit) out.push(...urlHit);

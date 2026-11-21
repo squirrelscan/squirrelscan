@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+
 import { getAuditFailureNotice } from "../src/failure-notice";
 
 describe("getAuditFailureNotice", () => {
@@ -7,13 +8,21 @@ describe("getAuditFailureNotice", () => {
     expect(notice).not.toBeNull();
     expect(notice?.tone).toBe("blocked");
     expect(notice?.heading).toBe("Your site blocked the audit");
-    const text = [notice?.heading, ...(notice?.body ?? []), ...(notice?.steps ?? [])].join(" ");
+    const text = [
+      notice?.heading,
+      ...(notice?.body ?? []),
+      ...(notice?.steps ?? []),
+    ].join(" ");
     // Names the site as the blocker, not our infra.
     expect(text).toContain("refused our crawler");
     expect(text).toContain("not a squirrelscan outage");
     // Actionable: allowlist / bot fight mode.
-    expect(notice?.steps.some((s) => s.toLowerCase().includes("allowlist"))).toBe(true);
-    expect(notice?.steps.some((s) => s.toLowerCase().includes("bot fight mode"))).toBe(true);
+    expect(
+      notice?.steps.some((s) => s.toLowerCase().includes("allowlist"))
+    ).toBe(true);
+    expect(
+      notice?.steps.some((s) => s.toLowerCase().includes("bot fight mode"))
+    ).toBe(true);
     expect(notice?.cliCommand).toBe("squirrel audit example.com");
   });
 

@@ -1,12 +1,12 @@
 // a11y/form-field-multiple-labels counts label ELEMENTS (HTMLInputElement.labels), so a label that
 // wraps a control and also points at it with for= is one label (#1249).
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { CheckResult, RuleContext } from "../src/types";
 
 import { formFieldMultipleLabelsRule } from "../src/a11y/form-field-multiple-labels";
-import type { CheckResult, RuleContext } from "../src/types";
 
 async function run(body: string): Promise<CheckResult | undefined> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Gift card amount selection form test page</title></head><body><main>${body}</main></body></html>`;
@@ -22,7 +22,8 @@ async function run(body: string): Promise<CheckResult | undefined> {
 
 describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => {
   test("the reporter's gift card page passes", async () => {
-    const result = await run(`<h1>Gift card</h1><form><fieldset><legend>Amount</legend>
+    const result =
+      await run(`<h1>Gift card</h1><form><fieldset><legend>Amount</legend>
 <label for="a"><input type="radio" name="amt" id="a" value="50"> 50</label>
 <label for="b"><input type="radio" name="amt" id="b" value="100"> 100</label>
 </fieldset></form>`);
@@ -33,7 +34,10 @@ describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => 
   test.each([
     ["wrap only", `<label><input id="x" type="text"> X</label>`],
     ["for only", `<label for="x">X</label><input id="x" type="text">`],
-    ["wrap plus for to itself", `<label for="x"><input id="x" type="text"> X</label>`],
+    [
+      "wrap plus for to itself",
+      `<label for="x"><input id="x" type="text"> X</label>`,
+    ],
     [
       "wrap plus for, no id to match twice",
       `<label for="x"><input id="x" name="n" type="text"></label>`,
@@ -44,7 +48,7 @@ describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => 
 
   test("two label elements for one id still warn, with the real count", async () => {
     const result = await run(
-      `<label for="y">One</label><label for="y">Two</label><input id="y" name="y" type="text">`,
+      `<label for="y">One</label><label for="y">Two</label><input id="y" name="y" type="text">`
     );
     expect(result?.status).toBe("warn");
     expect(result?.items?.[0]?.id).toBe("y (2 labels)");
@@ -52,7 +56,7 @@ describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => 
 
   test("a wrapping label plus a separate label for= still warns", async () => {
     const result = await run(
-      `<label>Wrap <input id="z" name="z" type="text"></label><label for="z">Other</label>`,
+      `<label>Wrap <input id="z" name="z" type="text"></label><label for="z">Other</label>`
     );
     expect(result?.status).toBe("warn");
     expect(result?.items?.[0]?.id).toBe("z (2 labels)");
@@ -60,7 +64,7 @@ describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => 
 
   test("a wrapping label whose for= points at another control does not label this one", async () => {
     const result = await run(
-      `<label for="other">Other <input id="inner" name="inner" type="text"></label><input id="other" name="other" type="text"><label for="inner">Inner</label>`,
+      `<label for="other">Other <input id="inner" name="inner" type="text"></label><input id="other" name="other" type="text"><label for="inner">Inner</label>`
     );
     // `inner` is labelled by its for= label only; the wrapper belongs to `other`.
     expect(result?.status).toBe("pass");
@@ -68,14 +72,14 @@ describe("a11y/form-field-multiple-labels counts label elements (#1249)", () => 
 
   test("a wrapping label labels only its first labelable control", async () => {
     const result = await run(
-      `<label>Both <input id="p" name="p" type="text"><input id="q" name="q" type="text"></label><label for="q">Q</label>`,
+      `<label>Both <input id="p" name="p" type="text"><input id="q" name="q" type="text"></label><label for="q">Q</label>`
     );
     expect(result?.status).toBe("pass");
   });
 
   test("an id with selector characters is matched literally", async () => {
     const result = await run(
-      `<label for='a"]b'>A</label><label for='a"]b'>B</label><input id='a"]b' name="w" type="text">`,
+      `<label for='a"]b'>A</label><label for='a"]b'>B</label><input id='a"]b' name="w" type="text">`
     );
     expect(result?.status).toBe("warn");
     expect(result?.items?.[0]?.id).toBe("w (2 labels)");

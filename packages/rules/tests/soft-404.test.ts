@@ -1,12 +1,13 @@
 // crawl/soft-404 rule + the soft-404 gating of page content/legal rules (#1174).
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
+import type { ParsedPage, PageData, RuleContext } from "../src/types";
 
 import { soft404Rule } from "../src/crawl/soft-404";
 import { RuleRunner, type RulesConfig } from "../src/runner";
-import type { ParsedPage, PageData, RuleContext } from "../src/types";
 
 // Real soft-404 shape: Next.js error shell, "Page Not Found" title/h1, noindex.
 const SOFT_404_HTML = `<!doctype html>
@@ -41,17 +42,30 @@ function makeRunner(enable: string[]): RuleRunner {
 }
 
 function page(html: string, statusCode = 200): PageData {
-  return { url: "https://example.com/blog/gone", html, statusCode, loadTime: 0, headers: {} };
+  return {
+    url: "https://example.com/blog/gone",
+    html,
+    statusCode,
+    loadTime: 0,
+    headers: {},
+  };
 }
 
-function byId(checks: Map<string, { checks: CheckResult[] }>, id: string): CheckResult[] {
+function byId(
+  checks: Map<string, { checks: CheckResult[] }>,
+  id: string
+): CheckResult[] {
   return checks.get(id)?.checks ?? [];
 }
 
 describe("soft404Rule.run (direct)", () => {
   const baseCtx = (
     isSoft404: boolean,
-    confirmation?: "confirmed" | "intermittent" | "unconfirmed" | "unconfirmed-rendered",
+    confirmation?:
+      | "confirmed"
+      | "intermittent"
+      | "unconfirmed"
+      | "unconfirmed-rendered"
   ): RuleContext => ({
     page: page(SOFT_404_HTML),
     parsed: {
@@ -68,45 +82,58 @@ describe("soft404Rule.run (direct)", () => {
     const checks = (await soft404Rule.run(baseCtx(true, "confirmed"))).checks;
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("warn");
-    expect(checks[0]?.message).toContain("Page serves 404 content with HTTP 200");
+    expect(checks[0]?.message).toContain(
+      "Page serves 404 content with HTTP 200"
+    );
     expect(checks[0]?.message).not.toContain("intermittently");
     expect(checks[0]?.message).toBe(
-      "Page serves 404 content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+      "Page serves 404 content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser."
     );
-    expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("confirmed");
+    expect(
+      (checks[0]?.details as { confirmation?: string })?.confirmation
+    ).toBe("confirmed");
   });
 
   test("intermittent: DISTINCT wording, not the standard warn", async () => {
-    const checks = (await soft404Rule.run(baseCtx(true, "intermittent"))).checks;
+    const checks = (await soft404Rule.run(baseCtx(true, "intermittent")))
+      .checks;
     expect(checks[0]?.status).toBe("warn");
-    expect(checks[0]?.message).toContain("intermittently serves 404 error content");
-    expect(checks[0]?.message).toBe(
-      "Page intermittently serves 404 error content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+    expect(checks[0]?.message).toContain(
+      "intermittently serves 404 error content"
     );
-    expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("intermittent");
+    expect(checks[0]?.message).toBe(
+      "Page intermittently serves 404 error content with HTTP 200. This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser."
+    );
+    expect(
+      (checks[0]?.details as { confirmation?: string })?.confirmation
+    ).toBe("intermittent");
   });
 
   test("unconfirmed: warn annotated as a single observation (never dropped)", async () => {
     const checks = (await soft404Rule.run(baseCtx(true, "unconfirmed"))).checks;
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toBe(
-      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser.",
+      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the server's HTML only, so a client-rendered page could differ in a browser."
     );
     expect(checks[0]?.message).not.toContain("rendered page content");
-    expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe("unconfirmed");
+    expect(
+      (checks[0]?.details as { confirmation?: string })?.confirmation
+    ).toBe("unconfirmed");
   });
 
   test("unconfirmed-rendered: warn with render-specific annotation", async () => {
-    const checks = (await soft404Rule.run(baseCtx(true, "unconfirmed-rendered"))).checks;
+    const checks = (
+      await soft404Rule.run(baseCtx(true, "unconfirmed-rendered"))
+    ).checks;
     expect(checks[0]?.status).toBe("warn");
     expect(checks[0]?.message).toBe(
-      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the rendered page content, so it matches what a browser shows.",
+      "Page serves 404 content with HTTP 200 (based on a single crawl observation). This verdict comes from the rendered page content, so it matches what a browser shows."
     );
     expect(checks[0]?.message).not.toContain("cannot verify");
     expect(checks[0]?.message).not.toContain("server's HTML");
-    expect((checks[0]?.details as { confirmation?: string })?.confirmation).toBe(
-      "unconfirmed-rendered",
-    );
+    expect(
+      (checks[0]?.details as { confirmation?: string })?.confirmation
+    ).toBe("unconfirmed-rendered");
   });
 
   test("absent confirmation (runner-only path) is treated as unconfirmed, still warns", async () => {
@@ -121,7 +148,11 @@ describe("soft404Rule.run (direct)", () => {
   });
 });
 
-const GATED = ["legal/cookie-consent", "legal/terms-of-service", "ax/token-weight"];
+const GATED = [
+  "legal/cookie-consent",
+  "legal/terms-of-service",
+  "ax/token-weight",
+];
 
 describe("soft-404 gating through the runner", () => {
   test("soft-404 page: crawl/soft-404 warns, gated content/legal rules skip", async () => {
@@ -150,7 +181,9 @@ describe("soft-404 gating through the runner", () => {
     expect(consent[0]?.status).toBe("pass");
 
     // terms-of-service ran (found the /terms link → pass) rather than skipping.
-    expect(byId(ruleResults, "legal/terms-of-service")[0]?.status).not.toBe("skipped");
+    expect(byId(ruleResults, "legal/terms-of-service")[0]?.status).not.toBe(
+      "skipped"
+    );
   });
 
   test("real 404 (status 404) is not treated as a soft-404", async () => {

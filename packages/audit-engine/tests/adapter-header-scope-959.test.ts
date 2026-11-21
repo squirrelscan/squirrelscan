@@ -5,12 +5,12 @@
 // under another host, so it is another origin. Every negative also proves the URL
 // was requested, by the server's own log.
 
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -110,7 +110,11 @@ function pageRecord(path: string, body: string): PageRecord {
 
 type Engine = "v1" | "streaming";
 
-async function audit(engine: Engine, config: Config = CONFIG, originalUrl?: string) {
+async function audit(
+  engine: Engine,
+  config: Config = CONFIG,
+  originalUrl?: string
+) {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -137,16 +141,32 @@ async function audit(engine: Engine, config: Config = CONFIG, originalUrl?: stri
       yield* storage.upsertPage(crawlId, pageRecord("/", PLAIN));
       yield* storage.upsertPage(crawlId, pageRecord("/hidden-kit", PLAIN));
       yield* storage.upsertPage(crawlId, pageRecord("/gone", SHELL));
-      yield* storage.upsertPage(crawlId, pageRecord(`${OTHER_ORIGIN}/ghost`, PLAIN));
+      yield* storage.upsertPage(
+        crawlId,
+        pageRecord(`${OTHER_ORIGIN}/ghost`, PLAIN)
+      );
       if (engine === "streaming") {
-        return yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        return yield* runStreamingRules(
+          storage,
+          crawlId,
+          config,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       }
       const stored = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(stored);
-      return yield* runRulesOnStorage(storage, crawlId, siteContext, config, EMPTY_ASSETS);
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      return yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        EMPTY_ASSETS
+      );
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -161,7 +181,9 @@ describe("adapter re-fetches send custom headers only to the audited origin (#95
       expect(own.some((s) => s.path === "/hidden-kit")).toBe(true);
       expect(other.some((s) => s.path === "/ghost")).toBe(true);
       expect(own.some((s) => s.path === "/gone")).toBe(true);
-      expect(own.filter((s) => s.path !== "/").every((s) => s.token === "secret")).toBe(true);
+      expect(
+        own.filter((s) => s.path !== "/").every((s) => s.token === "secret")
+      ).toBe(true);
       expect(other.every((s) => s.token === null)).toBe(true);
     }, 60_000);
   }

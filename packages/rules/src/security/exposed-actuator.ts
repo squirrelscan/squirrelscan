@@ -63,10 +63,20 @@ import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type { ProbeBudget, ProbeKind } from "../probe-budget";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import { isStateChangingPath } from "./graphql-probe";
-import { isThrottledOrChallenged, isUnverifiedReply, readCappedBytes } from "./probe-http";
+import {
+  isThrottledOrChallenged,
+  isUnverifiedReply,
+  readCappedBytes,
+} from "./probe-http";
 
 /** Base paths one run probes. */
 export const MAX_ACTUATOR_BASES = 3;
@@ -106,7 +116,12 @@ export const ACTUATOR_CONVENTION_BASE = "/actuator";
 /** The HPROF file header every HotSpot heap dump starts with. */
 export const HPROF_MAGIC = "JAVA PROFILE ";
 
-export type ActuatorEndpointId = "index" | "env" | "configprops" | "heapdump" | "mappings";
+export type ActuatorEndpointId =
+  | "index"
+  | "env"
+  | "configprops"
+  | "heapdump"
+  | "mappings";
 
 /** What showed the endpoint is an actuator endpoint. Never the content itself. */
 export type ActuatorEvidence =
@@ -132,11 +147,41 @@ interface ActuatorEndpointSpec {
 
 /** The only requests this rule sends, in order. Every one is a GET. */
 export const ACTUATOR_ENDPOINTS: readonly ActuatorEndpointSpec[] = [
-  { id: "index", path: "", severity: "warning", kind: "quiet", maxBytes: 64 * 1024 },
-  { id: "env", path: "/env", severity: "critical", kind: "quiet", maxBytes: 1024 * 1024 },
-  { id: "configprops", path: "/configprops", severity: "critical", kind: "quiet", maxBytes: 1024 * 1024 },
-  { id: "mappings", path: "/mappings", severity: "warning", kind: "quiet", maxBytes: 1024 * 1024 },
-  { id: "heapdump", path: "/heapdump", severity: "critical", kind: "loud", maxBytes: 64 },
+  {
+    id: "index",
+    path: "",
+    severity: "warning",
+    kind: "quiet",
+    maxBytes: 64 * 1024,
+  },
+  {
+    id: "env",
+    path: "/env",
+    severity: "critical",
+    kind: "quiet",
+    maxBytes: 1024 * 1024,
+  },
+  {
+    id: "configprops",
+    path: "/configprops",
+    severity: "critical",
+    kind: "quiet",
+    maxBytes: 1024 * 1024,
+  },
+  {
+    id: "mappings",
+    path: "/mappings",
+    severity: "warning",
+    kind: "quiet",
+    maxBytes: 1024 * 1024,
+  },
+  {
+    id: "heapdump",
+    path: "/heapdump",
+    severity: "critical",
+    kind: "loud",
+    maxBytes: 64,
+  },
 ];
 
 // Actuator endpoint ids. An index must name at least one besides `self`, so a
@@ -173,7 +218,15 @@ const KNOWN_ACTUATOR_IDS = new Set([
 
 // The actuator's own write operations. A discovered path naming one is never
 // used, even though this rule would only GET the fixed endpoints under its base.
-const ACTUATOR_WRITE_WORDS = new Set(["shutdown", "restart", "refresh", "pause", "resume", "busrefresh", "busenv"]);
+const ACTUATOR_WRITE_WORDS = new Set([
+  "shutdown",
+  "restart",
+  "refresh",
+  "pause",
+  "resume",
+  "busrefresh",
+  "busenv",
+]);
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 // ── selection ──────────────────────────────────────────────────────
@@ -231,10 +284,16 @@ export function selectActuatorBases(
   let skippedCap = 0;
   const baseUrl = ctx.site?.baseUrl;
   const siteOrigin = baseUrl ? originOf(baseUrl) : null;
-  if (!baseUrl || !siteOrigin) return { bases: out, skippedStateChanging, skippedCap };
+  if (!baseUrl || !siteOrigin)
+    return { bases: out, skippedStateChanging, skippedCap };
   const seen = new Set<string>();
 
-  const consider = (rawUrl: string, source: ActuatorBase["source"], discoveredVia: string, method?: string) => {
+  const consider = (
+    rawUrl: string,
+    source: ActuatorBase["source"],
+    discoveredVia: string,
+    method?: string
+  ) => {
     let u: URL;
     try {
       u = new URL(rawUrl, baseUrl);
@@ -266,7 +325,12 @@ export function selectActuatorBases(
 
   for (const c of ctx.endpointSurface?.candidates ?? []) {
     if (!c.probeEligible || !c.sameOrigin) continue;
-    consider(c.url, c.source === "convention" ? "convention" : "discovered", c.discoveredVia, c.method);
+    consider(
+      c.url,
+      c.source === "convention" ? "convention" : "discovered",
+      c.discoveredVia,
+      c.method
+    );
   }
   consider(ACTUATOR_CONVENTION_BASE, "convention", "convention");
   return { bases: out, skippedStateChanging, skippedCap };
@@ -290,12 +354,20 @@ export type ActuatorProbeOutcome =
   | { sent: true; error: string };
 
 /** Build the exact URL and init for one probe. Exported so tests can pin what is sent. */
-export function buildActuatorProbe(baseUrl: string, spec: ActuatorEndpointSpec): { url: string; init: RequestInit } {
+export function buildActuatorProbe(
+  baseUrl: string,
+  spec: ActuatorEndpointSpec
+): { url: string; init: RequestInit } {
   const headers: Record<string, string> =
     spec.id === "heapdump"
-      ? { Accept: "application/octet-stream", Range: `bytes=0-${spec.maxBytes - 1}`, "User-Agent": SQUIRRELSCAN_USER_AGENT }
+      ? {
+          Accept: "application/octet-stream",
+          Range: `bytes=0-${spec.maxBytes - 1}`,
+          "User-Agent": SQUIRRELSCAN_USER_AGENT,
+        }
       : {
-          Accept: "application/vnd.spring-boot.actuator.v3+json, application/json;q=0.9",
+          Accept:
+            "application/vnd.spring-boot.actuator.v3+json, application/json;q=0.9",
           "User-Agent": SQUIRRELSCAN_USER_AGENT,
         };
   return {
@@ -315,7 +387,11 @@ async function sendActuatorProbe(
   // Aborted once the read is done, so a capped read does not keep pulling an
   // endless answer (a heap dump that ignores Range) off the wire.
   const done = new AbortController();
-  const signal = AbortSignal.any([probe.signal(), AbortSignal.timeout(timeoutMs), done.signal]);
+  const signal = AbortSignal.any([
+    probe.signal(),
+    AbortSignal.timeout(timeoutMs),
+    done.signal,
+  ]);
   probe.record();
   try {
     const res = await fetchUndecoded(url, { ...init, signal });
@@ -331,7 +407,10 @@ async function sendActuatorProbe(
       },
     };
   } catch (err) {
-    return { sent: true, error: err instanceof Error ? err.name || "Error" : "Error" };
+    return {
+      sent: true,
+      error: err instanceof Error ? err.name || "Error" : "Error",
+    };
   } finally {
     done.abort();
   }
@@ -344,7 +423,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 function jsonOf(response: ActuatorResponse): unknown {
-  if (response.truncated || response.contentType.includes("html")) return undefined;
+  if (response.truncated || response.contentType.includes("html"))
+    return undefined;
   const text = new TextDecoder().decode(response.bytes).trim();
   if (!text.startsWith("{")) return undefined;
   try {
@@ -367,14 +447,17 @@ export function readActuatorIndex(response: ActuatorResponse): string[] | null {
     if (!isPlainObject(link) || typeof link.href !== "string") return null;
     // `env-toMatch`, `metrics-requiredMetricName` and similar are templated sub-links.
     const base = id.split("-")[0]!;
-    if (KNOWN_ACTUATOR_IDS.has(base) && !listed.includes(base)) listed.push(base);
+    if (KNOWN_ACTUATOR_IDS.has(base) && !listed.includes(base))
+      listed.push(base);
   }
   return listed.length > 0 ? listed : null;
 }
 
 const ENV_PREFIX_RE = /^\s*\{\s*"activeProfiles"\s*:\s*\[/;
 const CONTEXTS_PREFIX_RE = (key: string) =>
-  new RegExp(`^\\s*\\{\\s*"contexts"\\s*:\\s*\\{\\s*"[^"\\\\]{1,200}"\\s*:\\s*\\{[^]{0,200}?"${key}"\\s*:\\s*\\{`);
+  new RegExp(
+    `^\\s*\\{\\s*"contexts"\\s*:\\s*\\{\\s*"[^"\\\\]{1,200}"\\s*:\\s*\\{[^]{0,200}?"${key}"\\s*:\\s*\\{`
+  );
 const CONFIGPROPS_PREFIX_RE = CONTEXTS_PREFIX_RE("beans");
 const MAPPINGS_PREFIX_RE = CONTEXTS_PREFIX_RE("mappings");
 
@@ -387,15 +470,28 @@ function prefixText(response: ActuatorResponse): string | null {
 export function isEnvResponse(response: ActuatorResponse): boolean {
   const json = jsonOf(response);
   if (isPlainObject(json)) {
-    if (!Array.isArray(json.activeProfiles) || !Array.isArray(json.propertySources)) return false;
-    return json.propertySources.every((s) => isPlainObject(s) && typeof s.name === "string");
+    if (
+      !Array.isArray(json.activeProfiles) ||
+      !Array.isArray(json.propertySources)
+    )
+      return false;
+    return json.propertySources.every(
+      (s) => isPlainObject(s) && typeof s.name === "string"
+    );
   }
   // Longer than the cap: the prefix must open as an env answer does.
   const text = prefixText(response);
-  return text !== null && ENV_PREFIX_RE.test(text) && /"propertySources"\s*:\s*\[/.test(text);
+  return (
+    text !== null &&
+    ENV_PREFIX_RE.test(text) &&
+    /"propertySources"\s*:\s*\[/.test(text)
+  );
 }
 
-function contextsEntries(json: unknown, key: string): Record<string, unknown>[] | null {
+function contextsEntries(
+  json: unknown,
+  key: string
+): Record<string, unknown>[] | null {
   if (!isPlainObject(json) || !isPlainObject(json.contexts)) return null;
   const out: Record<string, unknown>[] = [];
   for (const ctx of Object.values(json.contexts)) {
@@ -411,7 +507,12 @@ export function isConfigpropsResponse(response: ActuatorResponse): boolean {
     const beans = contextsEntries(json, "beans");
     if (!beans) return false;
     return beans.some((b) =>
-      Object.values(b).some((bean) => isPlainObject(bean) && typeof bean.prefix === "string" && isPlainObject(bean.properties))
+      Object.values(b).some(
+        (bean) =>
+          isPlainObject(bean) &&
+          typeof bean.prefix === "string" &&
+          isPlainObject(bean.properties)
+      )
     );
   }
   const text = prefixText(response);
@@ -430,11 +531,18 @@ export function isMappingsResponse(response: ActuatorResponse): boolean {
     const mappings = contextsEntries(json, "mappings");
     if (!mappings) return false;
     return mappings.some(
-      (m) => isPlainObject(m.dispatcherServlets) || isPlainObject(m.dispatcherHandlers) || Array.isArray(m.servletFilters)
+      (m) =>
+        isPlainObject(m.dispatcherServlets) ||
+        isPlainObject(m.dispatcherHandlers) ||
+        Array.isArray(m.servletFilters)
     );
   }
   const text = prefixText(response);
-  return text !== null && MAPPINGS_PREFIX_RE.test(text) && /"dispatcher(?:Servlets|Handlers)"\s*:/.test(text);
+  return (
+    text !== null &&
+    MAPPINGS_PREFIX_RE.test(text) &&
+    /"dispatcher(?:Servlets|Handlers)"\s*:/.test(text)
+  );
 }
 
 /** `/heapdump`: the body opens with the HPROF header. */
@@ -472,16 +580,26 @@ function dispositionFilename(header: string | null): string | null {
 export function isGzipHprofAttachment(response: ActuatorResponse): boolean {
   if (response.bytes[0] !== 0x1f || response.bytes[1] !== 0x8b) return false;
   const name = dispositionFilename(response.headers.get("content-disposition"));
-  return name !== null && (name.endsWith(".hprof") || name.endsWith(".hprof.gz"));
+  return (
+    name !== null && (name.endsWith(".hprof") || name.endsWith(".hprof.gz"))
+  );
 }
 
 /** The evidence a 2xx answer confirms the endpoint with, or `null` when it does not. */
-const EVIDENCE: Record<ActuatorEndpointId, (r: ActuatorResponse) => ActuatorEvidence | null> = {
+const EVIDENCE: Record<
+  ActuatorEndpointId,
+  (r: ActuatorResponse) => ActuatorEvidence | null
+> = {
   index: (r) => (readActuatorIndex(r) !== null ? "actuator-index-links" : null),
   env: (r) => (isEnvResponse(r) ? "env-property-sources" : null),
   configprops: (r) => (isConfigpropsResponse(r) ? "configprops-beans" : null),
   mappings: (r) => (isMappingsResponse(r) ? "request-mappings" : null),
-  heapdump: (r) => (isHprofResponse(r) ? "hprof-header" : isGzipHprofAttachment(r) ? "hprof-gzip" : null),
+  heapdump: (r) =>
+    isHprofResponse(r)
+      ? "hprof-header"
+      : isGzipHprofAttachment(r)
+        ? "hprof-gzip"
+        : null,
 };
 
 const EVIDENCE_LABEL: Record<ActuatorEvidence, string> = {
@@ -491,7 +609,8 @@ const EVIDENCE_LABEL: Record<ActuatorEvidence, string> = {
   "request-mappings": "request mappings",
   "hprof-header": "HPROF heap dump header",
   "hprof-gzip": "gzipped heap dump sent as a .hprof attachment",
-  "listed-in-index": "listed by the open actuator index, not downloaded (it may still require authentication)",
+  "listed-in-index":
+    "listed by the open actuator index, not downloaded (it may still require authentication)",
 };
 
 // ── the rule ───────────────────────────────────────────────────────
@@ -549,10 +668,13 @@ const WHY_LABEL: Record<UncheckedWhy, string> = {
   time: "the rule's time limit ran out",
   timeout: "its base stopped answering (a request timed out)",
   error: "the request failed",
-  throttled: "the site rate limited the probes (HTTP 429) or answered with a bot challenge",
+  throttled:
+    "the site rate limited the probes (HTTP 429) or answered with a bot challenge",
   "server-error": "the server answered with an error (5xx)",
-  "no-definite-answer": "the answer was neither the endpoint nor a 401, 403 or 404",
-  "heapdump-timeout": "the request timed out; an open endpoint may have started writing a dump",
+  "no-definite-answer":
+    "the answer was neither the endpoint nor a 401, 403 or 404",
+  "heapdump-timeout":
+    "the request timed out; an open endpoint may have started writing a dump",
   "heapdump-already-confirmed":
     "not requested: a heap dump was already confirmed under another base, and each request makes the server write one",
   "heapdump-stopped-after-timeout":
@@ -592,10 +714,18 @@ export const exposedActuatorRule: Rule = {
     checks: [
       { name: CHECK_CRITICAL, outcome: "problem" },
       { name: CHECK_EXPOSED, outcome: "problem" },
-      { name: CHECK_CLEAN, outcome: "clean", clears: [CHECK_CRITICAL, CHECK_EXPOSED] },
+      {
+        name: CHECK_CLEAN,
+        outcome: "clean",
+        clears: [CHECK_CRITICAL, CHECK_EXPOSED],
+      },
       { name: CHECK_NOT_CHECKED, outcome: "skipped" },
       { name: CHECK_HEAPDUMP, outcome: "problem" },
-      { name: CHECK_HEAPDUMP_CLOSED, outcome: "clean", clears: [CHECK_HEAPDUMP] },
+      {
+        name: CHECK_HEAPDUMP_CLOSED,
+        outcome: "clean",
+        clears: [CHECK_HEAPDUMP],
+      },
       { name: CHECK_HEAPDUMP_NOT_CHECKED, outcome: "skipped" },
     ],
   },
@@ -606,7 +736,10 @@ export const exposedActuatorRule: Rule = {
 };
 
 /** The skip reason for a family's not-checked check, from why its paths were not checked. */
-function skipReasonFor(whys: Set<UncheckedWhy | "cap">, allErrored: boolean): string {
+function skipReasonFor(
+  whys: Set<UncheckedWhy | "cap">,
+  allErrored: boolean
+): string {
   if (whys.size === 1 && whys.has("robots")) return "robots-disallowed";
   if (whys.size === 1 && whys.has("probe-level")) return "probe-level-too-low";
   if (whys.size === 1 && whys.has("budget")) return "probe-budget";
@@ -614,12 +747,20 @@ function skipReasonFor(whys: Set<UncheckedWhy | "cap">, allErrored: boolean): st
   return PROBE_INCOMPLETE_SKIP_REASON;
 }
 
-function describeUnchecked(unchecked: UncheckedEndpoint[], skippedCap: number): string {
+function describeUnchecked(
+  unchecked: UncheckedEndpoint[],
+  skippedCap: number
+): string {
   const parts: string[] = [];
   const byWhy = new Map<UncheckedWhy, string[]>();
-  for (const u of unchecked) byWhy.set(u.why, [...(byWhy.get(u.why) ?? []), u.url]);
-  for (const [why, urls] of byWhy) parts.push(`${urls.join(", ")} (${WHY_LABEL[why]})`);
-  if (skippedCap > 0) parts.push(`${skippedCap} more actuator base path(s) past the cap of ${MAX_ACTUATOR_BASES}`);
+  for (const u of unchecked)
+    byWhy.set(u.why, [...(byWhy.get(u.why) ?? []), u.url]);
+  for (const [why, urls] of byWhy)
+    parts.push(`${urls.join(", ")} (${WHY_LABEL[why]})`);
+  if (skippedCap > 0)
+    parts.push(
+      `${skippedCap} more actuator base path(s) past the cap of ${MAX_ACTUATOR_BASES}`
+    );
   return parts.join("; ");
 }
 
@@ -670,16 +811,33 @@ export async function runExposedActuator(
   // `thisBaseOnly`) is left unchecked, for `why`. A heapdump below aggressive,
   // or after the run stopped asking for heap dumps, keeps its own reason: it
   // was never going to be sent.
-  const leaveRest = (b: number, s: number, listed: string[] | null, why: UncheckedWhy, thisBaseOnly = false) => {
+  const leaveRest = (
+    b: number,
+    s: number,
+    listed: string[] | null,
+    why: UncheckedWhy,
+    thisBaseOnly = false
+  ) => {
     const last = thisBaseOnly ? b + 1 : bases.length;
     for (let bi = b; bi < last; bi++) {
       for (let si = bi === b ? s : 0; si < ACTUATOR_ENDPOINTS.length; si++) {
         const spec = ACTUATOR_ENDPOINTS[si]!;
         // Left out by this base's open index: answered by the index, not unchecked.
-        if (bi === b && listed && spec.id !== "index" && spec.id !== "heapdump" && !listed.includes(spec.id)) continue;
+        if (
+          bi === b &&
+          listed &&
+          spec.id !== "index" &&
+          spec.id !== "heapdump" &&
+          !listed.includes(spec.id)
+        )
+          continue;
         const url = `${bases[bi]!.url}${spec.path}`;
         const heapWhy = !aggressive ? "probe-level" : (heapdumpStop ?? why);
-        unchecked.push({ url, endpoint: spec.id, why: spec.id === "heapdump" ? heapWhy : why });
+        unchecked.push({
+          url,
+          endpoint: spec.id,
+          why: spec.id === "heapdump" ? heapWhy : why,
+        });
       }
     }
   };
@@ -696,7 +854,13 @@ export async function runExposedActuator(
         // warning: the index lists endpoints Spring Security still protects,
         // so only the HPROF header read on an aggressive run makes it critical.
         if (listed?.includes("heapdump")) {
-          exposed.push({ url, endpoint: "heapdump", severity: "warning", evidence: "listed-in-index", base });
+          exposed.push({
+            url,
+            endpoint: "heapdump",
+            severity: "warning",
+            evidence: "listed-in-index",
+            base,
+          });
         }
         unchecked.push({ url, endpoint: "heapdump", why: "probe-level" });
         continue;
@@ -704,7 +868,13 @@ export async function runExposedActuator(
       // An open index lists every endpoint exposed over HTTP: one it leaves
       // out is not requested. The heapdump is the exception: it can pass only
       // on its own definite answer, so an aggressive run always asks.
-      if (spec.id !== "index" && spec.id !== "heapdump" && listed && !listed.includes(spec.id)) continue;
+      if (
+        spec.id !== "index" &&
+        spec.id !== "heapdump" &&
+        listed &&
+        !listed.includes(spec.id)
+      )
+        continue;
       if (spec.id === "heapdump" && heapdumpStop) {
         unchecked.push({ url, endpoint: "heapdump", why: heapdumpStop });
         continue;
@@ -719,7 +889,12 @@ export async function runExposedActuator(
         leaveRest(b, s, listed, "time");
         break outer;
       }
-      const outcome = await sendActuatorProbe(probe, base.url, spec, Math.min(timing.requestTimeoutMs, remaining));
+      const outcome = await sendActuatorProbe(
+        probe,
+        base.url,
+        spec,
+        Math.min(timing.requestTimeoutMs, remaining)
+      );
       if (!outcome.sent) {
         budgetStopped = true;
         leaveRest(b, s, listed, "budget");
@@ -743,7 +918,11 @@ export async function runExposedActuator(
         if (spec.id === "heapdump" && outcome.error === "TimeoutError") {
           // Never closed, and no further heapdump request this run.
           heapdumpStop = "heapdump-stopped-after-timeout";
-          unchecked.push({ url, endpoint: "heapdump", why: "heapdump-timeout" });
+          unchecked.push({
+            url,
+            endpoint: "heapdump",
+            why: "heapdump-timeout",
+          });
           if (Date.now() >= deadline) {
             timeStopped = true;
             leaveRest(b, s + 1, listed, "time");
@@ -768,7 +947,11 @@ export async function runExposedActuator(
         continue;
       }
       const { response } = outcome;
-      const reply = { status: response.status, headers: response.headers, text: new TextDecoder().decode(response.bytes) };
+      const reply = {
+        status: response.status,
+        headers: response.headers,
+        text: new TextDecoder().decode(response.bytes),
+      };
       if (isThrottledOrChallenged(reply)) {
         // The site pushed back: the answer says nothing about the path, and
         // no further request is sent.
@@ -780,7 +963,10 @@ export async function runExposedActuator(
       // written (a 2xx, with or without a recognised header, a 5xx from a
       // dump that failed half way, a redirect to where it lands): no further
       // heapdump request this run. A confirmed dump overrides this below.
-      if (spec.id === "heapdump" && !HEAPDUMP_CLOSED_STATUSES.has(response.status)) {
+      if (
+        spec.id === "heapdump" &&
+        !HEAPDUMP_CLOSED_STATUSES.has(response.status)
+      ) {
         heapdumpStop = "heapdump-stopped-after-answer";
       }
       // A 5xx cannot show whether the path is open (the same reading as
@@ -793,8 +979,15 @@ export async function runExposedActuator(
         if (spec.id === "index") listed = readActuatorIndex(response);
         const evidence = EVIDENCE[spec.id](response);
         if (evidence) {
-          exposed.push({ url, endpoint: spec.id, severity: spec.severity, evidence, base });
-          if (spec.id === "heapdump") heapdumpStop = "heapdump-already-confirmed";
+          exposed.push({
+            url,
+            endpoint: spec.id,
+            severity: spec.severity,
+            evidence,
+            base,
+          });
+          if (spec.id === "heapdump")
+            heapdumpStop = "heapdump-already-confirmed";
           continue;
         }
       }
@@ -804,7 +997,12 @@ export async function runExposedActuator(
         // or another status may be a proxy or error page in front of a dump
         // that is still there.
         if (HEAPDUMP_CLOSED_STATUSES.has(response.status)) heapdumpClosed++;
-        else unchecked.push({ url, endpoint: "heapdump", why: "no-definite-answer" });
+        else
+          unchecked.push({
+            url,
+            endpoint: "heapdump",
+            why: "no-definite-answer",
+          });
       }
     }
   }
@@ -821,7 +1019,8 @@ export async function runExposedActuator(
     timedOutBases,
     throttled,
   };
-  const allErrored = probed > 0 && errored === probed && !budgetStopped && !timeStopped;
+  const allErrored =
+    probed > 0 && errored === probed && !budgetStopped && !timeStopped;
 
   // ── index, env, configprops, mappings ──
   const mainExposed = exposed.filter((e) => e.endpoint !== "heapdump");
@@ -846,7 +1045,11 @@ export async function runExposedActuator(
       details,
     });
   }
-  if (mainUnchecked.length > 0 || selection.skippedCap > 0 || bases.length === 0) {
+  if (
+    mainUnchecked.length > 0 ||
+    selection.skippedCap > 0 ||
+    bases.length === 0
+  ) {
     // A path not definitely answered could be open: never a pass for it.
     const whys = new Set<UncheckedWhy | "cap">(mainUnchecked.map((u) => u.why));
     if (selection.skippedCap > 0) whys.add("cap");
@@ -858,7 +1061,9 @@ export async function runExposedActuator(
         bases.length === 0
           ? "No Spring Boot Actuator path could be probed"
           : `Spring Boot Actuator paths not checked: ${describeUnchecked(mainUnchecked, selection.skippedCap)}.${
-              whys.has("robots") ? " Run with --probe aggressive to probe robots.txt-disallowed paths, on a site you own or may test." : ""
+              whys.has("robots")
+                ? " Run with --probe aggressive to probe robots.txt-disallowed paths, on a site you own or may test."
+                : ""
             }`,
       details,
     });
@@ -887,7 +1092,12 @@ export async function runExposedActuator(
       details: read.length > 0 ? { severity: "critical", ...details } : details,
     });
   }
-  if (heapUnchecked.length > 0 || selection.skippedCap > 0 || bases.length === 0 || !aggressive) {
+  if (
+    heapUnchecked.length > 0 ||
+    selection.skippedCap > 0 ||
+    bases.length === 0 ||
+    !aggressive
+  ) {
     const whys = new Set<UncheckedWhy | "cap">(heapUnchecked.map((u) => u.why));
     if (selection.skippedCap > 0) whys.add("cap");
     checks.push({

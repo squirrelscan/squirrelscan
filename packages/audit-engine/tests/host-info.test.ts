@@ -7,7 +7,11 @@ const probe = { host: "example.test", ipv4: ["8.8.8.8"], ipv6: [] as string[] };
 describe("buildReportHost country labelling (#10, edge requirement)", () => {
   test("no edge detected: the country is an origin location", async () => {
     const host = await buildReportHost(probe, [{ id: "wordpress" }]);
-    expect(host?.country).toMatchObject({ code: "US", location: "origin", address: "8.8.8.8" });
+    expect(host?.country).toMatchObject({
+      code: "US",
+      location: "origin",
+      address: "8.8.8.8",
+    });
     expect(host?.country?.edge).toBeUndefined();
   });
 
@@ -23,7 +27,14 @@ describe("buildReportHost country labelling (#10, edge requirement)", () => {
 
   test("every edge provider the requirement names is covered", () => {
     const names = new Set(Object.values(EDGE_TECHNOLOGY_IDS));
-    for (const n of ["Cloudflare", "Amazon CloudFront", "Vercel", "Netlify", "Fastly", "Akamai"]) {
+    for (const n of [
+      "Cloudflare",
+      "Amazon CloudFront",
+      "Vercel",
+      "Netlify",
+      "Fastly",
+      "Akamai",
+    ]) {
       expect(names.has(n)).toBe(true);
     }
   });
@@ -34,14 +45,22 @@ describe("buildReportHost country labelling (#10, edge requirement)", () => {
   });
 
   test("the country is omitted, not guessed, when the database has none", async () => {
-    const host = await buildReportHost({ host: "lan.test", ipv4: ["10.1.2.3"], ipv6: [] }, []);
+    const host = await buildReportHost(
+      { host: "lan.test", ipv4: ["10.1.2.3"], ipv6: [] },
+      []
+    );
     expect(host?.country).toBeUndefined();
     expect(host?.addresses.ipv4).toEqual(["10.1.2.3"]);
   });
 
   test("IPv6-only hosts are looked up too, and an unresolved host gives no section", async () => {
-    const host = await buildReportHost({ host: "v6.test", ipv4: [], ipv6: ["2001:4860:1c00::1"] }, []);
+    const host = await buildReportHost(
+      { host: "v6.test", ipv4: [], ipv6: ["2001:4860:1c00::1"] },
+      []
+    );
     expect(host?.country?.code).toBe("US");
-    expect(await buildReportHost({ host: "x", ipv4: [], ipv6: [] }, [])).toBeUndefined();
+    expect(
+      await buildReportHost({ host: "x", ipv4: [], ipv6: [] }, [])
+    ).toBeUndefined();
   });
 });

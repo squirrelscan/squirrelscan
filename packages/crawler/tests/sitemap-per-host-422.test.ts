@@ -5,8 +5,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Effect, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 const CONFIG: Partial<CrawlerConfig> = {
@@ -45,11 +46,15 @@ beforeAll(() => {
         inFlight--;
         return new Response("not found", { status: 404 });
       }
-      if (pathname === "/robots.txt") return new Response("User-agent: *\nAllow: /\n");
+      if (pathname === "/robots.txt")
+        return new Response("User-agent: *\nAllow: /\n");
       if (pathname === "/") {
-        return new Response("<!doctype html><html><head><title>F</title></head><body>hi</body></html>", {
-          headers: { "content-type": "text/html" },
-        });
+        return new Response(
+          "<!doctype html><html><head><title>F</title></head><body>hi</body></html>",
+          {
+            headers: { "content-type": "text/html" },
+          }
+        );
       }
       return new Response("not found", { status: 404 });
     },
@@ -67,11 +72,16 @@ async function crawl(config: Partial<CrawlerConfig>): Promise<void> {
   await Effect.runPromise(
     Effect.gen(function* () {
       yield* storage.init();
-      const crawler = yield* createCrawler({ config: { ...CONFIG, ...config }, storage });
-      const events = Effect.runFork(Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void));
+      const crawler = yield* createCrawler({
+        config: { ...CONFIG, ...config },
+        storage,
+      });
+      const events = Effect.runFork(
+        Stream.runForEach(crawler.events, (_e: CrawlerEvent) => Effect.void)
+      );
       yield* crawler.start(`${base}/`, `${base}/`);
       yield* Fiber.interrupt(events);
-    }),
+    })
   );
 }
 

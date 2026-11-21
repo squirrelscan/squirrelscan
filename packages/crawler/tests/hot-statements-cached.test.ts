@@ -24,11 +24,16 @@
 // `db.query` must hand back the SAME object for the same text — so this file
 // keeps meaning something when the Bun under it moves.
 
-import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import type { CrawlMetadata, FrontierRecord, PageRecord } from "../src/storage/types";
+import type {
+  CrawlMetadata,
+  FrontierRecord,
+  PageRecord,
+} from "../src/storage/types";
+
 import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -65,7 +70,10 @@ const STATS: CrawlMetadata["stats"] = {
   avgLoadTimeMs: 0,
 } as CrawlMetadata["stats"];
 
-async function freshCrawl(): Promise<{ store: SQLiteStorage; crawlId: string }> {
+async function freshCrawl(): Promise<{
+  store: SQLiteStorage;
+  crawlId: string;
+}> {
   const store = new SQLiteStorage(":memory:");
   await run(store.init());
   const crawlId = await run(
@@ -77,7 +85,7 @@ async function freshCrawl(): Promise<{ store: SQLiteStorage; crawlId: string }> 
       status: "running",
       config: CONFIG,
       stats: STATS,
-    } as Omit<CrawlMetadata, "id">),
+    } as Omit<CrawlMetadata, "id">)
   );
   return { store, crawlId };
 }
@@ -120,13 +128,14 @@ function frontier(i: number): FrontierRecord {
 async function compilationsDuring(body: () => Promise<void>): Promise<number> {
   let compiles = 0;
   const real = Database.prototype.prepare;
-  (Database.prototype as unknown as Record<string, unknown>).prepare = function patched(
-    this: Database,
-    ...args: unknown[]
-  ) {
-    compiles++;
-    return (real as (this: Database, ...a: unknown[]) => unknown).call(this, ...args);
-  };
+  (Database.prototype as unknown as Record<string, unknown>).prepare =
+    function patched(this: Database, ...args: unknown[]) {
+      compiles++;
+      return (real as (this: Database, ...a: unknown[]) => unknown).call(
+        this,
+        ...args
+      );
+    };
   try {
     await body();
   } finally {
@@ -159,7 +168,8 @@ describe("per-page storage statements are cached", () => {
     // asserted behind a constant.
     await run(store.upsertPage(crawlId, page(crawlId, 0)));
     const compiles = await compilationsDuring(async () => {
-      for (let i = 1; i <= N; i++) await run(store.upsertPage(crawlId, page(crawlId, i)));
+      for (let i = 1; i <= N; i++)
+        await run(store.upsertPage(crawlId, page(crawlId, i)));
     });
     expect(compiles).toBe(0);
     expect(await run(store.getPageCount(crawlId))).toBe(N + 1);
@@ -170,7 +180,8 @@ describe("per-page storage statements are cached", () => {
     const { store, crawlId } = await freshCrawl();
     await run(store.upsertFrontier(crawlId, frontier(0)));
     const compiles = await compilationsDuring(async () => {
-      for (let i = 1; i <= N; i++) await run(store.upsertFrontier(crawlId, frontier(i)));
+      for (let i = 1; i <= N; i++)
+        await run(store.upsertFrontier(crawlId, frontier(i)));
     });
     expect(compiles).toBe(0);
     await run(store.close());
@@ -181,7 +192,9 @@ describe("per-page storage statements are cached", () => {
     await run(store.getIncomingLinkCount(crawlId, "http://example.test/p/0"));
     const compiles = await compilationsDuring(async () => {
       for (let i = 1; i <= N; i++) {
-        await run(store.getIncomingLinkCount(crawlId, `http://example.test/p/${i}`));
+        await run(
+          store.getIncomingLinkCount(crawlId, `http://example.test/p/${i}`)
+        );
       }
     });
     expect(compiles).toBe(0);
@@ -195,7 +208,8 @@ describe("per-page storage statements are cached", () => {
     const { store, crawlId } = await freshCrawl();
     await run(store.getCachedPage("http://example.test/p/0"));
     const compiles = await compilationsDuring(async () => {
-      for (let i = 1; i <= N; i++) await run(store.getCachedPage(`http://example.test/p/${i}`));
+      for (let i = 1; i <= N; i++)
+        await run(store.getCachedPage(`http://example.test/p/${i}`));
     });
     expect(compiles).toBe(0);
     expect(crawlId).toBeTruthy();
@@ -210,7 +224,9 @@ describe("per-page storage statements are cached", () => {
     await run(store.updateCrawl(crawlId, { stats: STATS }));
     const compiles = await compilationsDuring(async () => {
       for (let i = 1; i <= N; i++) {
-        await run(store.updateCrawl(crawlId, { stats: { ...STATS, pagesFetched: i } }));
+        await run(
+          store.updateCrawl(crawlId, { stats: { ...STATS, pagesFetched: i } })
+        );
       }
     });
     expect(compiles).toBe(0);
@@ -229,10 +245,14 @@ describe("per-page storage statements are cached", () => {
     const { store, crawlId } = await freshCrawl();
     const oneRound = async (i: number) => {
       await run(store.upsertFrontier(crawlId, frontier(i)));
-      await run(store.getIncomingLinkCount(crawlId, `http://example.test/p/${i}`));
+      await run(
+        store.getIncomingLinkCount(crawlId, `http://example.test/p/${i}`)
+      );
       await run(store.getCachedPage(`http://example.test/p/${i}`));
       await run(store.upsertPage(crawlId, page(crawlId, i)));
-      await run(store.updateCrawl(crawlId, { stats: { ...STATS, pagesFetched: i } }));
+      await run(
+        store.updateCrawl(crawlId, { stats: { ...STATS, pagesFetched: i } })
+      );
     };
     await oneRound(0);
     const compiles = await compilationsDuring(async () => {

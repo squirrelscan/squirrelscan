@@ -1,18 +1,27 @@
-import { Effect } from "effect";
-import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
-import { readBodyCapped } from "@squirrelscan/utils/response-body";
-import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
-
-import { optionalProbeTimeoutMs, safeFetchWithDeadline, skippedProbeError, ungated } from "./deadline";
-
-import type { PhaseBudget, ProbeGate } from "./deadline";
-import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
-import { AGENT_ACCESS_BOTS, DEFAULT_AGENT_ACCESS_BOT_IDS } from "@squirrelscan/core-contracts/storage";
 import type {
   AgentAccessData,
   AgentAccessProbe,
   AgentAccessUserAgent,
 } from "@squirrelscan/core-contracts";
+
+import {
+  AGENT_ACCESS_BOTS,
+  DEFAULT_AGENT_ACCESS_BOT_IDS,
+} from "@squirrelscan/core-contracts/storage";
+import { byteLength, truncateToBytes } from "@squirrelscan/utils/bytes";
+import { mergeHeaderRecords } from "@squirrelscan/utils/headers";
+import { readBodyCapped } from "@squirrelscan/utils/response-body";
+import { CLOUDFLARE_CHALLENGE_SCRIPT } from "@squirrelscan/utils/waf";
+import { Effect } from "effect";
+
+import type { PhaseBudget, ProbeGate } from "./deadline";
+
+import {
+  optionalProbeTimeoutMs,
+  safeFetchWithDeadline,
+  skippedProbeError,
+  ungated,
+} from "./deadline";
 
 const PROBE_TIMEOUT_MS = 15_000;
 const AGENT_ACCESS_MAX_BYTES = 512 * 1024;
@@ -31,20 +40,27 @@ export function detectChallenge(headers: Headers, body: string): string | null {
   // Not the bare /cdn-cgi/challenge-platform/ directory: JavaScript Detections
   // loads a script from it on every ordinary page of a Cloudflare site (#666).
   if (CLOUDFLARE_CHALLENGE_SCRIPT.test(sample)) return "challenge-platform";
-  if (sample.includes("__cf_chl_") || sample.includes("_cf_chl_opt")) return "__cf_chl_";
+  if (sample.includes("__cf_chl_") || sample.includes("_cf_chl_opt"))
+    return "__cf_chl_";
   // The challenge page's title, not the phrase anywhere in a page. The title
   // opens the document, so the first 4 KB holds it on any real challenge.
-  if (/<title\b[^>]*>\s*Just a moment/i.test(body.slice(0, 4_096))) return "just-a-moment";
+  if (/<title\b[^>]*>\s*Just a moment/i.test(body.slice(0, 4_096)))
+    return "just-a-moment";
   return null;
 }
 
 // Pay-per-crawl / x402 payment-wall markers. Returns the first signal that matched.
-export function detectPayment(status: number, headers: Headers, body: string): string | null {
+export function detectPayment(
+  status: number,
+  headers: Headers,
+  body: string
+): string | null {
   if (headers.has("crawler-price")) return "crawler-price";
   if (headers.has("crawler-charged")) return "crawler-charged";
   if (status === 402) {
     const head = body.slice(0, 4_096);
-    if (head.includes("x402Version") || /"accepts"\s*:/.test(head)) return "x402-body";
+    if (head.includes("x402Version") || /"accepts"\s*:/.test(head))
+      return "x402-body";
     return "http-402";
   }
   const head = body.slice(0, 4_096);
@@ -52,7 +68,10 @@ export function detectPayment(status: number, headers: Headers, body: string): s
   return null;
 }
 
-const unreachableProbe = (identity: ProbeIdentity, error: string): AgentAccessProbe => ({
+const unreachableProbe = (
+  identity: ProbeIdentity,
+  error: string
+): AgentAccessProbe => ({
   userAgent: identity.label,
   userAgentString: identity.ua,
   status: 0,
@@ -70,10 +89,11 @@ async function probeOne(
   identity: ProbeIdentity,
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
-  seen?: Response[],
+  seen?: Response[]
 ): Promise<AgentAccessProbe> {
   const timeoutMs = optionalProbeTimeoutMs(budget, PROBE_TIMEOUT_MS);
-  if (timeoutMs === null) return unreachableProbe(identity, skippedProbeError(budget));
+  if (timeoutMs === null)
+    return unreachableProbe(identity, skippedProbeError(budget));
   try {
     // #1395: manual redirects — per-hop scheme allowlist + strip secret
     // customHeaders on cross-origin redirects (native redirect:"follow" leaks them).
@@ -86,7 +106,7 @@ async function probeOne(
         headers: mergeHeaderRecords(
           { Accept: "text/html,*/*" },
           customHeaders,
-          { "User-Agent": identity.ua },
+          { "User-Agent": identity.ua }
         ),
         redirect: "follow",
       },
@@ -96,7 +116,11 @@ async function probeOne(
         const raw = await readBodyCapped(response, AGENT_ACCESS_MAX_BYTES);
         const body = truncateToBytes(raw, AGENT_ACCESS_MAX_BYTES);
         const challengeSignal = detectChallenge(response.headers, body);
-        const paymentSignal = detectPayment(response.status, response.headers, body);
+        const paymentSignal = detectPayment(
+          response.status,
+          response.headers,
+          body
+        );
         return {
           userAgent: identity.label,
           userAgentString: identity.ua,
@@ -110,7 +134,7 @@ async function probeOne(
           error: null,
         };
       },
-      budget?.egress,
+      budget?.egress
     );
   } catch (e) {
     return unreachableProbe(identity, (e as Error).message);
@@ -126,13 +150,15 @@ export function probeAgentAccess(
   customHeaders?: Record<string, string>,
   budget?: PhaseBudget,
   gate: ProbeGate = ungated,
-  opts?: { allTokens?: boolean },
+  opts?: { allTokens?: boolean }
 ): Effect.Effect<AgentAccessData, never, never> {
   const homeUrl = new URL("/", baseUrl).toString();
   const allTokens = opts?.allTokens === true;
   const bots = allTokens
     ? AGENT_ACCESS_BOTS
-    : AGENT_ACCESS_BOTS.filter((b) => DEFAULT_AGENT_ACCESS_BOT_IDS.includes(b.id));
+    : AGENT_ACCESS_BOTS.filter((b) =>
+        DEFAULT_AGENT_ACCESS_BOT_IDS.includes(b.id)
+      );
   const identities: ProbeIdentity[] = [
     { label: "browser", ua: browserUserAgent },
     ...bots.map((b): ProbeIdentity => ({ label: b.id, ua: b.userAgentString })),
@@ -142,7 +168,9 @@ export function probeAgentAccess(
     // skip the others: it is noted after all of them ran, and stops the probes after this one (#1655).
     const seen: Response[] = [];
     const probes = await Promise.all(
-      identities.map((id) => gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen))),
+      identities.map((id) =>
+        gate(homeUrl, () => probeOne(homeUrl, id, customHeaders, budget, seen))
+      )
     );
     for (const response of seen) budget?.refusals?.observe(response, homeUrl);
     return { probes };

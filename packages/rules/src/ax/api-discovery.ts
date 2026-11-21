@@ -1,10 +1,17 @@
 // ax/api-discovery - detect api-catalog, OpenAPI, and OAuth discovery documents
 
-import type { WellKnownPath, WellKnownProbe } from "@squirrelscan/core-contracts";
+import type {
+  WellKnownPath,
+  WellKnownProbe,
+} from "@squirrelscan/core-contracts";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { answeredWellKnown, includesPath, notCheckedCheck } from "./discovery-probe-state";
+import {
+  answeredWellKnown,
+  includesPath,
+  notCheckedCheck,
+} from "./discovery-probe-state";
 
 const API_CATALOG_PATH: WellKnownPath = "/.well-known/api-catalog";
 const OPENAPI_PATHS: readonly WellKnownPath[] = [
@@ -14,7 +21,10 @@ const OPENAPI_PATHS: readonly WellKnownPath[] = [
 ];
 const OAUTH_AS_PATH: WellKnownPath = "/.well-known/oauth-authorization-server";
 const OAUTH_PRM_PATH: WellKnownPath = "/.well-known/oauth-protected-resource";
-const API_DOC_PATHS: readonly WellKnownPath[] = [API_CATALOG_PATH, ...OPENAPI_PATHS];
+const API_DOC_PATHS: readonly WellKnownPath[] = [
+  API_CATALOG_PATH,
+  ...OPENAPI_PATHS,
+];
 const OAUTH_PATHS: readonly WellKnownPath[] = [OAUTH_AS_PATH, OAUTH_PRM_PATH];
 
 function isRealHit(p: WellKnownProbe): boolean {
@@ -23,14 +33,21 @@ function isRealHit(p: WellKnownProbe): boolean {
 
 // An OpenAPI/Swagger document names its own spec version at the top level.
 function looksLikeOpenApiDoc(p: WellKnownProbe): boolean {
-  if (p.jsonKeys.some((k) => ["openapi", "swagger"].includes(k.toLowerCase()))) return true;
+  if (p.jsonKeys.some((k) => ["openapi", "swagger"].includes(k.toLowerCase())))
+    return true;
   return /"(openapi|swagger)"\s*:/.test(p.excerpt);
 }
 
 // A refusal, a throttle or a server error says nothing about whether the file
 // exists, so it is "not checked", never "missing" (#1650).
 function isBlockedStatus(status: number): boolean {
-  return status === 401 || status === 403 || status === 408 || status === 429 || status >= 500;
+  return (
+    status === 401 ||
+    status === 403 ||
+    status === 408 ||
+    status === 429 ||
+    status >= 500
+  );
 }
 
 export type ApiCatalogState =
@@ -52,7 +69,9 @@ function linksetShape(p: WellKnownProbe): "non-empty" | "empty" | "invalid" {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const linkset = (parsed as Record<string, unknown>).linkset;
       if (!Array.isArray(linkset)) return "invalid";
-      return linkset.some((e) => e !== null && typeof e === "object" && !Array.isArray(e))
+      return linkset.some(
+        (e) => e !== null && typeof e === "object" && !Array.isArray(e)
+      )
         ? "non-empty"
         : "empty";
     }
@@ -66,7 +85,9 @@ function linksetShape(p: WellKnownProbe): "non-empty" | "empty" | "invalid" {
   }
 }
 
-export function classifyApiCatalog(p: WellKnownProbe | undefined): ApiCatalogState {
+export function classifyApiCatalog(
+  p: WellKnownProbe | undefined
+): ApiCatalogState {
   if (!p) return "not-requested";
   if (p.status === 0) return "not-requested";
   if (isBlockedStatus(p.status)) return "blocked";
@@ -81,12 +102,16 @@ export function classifyApiCatalog(p: WellKnownProbe | undefined): ApiCatalogSta
 }
 
 const CATALOG_STATE_TEXT: Partial<Record<ApiCatalogState, string>> = {
-  "empty-linkset": "the api-catalog at /.well-known/api-catalog has an empty linkset",
-  "invalid-linkset": "the api-catalog at /.well-known/api-catalog has a linkset that is not a list of link objects",
+  "empty-linkset":
+    "the api-catalog at /.well-known/api-catalog has an empty linkset",
+  "invalid-linkset":
+    "the api-catalog at /.well-known/api-catalog has a linkset that is not a list of link objects",
   "not-a-catalog": "/.well-known/api-catalog is JSON without a linkset member",
-  "openapi-document": "/.well-known/api-catalog serves an OpenAPI document, not a linkset catalog",
+  "openapi-document":
+    "/.well-known/api-catalog serves an OpenAPI document, not a linkset catalog",
   "malformed-json": "/.well-known/api-catalog does not parse as JSON",
-  "html-fallback": "/.well-known/api-catalog returned an HTML page, not a catalog",
+  "html-fallback":
+    "/.well-known/api-catalog returned an HTML page, not a catalog",
 };
 
 export const apiDiscoveryRule: Rule = {
@@ -110,7 +135,9 @@ export const apiDiscoveryRule: Rule = {
     const wk = ctx.site?.wellKnown;
 
     if (!wk) {
-      checks.push(notCheckedCheck("api-discovery", "API and OAuth discovery documents"));
+      checks.push(
+        notCheckedCheck("api-discovery", "API and OAuth discovery documents")
+      );
       return { checks };
     }
 
@@ -118,7 +145,10 @@ export const apiDiscoveryRule: Rule = {
     const catalogState = classifyApiCatalog(catalogProbe);
     const apiCatalogHit = catalogState === "present" ? catalogProbe : undefined;
     const openapiHit = wk.probes.find(
-      (p) => includesPath(OPENAPI_PATHS, p.path) && isRealHit(p) && looksLikeOpenApiDoc(p),
+      (p) =>
+        includesPath(OPENAPI_PATHS, p.path) &&
+        isRealHit(p) &&
+        looksLikeOpenApiDoc(p)
     );
 
     const apiDocs = answeredWellKnown(wk, API_DOC_PATHS);
@@ -155,13 +185,15 @@ export const apiDiscoveryRule: Rule = {
                   blocked: Object.fromEntries(
                     apiDocs.answered
                       .filter((p) => isBlockedStatus(p.status))
-                      .map((p) => [p.path, p.status]),
+                      .map((p) => [p.path, p.status])
                   ),
                 }
               : {}),
           },
-          blockedPaths.length > 0 && apiDocs.unchecked.length === 0 ? "blocked" : apiDocs.reason,
-        ),
+          blockedPaths.length > 0 && apiDocs.unchecked.length === 0
+            ? "blocked"
+            : apiDocs.reason
+        )
       );
     } else if (!apiCatalogHit && !openapiHit) {
       checks.push({
@@ -187,7 +219,7 @@ export const apiDiscoveryRule: Rule = {
           ...(apiCatalogHit
             ? {
                 apiCatalogMediaTypeOk: /application\/linkset\+json/i.test(
-                  apiCatalogHit.contentType ?? "",
+                  apiCatalogHit.contentType ?? ""
                 ),
               }
             : {}),
@@ -195,8 +227,12 @@ export const apiDiscoveryRule: Rule = {
       });
     }
 
-    const asHit = wk.probes.find((p) => p.path === OAUTH_AS_PATH && isRealHit(p));
-    const prmHit = wk.probes.find((p) => p.path === OAUTH_PRM_PATH && isRealHit(p));
+    const asHit = wk.probes.find(
+      (p) => p.path === OAUTH_AS_PATH && isRealHit(p)
+    );
+    const prmHit = wk.probes.find(
+      (p) => p.path === OAUTH_PRM_PATH && isRealHit(p)
+    );
 
     const oauth = answeredWellKnown(wk, OAUTH_PATHS);
     if (!asHit && !prmHit && oauth.unchecked.length > 0) {
@@ -205,8 +241,8 @@ export const apiDiscoveryRule: Rule = {
           "api-discovery-oauth",
           "OAuth discovery documents",
           { notChecked: oauth.unchecked },
-          oauth.reason,
-        ),
+          oauth.reason
+        )
       );
       return { checks };
     }
@@ -232,7 +268,10 @@ export const apiDiscoveryRule: Rule = {
         status: "info",
         message: `OAuth discovery found: ${found.join(", ")}`,
         value: "present",
-        details: { authorizationServerPath: null, protectedResourcePath: prmHit?.path ?? null },
+        details: {
+          authorizationServerPath: null,
+          protectedResourcePath: prmHit?.path ?? null,
+        },
       });
       return { checks };
     }
@@ -264,10 +303,13 @@ export const apiDiscoveryRule: Rule = {
       name: "api-discovery-oauth",
       status: "info",
       message: `OAuth discovery found: ${found.join(
-        ", ",
+        ", "
       )}, but no registration_endpoint (DCR) or client_id_metadata_document_supported (CIMD), an agent can find the authorization server but a human still has to register a client by hand`,
       value: "no-self-onboarding",
-      details: { authorizationServerPath: asHit.path, protectedResourcePath: prmHit?.path ?? null },
+      details: {
+        authorizationServerPath: asHit.path,
+        protectedResourcePath: prmHit?.path ?? null,
+      },
     });
 
     return { checks };

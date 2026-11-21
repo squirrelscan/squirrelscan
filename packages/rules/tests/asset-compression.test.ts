@@ -1,13 +1,18 @@
 // perf/asset-compression — uncompressed text sub-resources (#9).
 
+import type {
+  CheckResult,
+  ResourceSizeData,
+  ScriptContentData,
+} from "@squirrelscan/core-contracts";
+
+import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult, ResourceSizeData, ScriptContentData } from "@squirrelscan/core-contracts";
-import { ASSET_COMPRESSION_LIMITS } from "@squirrelscan/utils/constants";
+import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 import { assetCompressionRule } from "../src/performance/asset-compression";
 import { compressionRule } from "../src/performance/compression";
-import type { ParsedPage, RuleContext, SiteData } from "../src/types";
 
 const BIG = ASSET_COMPRESSION_LIMITS.MIN_BYTES * 2;
 const SMALL = Math.floor(ASSET_COMPRESSION_LIMITS.MIN_BYTES / 2);
@@ -39,11 +44,13 @@ function script(overrides: Partial<ScriptContentData> = {}): ScriptContentData {
   };
 }
 
-function ctx(site: Partial<SiteData["resourceSizes"]> & {
-  scripts?: ScriptContentData[];
-  css?: ResourceSizeData[];
-  images?: ResourceSizeData[];
-} = {}): RuleContext {
+function ctx(
+  site: Partial<SiteData["resourceSizes"]> & {
+    scripts?: ScriptContentData[];
+    css?: ResourceSizeData[];
+    images?: ResourceSizeData[];
+  } = {}
+): RuleContext {
   return {
     page: {
       url: "https://example.com/",
@@ -95,13 +102,16 @@ describe("perf/asset-compression — reports", () => {
 
   test("an SVG in the image pool is reported (image/svg+xml is text)", async () => {
     const check = only(
-      (await run(
+      await run(
         ctx({
           images: [
-            css({ url: "https://example.com/hero.svg", contentType: "image/svg+xml" }),
+            css({
+              url: "https://example.com/hero.svg",
+              contentType: "image/svg+xml",
+            }),
           ],
         })
-      ))
+      )
     );
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/hero.svg"]);
@@ -110,21 +120,26 @@ describe("perf/asset-compression — reports", () => {
   test.each([
     ["identity", "identity"],
     ["IDENTITY (uppercase)", "IDENTITY"],
-  ])("%s is reported — it means compression is off, not unknown", async (_l, enc) => {
-    const check = only(await run(ctx({ css: [css({ contentEncoding: enc })] })));
-    expect(check.status).toBe("warn");
-  });
+  ])(
+    "%s is reported — it means compression is off, not unknown",
+    async (_l, enc) => {
+      const check = only(
+        await run(ctx({ css: [css({ contentEncoding: enc })] }))
+      );
+      expect(check.status).toBe("warn");
+    }
+  );
 
   test("findings are sorted biggest-first and totalled", async () => {
     const check = only(
-      (await run(
+      await run(
         ctx({
           css: [
             css({ url: "https://example.com/small.css", sizeBytes: BIG }),
             css({ url: "https://example.com/huge.css", sizeBytes: BIG * 3 }),
           ],
         })
-      ))
+      )
     );
     expect(itemIds(check)).toEqual([
       "https://example.com/huge.css",
@@ -155,18 +170,21 @@ describe("perf/asset-compression — stays silent", () => {
     expect(check.status).toBe("pass");
   });
 
-
   test("an all-identity coding list is still reported as uncompressed", async () => {
     // Content-Encoding is a LIST. The fetchers normalize a lone `identity` to
     // null, but they match one token, so `identity, identity` arrives verbatim
     // and must not be mistaken for a real coding.
-    const check = only(await run(ctx({ css: [css({ contentEncoding: "identity, identity" })] })));
+    const check = only(
+      await run(ctx({ css: [css({ contentEncoding: "identity, identity" })] }))
+    );
     expect(check.status).toBe("warn");
     expect(itemIds(check)).toEqual(["https://example.com/app.css"]);
   });
 
   test("a list is compressed when any token is a real coding", async () => {
-    const check = only(await run(ctx({ css: [css({ contentEncoding: "identity, gzip" })] })));
+    const check = only(
+      await run(ctx({ css: [css({ contentEncoding: "identity, gzip" })] }))
+    );
     expect(check.status).toBe("pass");
   });
 
@@ -175,7 +193,9 @@ describe("perf/asset-compression — stays silent", () => {
     // unconfirmable ranged 206 records `undefined`, and the rule must stay
     // silent rather than report a possibly-gzipped asset as uncompressed.
     const check = only(
-      (await run(ctx({ css: [css({ status: 206, contentEncoding: undefined })] })))
+      await run(
+        ctx({ css: [css({ status: 206, contentEncoding: undefined })] })
+      )
     );
     expect(check.status).toBe("skipped");
   });
@@ -187,7 +207,9 @@ describe("perf/asset-compression — stays silent", () => {
 
   test("an asset exactly at the threshold is not reported (strict >)", async () => {
     const check = only(
-      (await run(ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] })))
+      await run(
+        ctx({ css: [css({ sizeBytes: ASSET_COMPRESSION_LIMITS.MIN_BYTES })] })
+      )
     );
     expect(check.status).toBe("pass");
   });
@@ -201,7 +223,9 @@ describe("perf/asset-compression — stays silent", () => {
   });
 
   test("a cache-reused record is not reported (headers are the prior crawl's)", async () => {
-    const check = only(await run(ctx({ css: [css({ cacheReason: "max-age" })] })));
+    const check = only(
+      await run(ctx({ css: [css({ cacheReason: "max-age" })] }))
+    );
     expect(check.status).toBe("skipped");
   });
 
@@ -211,10 +235,13 @@ describe("perf/asset-compression — stays silent", () => {
     ["woff2 font", "font/woff2"],
     ["PDF", "application/pdf"],
     ["octet-stream", "application/octet-stream"],
-  ])("a large %s is not reported (not compressible text)", async (_label, contentType) => {
-    const check = only(await run(ctx({ images: [css({ contentType })] })));
-    expect(check.status).toBe("skipped");
-  });
+  ])(
+    "a large %s is not reported (not compressible text)",
+    async (_label, contentType) => {
+      const check = only(await run(ctx({ images: [css({ contentType })] })));
+      expect(check.status).toBe("skipped");
+    }
+  );
 
   test.each([
     ["a 404", { status: 404 }],
@@ -230,7 +257,7 @@ describe("perf/asset-compression — stays silent", () => {
     // reading at, not the asset's real length — and this rule's finding names
     // that size out loud, so it must not speak for such a record.
     const check = only(
-      (await run(ctx({ scripts: [script({ error: "script too large" })] })))
+      await run(ctx({ scripts: [script({ error: "script too large" })] }))
     );
     expect(check.status).toBe("skipped");
   });

@@ -7,20 +7,24 @@
 // stored features come from extractPageFeatures applied to the identical parsed
 // pages, this also end-to-end-validates the extractor + the v19 columns.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
-import { SQLiteStorage } from "@squirrelscan/crawler";
-import { loadAllRules } from "@squirrelscan/rules";
-import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 import type {
   PageRecord,
   RobotsTxtData,
   SitemapDiscovery,
 } from "@squirrelscan/core-contracts";
+import type { ParsedPage, Rule, RuleContext } from "@squirrelscan/rules";
 
-import { createSiteQuery, extractPageFeatures, isAuditablePage } from "../src/index";
+import { SQLiteStorage } from "@squirrelscan/crawler";
+import { loadAllRules } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
+
 import { buildHeadersMap } from "../src/adapter";
+import {
+  createSiteQuery,
+  extractPageFeatures,
+  isAuditablePage,
+} from "../src/index";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -111,10 +115,30 @@ function mkPage(spec: Spec): { page: PageRecord; parsed: ParsedPage } {
 // Fixture (normalized_url ASC): exercises meta-noindex, header-noindex,
 // robots.txt-disallow, and rich-schema conflicts.
 const FIXTURE: Spec[] = [
-  { normalizedUrl: "https://example.com/a", robots: "noindex,follow", xRobotsTag: null, schemaTypes: [] },
-  { normalizedUrl: "https://example.com/c", robots: "index,follow", xRobotsTag: null, schemaTypes: ["Article", "Product"] },
-  { normalizedUrl: "https://example.com/private/x", robots: "noindex", xRobotsTag: null, schemaTypes: ["Recipe"] },
-  { normalizedUrl: "https://example.com/z", robots: null, xRobotsTag: "noindex", schemaTypes: [] },
+  {
+    normalizedUrl: "https://example.com/a",
+    robots: "noindex,follow",
+    xRobotsTag: null,
+    schemaTypes: [],
+  },
+  {
+    normalizedUrl: "https://example.com/c",
+    robots: "index,follow",
+    xRobotsTag: null,
+    schemaTypes: ["Article", "Product"],
+  },
+  {
+    normalizedUrl: "https://example.com/private/x",
+    robots: "noindex",
+    xRobotsTag: null,
+    schemaTypes: ["Recipe"],
+  },
+  {
+    normalizedUrl: "https://example.com/z",
+    robots: null,
+    xRobotsTag: "noindex",
+    schemaTypes: [],
+  },
 ];
 
 const ROBOTS_TXT: RobotsTxtData = {
@@ -125,7 +149,10 @@ const ROBOTS_TXT: RobotsTxtData = {
 const SITEMAPS: SitemapDiscovery = {
   discovered: [
     {
-      urls: [{ loc: "https://example.com/a" }, { loc: "https://example.com/c" }],
+      urls: [
+        { loc: "https://example.com/a" },
+        { loc: "https://example.com/c" },
+      ],
     },
   ],
 } as unknown as SitemapDiscovery;
@@ -140,7 +167,9 @@ async function seedAndRun(
 
   // Streaming: extract features from each parsed page and store them.
   for (const { page, parsed } of built) {
-    await run(store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed)));
+    await run(
+      store.upsertPageFeatures(CRAWL, extractPageFeatures(page, parsed))
+    );
   }
 
   // Legacy site.pages, normalized_url ASC (== cursor order), headers via buildHeadersMap.
@@ -160,14 +189,24 @@ async function seedAndRun(
   };
   const legacyCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: sitePages, robotsTxt: ROBOTS_TXT, sitemaps: SITEMAPS },
+    site: {
+      baseUrl: BASE,
+      pages: sitePages,
+      robotsTxt: ROBOTS_TXT,
+      sitemaps: SITEMAPS,
+    },
   };
   const legacy = (await Promise.resolve(rule.run(legacyCtx))).checks;
 
   const siteQuery = await run(createSiteQuery(store, CRAWL));
   const streamedCtx: RuleContext = {
     ...base,
-    site: { baseUrl: BASE, pages: [], robotsTxt: ROBOTS_TXT, sitemaps: SITEMAPS },
+    site: {
+      baseUrl: BASE,
+      pages: [],
+      robotsTxt: ROBOTS_TXT,
+      sitemaps: SITEMAPS,
+    },
     siteQuery,
   };
   const streamed = (await Promise.resolve(rule.run(streamedCtx))).checks;
@@ -217,8 +256,18 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
 
   test("crawl/indexability-conflicts: blocked page without noindex lists pages on both paths", async () => {
     const { legacy, streamed } = await seedAndRun(indexabilityConflicts, {}, [
-      { normalizedUrl: "https://example.com/c", robots: null, xRobotsTag: null, schemaTypes: [] },
-      { normalizedUrl: "https://example.com/private/y", robots: null, xRobotsTag: null, schemaTypes: [] },
+      {
+        normalizedUrl: "https://example.com/c",
+        robots: null,
+        xRobotsTag: null,
+        schemaTypes: [],
+      },
+      {
+        normalizedUrl: "https://example.com/private/y",
+        robots: null,
+        xRobotsTag: null,
+        schemaTypes: [],
+      },
     ]);
     expect(streamed).toEqual(legacy);
     expect(legacy).toHaveLength(1);
@@ -234,10 +283,14 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
     });
     expect(streamed).toEqual(legacy);
     // /a, /private/x, /z blocked; /c indexable. All fall in the info bucket.
-    const info = legacy.find((c) => c.name === "all-noindex" && c.status === "info");
+    const info = legacy.find(
+      (c) => c.name === "all-noindex" && c.status === "info"
+    );
     expect(info?.message).toBe("3 page(s) blocked from indexing");
     // Reason reconstruction (2-arg + robots.txt append) surfaces both reasons.
-    expect(String(info?.value)).toContain("/private/x (meta:noindex, robots.txt:disallowed)");
+    expect(String(info?.value)).toContain(
+      "/private/x (meta:noindex, robots.txt:disallowed)"
+    );
   });
 
   test("crawl/schema-noindex-conflict", async () => {
@@ -252,7 +305,10 @@ describe("PR-D dual-path golden — noindex family (extractor → siteQuery)", (
     expect(check.items).toHaveLength(1);
     expect(check.items![0]).toMatchObject({
       id: "https://example.com/private/x",
-      meta: { schemaTypes: ["Recipe"], blockedBy: ["meta:noindex", "robots.txt:disallowed"] },
+      meta: {
+        schemaTypes: ["Recipe"],
+        blockedBy: ["meta:noindex", "robots.txt:disallowed"],
+      },
     });
     expect(check.details).toMatchObject({ occurrences: 1, pagesTruncated: 1 });
   });
@@ -298,7 +354,12 @@ describe("extractPageFeatures — field extraction", () => {
 
 describe("isAuditablePage — page-universe predicate (E-E gates extraction on this)", () => {
   function base(): PageRecord {
-    return mkPage({ normalizedUrl: BASE, robots: null, xRobotsTag: null, schemaTypes: [] }).page;
+    return mkPage({
+      normalizedUrl: BASE,
+      robots: null,
+      xRobotsTag: null,
+      schemaTypes: [],
+    }).page;
   }
 
   test("normal 200 text/html page with a body → true", () => {
@@ -306,7 +367,9 @@ describe("isAuditablePage — page-universe predicate (E-E gates extraction on t
   });
 
   test("non-HTML content-type → false", () => {
-    expect(isAuditablePage({ ...base(), contentType: "application/pdf" })).toBe(false);
+    expect(isAuditablePage({ ...base(), contentType: "application/pdf" })).toBe(
+      false
+    );
   });
 
   test("missing body → false", () => {
@@ -318,19 +381,27 @@ describe("isAuditablePage — page-universe predicate (E-E gates extraction on t
   });
 
   test("captured zero-byte error response (404) → false", () => {
-    expect(isAuditablePage({ ...base(), status: 404, html: "", sizeBytes: 0 })).toBe(false);
+    expect(
+      isAuditablePage({ ...base(), status: 404, html: "", sizeBytes: 0 })
+    ).toBe(false);
   });
 
   test("captured zero-byte error response (410) → false", () => {
-    expect(isAuditablePage({ ...base(), status: 410, html: "", sizeBytes: 0 })).toBe(false);
+    expect(
+      isAuditablePage({ ...base(), status: 410, html: "", sizeBytes: 0 })
+    ).toBe(false);
   });
 
   test("204 response → false", () => {
-    expect(isAuditablePage({ ...base(), status: 204, html: "", sizeBytes: 0 })).toBe(false);
+    expect(
+      isAuditablePage({ ...base(), status: 204, html: "", sizeBytes: 0 })
+    ).toBe(false);
   });
 
   test("captured zero-byte body without an HTML content type → false", () => {
-    expect(isAuditablePage({ ...base(), contentType: null, html: "", sizeBytes: 0 })).toBe(false);
+    expect(
+      isAuditablePage({ ...base(), contentType: null, html: "", sizeBytes: 0 })
+    ).toBe(false);
   });
 
   test("WAF-challenge interstitial → false", () => {

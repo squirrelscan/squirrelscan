@@ -39,7 +39,10 @@ export function hasObservedRedirect(chain: RedirectChain | undefined): boolean {
   if (!chain || chain.hops.length < 2) return false;
   return chain.hops
     .slice(0, -1)
-    .some((hop) => hop.type !== "http" || (hop.statusCode >= 300 && hop.statusCode < 400));
+    .some(
+      (hop) =>
+        hop.type !== "http" || (hop.statusCode >= 300 && hop.statusCode < 400)
+    );
 }
 
 /**
@@ -62,7 +65,10 @@ export function contradictsItself(chain: RedirectChain | undefined): boolean {
   if (!chain || chain.hops.length < 2) return false;
   return chain.hops
     .slice(0, -1)
-    .some((hop) => hop.type === "http" && hop.statusCode >= 200 && hop.statusCode < 300);
+    .some(
+      (hop) =>
+        hop.type === "http" && hop.statusCode >= 200 && hop.statusCode < 300
+    );
 }
 
 /**
@@ -113,7 +119,10 @@ export function didRedirect(
  * response is certainly the stored document; a client-side hop (a render that
  * navigated) or an unparseable end keeps the page URL.
  */
-export function documentUrl(page: { url: string; redirectChain?: RedirectChain }): string {
+export function documentUrl(page: {
+  url: string;
+  redirectChain?: RedirectChain;
+}): string {
   const chain = page.redirectChain;
   if (!chain || !hasObservedRedirect(chain)) return page.url;
   if (!chain.hops.every((hop) => hop.type === "http")) return page.url;

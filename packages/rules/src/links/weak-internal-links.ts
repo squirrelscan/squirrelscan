@@ -1,16 +1,19 @@
-import { logger } from "../logger";
-import { frontDoorTest } from "../shared/front-door";
+import { CRAWL_CAPPED_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { matchesExcludePattern } from "@squirrelscan/utils";
 // links/weak-internal-links - Pages with minimal internal link support
-
+import { getPathname, normalizeUrl } from "@squirrelscan/utils";
 import { z } from "zod";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import { CRAWL_CAPPED_SKIP_REASON } from "@squirrelscan/core-contracts";
-import { matchesExcludePattern } from "@squirrelscan/utils";
-import { getPathname, normalizeUrl } from "@squirrelscan/utils";
-
-import { addSection, sectionMeta, withSection, type SectionCounts } from "./link-section-label";
+import { logger } from "../logger";
+import { frontDoorTest } from "../shared/front-door";
+import {
+  addSection,
+  sectionMeta,
+  withSection,
+  type SectionCounts,
+} from "./link-section-label";
 
 const SKIP_CHECK: CheckResult = {
   name: "weak-internal-links",
@@ -42,7 +45,11 @@ function buildWeakLinksCheck(
         // #2307: where the one link sits. Without section data the item stays bare.
         const sections = sectionsFor?.(url);
         return sections
-          ? { id: url, label: withSection(url, sections), meta: sectionMeta(sections) }
+          ? {
+              id: url,
+              label: withSection(url, sections),
+              meta: sectionMeta(sections),
+            }
           : { id: url };
       }),
       details: { total: weakPages.length },
@@ -142,7 +149,10 @@ export const weakInternalLinksRule: Rule = {
       );
       const sections = ctx.siteQuery.inboundSectionCounts?.();
       checks.push(
-        buildWeakLinksCheck(weakPages, sections ? (url) => sections.get(url) : undefined)
+        buildWeakLinksCheck(
+          weakPages,
+          sections ? (url) => sections.get(url) : undefined
+        )
       );
       return { checks };
     }
@@ -203,10 +213,10 @@ export const weakInternalLinksRule: Rule = {
     const weakPages = collectWeakPages(
       pages.map(
         (page) =>
-          [page.url, incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0] as [
-            string,
-            number,
-          ]
+          [
+            page.url,
+            incomingLinkCount.get(normalizedCache.get(page.url)!) ?? 0,
+          ] as [string, number]
       ),
       excludePatterns,
       ctx.site?.baseUrl || "",

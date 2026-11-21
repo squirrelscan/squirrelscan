@@ -7,12 +7,12 @@
 // A localhost audit's own assets still load: only link-local and metadata
 // addresses are refused for the site's own pools.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
+
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
 import { ASSET_FETCH_REFUSED_ERROR } from "@squirrelscan/utils/constants";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
@@ -50,7 +50,7 @@ function serve(): { origin: string; foreign: string } {
           `<!doctype html><html><head><title>Fixture</title>${head}</head><body>${body}</body></html>`,
           {
             headers: { "content-type": "text/html; charset=utf-8" },
-          },
+          }
         );
       switch (url.pathname) {
         case "/":
@@ -60,10 +60,12 @@ function serve(): { origin: string; foreign: string } {
               `<link rel="stylesheet" href="/go?u=meta-ip">`,
               `<script src="/go?u=meta-host"></script>`,
             ].join(""),
-            `<img src="/go?u=link-local" alt="x" width="1" height="1">`,
+            `<img src="/go?u=link-local" alt="x" width="1" height="1">`
           );
         case "/style.css":
-          return new Response("body{color:red}", { headers: { "content-type": "text/css" } });
+          return new Response("body{color:red}", {
+            headers: { "content-type": "text/css" },
+          });
         case "/go": {
           const to = url.searchParams.get("u");
           const location =
@@ -80,19 +82,25 @@ function serve(): { origin: string; foreign: string } {
               `<url><loc>${origin}/</loc></url><url><loc>${origin}/orphan</loc></url>` +
               `<url><loc>${origin}/go?u=meta-ip</loc></url>` +
               `<url><loc>${foreign}/elsewhere</loc></url></urlset>`,
-            { headers: { "content-type": "application/xml" } },
+            { headers: { "content-type": "application/xml" } }
           );
         case "/robots.txt":
-          return new Response(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`, {
-            headers: { "content-type": "text/plain" },
-          });
+          return new Response(
+            `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+            {
+              headers: { "content-type": "text/plain" },
+            }
+          );
         default:
           return html("");
       }
     },
   });
   servers.push(server);
-  return { origin: `http://localhost:${server.port}`, foreign: `http://127.0.0.1:${server.port}` };
+  return {
+    origin: `http://localhost:${server.port}`,
+    foreign: `http://127.0.0.1:${server.port}`,
+  };
 }
 
 async function assetsOf(origin: string) {
@@ -111,20 +119,28 @@ async function assetsOf(origin: string) {
         useCacheControl: false,
         disableLinkDiscovery: true,
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   requests = [];
   const config = {
     rule_options: {},
     rules: { enable: ["*"] },
     // The crawl fetches one page; the sitemap-status check takes up to
     // max_pages orphans, so every listed URL is checked.
-    crawler: { max_pages: 10, exclude: [], headers: { [CUSTOM_HEADER]: "audit-only-value" } },
+    crawler: {
+      max_pages: 10,
+      exclude: [],
+      headers: { [CUSTOM_HEADER]: "audit-only-value" },
+    },
     external_links: { enabled: false },
     internal_links: { enabled: false },
   } as unknown as Config;
-  const pre = await Effect.runPromise(runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {}));
+  const pre = await Effect.runPromise(
+    runStreamingPreRules(crawler.storage as SQLiteStorage, crawlId, config, {})
+  );
   return pre.assets;
 }
 
@@ -141,7 +157,9 @@ describe("the asset phase's egress (repo#2764)", () => {
     const ownOrphan = requests.filter((r) => r.path === "/orphan");
     expect(ownOrphan.length).toBeGreaterThan(0);
     expect(ownOrphan.every((r) => r.custom)).toBe(true);
-    expect(requests.filter((r) => r.path === "/style.css").every((r) => r.custom)).toBe(true);
+    expect(
+      requests.filter((r) => r.path === "/style.css").every((r) => r.custom)
+    ).toBe(true);
 
     // Both still checked, in the sitemap's order.
     expect(assets.sitemapUrlStatuses.map((s) => s.url)).toEqual([
@@ -149,7 +167,10 @@ describe("the asset phase's egress (repo#2764)", () => {
       `${origin}/go?u=meta-ip`,
       `${foreign}/elsewhere`,
     ]);
-    expect(assets.sitemapUrlStatuses.find((s) => s.url.endsWith("/elsewhere"))?.status).toBe(200);
+    expect(
+      assets.sitemapUrlStatuses.find((s) => s.url.endsWith("/elsewhere"))
+        ?.status
+    ).toBe(200);
   });
 
   test("a same-site asset that redirects to a metadata or link-local address is refused at that hop", async () => {
@@ -161,12 +182,20 @@ describe("the asset phase's egress (repo#2764)", () => {
     expect(css.get(`${origin}/style.css`)?.status).toBe(200);
     // The redirect itself was requested; the metadata hop never was: it is
     // refused by the egress policy, not a failed connection.
-    expect(css.get(`${origin}/go?u=meta-ip`)?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
-    const script = assets.scripts.find((s) => s.url === `${origin}/go?u=meta-host`);
+    expect(css.get(`${origin}/go?u=meta-ip`)?.error).toBe(
+      ASSET_FETCH_REFUSED_ERROR
+    );
+    const script = assets.scripts.find(
+      (s) => s.url === `${origin}/go?u=meta-host`
+    );
     expect(script?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
-    const image = assets.resourceSizes.images.find((i) => i.url === `${origin}/go?u=link-local`);
+    const image = assets.resourceSizes.images.find(
+      (i) => i.url === `${origin}/go?u=link-local`
+    );
     expect(image?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
-    const sitemapHop = assets.sitemapUrlStatuses.find((s) => s.url === `${origin}/go?u=meta-ip`);
+    const sitemapHop = assets.sitemapUrlStatuses.find(
+      (s) => s.url === `${origin}/go?u=meta-ip`
+    );
     expect(sitemapHop?.error).toBe(ASSET_FETCH_REFUSED_ERROR);
     expect(requests.some((r) => r.path === "/go?u=meta-ip")).toBe(true);
   });

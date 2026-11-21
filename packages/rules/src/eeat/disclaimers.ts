@@ -1,8 +1,8 @@
 // eeat/disclaimers - Checks for required disclaimers on YMYL content
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { getPathname } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const disclaimersRule: Rule = {
   meta: {

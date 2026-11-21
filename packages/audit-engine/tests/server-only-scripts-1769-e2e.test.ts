@@ -4,19 +4,23 @@
 // both, so security/leaked-secrets reports the secrets, the external script is fetched, and the page set is the
 // same for a fast and a slow render.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
+
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 import {
   createConditionalRenderDocumentFetcher,
   createFetchDocumentFetcher,
   type DocumentFetcher,
 } from "@squirrelscan/fetchers";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
-import { buildSiteContext, runRulesOnStorage, runStreamingRules } from "../src/adapter";
+import {
+  buildSiteContext,
+  runRulesOnStorage,
+  runStreamingRules,
+} from "../src/adapter";
 import { runStreamingPreRules } from "../src/streaming-pre-rules";
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
@@ -48,7 +52,7 @@ function serveSite(): string {
             `<script src="/_fault/shop-config.js"></script>` +
             `<script>window.__cfg = { awsKey: "${INLINE_KEY}" };</script>` +
             `</head><body><h1>Product</h1></body></html>`,
-          { headers: { "content-type": "text/html; charset=utf-8" } },
+          { headers: { "content-type": "text/html; charset=utf-8" } }
         );
       }
       return new Response("not found", { status: 404 });
@@ -62,7 +66,11 @@ function serveSite(): string {
 const HYDRATED_BODY = `<!doctype html><html lang="en"><head><title>Product</title></head><body><h1>Product</h1></body></html>`;
 
 /** A render that hydrated: the DOM comes back without the head scripts. `delayMs` is a slow render. */
-function hydratedRender(http: DocumentFetcher, delayMs: number, keepScripts: boolean): DocumentFetcher {
+function hydratedRender(
+  http: DocumentFetcher,
+  delayMs: number,
+  keepScripts: boolean
+): DocumentFetcher {
   return {
     id: "cloud-render",
     capabilities: { jsRendering: true, cookies: false, screenshot: false },
@@ -105,29 +113,55 @@ async function audit(engine: "v1" | "v2", delayMs: number) {
           render: hydratedRender(http, delayMs, false),
         }),
       },
-    }),
+    })
   );
-  const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+  const crawlId = await Effect.runPromise(
+    crawler.start(`${origin}/`, `${origin}/`)
+  );
   const storage = crawler.storage as SQLiteStorage;
   const stored = await Effect.runPromise(storage.getPages(crawlId));
   const checks = await Effect.runPromise(
     Effect.gen(function* () {
-      const preRules = yield* runStreamingPreRules(storage, crawlId, CONFIG, {});
+      const preRules = yield* runStreamingPreRules(
+        storage,
+        crawlId,
+        CONFIG,
+        {}
+      );
       if (engine === "v1") {
         const siteContext = yield* buildSiteContext(stored);
-        const ran = yield* runRulesOnStorage(storage, crawlId, siteContext, CONFIG, preRules.assets);
+        const ran = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          siteContext,
+          CONFIG,
+          preRules.assets
+        );
         return ran.siteRuleResults.get("security/leaked-secrets") ?? [];
       }
-      const ran = yield* runStreamingRules(storage, crawlId, CONFIG, preRules.assets);
+      const ran = yield* runStreamingRules(
+        storage,
+        crawlId,
+        CONFIG,
+        preRules.assets
+      );
       return ran.siteRuleResults.get("security/leaked-secrets") ?? [];
-    }) as Effect.Effect<CheckResult[], never, never>,
+    }) as Effect.Effect<CheckResult[], never, never>
   );
-  return { origin, html: stored[0]?.html ?? "", checks, requested: [...requested] };
+  return {
+    origin,
+    html: stored[0]?.html ?? "",
+    checks,
+    requested: [...requested],
+  };
 }
 
 describe("server-sent scripts that client code removed are still audited (#1769)", () => {
   for (const engine of ["v1", "v2"] as const) {
-    for (const [label, delayMs] of [["fast", 0], ["slow", 300]] as const) {
+    for (const [label, delayMs] of [
+      ["fast", 0],
+      ["slow", 300],
+    ] as const) {
       test(`${engine}, ${label} render: both scripts are read and the secrets name the page`, async () => {
         const run = await audit(engine, delayMs);
         // The stored page holds the union, the server-only scripts marked.
@@ -138,9 +172,13 @@ describe("server-sent scripts that client code removed are still audited (#1769)
         // Both secrets are reported, and the finding names the page.
         const text = JSON.stringify(run.checks);
         expect(text).toContain(`${run.origin}/`);
-        const found = run.checks.find((c) => c.name.startsWith("leaked-secrets-"));
+        const found = run.checks.find((c) =>
+          c.name.startsWith("leaked-secrets-")
+        );
         expect(found?.items?.length).toBe(2);
-        expect(found?.items?.every((i) => i.sourcePages?.includes(`${run.origin}/`))).toBe(true);
+        expect(
+          found?.items?.every((i) => i.sourcePages?.includes(`${run.origin}/`))
+        ).toBe(true);
         expect(text).toContain("inline-script");
         expect(text).toContain("external-script");
       }, 30_000);

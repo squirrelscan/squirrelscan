@@ -1,9 +1,9 @@
 // adblock/element-hiding - selectors hidden by EasyList cosmetic rules
 // (cloud-backed, site-scope — server matches against the full EasyList)
 
-import { z } from "zod";
-
 import type { BlocklistCheckResponse } from "@squirrelscan/core-contracts";
+
+import { z } from "zod";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
@@ -33,17 +33,26 @@ export const elementHidingRule: Rule = {
     severity: "warning",
     weight: 3,
     optionsSchema,
-    cloud: { service: "blocklist-check", unit: "site", creditFeature: "adblock_detect" },
+    cloud: {
+      service: "blocklist-check",
+      unit: "site",
+      creditFeature: "adblock_detect",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<BlocklistCheckResponse>(ctx.cloudResults, "blocklist-check");
+    const envelope = readCloudResult<BlocklistCheckResponse>(
+      ctx.cloudResults,
+      "blocklist-check"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "adblock-elements",
         status: "skipped",
@@ -55,7 +64,7 @@ export const elementHidingRule: Rule = {
 
     // EasyPrivacy matches are reported by adblock/privacy-blocked.
     const matches = envelope.data.matches.filter(
-      (m) => m.kind === "selector" && m.list === "easylist",
+      (m) => m.kind === "selector" && m.list === "easylist"
     );
 
     if (matches.length === 0) {

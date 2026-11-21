@@ -2,17 +2,17 @@
 // already returned (and reports the spend for exactly those calls) instead of
 // discarding the lot.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CloudServicesClient } from "@squirrelscan/cloud-client";
 import type { CloudConfig } from "@squirrelscan/config";
-import { getDefaultConfig } from "@squirrelscan/config";
 import type {
   CloudPagePayload,
   RenderResultResponse,
   SiteMetadataResponse,
 } from "@squirrelscan/core-contracts";
+
+import { getDefaultConfig } from "@squirrelscan/config";
 import { CLOUD_SITE_KEY } from "@squirrelscan/rules";
+import { describe, expect, test } from "bun:test";
 
 import {
   CloudPrefetchAccumulator,
@@ -54,11 +54,19 @@ const METADATA: SiteMetadataResponse = {
 const RULES: CloudPrefetchInput["rules"] = [
   {
     id: "ai/site-metadata",
-    cloud: { service: "site-metadata", unit: "site", creditFeature: "site_metadata" },
+    cloud: {
+      service: "site-metadata",
+      unit: "site",
+      creditFeature: "site_metadata",
+    },
   },
   {
     id: "gaps/keywords",
-    cloud: { service: "keyword-gaps", unit: "site", creditFeature: "keyword_gaps" },
+    cloud: {
+      service: "keyword-gaps",
+      unit: "site",
+      creditFeature: "keyword_gaps",
+    },
   },
   {
     id: "ax/content-without-js",
@@ -66,7 +74,9 @@ const RULES: CloudPrefetchInput["rules"] = [
   },
 ];
 
-function input(client: CloudServicesClient): Omit<CloudPrefetchInput, "accumulator"> {
+function input(
+  client: CloudServicesClient
+): Omit<CloudPrefetchInput, "accumulator"> {
   return {
     client,
     config,
@@ -99,8 +109,10 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
     render: (req: Parameters<CloudServicesClient["render"]>[0]) => {
       const url = req.urls[0];
       submitted.push(url);
-      if (url.endsWith("/p0")) return Promise.resolve({ jobId: "done", status: "queued" });
-      if (url.endsWith("/p1")) return Promise.resolve({ jobId: "stuck", status: "queued" });
+      if (url.endsWith("/p0"))
+        return Promise.resolve({ jobId: "done", status: "queued" });
+      if (url.endsWith("/p1"))
+        return Promise.resolve({ jobId: "stuck", status: "queued" });
       if (url.endsWith("/p2")) {
         return new Promise((resolve) => {
           release.p2 = () => resolve({ jobId: "done", status: "queued" });
@@ -113,7 +125,13 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
         ? {
             jobId,
             status: "done",
-            results: [{ url: "https://example.com/p0", status: 200, html: "<html>p0</html>" }],
+            results: [
+              {
+                url: "https://example.com/p0",
+                status: 200,
+                html: "<html>p0</html>",
+              },
+            ],
           }
         : { jobId, status: "running" },
   } as unknown as CloudServicesClient;
@@ -123,13 +141,18 @@ function partialClient(submitted: string[], release: { p2?: () => void } = {}) {
 describe("abandoned cloud prefetch (#280)", () => {
   test("a deadline with some services returned keeps their results and reports exactly their spend", async () => {
     const submitted: string[] = [];
-    const res = await prefetchCloudDataWithDeadline(input(partialClient(submitted)), 50);
+    const res = await prefetchCloudDataWithDeadline(
+      input(partialClient(submitted)),
+      50
+    );
 
     expect(res.abandoned).toBe(true);
 
     // Kept: Stage 0, the site-unit service, and the render batch that returned.
     expect(res.siteMetadata).toEqual(METADATA);
-    expect(res.store.get("site-metadata")?.get(CLOUD_SITE_KEY)?.status).toBe("ok");
+    expect(res.store.get("site-metadata")?.get(CLOUD_SITE_KEY)?.status).toBe(
+      "ok"
+    );
     expect(res.store.get("keyword-gaps")?.get(CLOUD_SITE_KEY)).toEqual({
       status: "ok",
       data: { gaps: [], summary: "" },
@@ -144,14 +167,22 @@ describe("abandoned cloud prefetch (#280)", () => {
     });
     // Not returned: every other page still has an envelope, so rules skip visibly.
     for (const p of pages.slice(1)) {
-      expect(render?.get(p.url)).toEqual({ status: "skipped", skipReason: "prefetch-out-of-time" });
+      expect(render?.get(p.url)).toEqual({
+        status: "skipped",
+        skipReason: "prefetch-out-of-time",
+      });
     }
 
     // Spend: keyword-gaps (25) + render p0 (returned, 2) + render p1 (charged on
     // submit, its job never finished, 2). p2 to p4 never acknowledged a submit
     // and p5 was never sent, so none of them is reported.
     expect(res.spend).toEqual([
-      { service: "keyword-gaps", feature: "keyword_gaps", units: 1, credits: 25 },
+      {
+        service: "keyword-gaps",
+        feature: "keyword_gaps",
+        units: 1,
+        credits: 25,
+      },
       { service: "render", feature: "render", units: 2, credits: 4 },
     ]);
     expect(res.totalSpent).toBe(29);
@@ -175,7 +206,10 @@ describe("abandoned cloud prefetch (#280)", () => {
     const submitted: string[] = [];
     const release: { p2?: () => void } = {};
     const accumulator = new CloudPrefetchAccumulator();
-    void prefetchCloudData({ ...input(partialClient(submitted, release)), accumulator });
+    void prefetchCloudData({
+      ...input(partialClient(submitted, release)),
+      accumulator,
+    });
     await new Promise((r) => setTimeout(r, 50));
 
     const first = accumulator.abandon();
@@ -196,7 +230,9 @@ describe("abandoned cloud prefetch (#280)", () => {
 
   test("abandoned before preflight returns: every planned key skips, no spend, no balance", async () => {
     const accumulator = new CloudPrefetchAccumulator();
-    const client = { getBalance: () => hang() } as unknown as CloudServicesClient;
+    const client = {
+      getBalance: () => hang(),
+    } as unknown as CloudServicesClient;
     void prefetchCloudData({ ...input(client), accumulator });
     await flush();
     const res = accumulator.abandon();
@@ -207,10 +243,12 @@ describe("abandoned cloud prefetch (#280)", () => {
     expect("balanceAfterApproximate" in res).toBe(false);
     expect(res.siteMetadata).toBeNull();
     for (const p of pages) {
-      expect(res.store.get("render")?.get(p.url)?.skipReason).toBe("prefetch-out-of-time");
+      expect(res.store.get("render")?.get(p.url)?.skipReason).toBe(
+        "prefetch-out-of-time"
+      );
     }
     expect(res.store.get("keyword-gaps")?.get(CLOUD_SITE_KEY)?.skipReason).toBe(
-      "prefetch-out-of-time",
+      "prefetch-out-of-time"
     );
     expect(res.failures.map((f) => [f.service, f.failedUnits])).toEqual([
       ["site-metadata", 1],
@@ -225,7 +263,10 @@ describe("abandoned cloud prefetch (#280)", () => {
         getBalance: async () => BALANCE,
         siteMetadata: async () => METADATA,
         keywordGaps: async () => ({ gaps: [], summary: "" }),
-        render: async (req: Parameters<CloudServicesClient["render"]>[0]) => ({ jobId: req.urls[0], status: "queued" }),
+        render: async (req: Parameters<CloudServicesClient["render"]>[0]) => ({
+          jobId: req.urls[0],
+          status: "queued",
+        }),
         renderResult: async (jobId: string) => ({
           jobId,
           status: "done",
@@ -234,12 +275,18 @@ describe("abandoned cloud prefetch (#280)", () => {
       }) as unknown as CloudServicesClient;
 
     const plain = await prefetchCloudData(input(complete()));
-    const bounded = await prefetchCloudDataWithDeadline(input(complete()), 60_000);
+    const bounded = await prefetchCloudDataWithDeadline(
+      input(complete()),
+      60_000
+    );
     expect("abandoned" in bounded).toBe(false);
     expect("balanceAfterApproximate" in bounded).toBe(false);
     expect(bounded).toEqual(plain);
     const serialize = (r: typeof plain) =>
-      JSON.stringify({ ...r, store: [...r.store].map(([s, m]) => [s, [...m]]) });
+      JSON.stringify({
+        ...r,
+        store: [...r.store].map(([s, m]) => [s, [...m]]),
+      });
     expect(serialize(bounded)).toBe(serialize(plain));
 
     // abandon() after completion hands back the completed result itself.
@@ -275,12 +322,14 @@ describe("abandoned cloud prefetch (#280)", () => {
         blocklist: null,
         gapsSeeds: [],
         renderedPageUrls: new Set(),
-      },
+      }
     );
 
     expect(res?.abandoned).toBe(true);
     expect(res?.siteMetadata).toEqual(METADATA);
-    expect(res?.store.get("ai-parse")?.get(pages[0].url)?.skipReason).toBe("prefetch-out-of-time");
+    expect(res?.store.get("ai-parse")?.get(pages[0].url)?.skipReason).toBe(
+      "prefetch-out-of-time"
+    );
     expect(res?.spend).toEqual([]);
   });
 });

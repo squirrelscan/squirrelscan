@@ -7,11 +7,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Either, Fiber, Stream } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
 import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
+import { createCrawler } from "../src/core/crawler";
 import { CrawlError, fetchPage, isDecompressionError } from "../src/fetcher";
 
-const FETCH_OPTIONS = { userAgent: "squirrel-test", timeoutMs: 5_000, followRedirects: false };
+const FETCH_OPTIONS = {
+  userAgent: "squirrel-test",
+  timeoutMs: 5_000,
+  followRedirects: false,
+};
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
 afterEach(() => {
@@ -31,11 +36,16 @@ function lyingResponse(encoding: string): Response {
 describe("decode failures are attributed", () => {
   for (const encoding of ["br", "gzip"]) {
     test(`content-encoding: ${encoding} that the body does not match names the URL and encoding`, async () => {
-      const server = Bun.serve({ port: 0, fetch: () => lyingResponse(encoding) });
+      const server = Bun.serve({
+        port: 0,
+        fetch: () => lyingResponse(encoding),
+      });
       servers.push(server);
       const url = `http://localhost:${server.port}/`;
 
-      const result = await Effect.runPromise(Effect.either(fetchPage(url, FETCH_OPTIONS)));
+      const result = await Effect.runPromise(
+        Effect.either(fetchPage(url, FETCH_OPTIONS))
+      );
 
       expect(Either.isLeft(result)).toBe(true);
       if (!Either.isLeft(result)) return;
@@ -49,11 +59,12 @@ describe("decode failures are attributed", () => {
   test("a body that decodes normally is untouched", async () => {
     const server = Bun.serve({
       port: 0,
-      fetch: () => new Response(PAGE, { headers: { "content-type": "text/html" } }),
+      fetch: () =>
+        new Response(PAGE, { headers: { "content-type": "text/html" } }),
     });
     servers.push(server);
     const result = await Effect.runPromise(
-      fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS),
+      fetchPage(`http://localhost:${server.port}/`, FETCH_OPTIONS)
     );
     expect(result.status).toBe(200);
     expect(result.body).toBe(PAGE);
@@ -61,7 +72,9 @@ describe("decode failures are attributed", () => {
 
   test("isDecompressionError matches the runtime's decode failures only", () => {
     expect(isDecompressionError(new Error("ZlibError"))).toBe(true);
-    expect(isDecompressionError(new Error("BrotliDecompressionError"))).toBe(true);
+    expect(isDecompressionError(new Error("BrotliDecompressionError"))).toBe(
+      true
+    );
     expect(isDecompressionError(new Error("connection refused"))).toBe(false);
     expect(isDecompressionError("ZlibError")).toBe(false);
   });
@@ -102,8 +115,8 @@ describe("a page that cannot be decoded is counted by the crawl", () => {
       Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
         Effect.sync(() => {
           if (event.type === "page:failed") failures.push(event.error);
-        }),
-      ),
+        })
+      )
     );
     try {
       const crawlId = await Effect.runPromise(crawler.start(origin, origin));

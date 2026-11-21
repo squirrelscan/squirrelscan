@@ -1,9 +1,16 @@
 // schema/local-business - LocalBusiness schema validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+import {
+  flattenJsonLdNodes,
+  indexJsonLdIds,
+  resolveJsonLdRef,
+} from "@squirrelscan/utils";
+import {
+  LOCAL_BUSINESS_TYPES,
+  type LocalBusinessType,
+} from "@squirrelscan/utils/constants";
 
-import { LOCAL_BUSINESS_TYPES, type LocalBusinessType } from "@squirrelscan/utils/constants";
-import { flattenJsonLdNodes, indexJsonLdIds, resolveJsonLdRef } from "@squirrelscan/utils";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // "address" is intentionally NOT required here — service-area businesses
 // (#700) legitimately have no public street address; the address-vs-areaServed
@@ -12,9 +19,11 @@ const REQUIRED_PROPS = ["name"];
 const RECOMMENDED_PROPS = ["telephone", "openingHours", "image", "priceRange"];
 
 function isLocalBusinessType(type: unknown): boolean {
-  if (typeof type === "string") return LOCAL_BUSINESS_TYPES.includes(type as LocalBusinessType);
+  if (typeof type === "string")
+    return LOCAL_BUSINESS_TYPES.includes(type as LocalBusinessType);
   return (
-    Array.isArray(type) && type.some((t) => LOCAL_BUSINESS_TYPES.includes(t as LocalBusinessType))
+    Array.isArray(type) &&
+    type.some((t) => LOCAL_BUSINESS_TYPES.includes(t as LocalBusinessType))
   );
 }
 
@@ -32,14 +41,14 @@ function hasOwnDescriptiveFields(node: Record<string, unknown>): boolean {
     node["polygon"] ||
     node["circle"] ||
     node["box"] ||
-    node["line"],
+    node["line"]
   );
 }
 
 function resolveAreaServedNode(
   node: Record<string, unknown>,
   idMap: Map<string, Record<string, unknown>>,
-  seen: Set<string> = new Set(),
+  seen: Set<string> = new Set()
 ): Record<string, unknown> | null {
   if (hasOwnDescriptiveFields(node)) return node;
   const id = node["@id"];
@@ -53,13 +62,18 @@ function resolveAreaServedNode(
 // text ("Sydney NSW"), an array of either, a structured Place / GeoShape /
 // AdministrativeArea node, or an `@id` reference to one elsewhere in the
 // @graph — accept all forms per Google's SAB guidance (#700).
-function hasServiceArea(value: unknown, idMap: Map<string, Record<string, unknown>>): boolean {
+function hasServiceArea(
+  value: unknown,
+  idMap: Map<string, Record<string, unknown>>
+): boolean {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
   if (Array.isArray(value)) return value.some((v) => hasServiceArea(v, idMap));
   if (typeof value === "object") {
     // resolveAreaServedNode only returns nodes that already carry descriptive fields
-    return resolveAreaServedNode(value as Record<string, unknown>, idMap) != null;
+    return (
+      resolveAreaServedNode(value as Record<string, unknown>, idMap) != null
+    );
   }
   return false;
 }
@@ -89,7 +103,8 @@ export const localBusinessSchemaRule: Rule = {
     // Flattened (handles @graph-wrapped LocalBusiness nodes, e.g. Yoast sites).
     const raw = ctx.parsed.schema.raw;
     const nodes = raw ? flattenJsonLdNodes(raw) : [];
-    const businessSchema = nodes.find((node) => isLocalBusinessType(node["@type"])) ?? null;
+    const businessSchema =
+      nodes.find((node) => isLocalBusinessType(node["@type"])) ?? null;
 
     if (!businessSchema) {
       checks.push({
@@ -129,13 +144,16 @@ export const localBusinessSchemaRule: Rule = {
     // pub#869: an address written as a node reference (`{"@id": …}`) is read
     // from the PostalAddress node it names; a dangling one is judged as written.
     const ids = indexJsonLdIds(nodes, ctx.page.url);
-    const resolve = (value: unknown) => resolveJsonLdRef(value, ids, ctx.page.url);
+    const resolve = (value: unknown) =>
+      resolveJsonLdRef(value, ids, ctx.page.url);
     const rawAddress = Array.isArray(businessSchema["address"])
       ? (businessSchema["address"] as unknown[]).map(resolve)
       : resolve(businessSchema["address"]);
     // An empty candidates array (`address: []`) counts as no address (#724) so
     // the SAB location check below offers the address-vs-areaServed guidance.
-    const hasAddress = Array.isArray(rawAddress) ? rawAddress.length > 0 : Boolean(rawAddress);
+    const hasAddress = Array.isArray(rawAddress)
+      ? rawAddress.length > 0
+      : Boolean(rawAddress);
     if (hasAddress) {
       // Some generators wrap the single PostalAddress in an array (#711); unwrap
       // and pass if ANY entry is complete, matching the areaServed `.some()` seam.

@@ -158,7 +158,8 @@ export function createTlsProbe(options: TlsProbeOptions = {}): TlsProbeFn {
     if (options.requireProxy === true && proxy.kind === "direct") {
       return {
         kind: "unavailable",
-        reason: "no egress proxy applies, and a direct TLS connection is not allowed here",
+        reason:
+          "no egress proxy applies, and a direct TLS connection is not allowed here",
       };
     }
     if (proxy.kind === "unsupported") {

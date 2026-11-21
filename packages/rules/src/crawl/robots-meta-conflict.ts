@@ -1,9 +1,10 @@
 // crawl/robots-meta-conflict - Robots meta vs robots.txt conflict detection
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import type { RobotsTxtData, SiteQuery } from "@squirrelscan/core-contracts";
 
 import { isPageIndexable, isRobotsTxtDisallowed } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 /** noindex from the meta tag or the header; an unparseable page is not noindex. */
 function hasNoindex(reasons: readonly string[]): boolean {
@@ -18,7 +19,10 @@ function hasNoindex(reasons: readonly string[]): boolean {
 // `conflicts` is vestigial (never populated in either path — the "robots-conflict"
 // warn branch is dead code) but is kept in the signature to preserve the exact
 // legacy output structure; both callers pass an empty array.
-function buildChecks(conflicts: string[], redundantNoindex: string[]): CheckResult[] {
+function buildChecks(
+  conflicts: string[],
+  redundantNoindex: string[]
+): CheckResult[] {
   const checks: CheckResult[] = [];
   if (redundantNoindex.length > 0) {
     checks.push({
@@ -58,7 +62,10 @@ async function runViaSiteQuery(
   const conflicts: string[] = [];
   const redundantNoindex: string[] = [];
   for await (const row of siteQuery.pagesMatching(() => true)) {
-    if (hasNoindex(row.indexableReasons) && isRobotsTxtDisallowed(row.normalizedUrl, robotsTxt)) {
+    if (
+      hasNoindex(row.indexableReasons) &&
+      isRobotsTxtDisallowed(row.normalizedUrl, robotsTxt)
+    ) {
       redundantNoindex.push(row.normalizedUrl);
     }
   }
@@ -115,7 +122,9 @@ export const robotsMetaConflictRule: Rule = {
     for (const page of pages) {
       const isBlocked = isRobotsTxtDisallowed(page.url, robotsTxt);
       // noindex from the meta tag or the X-Robots-Tag header (pub#556).
-      const noindex = hasNoindex(isPageIndexable(page.parsed, page.headers).reasons);
+      const noindex = hasNoindex(
+        isPageIndexable(page.parsed, page.headers).reasons
+      );
 
       if (isBlocked && noindex) {
         // Blocked in robots.txt AND has noindex - redundant

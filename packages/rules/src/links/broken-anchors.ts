@@ -10,10 +10,10 @@
 
 import type { LinkSection } from "@squirrelscan/core-contracts";
 
+import { normalizeUrl } from "@squirrelscan/utils";
+
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import type { PageAnchorSignal } from "./page-anchors";
-
-import { normalizeUrl } from "@squirrelscan/utils";
 
 import {
   regionsField,
@@ -61,7 +61,7 @@ const stripHash = (url: string): string => {
  */
 export function anchorLookup(
   ctx: RuleContext,
-  pages: SitePage[],
+  pages: SitePage[]
 ): (key: string) => PageAnchorSignal | null {
   if (ctx.collectedSignals) {
     const byKey = new Map<string, PageAnchorSignal | null>();
@@ -140,7 +140,8 @@ export const brokenAnchorsRule: Rule = {
 
     const anchorsOf = anchorLookup(ctx, pages);
     const statusByKey = new Map<string, number>();
-    for (const page of pages) statusByKey.set(normalizeUrl(page.url), page.statusCode);
+    for (const page of pages)
+      statusByKey.set(normalizeUrl(page.url), page.statusCode);
 
     // Membership sets built once per target record, not once per link.
     const idSets = new Map<PageAnchorSignal, Set<string>>();
@@ -186,12 +187,14 @@ export const brokenAnchorsRule: Rule = {
           sources: new Map(),
           skipLink: false,
           unconfirmed:
-            link.targetRecord.clientShell || scriptMayCreateId(link.targetRecord, link.fragment),
+            link.targetRecord.clientShell ||
+            scriptMayCreateId(link.targetRecord, link.fragment),
         };
         groups.set(groupKey, group);
       }
       tallySource(group.sources, link.sourceUrl, link.section, link.links);
-      if (link.sourceRecord?.skipFragments.includes(link.fragment)) group.skipLink = true;
+      if (link.sourceRecord?.skipFragments.includes(link.fragment))
+        group.skipLink = true;
     };
 
     for (const page of pages) {
@@ -264,14 +267,23 @@ export const brokenAnchorsRule: Rule = {
         status: "warn",
         message: `${broken.length} in-page anchor link(s) point at an id that does not exist on the target page`,
         items: broken.map((g) => {
-          const { sourcePages, sources, sections, regions } = tallyFields(g.sources);
+          const { sourcePages, sources, sections, regions } = tallyFields(
+            g.sources
+          );
           return {
             id: g.url,
-            label: withSection(`${g.url}${g.skipLink ? " (skip link)" : ""}`, sections),
+            label: withSection(
+              `${g.url}${g.skipLink ? " (skip link)" : ""}`,
+              sections
+            ),
             sourcePages,
             sources,
             ...regionsField(regions),
-            meta: { skipLink: g.skipLink, ...sectionMeta(sections), linkedFrom: sourcePages.length },
+            meta: {
+              skipLink: g.skipLink,
+              ...sectionMeta(sections),
+              linkedFrom: sourcePages.length,
+            },
           };
         }),
       });
@@ -290,14 +302,20 @@ export const brokenAnchorsRule: Rule = {
         status: "info",
         message: `${unconfirmed.length} in-page anchor link(s) target a page that was not rendered and may add the id with JavaScript`,
         items: unconfirmed.map((g) => {
-          const { sourcePages, sources, sections, regions } = tallyFields(g.sources);
+          const { sourcePages, sources, sections, regions } = tallyFields(
+            g.sources
+          );
           return {
             id: g.url,
             label: withSection(g.url, sections),
             sourcePages,
             sources,
             ...regionsField(regions),
-            meta: { ...sectionMeta(sections), linkedFrom: sourcePages.length, rendered: false },
+            meta: {
+              ...sectionMeta(sections),
+              linkedFrom: sourcePages.length,
+              rendered: false,
+            },
           };
         }),
       });

@@ -6,8 +6,8 @@
 // in the record the rule reads — including the nginx-shaped case where a
 // bodiless HEAD hides the compression that a GET reveals.
 
-import { Effect } from "effect";
 import { afterAll, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { checkResourceSizes } from "../src/resource-checker";
 import { fetchScriptContents } from "../src/script-fetcher";
@@ -52,7 +52,10 @@ const server = Bun.serve({
 
     const identity = () =>
       new Response(isHead ? null : BODY, {
-        headers: { "content-type": type, "content-length": String(BODY.length) },
+        headers: {
+          "content-type": type,
+          "content-length": String(BODY.length),
+        },
       });
 
     /** A 206 that answers the one-byte Range without any coding. */

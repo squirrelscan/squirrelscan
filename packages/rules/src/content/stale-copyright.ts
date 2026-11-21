@@ -1,11 +1,16 @@
 // content/stale-copyright - Footer copyright year older than the current year
 
-import { z } from "zod";
 import type { Element } from "linkedom";
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-import { ComponentOccurrenceCache, componentOccurrence } from "../shared/component-occurrence";
+import { z } from "zod";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  ComponentOccurrenceCache,
+  componentOccurrence,
+} from "../shared/component-occurrence";
 
 export const optionsSchema = z.object({
   // Injected so a test never depends on the wall clock: a rule that reads the
@@ -17,7 +22,9 @@ export const optionsSchema = z.object({
     .min(1970)
     .max(9999)
     .optional()
-    .describe("Year to compare the footer against; defaults to the current UTC year"),
+    .describe(
+      "Year to compare the footer against; defaults to the current UTC year"
+    ),
 });
 
 /**
@@ -80,7 +87,7 @@ export function latestCopyrightYear(text: string): number | undefined {
  */
 function innermostAssertingElements(
   footers: readonly Element[],
-  year: number,
+  year: number
 ): Element[] {
   const out: Element[] = [];
   const seen = new Set<Element>();
@@ -185,18 +192,19 @@ export const staleCopyrightRule: Rule = {
             // assertion across all footer regions. Attach evidence only for
             // elements that assert THAT selected value, so older suppressed
             // notices never become invented findings.
-            componentOccurrences: innermostAssertingElements(footers, year).map((element) =>
-              componentOccurrence(
-                {
-                  pageUrl: ctx.page.url,
-                  observedUrl: ctx.page.finalUrl ?? ctx.page.url,
+            componentOccurrences: innermostAssertingElements(footers, year).map(
+              (element) =>
+                componentOccurrence(
+                  {
+                    pageUrl: ctx.page.url,
+                    observedUrl: ctx.page.finalUrl ?? ctx.page.url,
                     rendered: ctx.page.rendered === true,
-                  element,
-                  kind: "stale-copyright",
-                  values: { year, currentYear },
-                },
-                occurrenceCache,
-              ),
+                    element,
+                    kind: "stale-copyright",
+                    values: { year, currentYear },
+                  },
+                  occurrenceCache
+                )
             ),
           }
         : {
@@ -205,7 +213,7 @@ export const staleCopyrightRule: Rule = {
             // A year AHEAD of now is not a finding: sites legitimately roll over early.
             message: `Footer copyright year is ${year}`,
             value: year,
-          },
+          }
     );
     return { checks };
   },

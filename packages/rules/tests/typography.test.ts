@@ -1,17 +1,27 @@
 // content/typography: low-severity typographic hygiene. The risk is false positives
 // (code blocks, French copy, ellipses, CLI flags), so those fixtures matter most.
 
-import { describe, expect, test } from "bun:test";
 import { parseHTML } from "@squirrelscan/parser/dom";
+import { describe, expect, test } from "bun:test";
 
-import { findTypographyIssues, typographyRule } from "../src/content/typography";
 import type { ParsedPage, RuleContext } from "../src/types";
+
+import {
+  findTypographyIssues,
+  typographyRule,
+} from "../src/content/typography";
 
 async function run(body: string, lang = "en") {
   const html = `<html lang="${lang}"><head></head><body>${body}</body></html>`;
   const { document } = parseHTML(html);
   const ctx: RuleContext = {
-    page: { url: "https://example.com/", html, statusCode: 200, loadTime: 0, headers: {} },
+    page: {
+      url: "https://example.com/",
+      html,
+      statusCode: 200,
+      loadTime: 0,
+      headers: {},
+    },
     parsed: { document } as unknown as ParsedPage,
     options: {},
   };
@@ -19,9 +29,10 @@ async function run(body: string, lang = "en") {
 }
 
 const kinds = (checks: Awaited<ReturnType<typeof run>>) =>
-  ((checks[0]!.details as { kinds: { kind: string }[] } | undefined)?.kinds ?? []).map(
-    (k) => k.kind,
-  );
+  (
+    (checks[0]!.details as { kinds: { kind: string }[] } | undefined)?.kinds ??
+    []
+  ).map((k) => k.kind);
 
 describe("content/typography", () => {
   test("rule metadata is info severity with a minimal weight", () => {
@@ -31,7 +42,7 @@ describe("content/typography", () => {
 
   test("pass: clean copy, ellipsis, domain, emoticon and a CLI flag", async () => {
     const c = await run(
-      "<p>Hello, world. This is fine... see example.com or use the --verbose flag :) “Quoted” text, it’s tidy.</p>",
+      "<p>Hello, world. This is fine... see example.com or use the --verbose flag :) “Quoted” text, it’s tidy.</p>"
     );
     expect(c[0]!.status).toBe("pass");
   });
@@ -44,9 +55,15 @@ describe("content/typography", () => {
 
   test("spaces where two text nodes meet are not a double space", async () => {
     // A browser collapses whitespace across node boundaries: each renders one space.
-    expect((await run("<p><b>Two </b> spaces here.</p>"))[0]!.status).toBe("pass");
-    expect((await run("<p>Read <a href='/'> the docs</a> first.</p>"))[0]!.status).toBe("pass");
-    expect((await run("<p><span>Hello </span> <span>world</span></p>"))[0]!.status).toBe("pass");
+    expect((await run("<p><b>Two </b> spaces here.</p>"))[0]!.status).toBe(
+      "pass"
+    );
+    expect(
+      (await run("<p>Read <a href='/'> the docs</a> first.</p>"))[0]!.status
+    ).toBe("pass");
+    expect(
+      (await run("<p><span>Hello </span> <span>world</span></p>"))[0]!.status
+    ).toBe("pass");
   });
 
   test("double spaces are counted inside each text node", async () => {
@@ -93,7 +110,7 @@ describe("content/typography", () => {
 
   test("pre and code are never flagged", async () => {
     const c = await run(
-      '<p>Plain text.</p><pre>a  b , c -- d "x" “y”</pre><p>Use <code>x  --  y , z</code> here.</p>',
+      '<p>Plain text.</p><pre>a  b , c -- d "x" “y”</pre><p>Use <code>x  --  y , z</code> here.</p>'
     );
     expect(c[0]!.status).toBe("pass");
   });
@@ -101,7 +118,7 @@ describe("content/typography", () => {
   test("French copy is not flagged for space before punctuation", async () => {
     const c = await run(
       "<p>Bonjour ! Comment allez-vous ? Voici : un exemple ; merci.</p>",
-      "fr-FR",
+      "fr-FR"
     );
     expect(c[0]!.status).toBe("pass");
   });
@@ -118,7 +135,13 @@ describe("content/typography", () => {
 
   test("skipped: no document and no body", async () => {
     const noDoc = await typographyRule.run({
-      page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: "https://example.com/",
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: { document: null } as unknown as ParsedPage,
       options: {},
     });
@@ -126,7 +149,13 @@ describe("content/typography", () => {
     const doc = parseHTML("<html></html>").document;
     doc.querySelector("body")?.remove();
     const noBody = await typographyRule.run({
-      page: { url: "https://example.com/", html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: "https://example.com/",
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: { document: doc } as unknown as ParsedPage,
       options: {},
     });
@@ -135,6 +164,8 @@ describe("content/typography", () => {
 
   test("findTypographyIssues respects the punctuation switch", () => {
     expect(findTypographyIssues("a , b", false)).toEqual([]);
-    expect(findTypographyIssues("a , b", true)[0]!.kind).toBe("space-before-punctuation");
+    expect(findTypographyIssues("a , b", true)[0]!.kind).toBe(
+      "space-before-punctuation"
+    );
   });
 });

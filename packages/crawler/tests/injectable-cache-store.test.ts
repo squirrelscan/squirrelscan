@@ -12,11 +12,12 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
-import { createCrawler } from "../src/core/crawler";
-import { SQLiteStorage } from "../src/storage/sqlite";
 import type { CacheLookup, CacheStore } from "../src/cache-store";
 import type { CrawlFetcher } from "../src/fetcher";
 import type { PageRecord } from "../src/storage/types";
+
+import { createCrawler } from "../src/core/crawler";
+import { SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
   return Effect.runPromise(eff as Effect.Effect<A, never, never>);
@@ -71,7 +72,10 @@ function priorPage(url: string): PageRecord {
 }
 
 /** Records what the crawl asked for, and answers with the given status. */
-function trackingFetcher(seen: string[], status: (url: string) => number): CrawlFetcher {
+function trackingFetcher(
+  seen: string[],
+  status: (url: string) => number
+): CrawlFetcher {
   return ((url: string) => {
     seen.push(url);
     const code = status(url);
@@ -116,7 +120,7 @@ describe("injectable cache store (#1899)", () => {
           respectRobots: false,
           followRedirects: false,
         },
-      }),
+      })
     );
     await run(crawler.start("https://cache-seam.test/"));
 
@@ -141,7 +145,7 @@ describe("injectable cache store (#1899)", () => {
                 entry: priorPage(url),
                 freshness: { fresh: false, revalidate: false } as never,
               } satisfies CacheLookup)
-            : ({ entry: null } satisfies CacheLookup),
+            : ({ entry: null } satisfies CacheLookup)
         ),
       store: () => Effect.void,
     };
@@ -157,7 +161,7 @@ describe("injectable cache store (#1899)", () => {
           respectRobots: false,
           followRedirects: false,
         },
-      }),
+      })
     );
     const crawlId = await run(crawler.start(url));
 
@@ -186,7 +190,7 @@ describe("injectable cache store (#1899)", () => {
           respectRobots: false,
           followRedirects: false,
         },
-      }),
+      })
     );
     const crawlId = await run(crawler.start("https://cache-seam.test/"));
     const pages = await run(storage.getPages(crawlId));

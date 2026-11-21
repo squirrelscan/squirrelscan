@@ -34,7 +34,11 @@ describe("extractLinkAssetHrefs", () => {
 
   test("unquoted and single-quoted attributes, any attribute order, rel with several words", () => {
     const html = `<link rel=stylesheet href=/plain.css><link href='/single.css' rel='preload stylesheet'><link REL="StyleSheet" HREF="/upper.css"><link rel=icon href=/i.ico>`;
-    expect(extractLinkAssetHrefs(html)).toEqual(["/plain.css", "/single.css", "/upper.css"]);
+    expect(extractLinkAssetHrefs(html)).toEqual([
+      "/plain.css",
+      "/single.css",
+      "/upper.css",
+    ]);
   });
 
   test("bounded: a hostile page of unclosed tags costs its prefix", () => {
@@ -49,7 +53,10 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
 <script src="/app.js"></script></head></html>`;
 
   test("buildTechInputs", () => {
-    const [home] = buildTechInputs([{ url: "https://example.com/", headers: {}, html }], []);
+    const [home] = buildTechInputs(
+      [{ url: "https://example.com/", headers: {}, html }],
+      []
+    );
     expect(home?.scripts?.map((s) => s.url)).toEqual([
       "/app.js",
       "https://example.com/wp-content/plugins/woocommerce/assets/css/woocommerce.css",
@@ -57,7 +64,10 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
   });
 
   test("a stylesheet-path signal is detected on a page that also has scripts", () => {
-    const inputs = buildTechInputs([{ url: "https://example.com/", headers: {}, html }], []);
+    const inputs = buildTechInputs(
+      [{ url: "https://example.com/", headers: {}, html }],
+      []
+    );
     const ids = detectReportTechnologiesMulti(inputs).items.map((t) => t.id);
     expect(ids).toContain("woocommerce");
   });
@@ -66,18 +76,21 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
     const unquoted = `<html><head><link rel=stylesheet href=/wp-content/plugins/woocommerce/assets/css/woocommerce.css><script src="/app.js"></script></head></html>`;
     const inputs = buildTechInputs(
       [{ url: "https://example.com/", headers: {}, html: unquoted }],
-      [],
+      []
     );
-    expect(detectReportTechnologiesMulti(inputs).items.map((t) => t.id)).toContain("woocommerce");
+    expect(
+      detectReportTechnologiesMulti(inputs).items.map((t) => t.id)
+    ).toContain("woocommerce");
   });
 
   test("a page with 70 stylesheets cannot push its scripts out, and its link URLs have a cap of their own", () => {
-    const scripts = Array.from({ length: 60 }, (_, i) => `<script src="/s${i}.js"></script>`).join(
-      "",
-    );
+    const scripts = Array.from(
+      { length: 60 },
+      (_, i) => `<script src="/s${i}.js"></script>`
+    ).join("");
     const links = Array.from(
       { length: 70 },
-      (_, i) => `<link rel="stylesheet" href="/c${i}.css">`,
+      (_, i) => `<link rel="stylesheet" href="/c${i}.css">`
     ).join("");
     const [home] = buildTechInputs(
       [
@@ -87,7 +100,7 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
           html: `<html><head>${links}${scripts}</head></html>`,
         },
       ],
-      [],
+      []
     );
     const urls = home?.scripts?.map((s) => s.url) ?? [];
     for (let i = 0; i < 60; i++) expect(urls).toContain(`/s${i}.js`);
@@ -98,21 +111,31 @@ describe("the home page lists its stylesheet URLs beside its scripts", () => {
   test("WooCommerce CSS listed last among 70 stylesheets is still detected (platform paths first)", () => {
     const links = Array.from(
       { length: 70 },
-      (_, i) => `<link rel="stylesheet" href="/builder/c${i}.css">`,
+      (_, i) => `<link rel="stylesheet" href="/builder/c${i}.css">`
     ).join("");
     const woo = `<link rel="stylesheet" href="/wp-content/plugins/woocommerce/assets/css/woocommerce.css">`;
     const html = `<html><head>${links}${woo}<script src="/app.js"></script></head></html>`;
-    const inputs = buildTechInputs([{ url: "https://example.com/", headers: {}, html }], []);
-    expect(detectReportTechnologiesMulti(inputs).items.map((t) => t.id)).toContain("woocommerce");
+    const inputs = buildTechInputs(
+      [{ url: "https://example.com/", headers: {}, html }],
+      []
+    );
+    expect(
+      detectReportTechnologiesMulti(inputs).items.map((t) => t.id)
+    ).toContain("woocommerce");
   });
 
   test("a glued self-closing slash on an unquoted rel still lists the href", () => {
-    expect(extractLinkAssetHrefs(`<link href=/a.css rel=stylesheet/>`)).toEqual(["/a.css"]);
+    expect(extractLinkAssetHrefs(`<link href=/a.css rel=stylesheet/>`)).toEqual(
+      ["/a.css"]
+    );
   });
 
   test("a stylesheet named only in prose or a code sample is not listed", () => {
     const prose = `<html><body><p>Load /wp-content/plugins/woocommerce/x.css</p><pre>&lt;link rel="stylesheet" href="/wp-content/plugins/woocommerce/x.css"&gt;</pre><script src="/app.js"></script></body></html>`;
-    const [home] = buildTechInputs([{ url: "https://example.com/", headers: {}, html: prose }], []);
+    const [home] = buildTechInputs(
+      [{ url: "https://example.com/", headers: {}, html: prose }],
+      []
+    );
     expect(home?.scripts?.map((s) => s.url)).toEqual(["/app.js"]);
   });
 });

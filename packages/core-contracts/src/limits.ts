@@ -234,7 +234,9 @@ export const AUDIT_RUNTIME = {
  * extra five minutes is the cheap one, so the unknown takes the most generous
  * answer rather than a default that happens to be first in the table.
  */
-export function stallWindowForPhaseMs(phase: string | null | undefined): number {
+export function stallWindowForPhaseMs(
+  phase: string | null | undefined
+): number {
   const windows = AUDIT_RUNTIME.stallWindowMsByPhase;
   return phase && Object.hasOwn(windows, phase)
     ? windows[phase as AuditLivenessPhase]
@@ -249,7 +251,7 @@ export function stallWindowForPhaseMs(phase: string | null | undefined): number 
  * window. Derived so adding a longer phase moves it.
  */
 export const MAX_STALL_WINDOW_MS = Math.max(
-  ...Object.values(AUDIT_RUNTIME.stallWindowMsByPhase),
+  ...Object.values(AUDIT_RUNTIME.stallWindowMsByPhase)
 );
 
 // ── Fix Runner ──────────────────────────────────────────────────
@@ -663,10 +665,25 @@ export interface ReportCapTier {
  */
 export const REPORT_CAPS = {
   tiers: [
-    { pagesPerClass: 10, itemsPerClass: 5, sourcePagesPerItem: 1, messageChars: 500 },
-    { pagesPerClass: 3, itemsPerClass: 1, sourcePagesPerItem: 1, messageChars: 300 },
+    {
+      pagesPerClass: 10,
+      itemsPerClass: 5,
+      sourcePagesPerItem: 1,
+      messageChars: 500,
+    },
+    {
+      pagesPerClass: 3,
+      itemsPerClass: 1,
+      sourcePagesPerItem: 1,
+      messageChars: 300,
+    },
     // Counts only: no page or item samples, just the class and its true totals.
-    { pagesPerClass: 0, itemsPerClass: 0, sourcePagesPerItem: 0, messageChars: 200 },
+    {
+      pagesPerClass: 0,
+      itemsPerClass: 0,
+      sourcePagesPerItem: 0,
+      messageChars: 200,
+    },
   ] satisfies readonly ReportCapTier[],
   /**
    * Issue classes kept per rule. A rule past it keeps the classes that matter

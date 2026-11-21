@@ -63,7 +63,10 @@ export function createEntityMapCollector(): EntityMapCollector {
         // A redirect chain can land two crawl records on one final URL. The
         // builder counts the page once and lets a later record that HAS
         // JSON-LD fill in for an earlier one that had none.
-        builder.addPage(page.finalUrl || page.url, parsed?.schemas?.raw ?? null);
+        builder.addPage(
+          page.finalUrl || page.url,
+          parsed?.schemas?.raw ?? null
+        );
       }
     },
 

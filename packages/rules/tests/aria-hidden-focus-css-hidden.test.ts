@@ -7,13 +7,14 @@
 // attributes and the `<style>` rules shared/page-styles.ts can decide
 // (pub#678). External stylesheets are not read.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { ariaHiddenFocusRule } from "../src/a11y/aria-hidden-focus";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 async function run(html: string): Promise<CheckResult[]> {
   const url = "https://example.com/";
@@ -64,43 +65,53 @@ describe("a11y/aria-hidden-focus: the six repro fixtures (pub#664)", () => {
 
   for (const name of ["hidden", "inert", "disabled"] as const) {
     test(`${name}: passes`, async () => {
-      expect(await statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(VARIANTS[name]))).toEqual({
+        "aria-hidden-focus": "pass",
+      });
     });
   }
 
   test("display-none and visibility-hidden come from a <style> block: pass (pub#678)", async () => {
     for (const name of ["display-none", "visibility-hidden"] as const) {
-      expect(await statuses(fixture(VARIANTS[name]))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(VARIANTS[name]))).toEqual({
+        "aria-hidden-focus": "pass",
+      });
     }
   });
 
   test("with an external stylesheet, which could show the button again: unconfirmed", async () => {
     const external = '<link rel="stylesheet" href="/site.css">';
     for (const name of ["display-none", "visibility-hidden"] as const) {
-      expect(await statuses(fixture(external + VARIANTS[name]))).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
+      expect(await statuses(fixture(external + VARIANTS[name]))).toEqual({
+        "aria-hidden-focus-unconfirmed": "warn",
+      });
     }
   });
 
   test("written as inline styles: display:none passes, inherited visibility:hidden too unless a stylesheet could undo it", async () => {
     expect(
-      (await statuses(
-        fixture('<div style="display:none" aria-hidden="true"><button>Close</button></div>'),
-      )),
+      await statuses(
+        fixture(
+          '<div style="display:none" aria-hidden="true"><button>Close</button></div>'
+        )
+      )
     ).toEqual({ "aria-hidden-focus": "pass" });
     // With every stylesheet read, inherited visibility is settled.
     expect(
-      (await statuses(
-        fixture('<div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>'),
-      )),
+      await statuses(
+        fixture(
+          '<div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>'
+        )
+      )
     ).toEqual({ "aria-hidden-focus": "pass" });
     // An external stylesheet could make the button visible again
     // (`button{visibility:visible}`), so then it is not settled.
     expect(
-      (await statuses(
+      await statuses(
         fixture(
-          '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>',
-        ),
-      )),
+          '<link rel="stylesheet" href="/site.css"><div style="visibility:hidden" aria-hidden="true"><button>Close</button></div>'
+        )
+      )
     ).toEqual({ "aria-hidden-focus-unconfirmed": "warn" });
   });
 });
@@ -112,26 +123,32 @@ describe("a11y/aria-hidden-focus: markup and inline styles", () => {
       '<div style="display:none"><div aria-hidden="true"><button>b</button></div></div>',
       '<div style="DISPLAY: NONE !important" aria-hidden="true"><a href="/x">x</a></div>',
     ]) {
-      expect(await statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(variant))).toEqual({
+        "aria-hidden-focus": "pass",
+      });
     }
   });
 
   test("a child that sets visibility:visible inside a visibility:hidden container is still focusable", async () => {
-    const checks = (await run(
+    const checks = await run(
       fixture(
-        `<div style="visibility:hidden" aria-hidden="true"><a href="/x" id="back" style="visibility:visible">x</a></div>`,
-      ),
-    ));
-    expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "a#back" }]);
+        `<div style="visibility:hidden" aria-hidden="true"><a href="/x" id="back" style="visibility:visible">x</a></div>`
+      )
+    );
+    expect(check(checks, "aria-hidden-focus")?.items).toEqual([
+      { id: "a#back" },
+    ]);
   });
 
   test("a focusable container an inline style hides still has its visible descendants checked", async () => {
-    const checks = (await run(
+    const checks = await run(
       fixture(
-        `<div aria-hidden="true" tabindex="0" style="visibility:hidden"><button id="open" style="visibility:visible">Open</button></div>`,
-      ),
-    ));
-    expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "button#open" }]);
+        `<div aria-hidden="true" tabindex="0" style="visibility:hidden"><button id="open" style="visibility:visible">Open</button></div>`
+      )
+    );
+    expect(check(checks, "aria-hidden-focus")?.items).toEqual([
+      { id: "button#open" },
+    ]);
   });
 
   test("off-screen, transparent or clipped content is still reported", async () => {
@@ -141,9 +158,11 @@ describe("a11y/aria-hidden-focus: markup and inline styles", () => {
       "width:0;height:0;overflow:hidden",
       "clip:rect(0 0 0 0);position:absolute",
     ]) {
-      const checks = (await run(
-        fixture(`<div aria-hidden="true" style="${style}"><a href="/x">x</a></div>`),
-      ));
+      const checks = await run(
+        fixture(
+          `<div aria-hidden="true" style="${style}"><a href="/x">x</a></div>`
+        )
+      );
       expect(check(checks, "aria-hidden-focus")?.status).toBe("fail");
     }
   });
@@ -155,7 +174,9 @@ describe("a11y/aria-hidden-focus: markup and inline styles", () => {
       `<div hidden style="display:block" aria-hidden="true"><button>b</button></div>`,
       `<div hidden style="display:var(--d)" aria-hidden="true"><button>b</button></div>`,
     ]) {
-      expect(await statuses(fixture(variant))).toEqual({ "aria-hidden-focus": "pass" });
+      expect(await statuses(fixture(variant))).toEqual({
+        "aria-hidden-focus": "pass",
+      });
     }
   });
 });
@@ -168,9 +189,11 @@ describe("a11y/aria-hidden-focus: inline styles the check cannot read exactly", 
       "display:n\\6f ne",
       "all:unset",
     ]) {
-      const checks = (await run(
-        fixture(`<div style="${style}" aria-hidden="true"><a href="/x">x</a></div>`),
-      ));
+      const checks = await run(
+        fixture(
+          `<div style="${style}" aria-hidden="true"><a href="/x">x</a></div>`
+        )
+      );
       expect(check(checks, "aria-hidden-focus")).toBeUndefined();
       expect(check(checks, "aria-hidden-focus-unconfirmed")).toMatchObject({
         status: "warn",
@@ -182,14 +205,16 @@ describe("a11y/aria-hidden-focus: inline styles the check cannot read exactly", 
   });
 
   test("confirmed and unconfirmed findings are reported side by side", async () => {
-    const checks = (await run(
+    const checks = await run(
       fixture(
-        `<div aria-hidden="true"><a href="/a" id="seen">a</a></div><div aria-hidden="true" style="display:var(--d)"><a href="/b" id="maybe">b</a></div>`,
-      ),
-    ));
-    expect(check(checks, "aria-hidden-focus")?.items).toEqual([{ id: "a#seen" }]);
-    expect(check(checks, "aria-hidden-focus-unconfirmed")?.items?.map((i) => i.id)).toEqual([
-      "a#maybe",
+        `<div aria-hidden="true"><a href="/a" id="seen">a</a></div><div aria-hidden="true" style="display:var(--d)"><a href="/b" id="maybe">b</a></div>`
+      )
+    );
+    expect(check(checks, "aria-hidden-focus")?.items).toEqual([
+      { id: "a#seen" },
     ]);
+    expect(
+      check(checks, "aria-hidden-focus-unconfirmed")?.items?.map((i) => i.id)
+    ).toEqual(["a#maybe"]);
   });
 });

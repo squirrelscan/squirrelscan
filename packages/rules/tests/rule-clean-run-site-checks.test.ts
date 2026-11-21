@@ -1,3 +1,4 @@
+import { parsePage } from "@squirrelscan/parser";
 // #1741: a site-scope rule that ran says so, like the page rules in rule-clean-run-checks.test.ts. Every
 // site-scope rule is run over a small clean site and must emit at least one check. The rules that still
 // return an empty list there, or that need more than this fixture (they throw or answer asynchronously),
@@ -5,10 +6,9 @@
 // must be removed from it, and a new site rule that returns an empty list fails.
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, Rule, RuleResult, SiteData } from "../src/types";
 
 import { loadAllRules } from "../src/loader";
-import type { ParsedPage, Rule, RuleResult, SiteData } from "../src/types";
 import emptyBaseline from "./fixtures/rule-clean-run-site-empty.json";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
 
@@ -33,13 +33,21 @@ function site(): SiteData {
   };
 }
 
-const siteRules = [...loadAllRules().values()].filter((r) => r.meta.scope === "site");
+const siteRules = [...loadAllRules().values()].filter(
+  (r) => r.meta.scope === "site"
+);
 
 function runClean(rule: Rule): RuleResult | null {
   const data = site();
   try {
     const out = rule.run({
-      page: { url: data.baseUrl, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: data.baseUrl,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: data.pages[0]!.parsed,
       site: data,
       options: {},
@@ -62,12 +70,13 @@ describe("a site rule that ran emits a check (#1741)", () => {
       .map((r) => r.meta.id)
       .sort();
     const baseline = new Set<string>(emptyBaseline);
-    expect(unjudged.filter((id) => !baseline.has(id)), "a site rule that ran must emit a pass or info check").toEqual(
-      [],
-    );
+    expect(
+      unjudged.filter((id) => !baseline.has(id)),
+      "a site rule that ran must emit a pass or info check"
+    ).toEqual([]);
     expect(
       [...baseline].filter((id) => !unjudged.includes(id)),
-      "now emits a check: remove from fixtures/rule-clean-run-site-empty.json",
+      "now emits a check: remove from fixtures/rule-clean-run-site-empty.json"
     ).toEqual([]);
     expect([...emptyBaseline]).toEqual([...new Set(emptyBaseline)].sort());
   });

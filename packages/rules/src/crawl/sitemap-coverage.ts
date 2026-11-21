@@ -1,10 +1,14 @@
 // crawl/sitemap-coverage - Check for indexable pages not in sitemap
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { normalizeUrl } from "@squirrelscan/utils";
 
-import { excludesNoindexPage, noindexSource, skipsNoindexPages } from "../shared/noindex";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import {
+  excludesNoindexPage,
+  noindexSource,
+  skipsNoindexPages,
+} from "../shared/noindex";
 import { sampleUrlItems } from "../shared/sample-items";
 import { productDiscoveryCheck } from "./product-discovery";
 
@@ -105,7 +109,8 @@ const coverageRule: Rule = {
       const noindexUrls = new Set<string>();
       if (skipNoindex) {
         for (const page of pages) {
-          if (!excludesNoindexPage(ctx.site, page.parsed, page.headers)) continue;
+          if (!excludesNoindexPage(ctx.site, page.parsed, page.headers))
+            continue;
           for (const candidate of [page.url, page.finalUrl]) {
             const normalized = candidate ? normalizedOrNull(candidate) : null;
             if (normalized) noindexUrls.add(normalized);
@@ -113,7 +118,11 @@ const coverageRule: Rule = {
         }
       }
       for (const url of precomputedMissing) {
-        if (noindexUrls.size > 0 && noindexUrls.has(normalizedOrNull(url) ?? url)) continue;
+        if (
+          noindexUrls.size > 0 &&
+          noindexUrls.has(normalizedOrNull(url) ?? url)
+        )
+          continue;
         missingFromSitemap.push(url);
       }
     } else {
@@ -125,11 +134,12 @@ const coverageRule: Rule = {
         // meta-noindex pages, and still does (header noindex is only read when
         // the site is known to be indexable).
         const source = noindexSource(page.parsed, page.headers);
-        if (skipNoindex ? source !== null : source === "robots meta tag") continue;
+        if (skipNoindex ? source !== null : source === "robots meta tag")
+          continue;
 
         // Check if page (or final URL) is in sitemap
         const candidates = [page.url, page.finalUrl].filter(
-          (candidate): candidate is string => !!candidate,
+          (candidate): candidate is string => !!candidate
         );
         let inSitemap = false;
         for (const candidate of candidates) {
@@ -149,11 +159,15 @@ const coverageRule: Rule = {
       checks.push({
         name: "sitemap-coverage",
         status: "skipped",
-        message: "Sitemap was not fully read (or its read state is unknown), so pages missing from it were not checked",
-        skipReason: "Sitemap incomplete (truncated, partly read or read state unknown)",
+        message:
+          "Sitemap was not fully read (or its read state is unknown), so pages missing from it were not checked",
+        skipReason:
+          "Sitemap incomplete (truncated, partly read or read state unknown)",
       });
     } else if (missingFromSitemap.length > 0) {
-      const percentage = Math.round((missingFromSitemap.length / pages.length) * 100);
+      const percentage = Math.round(
+        (missingFromSitemap.length / pages.length) * 100
+      );
 
       checks.push({
         name: "sitemap-coverage",
@@ -178,7 +192,10 @@ const coverageRule: Rule = {
     // whether it is linked or reachable is unknown (#1639). Those are moved to
     // their own info check, keeping the URLs and statuses as evidence, instead of
     // being dropped or reported as actionable.
-    const deniedByUrl = new Map<string, { status: number; reason: "rate_limited" | "waf_challenge" }>();
+    const deniedByUrl = new Map<
+      string,
+      { status: number; reason: "rate_limited" | "waf_challenge" }
+    >();
     for (const target of ctx.site?.fetchedTargets ?? []) {
       if (!target.rateLimited && !target.wafChallenge) continue;
       const key = normalizedOrNull(target.url);
@@ -209,8 +226,12 @@ const coverageRule: Rule = {
         items: denied.map((entry) => ({ id: entry.url })),
         details: {
           total: denied.length,
-          statuses: Array.from(new Set(denied.map((entry) => entry.status))).sort(),
-          reasons: Array.from(new Set(denied.map((entry) => entry.reason))).sort(),
+          statuses: Array.from(
+            new Set(denied.map((entry) => entry.status))
+          ).sort(),
+          reasons: Array.from(
+            new Set(denied.map((entry) => entry.reason))
+          ).sort(),
         },
       });
     }
@@ -225,7 +246,9 @@ const coverageRule: Rule = {
       // reason these URLs are missing (codex review).
       const limits = ctx.site?.crawlLimits;
       const wasCapped =
-        !!limits && limits.pagesCrawled >= limits.maxPages && sitemaps.totalUrls > limits.maxPages;
+        !!limits &&
+        limits.pagesCrawled >= limits.maxPages &&
+        sitemaps.totalUrls > limits.maxPages;
 
       // Count plus sample: one entry per un-crawled sitemap URL ran to
       // thousands of items on a large sitemap (repo#2320).

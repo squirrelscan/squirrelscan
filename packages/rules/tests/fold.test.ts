@@ -4,15 +4,21 @@
 // collapses each over-cap (name, status) issue class into ONE aggregate check
 // that keeps every affected page and the itemized detail within the caps.
 
-import { describe, expect, test } from "bun:test";
-
+import { clampItemId } from "@squirrelscan/core-contracts/clamp";
 import {
   CHECK_DETAILS_LIMITS,
   MAX_PAGES_CAP,
   REPORT_LIMITS,
 } from "@squirrelscan/core-contracts/limits";
+import { describe, expect, test } from "bun:test";
 
-import { clampItemId } from "@squirrelscan/core-contracts/clamp";
+import type {
+  CheckResult,
+  ParsedPage,
+  RuleContext,
+  RuleResult,
+  RuleRunResult,
+} from "../src/types";
 
 import {
   capChecksForPublish,
@@ -29,7 +35,6 @@ import {
 } from "../src/fold";
 import { altTextRule } from "../src/images/alt-text";
 import { mergeRuleRunResult } from "../src/merge";
-import type { CheckResult, ParsedPage, RuleContext, RuleResult, RuleRunResult } from "../src/types";
 
 const SMALL: FoldLimits = {
   maxChecks: 5,
@@ -50,7 +55,7 @@ function failCheck(overrides: Partial<CheckResult> = {}): CheckResult {
 describe("foldOverflowChecks", () => {
   test("at or below the cap the array passes through untouched (same reference)", () => {
     const checks = Array.from({ length: 5 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     expect(foldOverflowChecks(checks, SMALL)).toBe(checks);
   });
@@ -63,7 +68,9 @@ describe("foldOverflowChecks", () => {
       pageUrl: "https://example.com/",
     };
     const checks = [
-      ...Array.from({ length: 6 }, (_, i) => failCheck({ pageUrl: `https://example.com/p/${i}` })),
+      ...Array.from({ length: 6 }, (_, i) =>
+        failCheck({ pageUrl: `https://example.com/p/${i}` })
+      ),
       single,
     ];
 
@@ -92,7 +99,7 @@ describe("foldOverflowChecks", () => {
       failCheck({
         pageUrl: `https://example.com/p/${i}`,
         items: [{ id: "https://cdn.example.com/shared.jpg" }],
-      }),
+      })
     );
 
     const [aggregate] = foldOverflowChecks(checks, SMALL);
@@ -112,7 +119,7 @@ describe("foldOverflowChecks", () => {
         items: [{ id: `item-${i}` }],
         // Two checks already truncated their own items (rule-side "+N more").
         details: i < 2 ? { additional: 10 } : undefined,
-      }),
+      })
     );
 
     const [aggregate] = foldOverflowChecks(checks, SMALL);
@@ -126,10 +133,16 @@ describe("foldOverflowChecks", () => {
     // then recurs on every later check — it must count as ONE dropped item.
     const checks = [
       ...Array.from({ length: 3 }, (_, i) =>
-        failCheck({ pageUrl: `https://example.com/p/${i}`, items: [{ id: `item-${i}` }] }),
+        failCheck({
+          pageUrl: `https://example.com/p/${i}`,
+          items: [{ id: `item-${i}` }],
+        })
       ),
       ...Array.from({ length: 4 }, (_, i) =>
-        failCheck({ pageUrl: `https://example.com/q/${i}`, items: [{ id: "shared-cdn" }] }),
+        failCheck({
+          pageUrl: `https://example.com/q/${i}`,
+          items: [{ id: "shared-cdn" }],
+        })
       ),
     ];
 
@@ -144,7 +157,7 @@ describe("foldOverflowChecks", () => {
         pageUrl: `https://example.com/p/${i}`,
         provenance: "carried",
         lastSeenAt: 1000 + i,
-      }),
+      })
     );
     const [allCarried] = foldOverflowChecks(carried, SMALL);
     expect(allCarried!.provenance).toBe("carried");
@@ -162,7 +175,7 @@ describe("foldOverflowChecks", () => {
         pageUrl: `https://example.com/p/${i}`,
         provenance: "carried",
         lastSeenAt: 1000 + i,
-      }),
+      })
     );
     const mixed = [
       ...carried.slice(0, 5),
@@ -192,7 +205,10 @@ describe("foldOverflowChecks", () => {
   // would then be making on a first run.
   test("a wholly-unrendered fold stays unrendered, with no lastSeenAt", () => {
     const unrendered = Array.from({ length: 6 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}`, provenance: "unrendered" }),
+      failCheck({
+        pageUrl: `https://example.com/p/${i}`,
+        provenance: "unrendered",
+      })
     );
     const [aggregate] = foldOverflowChecks(unrendered, SMALL);
     expect(aggregate!.provenance).toBe("unrendered");
@@ -209,14 +225,21 @@ describe("foldOverflowChecks", () => {
       }),
     ];
     const folded = foldOverflowChecks(mixed, SMALL);
-    expect(folded.map((c) => c.provenance).sort()).toEqual(["carried", "unrendered"]);
-    expect(folded.find((c) => c.provenance === "unrendered")!.lastSeenAt).toBeUndefined();
-    expect(folded.find((c) => c.provenance === "carried")!.lastSeenAt).toBe(900);
+    expect(folded.map((c) => c.provenance).sort()).toEqual([
+      "carried",
+      "unrendered",
+    ]);
+    expect(
+      folded.find((c) => c.provenance === "unrendered")!.lastSeenAt
+    ).toBeUndefined();
+    expect(folded.find((c) => c.provenance === "carried")!.lastSeenAt).toBe(
+      900
+    );
   });
 
   test("a pathological rule with more distinct issue classes than the cap still slices to the cap", () => {
     const checks = Array.from({ length: 10 }, (_, i) =>
-      failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` })
     );
     expect(foldOverflowChecks(checks, SMALL)).toHaveLength(SMALL.maxChecks);
   });
@@ -228,11 +251,14 @@ describe("foldOverflowChecks", () => {
     // 600 — and `occurrences` IS the tracker's count.
     const aggregate = failCheck({
       message: "1 thing broken (+599 more pages)",
-      pages: Array.from({ length: 3 }, (_, i) => `https://example.com/old/${i}`),
+      pages: Array.from(
+        { length: 3 },
+        (_, i) => `https://example.com/old/${i}`
+      ),
       details: { aggregated: true, occurrences: 600, pagesTruncated: 600 },
     });
     const carried = Array.from({ length: 6 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/new/${i}` }),
+      failCheck({ pageUrl: `https://example.com/new/${i}` })
     );
 
     const folded = foldOverflowChecks([aggregate, ...carried], SMALL);
@@ -263,7 +289,11 @@ describe("images/alt-text over-cap crawl (#910)", () => {
   const FAIL_PAGES = 600;
   const PASS_PAGES = 150;
 
-  function pageCtx(pageUrl: string, missingAlt: boolean, i: number): RuleContext {
+  function pageCtx(
+    pageUrl: string,
+    missingAlt: boolean,
+    i: number
+  ): RuleContext {
     const images = [
       {
         src: `https://cdn.example.com/img-${i}.jpg`,
@@ -271,7 +301,13 @@ describe("images/alt-text over-cap crawl (#910)", () => {
       },
     ];
     return {
-      page: { url: pageUrl, html: "", statusCode: 200, loadTime: 0, headers: {} },
+      page: {
+        url: pageUrl,
+        html: "",
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
       parsed: { images } as unknown as ParsedPage,
       options: {},
     } as unknown as RuleContext;
@@ -281,7 +317,9 @@ describe("images/alt-text over-cap crawl (#910)", () => {
     const map = new Map<string, RuleRunResult>();
     for (let i = 0; i < FAIL_PAGES + PASS_PAGES; i++) {
       const pageUrl = `https://example.com/p/${i}`;
-      const result = (await altTextRule.run(pageCtx(pageUrl, i < FAIL_PAGES, i))) as RuleResult;
+      const result = (await altTextRule.run(
+        pageCtx(pageUrl, i < FAIL_PAGES, i)
+      )) as RuleResult;
       // The adapter stamps pageUrl on page-scope checks before merging.
       for (const check of result.checks) {
         if (!check.pageUrl) check.pageUrl = pageUrl;
@@ -308,7 +346,9 @@ describe("images/alt-text over-cap crawl (#910)", () => {
     // Every affected page survives the fold (the schema slice used to drop
     // pages past the cap wholesale).
     expect(fail.pages).toHaveLength(FAIL_PAGES);
-    expect(fail.items!.length).toBeLessThanOrEqual(REPORT_LIMITS.maxItemsPerCheck);
+    expect(fail.items!.length).toBeLessThanOrEqual(
+      REPORT_LIMITS.maxItemsPerCheck
+    );
 
     const pass = folded.find((c) => c.status === "pass")!;
     expect(pass.name).toBe("alt-text");
@@ -342,7 +382,12 @@ describe("unfoldAggregateCheck", () => {
         { id: "img1", sourcePages: ["https://e.com/a"] },
         { id: "img2", sourcePages: ["https://e.com/b", "https://e.com/c"] },
       ],
-      details: { aggregated: true, occurrences: 3, additional: 5, ruleHint: "keep-me" },
+      details: {
+        aggregated: true,
+        occurrences: 3,
+        additional: 5,
+        ruleHint: "keep-me",
+      },
     };
 
     const out = unfoldAggregateCheck(aggregate);
@@ -379,13 +424,15 @@ describe("unfoldAggregateCheck", () => {
       maxSourcePagesPerItem: 5,
     };
     const perPage = Array.from({ length: 6 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const folded = foldOverflowChecks(perPage, BIG_PAGES);
     expect(folded).toHaveLength(1);
 
     const unfolded = unfoldAggregateCheck(folded[0]!);
-    expect(unfolded.map((c) => c.pageUrl).sort()).toEqual(perPage.map((c) => c.pageUrl).sort());
+    expect(unfolded.map((c) => c.pageUrl).sort()).toEqual(
+      perPage.map((c) => c.pageUrl).sort()
+    );
     for (const c of unfolded) {
       expect(c.pageUrl).toBeTruthy();
       expect(c.details?.aggregated).toBeUndefined();
@@ -405,17 +452,22 @@ describe("unfoldAggregateCheck", () => {
         pageUrl: `https://example.com/p/${i}`,
         items: [{ id: `img-${i}` }],
         details: { additional: 2 },
-      }),
+      })
     );
     const folded = foldOverflowChecks(perPage, BIG_PAGES);
     expect(folded).toHaveLength(1);
     const foldedAdditional = folded[0]!.details?.additional as number;
     expect(foldedAdditional).toBe(12); // 6×2 remainders summed, no items dropped
 
-    const refolded = foldOverflowChecks(unfoldAggregateCheck(folded[0]!), BIG_PAGES);
+    const refolded = foldOverflowChecks(
+      unfoldAggregateCheck(folded[0]!),
+      BIG_PAGES
+    );
     expect(refolded).toHaveLength(1);
     // Exactly one "(+N more pages)" suffix — never doubled (review finding).
-    expect(refolded[0]!.message.match(/\(\+\d+ more pages\)/g) ?? []).toHaveLength(1);
+    expect(
+      refolded[0]!.message.match(/\(\+\d+ more pages\)/g) ?? []
+    ).toHaveLength(1);
     // The density-penalty remainder survives the round trip (not silently dropped).
     expect(refolded[0]!.details?.additional).toBe(foldedAdditional);
   });
@@ -423,26 +475,32 @@ describe("unfoldAggregateCheck", () => {
 
 describe("per-check pages cap (#918)", () => {
   test("DEFAULT_FOLD_LIMITS.maxPagesPerCheck tracks REPORT_LIMITS and covers a full crawl", () => {
-    expect(DEFAULT_FOLD_LIMITS.maxPagesPerCheck).toBe(REPORT_LIMITS.maxPagesPerCheck);
+    expect(DEFAULT_FOLD_LIMITS.maxPagesPerCheck).toBe(
+      REPORT_LIMITS.maxPagesPerCheck
+    );
     // The point of #918's decoupling: a folded check can list every page of the
     // largest crawl either surface can dispatch, so nothing is silently clipped.
     // Asserted against BOTH ceilings rather than "strictly above maxPages" — the
     // strict form only held while the cloud ceiling sat below the CLI's, and
     // #1028 raised both to MAX_PAGES_CAP.
     expect(REPORT_LIMITS.maxPagesPerCheck).toBe(MAX_PAGES_CAP);
-    expect(REPORT_LIMITS.maxPagesPerCheck).toBeGreaterThanOrEqual(REPORT_LIMITS.maxPages);
+    expect(REPORT_LIMITS.maxPagesPerCheck).toBeGreaterThanOrEqual(
+      REPORT_LIMITS.maxPages
+    );
   });
 
   test("a >2000-page failure keeps every page (no clip at the old 2000 cap)", () => {
     // 3000 per-page fails in ONE class → one aggregate. With the raised cap it
     // keeps all 3000 pages; the old maxPages=2000 fold cap would have clipped.
     const checks = Array.from({ length: 3000 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const folded = foldOverflowChecks(checks); // DEFAULT limits
     expect(folded).toHaveLength(1);
     expect(folded[0]!.pages).toHaveLength(3000);
-    expect(folded[0]!.pages!.length).toBeLessThanOrEqual(REPORT_LIMITS.maxPagesPerCheck);
+    expect(folded[0]!.pages!.length).toBeLessThanOrEqual(
+      REPORT_LIMITS.maxPagesPerCheck
+    );
   });
 
   test("re-fold attributes items from a pages-carrying check to those pages", () => {
@@ -450,7 +508,7 @@ describe("per-check pages cap (#918)", () => {
     // pageUrl). foldGroup must attribute its item to those pages via sourcePages,
     // or a later unfold drops the item from every page.
     const perPage = Array.from({ length: 5 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const aggregateShaped = failCheck({
       pages: ["https://example.com/agg/a", "https://example.com/agg/b"],
@@ -467,7 +525,7 @@ describe("per-check pages cap (#918)", () => {
     // An aggregate-shaped check whose item ONLY fired on page a. A re-fold must
     // NOT broaden it to page b just because the aggregate lists both pages.
     const perPage = Array.from({ length: 5 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const narrowAggregate = failCheck({
       pages: ["https://example.com/agg/a", "https://example.com/agg/b"],
@@ -494,9 +552,15 @@ describe("per-check pages cap (#918)", () => {
     const perPage = unfoldAggregateCheck(aggregate);
     expect(perPage).toHaveLength(3);
     const byUrl = new Map(perPage.map((c) => [c.pageUrl!, c]));
-    expect(byUrl.get("https://x/a")!.items?.map((i) => i.id)).toEqual(["item-ab"]);
-    expect(byUrl.get("https://x/b")!.items?.map((i) => i.id)).toEqual(["item-ab"]);
-    expect(byUrl.get("https://x/c")!.items?.map((i) => i.id)).toEqual(["item-c"]);
+    expect(byUrl.get("https://x/a")!.items?.map((i) => i.id)).toEqual([
+      "item-ab",
+    ]);
+    expect(byUrl.get("https://x/b")!.items?.map((i) => i.id)).toEqual([
+      "item-ab",
+    ]);
+    expect(byUrl.get("https://x/c")!.items?.map((i) => i.id)).toEqual([
+      "item-c",
+    ]);
   });
 });
 
@@ -510,7 +574,9 @@ describe("clampCheckItemIds", () => {
 
   test("under-cap ids pass through untouched (same references)", () => {
     const checks: CheckResult[] = [
-      failCheck({ items: [{ id: "https://x/a" }, { id: "https://x/b", label: "B" }] }),
+      failCheck({
+        items: [{ id: "https://x/a" }, { id: "https://x/b", label: "B" }],
+      }),
       failCheck({ name: "no-items" }),
     ];
     expect(clampCheckItemIds(checks)).toBe(checks);
@@ -519,7 +585,9 @@ describe("clampCheckItemIds", () => {
   test("clamps oversize id to the cap and keeps distinct long ids distinct", () => {
     const idA = dataUrl(5000);
     const idB = `${dataUrl(4999)}B`; // differs only at the end
-    const checks: CheckResult[] = [failCheck({ items: [{ id: idA }, { id: idB }] })];
+    const checks: CheckResult[] = [
+      failCheck({ items: [{ id: idA }, { id: idB }] }),
+    ];
     const out = clampCheckItemIds(checks);
 
     expect(out).not.toBe(checks); // new refs when something changed
@@ -541,7 +609,9 @@ describe("clampCheckItemIds", () => {
   test("clamps an oversize label but leaves an untouched item by reference", () => {
     const keep = { id: "https://x/keep" };
     const checks: CheckResult[] = [
-      failCheck({ items: [keep, { id: "https://x/y", label: "Z".repeat(MAX + 50) }] }),
+      failCheck({
+        items: [keep, { id: "https://x/y", label: "Z".repeat(MAX + 50) }],
+      }),
     ];
     const out = clampCheckItemIds(checks);
     expect(out[0]!.items![0]).toBe(keep); // unchanged item not re-allocated
@@ -557,10 +627,14 @@ describe("clampCheckItemIds", () => {
 // overflows maxChecksPerRule, so foldOverflowChecks never triggers, and
 // foldGroup's item-merge cap only fires for GROUPED (name,status) classes.
 describe("clampCheckItemsOverflow", () => {
-  const items = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `item-${i}` }));
+  const items = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `item-${i}` }));
 
   test("under-cap items pass through untouched (same references)", () => {
-    const checks: CheckResult[] = [failCheck({ items: items(3) }), failCheck({ name: "no-items" })];
+    const checks: CheckResult[] = [
+      failCheck({ items: items(3) }),
+      failCheck({ name: "no-items" }),
+    ];
     expect(clampCheckItemsOverflow(checks, 5)).toBe(checks);
   });
 
@@ -574,7 +648,9 @@ describe("clampCheckItemsOverflow", () => {
   });
 
   test("adds the dropped count to an existing rule-side additional remainder", () => {
-    const checks: CheckResult[] = [failCheck({ items: items(1100), details: { additional: 50 } })];
+    const checks: CheckResult[] = [
+      failCheck({ items: items(1100), details: { additional: 50 } }),
+    ];
     const out = clampCheckItemsOverflow(checks, 1000);
     // 100 dropped by this clamp + 50 already carried by the rule.
     expect(out[0]!.details?.additional).toBe(150);
@@ -591,7 +667,9 @@ describe("clampCheckItemsOverflow", () => {
   });
 
   test("defaults to REPORT_LIMITS.maxItemsPerCheck when no cap is passed", () => {
-    const checks: CheckResult[] = [failCheck({ items: items(REPORT_LIMITS.maxItemsPerCheck + 1) })];
+    const checks: CheckResult[] = [
+      failCheck({ items: items(REPORT_LIMITS.maxItemsPerCheck + 1) }),
+    ];
     const out = clampCheckItemsOverflow(checks);
     expect(out[0]!.items).toHaveLength(REPORT_LIMITS.maxItemsPerCheck);
   });
@@ -614,17 +692,21 @@ describe("capChecksForPublish", () => {
     // A single site-wide check (broken-links pattern) with 1500 items — check
     // COUNT is 1, nowhere near maxChecks, so foldOverflowChecks alone would
     // never touch it.
-    const items = Array.from({ length: 1500 }, (_, i) => ({ id: `https://x/broken-${i}` }));
+    const items = Array.from({ length: 1500 }, (_, i) => ({
+      id: `https://x/broken-${i}`,
+    }));
     const checks: CheckResult[] = [failCheck({ name: "broken-links", items })];
     const out = capChecksForPublish(checks, 500);
     expect(out).toHaveLength(1);
     expect(out[0]!.items).toHaveLength(REPORT_LIMITS.maxItemsPerCheck);
-    expect(out[0]!.details?.additional).toBe(1500 - REPORT_LIMITS.maxItemsPerCheck);
+    expect(out[0]!.details?.additional).toBe(
+      1500 - REPORT_LIMITS.maxItemsPerCheck
+    );
   });
 
   test("folds one rule's per-page checks over maxChecks into an aggregate (#910 shape)", () => {
     const checks = Array.from({ length: 210 }, (_, i) =>
-      failCheck({ pageUrl: `https://x/p/${i}` }),
+      failCheck({ pageUrl: `https://x/p/${i}` })
     );
     const out = capChecksForPublish(checks, REPORT_LIMITS.maxChecksPerPage);
     expect(out.length).toBeLessThanOrEqual(REPORT_LIMITS.maxChecksPerPage);
@@ -649,7 +731,10 @@ describe("capChecksForPublish", () => {
 // reused capChecksForPublish/foldOverflowChecks here).
 describe("capMixedRuleChecksForPublish", () => {
   test("a fully under-cap array passes through with no changes", () => {
-    const checks: CheckResult[] = [failCheck({ name: "rule-a" }), failCheck({ name: "rule-b" })];
+    const checks: CheckResult[] = [
+      failCheck({ name: "rule-a" }),
+      failCheck({ name: "rule-b" }),
+    ];
     const out = capMixedRuleChecksForPublish(checks, 500);
     expect(out).toEqual(checks);
   });
@@ -670,7 +755,9 @@ describe("capMixedRuleChecksForPublish", () => {
   });
 
   test("slices to maxChecks (last-resort, no signal) when the array is truly over cap", () => {
-    const checks = Array.from({ length: 210 }, (_, i) => failCheck({ name: `rule-${i}` }));
+    const checks = Array.from({ length: 210 }, (_, i) =>
+      failCheck({ name: `rule-${i}` })
+    );
     const out = capMixedRuleChecksForPublish(checks, 200);
     expect(out).toHaveLength(200);
     expect(out[0]).toBe(checks[0]); // untouched references, plain slice
@@ -681,7 +768,9 @@ describe("capMixedRuleChecksForPublish", () => {
     const checks: CheckResult[] = [failCheck({ items })];
     const out = capMixedRuleChecksForPublish(checks, 500);
     expect(out[0]!.items).toHaveLength(REPORT_LIMITS.maxItemsPerCheck);
-    expect(out[0]!.details?.additional).toBe(1500 - REPORT_LIMITS.maxItemsPerCheck);
+    expect(out[0]!.details?.additional).toBe(
+      1500 - REPORT_LIMITS.maxItemsPerCheck
+    );
   });
 
   test("still clamps oversize item ids (#996)", () => {
@@ -720,7 +809,13 @@ describe("clampCheckStrings (#1263)", () => {
   test("leaves the `name` JOIN KEY untouched and numeric value/expected untouched", () => {
     const longName = over(M);
     const [c] = clampCheckStrings([
-      { name: longName, status: "warn", message: "m", value: 123, expected: 456 },
+      {
+        name: longName,
+        status: "warn",
+        message: "m",
+        value: 123,
+        expected: 456,
+      },
     ]);
     expect(c!.name).toBe(longName); // fold/dedup key — never clamped
     expect(c!.value).toBe(123);
@@ -729,7 +824,13 @@ describe("clampCheckStrings (#1263)", () => {
 
   test("returns the SAME references when nothing overruns (no content-hash churn)", () => {
     const input: CheckResult[] = [
-      { name: "n", status: "pass", message: "short", value: "v", expected: "e" },
+      {
+        name: "n",
+        status: "pass",
+        message: "short",
+        value: "v",
+        expected: "e",
+      },
     ];
     const out = clampCheckStrings(input);
     expect(out).toBe(input);
@@ -737,7 +838,9 @@ describe("clampCheckStrings (#1263)", () => {
   });
 
   test("does not introduce an undefined `value`/`expected`/`skipReason` own-key", () => {
-    const [c] = clampCheckStrings([{ name: "n", status: "fail", message: over(M) }]);
+    const [c] = clampCheckStrings([
+      { name: "n", status: "fail", message: over(M) },
+    ]);
     expect(Object.hasOwn(c!, "value")).toBe(false);
     expect(Object.hasOwn(c!, "expected")).toBe(false);
     expect(Object.hasOwn(c!, "skipReason")).toBe(false);
@@ -746,7 +849,7 @@ describe("clampCheckStrings (#1263)", () => {
   test("capChecksForPublish applies the string clamp end to end", () => {
     const [c] = capChecksForPublish(
       [{ name: "core-title", status: "fail", message: over(M) }],
-      REPORT_LIMITS.maxChecksPerRule,
+      REPORT_LIMITS.maxChecksPerRule
     );
     expect(c!.message.length).toBe(M);
   });
@@ -764,7 +867,9 @@ describe("clampCheckDetails (#1288)", () => {
   const over = (n: number) => "x".repeat(n + 1);
 
   test("bounds an oversize details record (key-count cap)", () => {
-    const details = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, i]));
+    const details = Object.fromEntries(
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, i])
+    );
     const [c] = clampCheckDetails([failCheck({ details })]);
     expect(Object.keys(c!.details!).length).toBeLessThan(30);
   });
@@ -788,9 +893,14 @@ describe("clampCheckDetails (#1288)", () => {
     // issue synchronization also persists the details. Neither must see these numbers
     // altered by this clamp, even when the record ALSO needs bounding.
     const bigNoise = Object.fromEntries(
-      Array.from({ length: 30 }, (_, i) => [`k${i}`, "x".repeat(50)]),
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, "x".repeat(50)])
     );
-    const details = { additional: 40, occurrences: 12, pagesTruncated: 1837, ...bigNoise };
+    const details = {
+      additional: 40,
+      occurrences: 12,
+      pagesTruncated: 1837,
+      ...bigNoise,
+    };
     const [c] = clampCheckDetails([failCheck({ details })]);
     expect(c!.details!.additional).toBe(40);
     expect(c!.details!.occurrences).toBe(12);
@@ -798,18 +908,25 @@ describe("clampCheckDetails (#1288)", () => {
   });
 
   test("capChecksForPublish applies the details clamp end to end, alongside the string clamp", () => {
-    const bigNoise = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, i]));
+    const bigNoise = Object.fromEntries(
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, i])
+    );
     const [c] = capChecksForPublish(
       [failCheck({ message: over(M), details: bigNoise })],
-      REPORT_LIMITS.maxChecksPerRule,
+      REPORT_LIMITS.maxChecksPerRule
     );
     expect(c!.message.length).toBe(M);
     expect(Object.keys(c!.details!).length).toBeLessThan(30);
   });
 
   test("capMixedRuleChecksForPublish applies the details clamp end to end", () => {
-    const bigNoise = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`k${i}`, i]));
-    const [c] = capMixedRuleChecksForPublish([failCheck({ details: bigNoise })], 500);
+    const bigNoise = Object.fromEntries(
+      Array.from({ length: 30 }, (_, i) => [`k${i}`, i])
+    );
+    const [c] = capMixedRuleChecksForPublish(
+      [failCheck({ details: bigNoise })],
+      500
+    );
     expect(Object.keys(c!.details!).length).toBeLessThan(30);
   });
 });
@@ -828,7 +945,7 @@ describe("truncation is never silent (#1503)", () => {
     // class to one aggregate that carries every affected page. Nothing is lost
     // and no marker is needed, because nothing was clipped.
     const checks = Array.from({ length: 2000 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const capped = capChecksForPublish(checks, REPORT_LIMITS.maxChecksPerRule);
 
@@ -843,7 +960,7 @@ describe("truncation is never silent (#1503)", () => {
     // affectedPages() reads pagesTruncated as authoritative, so without this
     // stamp a clipped rule reports its retained length as the whole truth.
     const checks = Array.from({ length: 10 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const folded = foldOverflowChecks(checks, { ...SMALL, maxChecks: 3 });
 
@@ -861,8 +978,13 @@ describe("truncation is never silent (#1503)", () => {
       details: { aggregated: true, pagesTruncated: 600 },
     });
     const folded = foldOverflowChecks(
-      [alreadySampled, ...Array.from({ length: 3 }, (_, i) => failCheck({ pageUrl: `https://example.com/p/${i}` }))],
-      { ...SMALL, maxChecks: 2, maxPagesPerCheck: 100 },
+      [
+        alreadySampled,
+        ...Array.from({ length: 3 }, (_, i) =>
+          failCheck({ pageUrl: `https://example.com/p/${i}` })
+        ),
+      ],
+      { ...SMALL, maxChecks: 2, maxPagesPerCheck: 100 }
     );
 
     expect(folded).toHaveLength(1);
@@ -877,7 +999,7 @@ describe("truncation is never silent (#1503)", () => {
     // multiply the count on every publish round trip.
     const LIMITS: FoldLimits = { ...SMALL, maxChecks: 2 };
     const checks = Array.from({ length: 10 }, (_, i) =>
-      failCheck({ pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ pageUrl: `https://example.com/p/${i}` })
     );
     const folded = foldOverflowChecks(checks, LIMITS);
     expect(folded[0]!.details?.pagesTruncated).toBe(10);
@@ -896,7 +1018,7 @@ describe("truncation is never silent (#1503)", () => {
     // time it runs, fold has already bounded the array to maxChecks, so its own
     // length check cannot trip.
     const checks = Array.from({ length: 8 }, (_, i) =>
-      failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ name: `class-${i}`, pageUrl: `https://example.com/p/${i}` })
     );
     const folded = foldOverflowChecks(checks, SMALL);
 
@@ -908,7 +1030,7 @@ describe("truncation is never silent (#1503)", () => {
     // Mixed-rule arrays cannot fold (grouping across DIFFERENT rules is
     // unsound), so this one really does slice — it just says so now.
     const checks = Array.from({ length: 12 }, (_, i) =>
-      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` })
     );
     const capped = capMixedRuleChecksForPublish(checks, 5);
 
@@ -918,7 +1040,7 @@ describe("truncation is never silent (#1503)", () => {
 
   test("under both caps nothing is stamped (no marker on an untruncated array)", () => {
     const checks = Array.from({ length: 3 }, (_, i) =>
-      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` }),
+      failCheck({ name: `rule-${i}`, pageUrl: `https://example.com/p/${i}` })
     );
     const capped = capMixedRuleChecksForPublish(checks, 5);
 
@@ -933,7 +1055,7 @@ describe("truncation is never silent (#1503)", () => {
     // intermediate for the real 40 and re-hiding most of the loss.
     const once = capMixedRuleChecksForPublish(
       Array.from({ length: 40 }, (_, i) => failCheck({ name: `rule-${i}` })),
-      10,
+      10
     );
     expect(once.at(-1)!.details?.checksTruncated).toBe(40);
 
@@ -943,7 +1065,10 @@ describe("truncation is never silent (#1503)", () => {
   });
 
   test("stampChecksTruncated never replaces a larger recorded total with a smaller one", () => {
-    const stamped = stampChecksTruncated(failCheck({ details: { checksTruncated: 2000 } }), 500);
+    const stamped = stampChecksTruncated(
+      failCheck({ details: { checksTruncated: 2000 } }),
+      500
+    );
     expect(stamped.details?.checksTruncated).toBe(2000);
   });
 
@@ -953,7 +1078,10 @@ describe("truncation is never silent (#1503)", () => {
     // already-full record is dropped — losing the very fact being recorded, on
     // the two call sites that do not also log it.
     const full = Object.fromEntries(
-      Array.from({ length: CHECK_DETAILS_LIMITS.maxKeysPerLevel }, (_, i) => [`n${i}`, i]),
+      Array.from({ length: CHECK_DETAILS_LIMITS.maxKeysPerLevel }, (_, i) => [
+        `n${i}`,
+        i,
+      ])
     );
     const stamped = stampChecksTruncated(failCheck({ details: full }), 1234);
     expect(stamped.details?.checksTruncated).toBe(1234);

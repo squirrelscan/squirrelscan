@@ -40,8 +40,15 @@ import {
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
+import type {
+  CheckItem,
+  CheckResult,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
+
 import { hasRequestTool } from "../tools";
-import type { CheckItem, CheckResult, Rule, RuleContext, RuleResult } from "../types";
 import {
   EXPOSED_FILE_READ_CAP,
   EXPOSED_FILES_LIST_VERSION,
@@ -84,7 +91,8 @@ export function buildExposedFileProbe(
 ): { url: string; init: RequestInit } {
   // Built on the origin, so a path can never name another host.
   const url = new URL(path, `${origin}/`);
-  if (url.origin !== origin) throw new Error("exposed-files: probe left the audited origin");
+  if (url.origin !== origin)
+    throw new Error("exposed-files: probe left the audited origin");
   return {
     url: url.href,
     init: {
@@ -117,7 +125,9 @@ async function sendProbe(
   try {
     const res = await fetchUndecoded(url, { ...init, signal });
     const { bytes } =
-      method === "HEAD" ? { bytes: new Uint8Array(0) } : await readCappedBytes(res, EXPOSED_FILE_READ_CAP);
+      method === "HEAD"
+        ? { bytes: new Uint8Array(0) }
+        : await readCappedBytes(res, EXPOSED_FILE_READ_CAP);
     return {
       kind: "answer",
       url,
@@ -164,7 +174,12 @@ export function confirmHit(
   const match = file.match(answer);
   if (!match) return null;
   if (baseline && isSuccess(baseline.status)) {
-    if (file.method === "GET" && answer.bytes.byteLength > 0 && sameBytes(answer.bytes, baseline.bytes)) return null;
+    if (
+      file.method === "GET" &&
+      answer.bytes.byteLength > 0 &&
+      sameBytes(answer.bytes, baseline.bytes)
+    )
+      return null;
     if (file.match(baseline)) return null;
   }
   return match;
@@ -215,7 +230,13 @@ function hitCheck(hit: Hit): CheckResult {
     status: file.severity === "high" ? "fail" : "warn",
     message: `${file.path} is publicly readable at ${url}: it reveals ${file.reveals}${detail}`,
     items: [item],
-    details: { path: file.path, status, signature: file.signature, group: file.group, severity: file.severity },
+    details: {
+      path: file.path,
+      status,
+      signature: file.signature,
+      group: file.group,
+      severity: file.severity,
+    },
   };
 }
 
@@ -226,7 +247,7 @@ export const exposedFilesRule: Rule = {
     description:
       "Requests a short, curated list of sensitive files that should never be public (.git and other version control metadata, .env files, configuration backups, server status pages, database dumps, .DS_Store) and flags each one the site serves, confirmed by its content, not its status code. Runs only when probing is aggressive.",
     solution:
-      "Remove each listed file from the web root, or block it at the server: deny dotfiles and dot-directories (`location ~ /\\. { deny all; }` in nginx, `<FilesMatch \"^\\.\">Require all denied</FilesMatch>` in Apache), and keep backups, dumps and configuration copies outside the document root. Deploy from a build output, not a working copy, so `.git` never ships. Turn off `server-status`, `server-info` and `phpinfo()` pages in production, or restrict them to internal addresses. Then treat anything the file exposed as leaked: rotate every credential and key it held, and assume the source and history are public.",
+      'Remove each listed file from the web root, or block it at the server: deny dotfiles and dot-directories (`location ~ /\\. { deny all; }` in nginx, `<FilesMatch "^\\.">Require all denied</FilesMatch>` in Apache), and keep backups, dumps and configuration copies outside the document root. Deploy from a build output, not a working copy, so `.git` never ships. Turn off `server-status`, `server-info` and `phpinfo()` pages in production, or restrict them to internal addresses. Then treat anything the file exposed as leaked: rotate every credential and key it held, and assume the source and history are public.',
     category: "security",
     scope: "site",
     findingScope: "page",
@@ -276,17 +297,29 @@ export const exposedFilesRule: Rule = {
 
     const origin = siteOrigin(ctx.site?.baseUrl);
     if (!origin) {
-      return { checks: [{ name: NOT_CHECKED, status: "skipped", message: "Invalid base URL" }] };
+      return {
+        checks: [
+          { name: NOT_CHECKED, status: "skipped", message: "Invalid base URL" },
+        ],
+      };
     }
 
-    const listDetails = { listVersion: EXPOSED_FILES_LIST_VERSION, listed: SENSITIVE_FILES.length };
+    const listDetails = {
+      listVersion: EXPOSED_FILES_LIST_VERSION,
+      listed: SENSITIVE_FILES.length,
+    };
     let stopped: "budget" | "pushback" | null = null;
     let probed = 0;
     let errored = 0;
     let redirected = 0;
     let serverErrors = 0;
 
-    const baselineOutcome = await sendProbe(ctx, origin, randomBaselinePath(), "GET");
+    const baselineOutcome = await sendProbe(
+      ctx,
+      origin,
+      randomBaselinePath(),
+      "GET"
+    );
     let baseline: ProbeAnswer | null = null;
     if (baselineOutcome.kind === "not-allowed") stopped = "budget";
     else if (baselineOutcome.kind === "answer") {
@@ -324,7 +357,13 @@ export const exposedFilesRule: Rule = {
         }
         const match = confirmHit(file, answer, baseline);
         if (!match) continue;
-        hits.push({ file, url, status: answer.status, size: answerSize(file, answer), match });
+        hits.push({
+          file,
+          url,
+          status: answer.status,
+          size: answerSize(file, answer),
+          match,
+        });
       }
     }
 
@@ -332,7 +371,12 @@ export const exposedFilesRule: Rule = {
     const total = SENSITIVE_FILES.length;
     // Every path not answered: never reached, errored, a server error, or the
     // one that drew the pushback.
-    const unverified = total - (probed - errored - serverErrors - (stopped === "pushback" && probed > 0 ? 1 : 0));
+    const unverified =
+      total -
+      (probed -
+        errored -
+        serverErrors -
+        (stopped === "pushback" && probed > 0 ? 1 : 0));
     const runDetails = {
       ...listDetails,
       probed,
@@ -351,16 +395,24 @@ export const exposedFilesRule: Rule = {
           `the site throttled the probes (HTTP 429) or answered with a bot challenge after ${probed} of ${total} path(s), so no further request was sent`
         );
       }
-      if (stopped === "budget") why.push(`the probe budget ran out after ${probed} of ${total} path(s)`);
-      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
-      if (serverErrors > 0) why.push(`${serverErrors} path(s) answered with a server error (5xx)`);
+      if (stopped === "budget")
+        why.push(
+          `the probe budget ran out after ${probed} of ${total} path(s)`
+        );
+      if (errored > 0)
+        why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (serverErrors > 0)
+        why.push(`${serverErrors} path(s) answered with a server error (5xx)`);
       checks.push({
         name: INCOMPLETE,
         status: "skipped",
         skipReason: PROBE_INCOMPLETE_SKIP_REASON,
         message: `Exposed sensitive files check incomplete: ${why.join("; ")}. ${unverified} of ${total} path(s) were not verified and may be exposed`,
         value: "not-checked",
-        details: { ...runDetails, stoppedBy: stopped ?? (errored > 0 ? "errors" : "server-errors") },
+        details: {
+          ...runDetails,
+          stoppedBy: stopped ?? (errored > 0 ? "errors" : "server-errors"),
+        },
       });
       return { checks };
     }

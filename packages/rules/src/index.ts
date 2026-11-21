@@ -25,7 +25,12 @@ export {
   type ApplicabilityVerdict,
   ruleApplies,
 } from "./applicability";
-export { setRequestAsync, clearRequestAsync, hasRequestTool, setLlmCall } from "./tools";
+export {
+  setRequestAsync,
+  clearRequestAsync,
+  hasRequestTool,
+  setLlmCall,
+} from "./tools";
 // The anchor graph `links/anchor-mismatch` judges. audit-engine's SiteQuery builds it with the
 // SAME builder the rule's legacy path uses, so the two paths cannot diverge (#110).
 export { AnchorGraphBuilder } from "./links/anchor-mismatch";
@@ -87,9 +92,16 @@ export * as social from "./social";
 export * as crawl from "./crawl";
 export * as url from "./url";
 export * as mobile from "./mobile";
-export { colorContrastRule, stylesheetBackgroundOf, stylesheetBackgroundSelectorsOf } from "./a11y/color-contrast";
+export {
+  colorContrastRule,
+  stylesheetBackgroundOf,
+  stylesheetBackgroundSelectorsOf,
+} from "./a11y/color-contrast";
 export { reducedMotionRule, stylesheetMotionOf } from "./a11y/reduced-motion";
-export { listWebAppManifestIconUrls, WEB_APP_MANIFEST_ICON_LIMIT } from "./mobile/web-app-manifest";
+export {
+  listWebAppManifestIconUrls,
+  WEB_APP_MANIFEST_ICON_LIMIT,
+} from "./mobile/web-app-manifest";
 export * as legal from "./legal";
 export * as local from "./local";
 export * as video from "./video";

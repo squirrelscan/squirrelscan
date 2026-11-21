@@ -15,29 +15,35 @@
 // HTML and also read script text were reviewed by hand (perf/js-libraries now
 // blanks the script bodies out of its HTML-marker pass).
 
-import { describe, expect, test } from "bun:test";
-
 import { parsePage } from "@squirrelscan/parser";
 import { hasJavaScriptDetections } from "@squirrelscan/utils/cdn";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { pageScriptSrcs } from "../src/adblock/blocked-links";
 import { scanPageForMisspellings } from "../src/content/common-misspellings";
 import { fingerprintForPage } from "../src/content/duplicate-content";
 import { fingerprintPage } from "../src/integrity/fingerprint";
 import { detectPageSignals } from "../src/integrity/signals";
-import { hasCommercialOfferLink, matchSubprocessorLink } from "../src/legal/subprocessor-disclosure";
+import {
+  hasCommercialOfferLink,
+  matchSubprocessorLink,
+} from "../src/legal/subprocessor-disclosure";
 import { buildPageAnchorSignal } from "../src/links/page-anchors";
 import { loadAllRules } from "../src/loader";
 import { extractPageByteSignal } from "../src/performance/total-byte-weight";
 import { scanPageBounded } from "../src/security/leaked-secrets";
 import { extractContentSentences } from "../src/shared/content-in-script";
 import { buildInPageSectionSignal } from "../src/shared/inpage-section";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const URL_ = "https://store.example.com/products/insole";
 
 const bundle = (seed: string, kb: number) =>
-  Array.from({ length: kb * 20 }, (_, i) => `function ${seed}${i}(a,b){return a?b(a):null}`).join("");
+  Array.from(
+    { length: kb * 20 },
+    (_, i) => `function ${seed}${i}(a,b){return a?b(a):null}`
+  ).join("");
 
 // Scripts in the head, the body, nested in containers, before the first heading,
 // a JSON-LD block and a JSON data block, an external script, and a Shopify-shaped
@@ -75,7 +81,8 @@ function instrument(doc: Document): Counter {
   const bump = (root: Node) => {
     if (depth > 0) return;
     for (const s of scripts) {
-      if (root === s || root === doc || root.contains(s)) counts.set(s, (counts.get(s) ?? 0) + 1);
+      if (root === s || root === doc || root.contains(s))
+        counts.set(s, (counts.get(s) ?? 0) + 1);
     }
   };
   const find = (obj: object, prop: string): PropertyDescriptor | undefined => {
@@ -86,9 +93,16 @@ function instrument(doc: Document): Counter {
     return undefined;
   };
   const targets = new Set<Node>([doc, ...scripts]);
-  for (const s of scripts) for (let p = s.parentNode; p; p = p.parentNode) targets.add(p);
+  for (const s of scripts)
+    for (let p = s.parentNode; p; p = p.parentNode) targets.add(p);
   for (const node of targets) {
-    for (const prop of ["textContent", "innerHTML", "outerHTML", "innerText", "text"]) {
+    for (const prop of [
+      "textContent",
+      "innerHTML",
+      "outerHTML",
+      "innerText",
+      "text",
+    ]) {
       const d = find(node, prop);
       if (!d?.get) continue;
       Object.defineProperty(node, prop, {
@@ -136,15 +150,24 @@ describe("#1864: each inline script's text is read at most once per rule per pag
       if (rule.meta.scope !== "page") continue;
       const parsed = parsePage(PAGE, URL_) as ParsedPage;
       const counter = instrument(parsed.document!);
-      const options = rule.meta.optionsSchema ? (rule.meta.optionsSchema.parse({}) as Record<string, unknown>) : {};
+      const options = rule.meta.optionsSchema
+        ? (rule.meta.optionsSchema.parse({}) as Record<string, unknown>)
+        : {};
       const ctx: RuleContext = {
-        page: { url: URL_, html: PAGE, statusCode: 200, loadTime: 0, headers: { "content-type": "text/html" } },
+        page: {
+          url: URL_,
+          html: PAGE,
+          statusCode: 200,
+          loadTime: 0,
+          headers: { "content-type": "text/html" },
+        },
         parsed,
         options,
       };
       await rule.run(ctx);
       ran++;
-      if (worst(counter) > 1) offenders.push(`${rule.meta.id} read a script ${worst(counter)} times`);
+      if (worst(counter) > 1)
+        offenders.push(`${rule.meta.id} read a script ${worst(counter)} times`);
     }
     expect(ran).toBeGreaterThan(200);
     expect(offenders).toEqual([]);
@@ -155,15 +178,22 @@ describe("#1864: each inline script's text is read at most once per rule per pag
     "security/leaked-secrets": (p) => scanPageBounded(p.document!, URL_),
     "perf/total-byte-weight": (p) => extractPageByteSignal(p.document!),
     "integrity/template-discontinuity": (p) => fingerprintPage(p, URL_),
-    "integrity/orphan-page": (p) => [...detectPageSignals({ parsed: p, page: { url: URL_ } })],
+    "integrity/orphan-page": (p) => [
+      ...detectPageSignals({ parsed: p, page: { url: URL_ } }),
+    ],
     "adblock/blocked-links": (p) => pageScriptSrcs(p.document!),
-    "legal/subprocessor-disclosure": (p) => [matchSubprocessorLink(p.document!, URL_), hasCommercialOfferLink(p.document!)],
-    "links/broken-anchors": (p) => buildPageAnchorSignal({ parsed: p, rendered: false }),
+    "legal/subprocessor-disclosure": (p) => [
+      matchSubprocessorLink(p.document!, URL_),
+      hasCommercialOfferLink(p.document!),
+    ],
+    "links/broken-anchors": (p) =>
+      buildPageAnchorSignal({ parsed: p, rendered: false }),
     "eeat/about-page": (p) => buildInPageSectionSignal(p.document!),
     "content/common-misspellings": (p) => scanPageForMisspellings(p.document!),
     "perf/content-in-js-bundle": (p) => extractContentSentences(p.document!),
     "perf/bad-caching": (p) => hasJavaScriptDetections(p.document!),
-    "content/duplicate-content": (p) => fingerprintForPage(p.document!, URL_, undefined),
+    "content/duplicate-content": (p) =>
+      fingerprintForPage(p.document!, URL_, undefined),
   };
 
   for (const [id, extract] of Object.entries(EXTRACTORS)) {
@@ -178,7 +208,10 @@ describe("#1864: each inline script's text is read at most once per rule per pag
   // The one read past the first, by design: a Shopify-shaped token under a generic key is public on a page that loads
   // from the Shopify CDN, and a page whose markup does not is asked again with its scripts in, exactly as before.
   test("leaked-secrets reads the scripts again only to settle a Shopify token on a page whose markup has no Shopify CDN", () => {
-    const page = PAGE.replace(/<link rel="stylesheet" href="https:\/\/cdn\.shopify\.com[^>]*>/, "");
+    const page = PAGE.replace(
+      /<link rel="stylesheet" href="https:\/\/cdn\.shopify\.com[^>]*>/,
+      ""
+    );
     expect(page).not.toContain("cdn.shopify.com");
     const parsed = parsePage(page, URL_) as ParsedPage;
     const counter = instrument(parsed.document!);

@@ -8,11 +8,11 @@
 import type { Document, Element } from "linkedom";
 
 import { SITE_TYPES, type SiteType } from "@squirrelscan/core-contracts";
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { isGdprJurisdiction } from "./jurisdiction";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 // Vendor tokens matched ONLY against structural attributes (script src/id,
 // element id/class) — never against page prose — so a blog post that merely
@@ -164,7 +164,12 @@ function hasCmpResource(doc: Document): boolean {
   }
   // Only resource-loading links count — a rel=canonical/author link that happens
   // to point at a CMP vendor's site is not a consent mechanism.
-  const RESOURCE_RELS = new Set(["stylesheet", "preload", "prefetch", "modulepreload"]);
+  const RESOURCE_RELS = new Set([
+    "stylesheet",
+    "preload",
+    "prefetch",
+    "modulepreload",
+  ]);
   for (const l of doc.querySelectorAll("link[href][rel]")) {
     const rels = (l.getAttribute("rel") || "").toLowerCase().split(/\s+/);
     if (!rels.some((r) => RESOURCE_RELS.has(r))) continue;
@@ -228,11 +233,12 @@ function hasInteractiveConsent(regions: Element[]): boolean {
     // or generic dialog without cookie context does not qualify — #1141 (b)) AND
     // carry an accept/reject control.
     const aboutCookies =
-      hay.includes("cookie") || (region.textContent || "").toLowerCase().includes("cookie");
+      hay.includes("cookie") ||
+      (region.textContent || "").toLowerCase().includes("cookie");
     if (!aboutCookies) continue;
 
     for (const control of region.querySelectorAll(
-      "button, a, input[type='button'], input[type='submit'], [role='button']",
+      "button, a, input[type='button'], input[type='submit'], [role='button']"
     )) {
       const label = `${control.textContent || ""} ${
         control.getAttribute("value") || ""
@@ -254,7 +260,7 @@ function hasConsentMechanism(doc: Document): boolean {
 // positive list (vs. an exclusion set) keeps the `appliesWhen` contract simple:
 // the rule applies only when the resolved type is one of these.
 const SITE_TYPES_NEEDING_CONSENT: SiteType[] = SITE_TYPES.filter(
-  (t): t is SiteType => t !== "personal" && t !== "portfolio",
+  (t): t is SiteType => t !== "personal" && t !== "portfolio"
 );
 
 export const cookieConsentRule: Rule = {
@@ -306,7 +312,9 @@ export const cookieConsentRule: Rule = {
         value: "Required for GDPR compliance if using cookies",
         // Without a site profile the audience is unknown: the downgrade from a warning to info is not a
         // verdict that consent stopped being required (#1031), so an earlier warning is not resolved by it.
-        ...(!gdpr && !ctx.siteMetadata ? { details: { inconclusive: true } } : {}),
+        ...(!gdpr && !ctx.siteMetadata
+          ? { details: { inconclusive: true } }
+          : {}),
       });
     }
 

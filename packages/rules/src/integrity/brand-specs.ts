@@ -41,7 +41,11 @@ export const BRAND_SPECS: BrandSpec[] = [
     actionCues: ["sign in", "log in", "continue", "verify"],
     // `sites.`, `docs.`, `script.`, `drive.`, `forms.`, `translate.` and the `/url` and `/amp/s/` redirectors of google.com hold
     // user content or send a visitor anywhere (#1418): only the sign-in hosts and the accounts path are the brand's.
-    legitHosts: ["accounts.google.com", "accounts.youtube.com", "myaccount.google.com"],
+    legitHosts: [
+      "accounts.google.com",
+      "accounts.youtube.com",
+      "myaccount.google.com",
+    ],
     legitEndpoints: [
       { host: "www.google.com", path: /^\/accounts(?:\/|$)/ },
       { host: "google.com", path: /^\/accounts(?:\/|$)/ },
@@ -75,8 +79,18 @@ export const BRAND_SPECS: BrandSpec[] = [
     ],
     // Azure AD B2C and Entra External ID tenants are tenant-owned: only the site's own tenant (by name), on an authorize path.
     legitEndpoints: [
-      { host: "b2clogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.b2clogin\.com$/ },
-      { host: "ciamlogin.com", suffix: true, path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/, tenant: /^\.ciamlogin\.com$/ },
+      {
+        host: "b2clogin.com",
+        suffix: true,
+        path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/,
+        tenant: /^\.b2clogin\.com$/,
+      },
+      {
+        host: "ciamlogin.com",
+        suffix: true,
+        path: /\/oauth2\/(?:v2\.0\/)?authorize(?:\/|$)/,
+        tenant: /^\.ciamlogin\.com$/,
+      },
     ],
   },
   {

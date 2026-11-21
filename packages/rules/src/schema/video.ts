@@ -1,8 +1,8 @@
 // schema/video - VideoObject schema validation
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
 import { flattenJsonLdNodes } from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 const REQUIRED_PROPS = ["name", "description", "thumbnailUrl", "uploadDate"];
 const RECOMMENDED_PROPS = ["duration", "contentUrl", "embedUrl"];

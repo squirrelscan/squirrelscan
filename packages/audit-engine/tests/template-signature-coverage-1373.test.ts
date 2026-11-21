@@ -2,9 +2,8 @@
 // not an estimate: its pages vary only the ways the author chose. The real
 // numbers come from `template-fanout-bench.ts --coverage` on real crawls.
 
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
-
 import { SIGNATURE_ATTRIBUTES, SIGNATURE_SELECTORS } from "@squirrelscan/rules";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { parseHtmlForRules } from "../src/adapter";
 import {
@@ -49,12 +48,18 @@ describe("measureSignatureCoverage on the template corpus (ceiling, not an estim
   });
 
   test("empty input and a page without a document are counted, not dropped", () => {
-    expect(measureSignatureCoverage([], "derived")).toMatchObject({ pages: 0, coverage: 0 });
+    expect(measureSignatureCoverage([], "derived")).toMatchObject({
+      pages: 0,
+      coverage: 0,
+    });
     expect(derivedFanoutSignature(null)).toBeNull();
   });
 
   test("every declared selector is a valid selector for the DOM", () => {
-    const doc = parseHtmlForRules("<html><body><main></main></body></html>", `${ORIGIN}/`).document!;
+    const doc = parseHtmlForRules(
+      "<html><body><main></main></body></html>",
+      `${ORIGIN}/`
+    ).document!;
     for (const selector of SIGNATURE_SELECTORS) {
       expect(() => doc.querySelectorAll(selector)).not.toThrow();
     }
@@ -74,6 +79,9 @@ describe("createCoverageAccumulator (streamed pass, #1373)", () => {
   }
 
   test("empty accumulator reports zero coverage", () => {
-    expect(createCoverageAccumulator("current").result()).toMatchObject({ pages: 0, coverage: 0 });
+    expect(createCoverageAccumulator("current").result()).toMatchObject({
+      pages: 0,
+      coverage: 0,
+    });
   });
 });

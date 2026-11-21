@@ -1,8 +1,11 @@
 // content/typography - typographic hygiene in body copy
 
-import { getRenderedProseText, getRenderedProseTextNodes } from "./text-content";
-
 import type { Rule, RuleResult, CheckResult } from "../types";
+
+import {
+  getRenderedProseText,
+  getRenderedProseTextNodes,
+} from "./text-content";
 
 /**
  * Languages that legitimately put a space before `; : ! ?` (French typography and
@@ -10,12 +13,26 @@ import type { Rule, RuleResult, CheckResult } from "../types";
  * them, and not for a page with no `lang` either: with no declared locale we cannot
  * tell a French page from a sloppy English one, so we stay quiet.
  */
-const SPACE_BEFORE_PUNCT_LOCALES = new Set(["fr", "br", "oc", "co", "wa", "ht", "ln", "wo", "mg"]);
+const SPACE_BEFORE_PUNCT_LOCALES = new Set([
+  "fr",
+  "br",
+  "oc",
+  "co",
+  "wa",
+  "ht",
+  "ln",
+  "wo",
+  "mg",
+]);
 
 /** At or above this many occurrences the check fails instead of warning. */
 const FAIL_THRESHOLD = 20;
 
-type Kind = "double-space" | "mixed-quotes" | "space-before-punctuation" | "double-hyphen-dash";
+type Kind =
+  | "double-space"
+  | "mixed-quotes"
+  | "space-before-punctuation"
+  | "double-hyphen-dash";
 type Finding = { kind: Kind; count: number; sample: string };
 
 /** Two or more spaces, or a space beside a no-break space, between words on one line. */
@@ -41,7 +58,7 @@ const show = (s: string): string => s.replace(/\u00A0/g, "[nbsp]");
 export function findTypographyIssues(
   text: string,
   checkPunctSpacing: boolean,
-  textNodes: readonly string[] = [text],
+  textNodes: readonly string[] = [text]
 ): Finding[] {
   const out: Finding[] = [];
 
@@ -54,7 +71,11 @@ export function findTypographyIssues(
     dblCount += dbl.n;
   }
   if (dblCount > 0)
-    out.push({ kind: "double-space", count: dblCount, sample: show(dblFirst) || "double space" });
+    out.push({
+      kind: "double-space",
+      count: dblCount,
+      sample: show(dblFirst) || "double space",
+    });
 
   // Straight and curly are only "mixed" when the SAME family uses both. Double quotes and
   // single quotes/apostrophes are separate families: a page can be all-curly doubles.
@@ -66,8 +87,10 @@ export function findTypographyIssues(
   const mixedSingle = straightSingle > 0 && curlySingle > 0;
   if (mixedDouble || mixedSingle) {
     const parts: string[] = [];
-    if (mixedDouble) parts.push(`${straightDouble} straight and ${curlyDouble} curly double`);
-    if (mixedSingle) parts.push(`${straightSingle} straight and ${curlySingle} curly single`);
+    if (mixedDouble)
+      parts.push(`${straightDouble} straight and ${curlyDouble} curly double`);
+    if (mixedSingle)
+      parts.push(`${straightSingle} straight and ${curlySingle} curly single`);
     const n =
       (mixedDouble ? Math.min(straightDouble, curlyDouble) : 0) +
       (mixedSingle ? Math.min(straightSingle, curlySingle) : 0);
@@ -76,12 +99,21 @@ export function findTypographyIssues(
 
   if (checkPunctSpacing) {
     const sp = count(SPACE_BEFORE_PUNCT_RE, text);
-    if (sp.n > 0) out.push({ kind: "space-before-punctuation", count: sp.n, sample: sp.first });
+    if (sp.n > 0)
+      out.push({
+        kind: "space-before-punctuation",
+        count: sp.n,
+        sample: sp.first,
+      });
   }
 
   const dash = count(DOUBLE_HYPHEN_RE, text);
   if (dash.n > 0)
-    out.push({ kind: "double-hyphen-dash", count: dash.n, sample: dash.first.trim() });
+    out.push({
+      kind: "double-hyphen-dash",
+      count: dash.n,
+      sample: dash.first.trim(),
+    });
 
   return out;
 }
@@ -138,10 +170,15 @@ export const typographyRule: Rule = {
       .trim()
       .toLowerCase()
       .split(/[-_]/)[0]!;
-    const checkPunctSpacing = lang !== "" && !SPACE_BEFORE_PUNCT_LOCALES.has(lang);
+    const checkPunctSpacing =
+      lang !== "" && !SPACE_BEFORE_PUNCT_LOCALES.has(lang);
     // Double spaces are judged per text node: where two nodes meet, the browser
     // collapses the whitespace, so the joined text would report spaces nobody sees.
-    const found = findTypographyIssues(text, checkPunctSpacing, getRenderedProseTextNodes(body));
+    const found = findTypographyIssues(
+      text,
+      checkPunctSpacing,
+      getRenderedProseTextNodes(body)
+    );
 
     if (found.length === 0) {
       checks.push({
@@ -159,7 +196,13 @@ export const typographyRule: Rule = {
       status: total >= FAIL_THRESHOLD ? "fail" : "warn",
       message: `${total} typographic issue(s) in body copy (${kinds})`,
       value: total,
-      details: { kinds: found.map((f) => ({ kind: f.kind, count: f.count, sample: f.sample })) },
+      details: {
+        kinds: found.map((f) => ({
+          kind: f.kind,
+          count: f.count,
+          sample: f.sample,
+        })),
+      },
     });
     return { checks };
   },

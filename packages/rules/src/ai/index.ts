@@ -14,4 +14,9 @@ export const rules: Rule[] = [
   siteMetadataRule,
 ];
 
-export { aiContentRule, llmParsabilityRule, pageTypeMatchRule, siteMetadataRule };
+export {
+  aiContentRule,
+  llmParsabilityRule,
+  pageTypeMatchRule,
+  siteMetadataRule,
+};

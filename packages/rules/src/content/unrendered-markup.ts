@@ -1,13 +1,13 @@
 // content/unrendered-markup - Markup that failed to render and leaked into visible copy
 
-import { collectTextExcluding } from "@squirrelscan/parser/extractors";
-
 import type { Element } from "linkedom";
+
+import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
+import { collectTextExcluding } from "@squirrelscan/parser/extractors";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { sharedRegex } from "../shared-regex";
-import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 /** Never read by a visitor at all. */
 const SCRIPT_LIKE_TAGS = ["script", "style", "noscript", "template"] as const;
 
@@ -62,7 +62,10 @@ const HIGHLIGHT_ATTRIBUTES = new Set([
   "data-code",
 ]);
 
-const SCRIPT_OR_CODE_TAGS = new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_TAGS]);
+const SCRIPT_OR_CODE_TAGS = new Set<string>([
+  ...SCRIPT_LIKE_TAGS,
+  ...CODE_LIKE_TAGS,
+]);
 
 /**
  * Elements a browser lays out on their own line. Their text has to be kept
@@ -71,11 +74,51 @@ const SCRIPT_OR_CODE_TAGS = new Set<string>([...SCRIPT_LIKE_TAGS, ...CODE_LIKE_T
  * which on a real page means after the header and nav, never.
  */
 const BLOCK_TAGS = new Set([
-  "address", "article", "aside", "blockquote", "br", "dd", "details", "dialog",
-  "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
-  "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr", "li", "main",
-  "nav", "ol", "p", "section", "summary", "table", "tbody", "td", "tfoot",
-  "th", "thead", "tr", "ul", "option", "optgroup", "caption", "legend", "menu",
+  "address",
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "details",
+  "dialog",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hgroup",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "section",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "ul",
+  "option",
+  "optgroup",
+  "caption",
+  "legend",
+  "menu",
 ]);
 
 /** True for any element a browser starts on a new line. */
@@ -105,7 +148,8 @@ export function isCodeLikeElement(el: Element): boolean {
       const lower = token.toLowerCase();
       if (HIGHLIGHT_CLASS_TOKENS.has(lower)) return true;
       for (const prefix of HIGHLIGHT_CLASS_PREFIXES) {
-        if (lower.startsWith(prefix) && lower.length > prefix.length) return true;
+        if (lower.startsWith(prefix) && lower.length > prefix.length)
+          return true;
       }
     }
   }
@@ -164,7 +208,8 @@ const MD_EMPHASIS_ASTERISK_RE =
 const MD_EMPHASIS_UNDERSCORE_RE =
   /(?:^|[\s([{'"])(_{1,2})(?=[^\s_])([^_\n]{1,200})\1(?=$|[\s.,;:!?)\]}'"])/gm;
 
-const INNER_HAS_SPACE = (m: RegExpExecArray): boolean => /[ \t]/.test(m[2] ?? "");
+const INNER_HAS_SPACE = (m: RegExpExecArray): boolean =>
+  /[ \t]/.test(m[2] ?? "");
 
 /**
  * Markdown link or image: `[text](url)`, `![alt](url)`.
@@ -211,7 +256,8 @@ const MD_FENCE_RE = /^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]{0,60}/gm;
  * Inline code span. Backticks are near-absent from ordinary prose, so flanking
  * plus a non-space interior is enough; the run is bounded to keep it linear.
  */
-const MD_INLINE_CODE_RE = /(?:^|[\s([{'"])`(?=[^\s`])([^`\n]{1,200})`(?=$|[\s.,;:!?)\]}'"])/gm;
+const MD_INLINE_CODE_RE =
+  /(?:^|[\s([{'"])`(?=[^\s`])([^`\n]{1,200})`(?=$|[\s.,;:!?)\]}'"])/gm;
 
 /**
  * Tags whose bare form is unambiguous evidence. `b`, `i`, `u`, `s` and `q` are
@@ -219,15 +265,75 @@ const MD_INLINE_CODE_RE = /(?:^|[\s([{'"])`(?=[^\s`])([^`\n]{1,200})`(?=$|[\s.,;
  * chain must not accuse a page of leaking markup.
  */
 const VISIBLE_HTML_TAGS = new Set([
-  "p", "div", "span", "br", "hr", "ul", "ol", "li", "dl", "dt", "dd",
-  "strong", "em", "h1", "h2", "h3", "h4", "h5", "h6",
-  "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
-  "section", "article", "header", "footer", "aside", "nav", "main",
-  "form", "input", "button", "select", "option", "label", "textarea",
-  "img", "picture", "source", "video", "audio", "iframe", "embed", "object",
-  "blockquote", "figure", "figcaption", "pre", "code", "script", "style",
-  "link", "meta", "svg", "path", "html", "head", "body", "title",
-  "details", "summary", "canvas", "template", "abbr",
+  "p",
+  "div",
+  "span",
+  "br",
+  "hr",
+  "ul",
+  "ol",
+  "li",
+  "dl",
+  "dt",
+  "dd",
+  "strong",
+  "em",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "table",
+  "thead",
+  "tbody",
+  "tfoot",
+  "tr",
+  "td",
+  "th",
+  "caption",
+  "section",
+  "article",
+  "header",
+  "footer",
+  "aside",
+  "nav",
+  "main",
+  "form",
+  "input",
+  "button",
+  "select",
+  "option",
+  "label",
+  "textarea",
+  "img",
+  "picture",
+  "source",
+  "video",
+  "audio",
+  "iframe",
+  "embed",
+  "object",
+  "blockquote",
+  "figure",
+  "figcaption",
+  "pre",
+  "code",
+  "script",
+  "style",
+  "link",
+  "meta",
+  "svg",
+  "path",
+  "html",
+  "head",
+  "body",
+  "title",
+  "details",
+  "summary",
+  "canvas",
+  "template",
+  "abbr",
 ]);
 
 /** These need an attribute or a closing slash before they count. */
@@ -240,7 +346,7 @@ const AMBIGUOUS_HTML_TAGS = new Set(["a", "b", "i", "u", "s", "q"]);
  * silently never match.
  */
 export const MAX_TAG_NAME_LENGTH = Math.max(
-  ...[...VISIBLE_HTML_TAGS, ...AMBIGUOUS_HTML_TAGS].map((t) => t.length),
+  ...[...VISIBLE_HTML_TAGS, ...AMBIGUOUS_HTML_TAGS].map((t) => t.length)
 );
 
 /**
@@ -263,7 +369,7 @@ export const MAX_TAG_NAME_LENGTH = Math.max(
  */
 const ESCAPED_TAG_RE = new RegExp(
   `<(/?)([a-z][a-z0-9]{0,${MAX_TAG_NAME_LENGTH - 1}})([^<>\n]{0,200})>`,
-  "g",
+  "g"
 );
 
 /**
@@ -274,26 +380,76 @@ const ESCAPED_TAG_RE = new RegExp(
  * at `fail`, the hardest status it has.
  */
 const KNOWN_ATTRIBUTES = new Set([
-  "class", "id", "style", "title", "lang", "dir", "role", "hidden", "tabindex",
-  "href", "src", "srcset", "sizes", "alt", "rel", "target", "type", "name",
-  "value", "content", "charset", "media", "loading", "decoding", "width",
-  "height", "colspan", "rowspan", "for", "action", "method", "placeholder",
-  "datetime", "label", "cite", "download", "referrerpolicy", "integrity",
-  "crossorigin", "http-equiv", "property", "itemprop", "viewbox", "xmlns",
+  "class",
+  "id",
+  "style",
+  "title",
+  "lang",
+  "dir",
+  "role",
+  "hidden",
+  "tabindex",
+  "href",
+  "src",
+  "srcset",
+  "sizes",
+  "alt",
+  "rel",
+  "target",
+  "type",
+  "name",
+  "value",
+  "content",
+  "charset",
+  "media",
+  "loading",
+  "decoding",
+  "width",
+  "height",
+  "colspan",
+  "rowspan",
+  "for",
+  "action",
+  "method",
+  "placeholder",
+  "datetime",
+  "label",
+  "cite",
+  "download",
+  "referrerpolicy",
+  "integrity",
+  "crossorigin",
+  "http-equiv",
+  "property",
+  "itemprop",
+  "viewbox",
+  "xmlns",
   // Legacy presentational attributes. A mangled rich-text or email import
   // produces exactly this shape — no closing tags, nothing modern — and would
   // otherwise have nothing to vouch for it. Single-letter SVG names (d, x, y)
   // are deliberately absent: `if a<b then d=1>0` would read as an attribute
   // again, which is the false positive this allowlist exists to prevent.
-  "align", "valign", "bgcolor", "cellpadding", "cellspacing", "nowrap",
-  "frameborder", "allowfullscreen", "scrolling", "poster", "srcdoc", "border",
+  "align",
+  "valign",
+  "bgcolor",
+  "cellpadding",
+  "cellspacing",
+  "nowrap",
+  "frameborder",
+  "allowfullscreen",
+  "scrolling",
+  "poster",
+  "srcdoc",
+  "border",
 ]);
 
 /**
  * Each `name=` in an attribute list. Bounded and over disjoint classes, so the
  * scan stays linear over the 200 characters `ESCAPED_TAG_RE` can hand it.
  */
-const ATTRIBUTE_NAME_RE = sharedRegex(/[\s/]([a-z][a-z0-9:_.-]{0,40})[ \t]{0,4}=/gi);
+const ATTRIBUTE_NAME_RE = sharedRegex(
+  /[\s/]([a-z][a-z0-9:_.-]{0,40})[ \t]{0,4}=/gi
+);
 /** True when `rest` assigns a value to an attribute a browser would recognise. */
 function hasRecognisedAttribute(rest: string): boolean {
   ATTRIBUTE_NAME_RE.lastIndex = 0;
@@ -301,7 +457,11 @@ function hasRecognisedAttribute(rest: string): boolean {
   let found = false;
   while ((m = ATTRIBUTE_NAME_RE.exec(rest)) !== null) {
     const name = (m[1] ?? "").toLowerCase();
-    if (KNOWN_ATTRIBUTES.has(name) || name.startsWith("data-") || name.startsWith("aria-")) {
+    if (
+      KNOWN_ATTRIBUTES.has(name) ||
+      name.startsWith("data-") ||
+      name.startsWith("aria-")
+    ) {
       found = true;
       break;
     }
@@ -317,18 +477,70 @@ function hasRecognisedAttribute(rest: string): boolean {
  * references are unambiguous and handled separately.
  */
 const KNOWN_ENTITY_NAMES = [
-  "nbsp", "amp", "lt", "gt", "quot", "apos", "hellip", "mdash", "ndash",
-  "copy", "reg", "trade", "laquo", "raquo", "ldquo", "rdquo", "lsquo", "rsquo",
-  "bull", "middot", "deg", "plusmn", "times", "divide", "frac12", "frac14",
-  "euro", "pound", "yen", "cent", "sect", "para", "dagger", "permil", "prime",
-  "ne", "le", "ge", "larr", "rarr", "harr", "infin", "sup2", "sup3",
-  "eacute", "egrave", "agrave", "uuml", "ouml", "auml", "ccedil", "ntilde", "szlig",
-  "shy", "ensp", "emsp", "thinsp", "zwnj", "zwj",
+  "nbsp",
+  "amp",
+  "lt",
+  "gt",
+  "quot",
+  "apos",
+  "hellip",
+  "mdash",
+  "ndash",
+  "copy",
+  "reg",
+  "trade",
+  "laquo",
+  "raquo",
+  "ldquo",
+  "rdquo",
+  "lsquo",
+  "rsquo",
+  "bull",
+  "middot",
+  "deg",
+  "plusmn",
+  "times",
+  "divide",
+  "frac12",
+  "frac14",
+  "euro",
+  "pound",
+  "yen",
+  "cent",
+  "sect",
+  "para",
+  "dagger",
+  "permil",
+  "prime",
+  "ne",
+  "le",
+  "ge",
+  "larr",
+  "rarr",
+  "harr",
+  "infin",
+  "sup2",
+  "sup3",
+  "eacute",
+  "egrave",
+  "agrave",
+  "uuml",
+  "ouml",
+  "auml",
+  "ccedil",
+  "ntilde",
+  "szlig",
+  "shy",
+  "ensp",
+  "emsp",
+  "thinsp",
+  "zwnj",
+  "zwj",
 ] as const;
 
 const DOUBLE_ENCODED_ENTITY_RE = new RegExp(
   `&(?:${KNOWN_ENTITY_NAMES.join("|")}|#\\d{1,7}|#[xX][0-9a-fA-F]{1,6});`,
-  "g",
+  "g"
 );
 
 export type UnrenderedMarkupKind =
@@ -367,7 +579,9 @@ const RAW_MARKUP_KINDS = new Set<UnrenderedMarkupKind>([
  * in a copyable prompt and is not mis-rendering anything. A template that
  * really lost its markdown pass leaks headings, links or emphasis as well.
  */
-const CORROBORATING_KINDS = new Set<UnrenderedMarkupKind>(["markdown-inline-code"]);
+const CORROBORATING_KINDS = new Set<UnrenderedMarkupKind>([
+  "markdown-inline-code",
+]);
 
 /** Reports get these verbatim, so no newline and no unbounded site-controlled string. */
 function toSample(match: string): string {
@@ -383,7 +597,7 @@ function toSample(match: string): string {
 function collect(
   re: RegExp,
   text: string,
-  accept?: (m: RegExpExecArray) => boolean,
+  accept?: (m: RegExpExecArray) => boolean
 ): string[] {
   re.lastIndex = 0;
   const out: string[] = [];
@@ -404,10 +618,14 @@ function collect(
 function push(
   out: UnrenderedMarkupFinding[],
   kind: UnrenderedMarkupKind,
-  matches: string[],
+  matches: string[]
 ): void {
   if (matches.length === 0) return;
-  out.push({ kind, sample: toSample(matches[0] as string), count: matches.length });
+  out.push({
+    kind,
+    sample: toSample(matches[0] as string),
+    count: matches.length,
+  });
 }
 
 /**
@@ -469,10 +687,10 @@ function findEscapedTags(text: string): string[] {
   return [vouching as string, ...candidates].slice(0, MAX_MATCHES_PER_KIND);
 }
 
-
 /** Every family of unrendered markup present in `text`, with a sample and a count. */
 export function findUnrenderedMarkup(text: string): UnrenderedMarkupFinding[] {
-  const scanned = text.length > MAX_SCANNED_CHARS ? text.slice(0, MAX_SCANNED_CHARS) : text;
+  const scanned =
+    text.length > MAX_SCANNED_CHARS ? text.slice(0, MAX_SCANNED_CHARS) : text;
   const out: UnrenderedMarkupFinding[] = [];
 
   // Two patterns, ONE family budget: capping each `collect` separately would let
@@ -483,13 +701,21 @@ export function findUnrenderedMarkup(text: string): UnrenderedMarkupFinding[] {
   ].slice(0, MAX_MATCHES_PER_KIND);
   push(out, "markdown-emphasis", emphasis);
   push(out, "markdown-link", collect(MD_LINK_RE, scanned));
-  push(out, "markdown-heading", collect(MD_HEADING_RE, scanned, HEADING_IS_PROSE));
+  push(
+    out,
+    "markdown-heading",
+    collect(MD_HEADING_RE, scanned, HEADING_IS_PROSE)
+  );
   push(out, "markdown-code-fence", collect(MD_FENCE_RE, scanned));
   push(out, "markdown-inline-code", collect(MD_INLINE_CODE_RE, scanned));
 
   push(out, "escaped-html-tag", findEscapedTags(scanned));
 
-  push(out, "double-encoded-entity", collect(DOUBLE_ENCODED_ENTITY_RE, scanned));
+  push(
+    out,
+    "double-encoded-entity",
+    collect(DOUBLE_ENCODED_ENTITY_RE, scanned)
+  );
 
   return out;
 }
@@ -498,9 +724,10 @@ export const unrenderedMarkupRule: Rule = {
   meta: {
     id: "content/unrendered-markup",
     name: "Unrendered Markup",
-    description: "Detects literal markdown or escaped HTML leaking into rendered copy",
+    description:
+      "Detects literal markdown or escaped HTML leaking into rendered copy",
     solution:
-      'Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake: HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.',
+      "Something rendered a value as plain text that was authored as markup. Find the field, not the page: a CMS that stores markdown and a template that prints it without a markdown-to-HTML pass produces literal `**bold**` and `[text](url)` everywhere that field appears, and fixing one page leaves the rest broken. Visible `<p>` or `<a href` means the opposite mistake: HTML was escaped twice, usually by escaping a value that a templating engine (Jinja, Twig, Blade, JSX) had already escaped, so remove the manual escape rather than marking the value safe. Visible `&nbsp;` or `&amp;` means the entity itself was encoded a second time on the way in, which is normally an import or a rich-text editor round-trip, so re-import the affected content. If the markup is meant to be on display, put it in `<code>` or `<pre>`, which this rule skips.",
     category: "content",
     scope: "page",
     findingScope: "page",
@@ -543,13 +770,15 @@ export const unrenderedMarkupRule: Rule = {
       body,
       isCodeLikeElement,
       SKIPPED_SUBTREE_BOUNDARY,
-      isBlockElement,
+      isBlockElement
     );
     const found = findUnrenderedMarkup(text);
 
     const hasRawMarkup = found.some((f) => RAW_MARKUP_KINDS.has(f.kind));
     const markdownCount = found
-      .filter((f) => !RAW_MARKUP_KINDS.has(f.kind) && !CORROBORATING_KINDS.has(f.kind))
+      .filter(
+        (f) => !RAW_MARKUP_KINDS.has(f.kind) && !CORROBORATING_KINDS.has(f.kind)
+      )
       .reduce((sum, f) => sum + f.count, 0);
 
     // Backticks alone say nothing: they are the one markdown character pages
@@ -585,7 +814,11 @@ export const unrenderedMarkupRule: Rule = {
       message: `${total} unrendered markup occurrence(s) in visible text (${kinds}): example ${example}`,
       value: total,
       details: {
-        kinds: found.map((f) => ({ kind: f.kind, sample: f.sample, count: f.count })),
+        kinds: found.map((f) => ({
+          kind: f.kind,
+          sample: f.sample,
+          count: f.count,
+        })),
       },
     });
     return { checks };

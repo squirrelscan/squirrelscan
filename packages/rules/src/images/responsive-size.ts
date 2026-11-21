@@ -1,12 +1,11 @@
 // images/responsive-size - Check image sizing vs display size
 
-import { z } from "zod";
-
 import type { ResourceSizeData } from "@squirrelscan/core-contracts";
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
-
 import { querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import { z } from "zod";
+
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // The evidence comes from the pre-rules resource check, which records each
 // same-site image's byte size and, read from its first bytes, its natural
@@ -44,7 +43,10 @@ interface MeasuredImage {
 
 // One url -> measurement index per resource list, not per page: the list is
 // site-wide and every page's run reads the same array.
-const measurementIndexes = new WeakMap<ResourceSizeData[], Map<string, MeasuredImage>>();
+const measurementIndexes = new WeakMap<
+  ResourceSizeData[],
+  Map<string, MeasuredImage>
+>();
 
 interface ImgLike {
   getAttribute(name: string): string | null;
@@ -99,7 +101,8 @@ function recordedImageUrls(
       continue;
     }
     const entry = recorded[next++];
-    if (entry && lastSegment(entry.src) === lastSegment(resolved)) urls.set(img, entry.src);
+    if (entry && lastSegment(entry.src) === lastSegment(resolved))
+      urls.set(img, entry.src);
   }
   return urls;
 }
@@ -108,7 +111,9 @@ function isPixelCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function imageMeasurementIndex(images: ResourceSizeData[]): Map<string, MeasuredImage> {
+function imageMeasurementIndex(
+  images: ResourceSizeData[]
+): Map<string, MeasuredImage> {
   let index = measurementIndexes.get(images);
   if (!index) {
     index = new Map();
@@ -119,7 +124,10 @@ function imageMeasurementIndex(images: ResourceSizeData[]): Map<string, Measured
       const height = image.naturalHeight;
       index.set(image.url, {
         bytes,
-        natural: isPixelCount(width) && isPixelCount(height) ? { width, height } : null,
+        natural:
+          isPixelCount(width) && isPixelCount(height)
+            ? { width, height }
+            : null,
         animated: image.animated ?? null,
       });
     }
@@ -178,10 +186,15 @@ export const responsiveSizeRule: Rule = {
       return { checks };
     }
 
-    const oversizedImages: Array<{ id: string; label: string; meta: Record<string, unknown> }> =
-      [];
+    const oversizedImages: Array<{
+      id: string;
+      label: string;
+      meta: Record<string, unknown>;
+    }> = [];
     let imagesWithSizeInfo = 0;
-    const measurements = imageMeasurementIndex(ctx.site?.resourceSizes?.images ?? []);
+    const measurements = imageMeasurementIndex(
+      ctx.site?.resourceSizes?.images ?? []
+    );
     const recordedUrls = recordedImageUrls(
       querySelectorAllOutsideNoscript(doc, "img"),
       ctx.parsed.images ?? [],
@@ -241,7 +254,9 @@ export const responsiveSizeRule: Rule = {
         // Pixels a 2x screen never draws in the box, as a share of the file.
         const naturalPixels = natural.width * natural.height;
         if (usedPixels >= naturalPixels) continue;
-        const wastedBytes = Math.round(bytes * (1 - usedPixels / naturalPixels));
+        const wastedBytes = Math.round(
+          bytes * (1 - usedPixels / naturalPixels)
+        );
         if (wastedBytes < MIN_SAVINGS_BYTES) continue;
         oversizedImages.push({
           id,
@@ -289,7 +304,9 @@ export const responsiveSizeRule: Rule = {
         message: `${oversizedImages.length} small image(s) serve files larger than their displayed size needs`,
         items: oversizedImages.slice(0, 10),
         details:
-          oversizedImages.length > 10 ? { additional: oversizedImages.length - 10 } : undefined,
+          oversizedImages.length > 10
+            ? { additional: oversizedImages.length - 10 }
+            : undefined,
       });
     } else if (imagesWithSizeInfo > 0) {
       checks.push({

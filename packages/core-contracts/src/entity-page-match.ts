@@ -61,25 +61,61 @@ export const ENTITY_PAGE_MATCH_CASES: ReadonlyArray<{
   matches: boolean;
 }> = [
   // Absolute URL: prefix of the whole URL.
-  { pattern: "https://example.com/blog", url: "https://example.com/blog/post", matches: true },
-  { pattern: "https://example.com/blog", url: "https://example.com/blog", matches: true },
-  { pattern: "https://example.com/blog", url: "https://example.com/tag/blog", matches: false },
-  { pattern: "https://example.com/blog", url: "https://other.example.com/blog/post", matches: false },
-  { pattern: "https://example.com/blog", url: "http://example.com/blog/post", matches: false },
-  { pattern: "HTTPS://example.com/blog", url: "HTTPS://example.com/blog/post", matches: true },
+  {
+    pattern: "https://example.com/blog",
+    url: "https://example.com/blog/post",
+    matches: true,
+  },
+  {
+    pattern: "https://example.com/blog",
+    url: "https://example.com/blog",
+    matches: true,
+  },
+  {
+    pattern: "https://example.com/blog",
+    url: "https://example.com/tag/blog",
+    matches: false,
+  },
+  {
+    pattern: "https://example.com/blog",
+    url: "https://other.example.com/blog/post",
+    matches: false,
+  },
+  {
+    pattern: "https://example.com/blog",
+    url: "http://example.com/blog/post",
+    matches: false,
+  },
+  {
+    pattern: "HTTPS://example.com/blog",
+    url: "HTTPS://example.com/blog/post",
+    matches: true,
+  },
   // Leading slash: prefix of path and query.
   { pattern: "/blog", url: "https://example.com/blog/post", matches: true },
   { pattern: "/blog", url: "https://example.com/blog", matches: true },
   { pattern: "/blog", url: "https://example.com/tag/blog", matches: false },
   { pattern: "/blog", url: "https://example.com/blog.html", matches: true },
-  { pattern: "/blog?page=2", url: "https://example.com/blog?page=2", matches: true },
+  {
+    pattern: "/blog?page=2",
+    url: "https://example.com/blog?page=2",
+    matches: true,
+  },
   { pattern: "/", url: "https://example.com/", matches: true },
   { pattern: "/blog", url: "not a url", matches: false },
   // Anything else: substring.
   { pattern: "blog", url: "https://example.com/blog/post", matches: true },
   { pattern: "blog", url: "https://example.com/tag/blog", matches: true },
-  { pattern: "example.com/blog", url: "https://example.com/blog/post", matches: true },
-  { pattern: "localhost:3000/blog", url: "http://localhost:3000/blog/post", matches: true },
+  {
+    pattern: "example.com/blog",
+    url: "https://example.com/blog/post",
+    matches: true,
+  },
+  {
+    pattern: "localhost:3000/blog",
+    url: "http://localhost:3000/blog/post",
+    matches: true,
+  },
   { pattern: "shop", url: "https://example.com/blog/post", matches: false },
   // Case-sensitive in every mode.
   { pattern: "Blog", url: "https://example.com/blog/post", matches: false },

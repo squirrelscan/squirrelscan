@@ -14,13 +14,6 @@
 //
 // The streaming audit (`runStreamingRules` in adapter.ts) builds it and passes it to the site pass.
 
-import { Effect } from "effect";
-
-import { AnchorGraphBuilder, countGenericAnchors } from "@squirrelscan/rules";
-import { normalizeUrl } from "@squirrelscan/utils";
-import { normalizePageUrl } from "@squirrelscan/utils/url";
-
-import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
   AnchorGraph,
   ClickDepthNode,
@@ -37,6 +30,12 @@ import type {
   SiteQuery,
   StorageError,
 } from "@squirrelscan/core-contracts";
+import type { SQLiteStorage } from "@squirrelscan/crawler";
+
+import { AnchorGraphBuilder, countGenericAnchors } from "@squirrelscan/rules";
+import { normalizeUrl } from "@squirrelscan/utils";
+import { normalizePageUrl } from "@squirrelscan/utils/url";
+import { Effect } from "effect";
 
 // Cursor batch for the page_features reads, whose rows are small scalars.
 const FEATURE_SCAN_BATCH = 500;
@@ -91,22 +90,35 @@ export function createSiteQuery(
     // link_appearances (which stores only external links; see below).
     // Clamped like every other streamed batch: `getPages` treats limit 0 as no
     // limit, which would pull the whole crawl and never advance the offset.
-    const pageScanBatch = Math.max(1, opts?.pageScanBatchSize ?? PAGE_SCAN_BATCH);
+    const pageScanBatch = Math.max(
+      1,
+      opts?.pageScanBatchSize ?? PAGE_SCAN_BATCH
+    );
     const incoming = yield* buildIncomingLinkCounts(
       storage,
       crawlId,
       opts?.universe,
       pageScanBatch,
-      opts?.anchorGraph ?? true,
+      opts?.anchorGraph ?? true
     );
 
     // page_features rollups (PR-A read API). All bounded by construction.
     const pageCount = yield* storage.getPageFeaturesCount(crawlId);
     const homepageRow = yield* storage.getHomepageFeature(crawlId);
-    const dupTitle = yield* storage.getPageFeatureDuplicateGroups(crawlId, "title");
-    const dupDesc = yield* storage.getPageFeatureDuplicateGroups(crawlId, "description");
-    const dupContent = yield* storage.getPageFeatureDuplicateGroups(crawlId, "content");
-    const templateGroups = yield* storage.getPageFeatureTemplateClusters(crawlId);
+    const dupTitle = yield* storage.getPageFeatureDuplicateGroups(
+      crawlId,
+      "title"
+    );
+    const dupDesc = yield* storage.getPageFeatureDuplicateGroups(
+      crawlId,
+      "description"
+    );
+    const dupContent = yield* storage.getPageFeatureDuplicateGroups(
+      crawlId,
+      "content"
+    );
+    const templateGroups =
+      yield* storage.getPageFeatureTemplateClusters(crawlId);
     const transferBytes = yield* storage.sumPageFeatureTransferBytes(crawlId);
     const secretHits = yield* storage.sumPageFeatureSecretHits(crawlId);
     const byType = yield* buildPagesByType(storage, crawlId);
@@ -132,7 +144,9 @@ export function createSiteQuery(
       contextualIncomingLinkCounts: () => incoming.contextual,
       inboundSectionCounts: () => incoming.sections,
       genericAnchorCounts: () => incoming.genericAnchors,
-      ...(incoming.anchorGraph ? { anchorGraph: () => incoming.anchorGraph! } : {}),
+      ...(incoming.anchorGraph
+        ? { anchorGraph: () => incoming.anchorGraph! }
+        : {}),
       homepage: () => homepageRow,
       duplicateGroups: (field) => duplicates[field] ?? [],
       templateClusters: () => templateGroups,
@@ -141,9 +155,22 @@ export function createSiteQuery(
       sumSecretHits: () => secretHits,
       pagesMatching: (pred) => iteratePagesMatching(storage, crawlId, pred),
       outgoingEdges: () =>
-        iterateOutgoingEdges(storage, crawlId, pageScanBatch, winnerByKey, universeSet),
+        iterateOutgoingEdges(
+          storage,
+          crawlId,
+          pageScanBatch,
+          winnerByKey,
+          universeSet
+        ),
       clickDepths: (entryUrls, depthOpts) =>
-        computeClickDepths(storage, crawlId, pageScanBatch, winnerByKey, entryUrls, depthOpts),
+        computeClickDepths(
+          storage,
+          crawlId,
+          pageScanBatch,
+          winnerByKey,
+          entryUrls,
+          depthOpts
+        ),
     } satisfies SiteQuery;
   });
 }
@@ -217,7 +244,10 @@ function buildIncomingLinkCounts(
     // #110: contextual anchor text per (source, target) pair, plus each page's title and H1s.
     let anchors: AnchorGraphBuilder | null = null;
     // repo#1387: generic/total content anchors per source page, same universe as the link sources.
-    const genericAnchors = new Map<string, { generic: number; total: number }>();
+    const genericAnchors = new Map<
+      string,
+      { generic: number; total: number }
+    >();
 
     // Pass A: the audit universe. With `universe` this is v1's site.pages set/order
     // exactly; otherwise the raw crawled-page set (getPages orders by normalized_url
@@ -241,7 +271,7 @@ function buildIncomingLinkCounts(
       anchors = new AnchorGraphBuilder(
         undefined,
         undefined,
-        new Set(orderedUrls.map((u) => normalizePageUrl(u))),
+        new Set(orderedUrls.map((u) => normalizePageUrl(u)))
       );
     }
     const anchorBuilder = anchors;
@@ -263,12 +293,17 @@ function buildIncomingLinkCounts(
       for (const link of parsed.links) {
         if (link.isInternal && link.url && !link.isNofollow) {
           try {
-            const target = normalizeUrl(new URL(link.url, page.normalizedUrl).href);
+            const target = normalizeUrl(
+              new URL(link.url, page.normalizedUrl).href
+            );
             const current = bucket.get(target);
             if (current !== undefined) {
               bucket.set(target, current + 1);
               if (!link.isChrome) {
-                contextualBucket.set(target, (contextualBucket.get(target) ?? 0) + 1);
+                contextualBucket.set(
+                  target,
+                  (contextualBucket.get(target) ?? 0) + 1
+                );
               }
               if (link.section && link.section !== "unknown") {
                 let sections = sectionBucket.get(target);
@@ -401,7 +436,11 @@ function extractEdges(
     try {
       const target = normalizeUrl(new URL(link.url, sourceUrl).href);
       if (winnerByKey.has(target)) {
-        edges.push({ target, nofollow: !!link.isNofollow, chrome: !!link.isChrome });
+        edges.push({
+          target,
+          nofollow: !!link.isNofollow,
+          chrome: !!link.isChrome,
+        });
       }
     } catch {
       // Invalid link URL: ignored, matching the legacy rules' try/catch.
@@ -423,7 +462,9 @@ async function readRowsByUrls(
 ): Promise<void> {
   for (let i = 0; i < urls.length; i += batchSize) {
     const rows = await Effect.runPromise(
-      storage.getPageLinkRowsByUrls(crawlId, urls.slice(i, i + batchSize)).pipe(Effect.orDie)
+      storage
+        .getPageLinkRowsByUrls(crawlId, urls.slice(i, i + batchSize))
+        .pipe(Effect.orDie)
     );
     for (const row of rows) onRow(row);
   }
@@ -440,7 +481,9 @@ async function* iterateOutgoingEdges(
   let offset = 0;
   for (;;) {
     const batch = await Effect.runPromise(
-      storage.getPageLinkRows(crawlId, { limit: batchSize, offset }).pipe(Effect.orDie)
+      storage
+        .getPageLinkRows(crawlId, { limit: batchSize, offset })
+        .pipe(Effect.orDie)
     );
     for (const row of batch) {
       if (universeSet && !universeSet.has(row.normalizedUrl)) continue;
@@ -497,7 +540,8 @@ async function computeClickDepths(
     frontier.add(key);
   }
 
-  const winnerUrls = (keys: ReadonlySet<string>) => [...keys].map((k) => winnerByKey.get(k)!);
+  const winnerUrls = (keys: ReadonlySet<string>) =>
+    [...keys].map((k) => winnerByKey.get(k)!);
 
   for (let depth = 0; truncated === null && frontier.size > 0; depth++) {
     const current = frontier;
@@ -506,14 +550,24 @@ async function computeClickDepths(
     const next = new Set<string>();
     let more = false;
     let denied = false;
-    await readRowsByUrls(storage, crawlId, batchSize, winnerUrls(current), (row) => {
+    await readRowsByUrls(
+      storage,
+      crawlId,
+      batchSize,
+      winnerUrls(current),
+      (row) => {
         const key = normalizeUrl(row.normalizedUrl);
         const node = depths.get(row.normalizedUrl)!;
         node.status = row.status ?? null;
         pending.delete(key);
         if (detectOnly && more) return;
-        for (const edge of extractEdges(row.parsedData, row.normalizedUrl, winnerByKey)) {
-          if (edge.nofollow || edge.target === key || reached.has(edge.target)) continue;
+        for (const edge of extractEdges(
+          row.parsedData,
+          row.normalizedUrl,
+          winnerByKey
+        )) {
+          if (edge.nofollow || edge.target === key || reached.has(edge.target))
+            continue;
           if (detectOnly) {
             more = true;
             break;
@@ -523,11 +577,15 @@ async function computeClickDepths(
             continue;
           }
           reached.add(edge.target);
-          depths.set(winnerByKey.get(edge.target)!, { depth: depth + 1, status: null });
+          depths.set(winnerByKey.get(edge.target)!, {
+            depth: depth + 1,
+            status: null,
+          });
           pending.add(edge.target);
           next.add(edge.target);
         }
-    });
+      }
+    );
     if (detectOnly) {
       if (more) truncated = full ? "maxNodes" : "maxDepth";
       break;
@@ -537,9 +595,15 @@ async function computeClickDepths(
   }
 
   if (pending.size > 0) {
-    await readRowsByUrls(storage, crawlId, batchSize, winnerUrls(pending), (row) => {
-      depths.get(row.normalizedUrl)!.status = row.status ?? null;
-    });
+    await readRowsByUrls(
+      storage,
+      crawlId,
+      batchSize,
+      winnerUrls(pending),
+      (row) => {
+        depths.get(row.normalizedUrl)!.status = row.status ?? null;
+      }
+    );
   }
   return { depths, truncated };
 }

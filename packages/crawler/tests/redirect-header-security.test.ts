@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { RobotsTxtData } from "@squirrelscan/core-contracts";
+
 import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
 import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
 import { safeRedirectFetch } from "@squirrelscan/utils/safe-fetch";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { fetchPage } from "../src/fetcher";
 import { fetchRslLicensing } from "../src/rsl";
@@ -80,7 +80,7 @@ describe("standard fetch redirect headers", () => {
             Authorization: "Bearer review-secret",
             "X-Crawl-Secret": "custom-secret", // pragma: allowlist secret
           },
-        }),
+        })
       );
 
       expect(result.status).toBe(200);
@@ -114,7 +114,7 @@ describe("cross-protocol redirect refusal (#1392)", () => {
           userAgent: "squirrel-test",
           timeoutMs: 5_000,
           followRedirects: true,
-        }),
+        })
       );
 
       // The file:// target is never fetched; the redirect is a terminal error
@@ -141,9 +141,9 @@ describe("cross-protocol redirect refusal (#1392)", () => {
     });
 
     try {
-      await expect(safeRedirectFetch(`http://127.0.0.1:${source.port}/x`)).rejects.toThrow(
-        /non-http/i,
-      );
+      await expect(
+        safeRedirectFetch(`http://127.0.0.1:${source.port}/x`)
+      ).rejects.toThrow(/non-http/i);
     } finally {
       source.stop(true);
     }
@@ -153,8 +153,16 @@ describe("cross-protocol redirect refusal (#1392)", () => {
   // `data:text/html` hop matters twice over: its body would be stored AND
   // parsed, so it must never reach `result.body` in the first place.
   const REFUSED_LOCATIONS = [
-    { label: "file:// (/etc/passwd)", location: "file:///etc/passwd", marker: "root:" },
-    { label: "file:// (/etc/hosts)", location: "file:///etc/hosts", marker: "localhost" },
+    {
+      label: "file:// (/etc/passwd)",
+      location: "file:///etc/passwd",
+      marker: "root:",
+    },
+    {
+      label: "file:// (/etc/hosts)",
+      location: "file:///etc/hosts",
+      marker: "localhost",
+    },
     {
       label: "file:// (/proc/self/environ)",
       location: "file:///proc/self/environ",
@@ -165,9 +173,17 @@ describe("cross-protocol redirect refusal (#1392)", () => {
       location: "data:text/html,<html><title>pwned-marker</title></html>",
       marker: "pwned-marker",
     },
-    { label: "blob:", location: "blob:http://127.0.0.1/abc", marker: "pwned-marker" },
+    {
+      label: "blob:",
+      location: "blob:http://127.0.0.1/abc",
+      marker: "pwned-marker",
+    },
     { label: "ftp:", location: "ftp://127.0.0.1/etc/passwd", marker: "root:" },
-    { label: "javascript:", location: "javascript:alert(1)", marker: "alert(1)" },
+    {
+      label: "javascript:",
+      location: "javascript:alert(1)",
+      marker: "alert(1)",
+    },
   ] as const;
 
   for (const { label, location, marker } of REFUSED_LOCATIONS) {
@@ -181,7 +197,7 @@ describe("cross-protocol redirect refusal (#1392)", () => {
             userAgent: "squirrel-test",
             timeoutMs: 5_000,
             followRedirects: true,
-          }),
+          })
         );
 
         // Terminal error hop: the redirect is not followed, so the final URL
@@ -192,9 +208,11 @@ describe("cross-protocol redirect refusal (#1392)", () => {
         // Nothing from the refused target reaches the body that crawler.ts
         // stores as PageRecord.html (and would otherwise parse).
         expect(result.body).not.toContain(marker);
-        expect(spy.requested.some((u) => !u.startsWith("http:") && !u.startsWith("https:"))).toBe(
-          false,
-        );
+        expect(
+          spy.requested.some(
+            (u) => !u.startsWith("http:") && !u.startsWith("https:")
+          )
+        ).toBe(false);
       } finally {
         spy.restore();
         source.stop(true);
@@ -216,9 +234,11 @@ describe("cross-protocol redirect refusal (#1392)", () => {
         expect(result.finalUrl).toContain(`127.0.0.1:${source.port}`);
         expect(result.redirectChain.endsInError).toBe(true);
         expect(result.body).not.toContain(marker);
-        expect(spy.requested.some((u) => !u.startsWith("http:") && !u.startsWith("https:"))).toBe(
-          false,
-        );
+        expect(
+          spy.requested.some(
+            (u) => !u.startsWith("http:") && !u.startsWith("https:")
+          )
+        ).toBe(false);
       } finally {
         spy.restore();
         source.stop(true);
@@ -246,7 +266,7 @@ describe("cross-protocol redirect refusal (#1392)", () => {
           userAgent: "squirrel-test",
           timeoutMs: 5_000,
           followRedirects: true,
-        }),
+        })
       );
       expect(crawled.status).toBe(200);
       expect(crawled.body).toContain("internal ok");
@@ -283,7 +303,7 @@ describe("probe fetch cross-origin header stripping (#1395)", () => {
         targetSawUserAgent = req.headers.get("user-agent");
         return new Response(
           `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`,
-          { headers: { "content-type": "application/xml" } },
+          { headers: { "content-type": "application/xml" } }
         );
       },
     });
@@ -300,9 +320,13 @@ describe("probe fetch cross-origin header stripping (#1395)", () => {
 
     try {
       const result = await Effect.runPromise(
-        fetchSitemap(`http://127.0.0.1:${source.port}/sitemap.xml`, "squirrel-test", {
-          "X-Api-Key": "supersecret", // pragma: allowlist secret
-        }),
+        fetchSitemap(
+          `http://127.0.0.1:${source.port}/sitemap.xml`,
+          "squirrel-test",
+          {
+            "X-Api-Key": "supersecret", // pragma: allowlist secret
+          }
+        )
       );
 
       expect(result.success).toBe(true);
@@ -340,7 +364,9 @@ describe("robots.txt directive scheme refusal (#1393/#1394)", () => {
         errors: [],
       };
       const result = await Effect.runPromise(
-        discoverSitemaps("https://example.test", robotsTxt, "test-agent", { maxUrls: 50 }),
+        discoverSitemaps("https://example.test", robotsTxt, "test-agent", {
+          maxUrls: 50,
+        })
       );
 
       expect(requested.some((u) => u.startsWith("file:"))).toBe(false);
@@ -367,7 +393,7 @@ describe("robots.txt directive scheme refusal (#1393/#1394)", () => {
 
     try {
       const result = await Effect.runPromise(
-        fetchRslLicensing("https://example.test", "test-agent"),
+        fetchRslLicensing("https://example.test", "test-agent")
       );
 
       expect(requested.some((u) => u.startsWith("file:"))).toBe(false);
@@ -391,17 +417,23 @@ describe("findMetaRefresh scheme restriction (#1396)", () => {
     expect(
       findClientRedirects(
         `<meta http-equiv="refresh" content="0;url=file:///etc/passwd">`,
-        base,
-      ),
+        base
+      )
     ).toBeNull();
   });
 
   test("rejects data: and javascript: meta refresh targets", () => {
     expect(
-      findClientRedirects(`<meta http-equiv="refresh" content="0;url=data:text/html,x">`, base),
+      findClientRedirects(
+        `<meta http-equiv="refresh" content="0;url=data:text/html,x">`,
+        base
+      )
     ).toBeNull();
     expect(
-      findClientRedirects(`<meta http-equiv="refresh" content="0;url=javascript:alert(1)">`, base),
+      findClientRedirects(
+        `<meta http-equiv="refresh" content="0;url=javascript:alert(1)">`,
+        base
+      )
     ).toBeNull();
   });
 
@@ -409,11 +441,14 @@ describe("findMetaRefresh scheme restriction (#1396)", () => {
     expect(
       findClientRedirects(
         `<meta http-equiv="refresh" content="0;url=https://other.example/next">`,
-        base,
-      ),
+        base
+      )
     ).toBe("https://other.example/next");
     expect(
-      findClientRedirects(`<meta http-equiv="refresh" content="0;url=/next">`, base),
+      findClientRedirects(
+        `<meta http-equiv="refresh" content="0;url=/next">`,
+        base
+      )
     ).toBe("https://example.com/next");
   });
 });

@@ -5,7 +5,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { classifyPage, tryLoadModel } from "../src/predict";
-import { chromeIndices, chromeMass, SITE_CHROME_THRESHOLD } from "../src/region-groups";
+import {
+  chromeIndices,
+  chromeMass,
+  SITE_CHROME_THRESHOLD,
+} from "../src/region-groups";
 
 const ARTIFACT = join(import.meta.dir, "../assets/classifier-v2.json");
 
@@ -28,7 +32,9 @@ describe("chrome mass", () => {
     expect(indices).toEqual([0, 1, 2, 3]);
     const probs = [0.2, 0.3, 0.1, 0.25, 0.05, 0.05, 0.02, 0.01, 0.01, 0.01];
     expect(chromeMass(probs, indices)).toBeCloseTo(0.85, 6);
-    expect(chromeMass(probs, indices)).toBeGreaterThanOrEqual(SITE_CHROME_THRESHOLD);
+    expect(chromeMass(probs, indices)).toBeGreaterThanOrEqual(
+      SITE_CHROME_THRESHOLD
+    );
   });
 
   test("a head without chrome classes has no fallback", () => {
@@ -36,17 +42,18 @@ describe("chrome mass", () => {
   });
 
   test("a class the platform guard abstains does not count towards the group", () => {
-    const thresholds = [0.85, 1.01, 0.94, 0.87, 1.01, 0.95, 1.01, 1.01, 1.01, 0.94];
+    const thresholds = [
+      0.85, 1.01, 0.94, 0.87, 1.01, 0.95, 1.01, 1.01, 1.01, 0.94,
+    ];
     expect(chromeIndices(CLASSES, thresholds)).toEqual([0, 2, 3]);
     expect(
       chromeIndices(
         CLASSES,
-        CLASSES.map(() => 1.01),
-      ),
+        CLASSES.map(() => 1.01)
+      )
     ).toEqual([]);
   });
 });
-
 
 // A page whose furniture the head names with less than class-level confidence.
 const PAGE = `<!doctype html><html lang="en"><head><title>Home - Example Shop</title></head><body>
@@ -86,7 +93,9 @@ describe.if(existsSync(ARTIFACT))(
     });
 
     test("the fallback never fires without a model", () => {
-      expect(classifyPage(PAGE, url).nodes.some((n) => n.label === "site_chrome")).toBe(false);
+      expect(
+        classifyPage(PAGE, url).nodes.some((n) => n.label === "site_chrome")
+      ).toBe(false);
     });
-  },
+  }
 );

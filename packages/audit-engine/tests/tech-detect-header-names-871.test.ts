@@ -4,9 +4,6 @@
 // crawler now keeps every header the fingerprints and WAF providers read, by
 // name, each value capped.
 
-import { afterEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import { createCrawler, SQLiteStorage } from "@squirrelscan/crawler";
 import { ALL_FINGERPRINTS } from "@squirrelscan/tech-detect";
 import {
@@ -15,8 +12,13 @@ import {
   TECH_DETECT_MAX_COOKIE_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { overlayTechHeaders, techCookieNames } from "@squirrelscan/utils/headers";
+import {
+  overlayTechHeaders,
+  techCookieNames,
+} from "@squirrelscan/utils/headers";
 import { HEADER_PATTERNS } from "@squirrelscan/waf-detect";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import { buildTechHeadersMap } from "../src/adapter";
 
@@ -25,14 +27,16 @@ describe("TECH_DETECT_HEADER_NAMES (pub#871)", () => {
 
   test("lists every header a fingerprint reads (Set-Cookie has its own field)", () => {
     const missing = ALL_FINGERPRINTS.flatMap((fp) =>
-      fp.detectors.flatMap((d) => (d.type === "header" ? [d.name.toLowerCase()] : [])),
+      fp.detectors.flatMap((d) =>
+        d.type === "header" ? [d.name.toLowerCase()] : []
+      )
     ).filter((name) => name !== "set-cookie" && !listed.has(name));
     expect([...new Set(missing)]).toEqual([]);
   });
 
   test("lists every header a WAF provider reads", () => {
     const missing = HEADER_PATTERNS.flatMap((p) =>
-      p.headers.map((h) => h.name.toLowerCase()),
+      p.headers.map((h) => h.name.toLowerCase())
     ).filter((name) => !listed.has(name));
     expect([...new Set(missing)]).toEqual([]);
   });
@@ -47,7 +51,8 @@ describe("TECH_DETECT_HEADER_NAMES (pub#871)", () => {
         if (d.type !== "header") continue;
         const name = d.name.toLowerCase();
         all.add(name);
-        if (![".+", ".*"].includes(d.pattern.source) || fp.versionPattern) byValue.add(name);
+        if (![".+", ".*"].includes(d.pattern.source) || fp.versionPattern)
+          byValue.add(name);
       }
     }
     for (const p of HEADER_PATTERNS) {
@@ -56,12 +61,15 @@ describe("TECH_DETECT_HEADER_NAMES (pub#871)", () => {
         if (h.pattern) byValue.add(h.name.toLowerCase());
       }
     }
-    const presence = [...all].filter((n) => n !== "set-cookie" && !byValue.has(n)).sort();
+    const presence = [...all]
+      .filter((n) => n !== "set-cookie" && !byValue.has(n))
+      .sort();
     expect([...TECH_DETECT_PRESENCE_HEADERS].sort()).toEqual(presence);
   });
 
   test("names are lower case and listed once", () => {
-    for (const name of TECH_DETECT_HEADER_NAMES) expect<string>(name).toBe(name.toLowerCase());
+    for (const name of TECH_DETECT_HEADER_NAMES)
+      expect<string>(name).toBe(name.toLowerCase());
     expect(listed.size).toBe(TECH_DETECT_HEADER_NAMES.length);
   });
 });
@@ -88,7 +96,7 @@ describe("the crawler stores the headers technology detection reads (pub#871)", 
               "x-not-a-fingerprint": "1",
               "set-cookie": "PHPSESSID=secret-session-value; Path=/",
             },
-          },
+          }
         ),
     });
     servers.push(server);
@@ -107,9 +115,11 @@ describe("the crawler stores the headers technology detection reads (pub#871)", 
           incremental: false,
           useCacheControl: false,
         },
-      }),
+      })
     );
-    const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+    const crawlId = await Effect.runPromise(
+      crawler.start(`${origin}/`, `${origin}/`)
+    );
     const [page] = await Effect.runPromise(crawler.storage.getPages(crawlId));
     const tech = page?.headers.techHeaders ?? {};
     expect(tech["x-cdn"]).toBe("Imperva");
@@ -132,13 +142,19 @@ describe("the crawler stores the headers technology detection reads (pub#871)", 
 // body. Every header comes from the response just fetched (repo#4765), the
 // detection headers included.
 test("an unchanged page refetched by an incremental crawl takes the new detection headers", async () => {
-  let extra: Record<string, string> = { "x-powered-by": "Express", "set-cookie": "sid=1" };
+  let extra: Record<string, string> = {
+    "x-powered-by": "Express",
+    "set-cookie": "sid=1",
+  };
   const server = Bun.serve({
     port: 0,
     fetch: () =>
-      new Response("<!doctype html><html><head><title>t</title></head><body>same</body></html>", {
-        headers: { "content-type": "text/html", ...extra },
-      }),
+      new Response(
+        "<!doctype html><html><head><title>t</title></head><body>same</body></html>",
+        {
+          headers: { "content-type": "text/html", ...extra },
+        }
+      ),
   });
   servers.push(server);
   const origin = `http://localhost:${server.port}`;
@@ -160,12 +176,16 @@ test("an unchanged page refetched by an incremental crawl takes the new detectio
           incremental: true,
           useCacheControl: false,
         },
-      }),
+      })
     );
-    const crawlId = await Effect.runPromise(crawler.start(`${origin}/`, `${origin}/`));
+    const crawlId = await Effect.runPromise(
+      crawler.start(`${origin}/`, `${origin}/`)
+    );
     return (await Effect.runPromise(storage.getPages(crawlId)))[0];
   };
-  expect((await crawl())?.headers.techHeaders?.["x-powered-by"]).toBe("Express");
+  expect((await crawl())?.headers.techHeaders?.["x-powered-by"]).toBe(
+    "Express"
+  );
   extra = { "x-powered-by": "Next.js" };
   const page = await crawl();
   // The body was reused; its headers are the new response's (repo#4765).
@@ -179,7 +199,9 @@ test("an unchanged page refetched by an incremental crawl takes the new detectio
   extra = {};
   const bare = await crawl();
   expect(bare?.headers.techHeaders).toBeNull();
-  expect(bare ? buildTechHeadersMap(bare)["x-powered-by"] : "missing").toBeUndefined();
+  expect(
+    bare ? buildTechHeadersMap(bare)["x-powered-by"] : "missing"
+  ).toBeUndefined();
 });
 
 describe("overlayTechHeaders (pub#871)", () => {
@@ -203,9 +225,9 @@ describe("overlayTechHeaders (pub#871)", () => {
 
 describe("techCookieNames (pub#871)", () => {
   test("a name ends at = or ;, so attributes never join it", () => {
-    expect(techCookieNames(["sid=abc; Path=/", "foo; Secure", " bar = 1"])).toBe(
-      "sid=\nfoo=\nbar=",
-    );
+    expect(
+      techCookieNames(["sid=abc; Path=/", "foo; Secure", " bar = 1"])
+    ).toBe("sid=\nfoo=\nbar=");
   });
   test("names are listed once, none for no cookies", () => {
     expect(techCookieNames(["a=1", "a=2"])).toBe("a=");
@@ -215,7 +237,12 @@ describe("techCookieNames (pub#871)", () => {
   test("names are kept whole: an over-long one is left out, and the count is capped", () => {
     const long = "x".repeat(TECH_DETECT_HEADER_MAX_CHARS + 1);
     expect(techCookieNames([`${long}=1`, "ok=1"])).toBe("ok=");
-    const many = Array.from({ length: TECH_DETECT_MAX_COOKIE_NAMES + 10 }, (_, i) => `c${i}=1`);
-    expect(techCookieNames(many)?.split("\n")).toHaveLength(TECH_DETECT_MAX_COOKIE_NAMES);
+    const many = Array.from(
+      { length: TECH_DETECT_MAX_COOKIE_NAMES + 10 },
+      (_, i) => `c${i}=1`
+    );
+    expect(techCookieNames(many)?.split("\n")).toHaveLength(
+      TECH_DETECT_MAX_COOKIE_NAMES
+    );
   });
 });

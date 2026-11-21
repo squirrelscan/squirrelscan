@@ -2,6 +2,7 @@
 // Based on WCAG 1.4.4 Resize Text (Level AA)
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 // Lighthouse uses threshold of 5 for maximum-scale

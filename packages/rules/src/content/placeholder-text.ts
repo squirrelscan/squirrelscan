@@ -10,9 +10,9 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
-import { getRenderedProseText } from "./text-content";
-
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { getRenderedProseText } from "./text-content";
 
 export type PlaceholderKind =
   | "lorem-ipsum"
@@ -31,7 +31,8 @@ export interface PlaceholderFinding {
 }
 
 /** Regex metacharacter escape for literals spliced into an alternation. */
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRe = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /* -------------------------------------------------------------------------- */
 /* Normalisation                                                              */
@@ -116,7 +117,11 @@ function findLorem(text: string): PlaceholderFinding | undefined {
   const distinct = [...new Set(matches.map((m) => m.toLowerCase()))];
   if (distinct.length < 3 && !LOREM_PHRASE_RE.test(text)) return undefined;
 
-  return { kind: "lorem-ipsum", samples: distinct.slice(0, 5), count: matches.length };
+  return {
+    kind: "lorem-ipsum",
+    samples: distinct.slice(0, 5),
+    count: matches.length,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -161,7 +166,7 @@ const BOILERPLATE_PHRASES = [
  */
 const BOILERPLATE_RE = new RegExp(
   `\\b(?:${BOILERPLATE_PHRASES.map((p) => p.split(" ").map(escapeRe).join(" ")).join("|")})\\b`,
-  "gi",
+  "gi"
 );
 
 /* -------------------------------------------------------------------------- */
@@ -232,30 +237,168 @@ const JS_VALUE_RE = /(?<![\w.\-])(?:undefined|null|NaN)(?![\w\-])/g;
  * These lists are the cheap first pass, not the guarantee.
  */
 const PROSE_BEFORE = new Set([
-  "a", "an", "the", "is", "was", "be", "been", "being", "are", "were", "if",
-  "unless", "when", "whether", "not", "non", "or", "and", "of", "any", "no",
-  "all", "some", "every", "returns", "return", "returning", "yields", "yield",
-  "produces", "equals", "equal", "becomes", "become", "than", "to", "from", "as",
-  "versus", "vs", "checks", "check", "checking", "against", "into", "with",
-  "without", "allow", "allows", "allowed", "permit", "permits", "treat",
-  "treats", "treated", "means", "meaning", "explicit", "implicit", "literal",
-  "nullable", "possibly", "always", "never", "either", "neither", "both",
+  "a",
+  "an",
+  "the",
+  "is",
+  "was",
+  "be",
+  "been",
+  "being",
+  "are",
+  "were",
+  "if",
+  "unless",
+  "when",
+  "whether",
+  "not",
+  "non",
+  "or",
+  "and",
+  "of",
+  "any",
+  "no",
+  "all",
+  "some",
+  "every",
+  "returns",
+  "return",
+  "returning",
+  "yields",
+  "yield",
+  "produces",
+  "equals",
+  "equal",
+  "becomes",
+  "become",
+  "than",
+  "to",
+  "from",
+  "as",
+  "versus",
+  "vs",
+  "checks",
+  "check",
+  "checking",
+  "against",
+  "into",
+  "with",
+  "without",
+  "allow",
+  "allows",
+  "allowed",
+  "permit",
+  "permits",
+  "treat",
+  "treats",
+  "treated",
+  "means",
+  "meaning",
+  "explicit",
+  "implicit",
+  "literal",
+  "nullable",
+  "possibly",
+  "always",
+  "never",
+  "either",
+  "neither",
+  "both",
 ]);
 
 const PROSE_AFTER = new Set([
-  "behavior", "behaviour", "behaviors", "behaviours", "variable", "variables",
-  "reference", "references", "function", "functions", "value", "values",
-  "property", "properties", "method", "methods", "symbol", "symbols", "index",
-  "indices", "state", "states", "term", "terms", "type", "types", "name",
-  "names", "error", "errors", "key", "keys", "result", "results", "field",
-  "fields", "column", "columns", "row", "rows", "entry", "entries", "case",
-  "cases", "check", "checks", "checking", "safety", "coalescing", "pointer",
-  "pointers", "hypothesis", "character", "characters", "byte", "bytes", "set",
-  "sets", "string", "strings", "island", "and", "or", "terminated",
-  "terminator", "default", "instead", "rather", "when", "if", "unless",
-  "because", "since", "means", "here", "in", "at", "for", "is", "was", "are",
-  "were", "has", "have", "had", "refers", "denotes", "indicates", "represents",
-  "behaves", "evaluates", "coerces",
+  "behavior",
+  "behaviour",
+  "behaviors",
+  "behaviours",
+  "variable",
+  "variables",
+  "reference",
+  "references",
+  "function",
+  "functions",
+  "value",
+  "values",
+  "property",
+  "properties",
+  "method",
+  "methods",
+  "symbol",
+  "symbols",
+  "index",
+  "indices",
+  "state",
+  "states",
+  "term",
+  "terms",
+  "type",
+  "types",
+  "name",
+  "names",
+  "error",
+  "errors",
+  "key",
+  "keys",
+  "result",
+  "results",
+  "field",
+  "fields",
+  "column",
+  "columns",
+  "row",
+  "rows",
+  "entry",
+  "entries",
+  "case",
+  "cases",
+  "check",
+  "checks",
+  "checking",
+  "safety",
+  "coalescing",
+  "pointer",
+  "pointers",
+  "hypothesis",
+  "character",
+  "characters",
+  "byte",
+  "bytes",
+  "set",
+  "sets",
+  "string",
+  "strings",
+  "island",
+  "and",
+  "or",
+  "terminated",
+  "terminator",
+  "default",
+  "instead",
+  "rather",
+  "when",
+  "if",
+  "unless",
+  "because",
+  "since",
+  "means",
+  "here",
+  "in",
+  "at",
+  "for",
+  "is",
+  "was",
+  "are",
+  "were",
+  "has",
+  "have",
+  "had",
+  "refers",
+  "denotes",
+  "indicates",
+  "represents",
+  "behaves",
+  "evaluates",
+  "coerces",
 ]);
 
 /**
@@ -264,7 +407,21 @@ const PROSE_AFTER = new Set([
  * quotation; neither is a value that leaked into the copy.
  */
 const QUOTE_CHARS = new Set([
-  '"', "'", "`", "[", "]", "(", ")", "{", "}", "\u201c", "\u201d", "\u2018", "\u2019", "\u00ab", "\u00bb",
+  '"',
+  "'",
+  "`",
+  "[",
+  "]",
+  "(",
+  ")",
+  "{",
+  "}",
+  "\u201c",
+  "\u201d",
+  "\u2018",
+  "\u2019",
+  "\u00ab",
+  "\u00bb",
 ]);
 
 /**
@@ -278,8 +435,6 @@ const QUOTE_CHARS = new Set([
  * in reverse, since `null/undefined has no properties` reads as "or".
  */
 const VALUE_INTRODUCER = /[:>\u2192$\u00a3\u20ac\u00a5#]/;
-
-
 
 /** Nearest non-space character before `index`, or "" at the start of the text. */
 function edgeBefore(text: string, index: number): string {
@@ -324,7 +479,9 @@ const isSlotBefore = (ch: string): boolean => VALUE_INTRODUCER.test(ch);
 
 /** The word immediately before `index`, lowercased, or "" when there is none. */
 function wordBefore(text: string, index: number): string {
-  const m = /([A-Za-z]+)[ \t]?$/.exec(text.slice(Math.max(0, index - 40), index));
+  const m = /([A-Za-z]+)[ \t]?$/.exec(
+    text.slice(Math.max(0, index - 40), index)
+  );
   return m ? m[1]!.toLowerCase() : "";
 }
 
@@ -352,8 +509,10 @@ function findStringifiedObjects(text: string): PlaceholderFinding | undefined {
  * slot test alone cannot clear them. A missing number prints one bare word, so
  * an `Infinity` partner on the same or an adjacent line is the corroboration.
  */
-const FLOAT_PARTNER_AFTER = /^(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)[+-]?Infinity\b/;
-const FLOAT_PARTNER_BEFORE = /\b[+-]?Infinity(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)$/;
+const FLOAT_PARTNER_AFTER =
+  /^(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)[+-]?Infinity\b/;
+const FLOAT_PARTNER_BEFORE =
+  /\b[+-]?Infinity(?:[ \t]*[,;/|][ \t]*|[ \t]+(?:and|or)[ \t]+|[ \t]*\n[ \t]*)$/;
 
 function hasFloatPartner(text: string, start: number, end: number): boolean {
   return (
@@ -389,7 +548,11 @@ function findJsArtifacts(text: string): PlaceholderFinding | undefined {
   }
 
   if (hits.length === 0) return undefined;
-  return { kind: "js-artifact", samples: [...new Set(hits)].slice(0, 5), count: hits.length };
+  return {
+    kind: "js-artifact",
+    samples: [...new Set(hits)].slice(0, 5),
+    count: hits.length,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -411,7 +574,8 @@ function findJsArtifacts(text: string): PlaceholderFinding | undefined {
  * skipped subtree and for every block boundary, so letting one bridge would let
  * the next paragraph pose as the marker's sentence.
  */
-const MARKER_ANNOTATION_RE = /(?<![\w])(?:TODO|FIXME)(?![\w])(?=[ \t]{0,4}[:(]|[ \t]{1,4}[a-z])/g;
+const MARKER_ANNOTATION_RE =
+  /(?<![\w])(?:TODO|FIXME)(?![\w])(?=[ \t]{0,4}[:(]|[ \t]{1,4}[a-z])/g;
 const MARKER_COMMENT_RE =
   /(?:(?:\/\/|\/\*)[ \t]{0,4}|#[ \t]{1,4})(TODO|FIXME|XXX)(?![\w])/g;
 
@@ -453,8 +617,14 @@ function findMarkers(text: string): PlaceholderFinding | undefined {
   }
 
   if (byOffset.size === 0) return undefined;
-  const hits = [...byOffset.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
-  return { kind: "todo-marker", samples: [...new Set(hits)].slice(0, 5), count: hits.length };
+  const hits = [...byOffset.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => v);
+  return {
+    kind: "todo-marker",
+    samples: [...new Set(hits)].slice(0, 5),
+    count: hits.length,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -466,7 +636,8 @@ function findMarkers(text: string): PlaceholderFinding | undefined {
  * `Page – Site`, `Page · Site`, `Site » Page`, `Site :: Page`. Each needs a
  * space on both sides, so a hyphenated word is not split.
  */
-const TITLE_SEPARATOR_RE = / (?:[|\-\u2013\u2014\u00b7\u2022\u00bb\u203a/]|::) /;
+const TITLE_SEPARATOR_RE =
+  / (?:[|\-\u2013\u2014\u00b7\u2022\u00bb\u203a/]|::) /;
 
 /** The bare JavaScript values, as a whole title segment. Case-sensitive, like the body family. */
 const TITLE_JS_VALUES = new Set(["undefined", "null", "NaN"]);
@@ -488,7 +659,7 @@ export interface TitlePlaceholder {
  */
 export function findTitlePlaceholder(
   title: string,
-  doc: NonNullable<RuleContext["parsed"]["document"]>,
+  doc: NonNullable<RuleContext["parsed"]["document"]>
 ): TitlePlaceholder | undefined {
   const text = normalizeProse(title).replace(/\n/g, " ").trim();
   const object = text.match(OBJECT_TAG_RE)?.[0];
@@ -499,7 +670,7 @@ export function findTitlePlaceholder(
     ` ${text} `
       .split(TITLE_SEPARATOR_RE)
       .map((segment) => segment.trim())
-      .filter((segment) => TITLE_JS_VALUES.has(segment)),
+      .filter((segment) => TITLE_JS_VALUES.has(segment))
   );
   if (values.size === 0) return undefined;
 
@@ -524,7 +695,7 @@ export function findTitlePlaceholder(
 function findByPatterns(
   kind: PlaceholderKind,
   text: string,
-  patterns: readonly RegExp[],
+  patterns: readonly RegExp[]
 ): PlaceholderFinding | undefined {
   const hits: string[] = [];
   for (const re of patterns) for (const m of text.matchAll(re)) hits.push(m[0]);
@@ -584,7 +755,8 @@ export const placeholderTextRule: Rule = {
   meta: {
     id: "content/placeholder-text",
     name: "Placeholder Text",
-    description: "Detects template leftovers and filler copy that shipped to production",
+    description:
+      "Detects template leftovers and filler copy that shipped to production",
     solution:
       "Each family points at a different break in the publishing pipeline. Lorem ipsum and theme boilerplate mean a page was published before its copy was written: replace the text, and add the affected fields to whatever check gates publishing. Unrendered template syntax means the templating engine never ran over that string, usually because the value was interpolated into an already-escaped fragment or the template was served as static HTML: render it server-side, or delete the stale copy. A visible undefined, NaN, null or [object Object] means the value was missing and the code concatenated it into the copy anyway: guard the field at the point of render rather than in CSS. TODO and FIXME markers mean a draft shipped: finish or remove the note, since search engines and readers see it exactly as written.",
     category: "content",
@@ -676,7 +848,11 @@ export const placeholderTextRule: Rule = {
       value: total,
       items,
       details: {
-        kinds: found.map((f) => ({ kind: f.kind, count: f.count, samples: f.samples })),
+        kinds: found.map((f) => ({
+          kind: f.kind,
+          count: f.count,
+          samples: f.samples,
+        })),
       },
     });
     checks.push(...titleCheck);

@@ -57,22 +57,30 @@ export function htmlReadState(ctx: RuleContext): ReadState {
   // Heuristic: a page that ends in `</html>` or `</body>` was served whole. Valid HTML may omit `</html>`
   // (and even `</body>`), so a page with neither reads as truncated and its unchecked fields as unknown,
   // never as a false "missing". lastIndexOf, not a regex over the tail: the tail can be large.
-  if (lower.lastIndexOf("</html") < 0 && lower.lastIndexOf("</body") < 0) return "truncated";
-  if (lower.lastIndexOf("<script") > lower.lastIndexOf("</script")) return "truncated";
+  if (lower.lastIndexOf("</html") < 0 && lower.lastIndexOf("</body") < 0)
+    return "truncated";
+  if (lower.lastIndexOf("<script") > lower.lastIndexOf("</script"))
+    return "truncated";
   return "complete";
 }
 
 /** The last segment of a type or property name: `https://schema.org/Product` and `schema:Product` give `Product`. */
 export function localName(name: string): string {
   const trimmed = name.trim();
-  const cut = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("#"), trimmed.lastIndexOf(":"));
+  const cut = Math.max(
+    trimmed.lastIndexOf("/"),
+    trimmed.lastIndexOf("#"),
+    trimmed.lastIndexOf(":")
+  );
   return cut >= 0 ? trimmed.slice(cut + 1) : trimmed;
 }
 
 export function typesOf(node: StructuredNode): string[] {
   const raw = node["@type"];
   const list = Array.isArray(raw) ? raw : [raw];
-  return list.filter((t): t is string => typeof t === "string" && t !== "").map(localName);
+  return list
+    .filter((t): t is string => typeof t === "string" && t !== "")
+    .map(localName);
 }
 
 export function hasType(node: StructuredNode, ...names: string[]): boolean {
@@ -90,7 +98,9 @@ export function asList(value: unknown): unknown[] {
  * nests entities (an Offer's `seller`, a Product's `brand`) that
  * `flattenJsonLdNodes` leaves inside their parent.
  */
-export function collectNestedNodes(roots: readonly StructuredNode[]): StructuredNode[] {
+export function collectNestedNodes(
+  roots: readonly StructuredNode[]
+): StructuredNode[] {
   const seen = new Set<object>();
   const out: StructuredNode[] = [];
   const visit = (value: unknown, depth: number): void => {
@@ -115,7 +125,7 @@ export function collectNestedNodes(roots: readonly StructuredNode[]): Structured
 /** Resolver for `{"@id": ...}` references against every node on the page. */
 export function makeRefResolver(
   nodes: readonly StructuredNode[],
-  baseUrl: string,
+  baseUrl: string
 ): (value: unknown) => unknown {
   const ids = indexJsonLdIds(nodes, baseUrl);
   return (value) => resolveJsonLdRef(value, ids, baseUrl);
@@ -125,7 +135,10 @@ export function makeRefResolver(
 export function isDanglingRef(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const node = value as StructuredNode;
-  return typeof node["@id"] === "string" && Object.keys(node).every((k) => k === "@id" || k === "@type");
+  return (
+    typeof node["@id"] === "string" &&
+    Object.keys(node).every((k) => k === "@id" || k === "@type")
+  );
 }
 
 // ── Microdata and RDFa ──────────────────────────────────────────────────────
@@ -145,9 +158,12 @@ interface ScopeSpec {
   unsupported?: (el: Element) => boolean;
 }
 
-const text = (el: Element): string => (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
-const attr = (el: Element, name: string): string => (el.getAttribute(name) ?? "").trim();
-const tokens = (value: string | null): string[] => (value ?? "").split(/\s+/).filter(Boolean);
+const text = (el: Element): string =>
+  (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+const attr = (el: Element, name: string): string =>
+  (el.getAttribute(name) ?? "").trim();
+const tokens = (value: string | null): string[] =>
+  (value ?? "").split(/\s+/).filter(Boolean);
 
 function readScopes(doc: Document, spec: ScopeSpec): MarkupRead {
   let budget = MAX_MARKUP_SCOPES;
@@ -269,7 +285,12 @@ export function readRdfa(doc: Document): MarkupRead {
     typesOf: (el) => {
       const inVocab = !!el.closest('[vocab*="schema.org" i]');
       return tokens(el.getAttribute("typeof"))
-        .filter((t) => isSchemaOrgType(t) || /^schema:/i.test(t) || (inVocab && !/[:/]/.test(t)))
+        .filter(
+          (t) =>
+            isSchemaOrgType(t) ||
+            /^schema:/i.test(t) ||
+            (inVocab && !/[:/]/.test(t))
+        )
         .map(localName);
     },
     valueOf: rdfaValue,
@@ -283,7 +304,11 @@ export function isFilled(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(isFilled);
   if (value && typeof value === "object") {
     const node = value as StructuredNode;
-    return Object.entries(node).some(([k, v]) => !k.startsWith("@") && isFilled(v)) || typeof node["@id"] === "string";
+    return (
+      Object.entries(node).some(
+        ([k, v]) => !k.startsWith("@") && isFilled(v)
+      ) || typeof node["@id"] === "string"
+    );
   }
   return false;
 }
@@ -295,6 +320,12 @@ export function visibleText(doc: Document): string {
   const body = doc.body;
   if (!body) return "";
   const clone = body.cloneNode(true) as Element;
-  for (const el of Array.from(clone.querySelectorAll("script, style, noscript, template"))) el.remove();
-  return (clone.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_VISIBLE_CHARS);
+  for (const el of Array.from(
+    clone.querySelectorAll("script, style, noscript, template")
+  ))
+    el.remove();
+  return (clone.textContent ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_VISIBLE_CHARS);
 }

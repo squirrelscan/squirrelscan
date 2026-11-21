@@ -15,7 +15,12 @@ export type WafProvider =
  * attribution (and of the cloud's stored link-check results): the providers
  * added here are recognised only by their block pages.
  */
-export type WafBlockProvider = WafProvider | "f5" | "vercel" | "wordfence" | "radware";
+export type WafBlockProvider =
+  | WafProvider
+  | "f5"
+  | "vercel"
+  | "wordfence"
+  | "radware";
 
 export interface WafDetectionResult {
   detected: boolean;
@@ -66,7 +71,9 @@ export interface WafBlockResult {
 }
 
 /** Response headers by lower-case name, or a `Headers` object. */
-export type HeaderBag = Headers | Readonly<Record<string, string | null | undefined>>;
+export type HeaderBag =
+  | Headers
+  | Readonly<Record<string, string | null | undefined>>;
 
 export interface WafResponse {
   status: number;

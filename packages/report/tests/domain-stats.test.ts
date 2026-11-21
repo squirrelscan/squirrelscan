@@ -3,7 +3,12 @@
 
 import { describe, expect, test } from "bun:test";
 
-import type { DomainStats, DomainStatsMetrics, DomainStatsPositions } from "../src/types";
+import type {
+  DomainStats,
+  DomainStatsMetrics,
+  DomainStatsPositions,
+} from "../src/types";
+
 import {
   buildDomainStatsSummary,
   domainStatRows,
@@ -99,7 +104,9 @@ describe("domainStatRows", () => {
     ]);
     expect(rows[0]).toEqual({ label: "Backlinks", value: "15.2k" });
     expect(rows.find((r) => r.label === "Domain rank")?.value).toBe("421");
-    expect(rows.find((r) => r.label === "Paid traffic cost")?.value).toBe("$4.5k");
+    expect(rows.find((r) => r.label === "Paid traffic cost")?.value).toBe(
+      "$4.5k"
+    );
   });
 
   test("empty metrics produce no rows", () => {
@@ -109,7 +116,11 @@ describe("domainStatRows", () => {
 
 describe("buildDomainStatsSummary", () => {
   test("joins the headline metrics into one line", () => {
-    const stats: DomainStats = { domain: "example.com", metrics, capturedAt: "2026-01-02T00:00:00Z" };
+    const stats: DomainStats = {
+      domain: "example.com",
+      metrics,
+      capturedAt: "2026-01-02T00:00:00Z",
+    };
     const line = buildDomainStatsSummary(stats);
     expect(line).toContain("example.com");
     expect(line).toContain("15.2k backlinks");
@@ -123,7 +134,9 @@ describe("buildDomainStatsSummary", () => {
       metrics: emptyMetrics,
       capturedAt: "2026-01-02T00:00:00Z",
     };
-    expect(buildDomainStatsSummary(stats)).toBe("No domain stats available for x.com.");
+    expect(buildDomainStatsSummary(stats)).toBe(
+      "No domain stats available for x.com."
+    );
   });
 });
 

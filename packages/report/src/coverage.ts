@@ -3,22 +3,30 @@
 // off (the report carries no `coverage` and no carried checks).
 
 import type { CheckTally } from "@squirrelscan/core-contracts";
-import { AUDIT_LEVEL_COPY, AUDIT_SETTING_COPY } from "@squirrelscan/core-contracts/audit-levels";
+
+import {
+  AUDIT_LEVEL_COPY,
+  AUDIT_SETTING_COPY,
+} from "@squirrelscan/core-contracts/audit-levels";
 import {
   offSiteRedirectFollowUp,
   type OffSiteRedirectFollowUp,
 } from "@squirrelscan/core-contracts/offsite-redirect";
-
+import {
+  redactUrl,
+  type SeedRedirectHop,
+} from "@squirrelscan/core-contracts/seed-redirect";
 import { seedVerificationLine } from "@squirrelscan/core-contracts/seed-verification";
-import { redactUrl, type SeedRedirectHop } from "@squirrelscan/core-contracts/seed-redirect";
 import { isWcagLevel } from "@squirrelscan/core-contracts/wcag";
 
-import type { AuditReport, CheckItem } from "./types";
 import type { GroupedCheck } from "./grouping";
+import type { AuditReport, CheckItem } from "./types";
+
 import { checkAffectedPages } from "./affected-pages";
 import { reportFailureReasonCode } from "./failure-notice";
 
-const OFFLINE_NOTE = " Offline: cloud checks, rendering and external link checks did not run.";
+const OFFLINE_NOTE =
+  " Offline: cloud checks, rendering and external link checks did not run.";
 const TARGETED_NOTE = " Targeted: only the listed URLs were audited.";
 
 /**
@@ -32,7 +40,9 @@ export function auditLevelLine(report: AuditReport): string | null {
   if (!a) return null;
   // A stored or fetched report can carry anything: only known names print, and a
   // snapshot with an unknown level is left out rather than throwing or echoing it.
-  const level = Object.hasOwn(AUDIT_LEVEL_COPY, a.level) ? AUDIT_LEVEL_COPY[a.level] : null;
+  const level = Object.hasOwn(AUDIT_LEVEL_COPY, a.level)
+    ? AUDIT_LEVEL_COPY[a.level]
+    : null;
   if (!level) return null;
   const offline = `${a.offline === true ? OFFLINE_NOTE : ""}${a.targeted === true ? TARGETED_NOTE : ""}`;
   if (a.level !== "custom") return `Audit level: ${level.label}.${offline}`;
@@ -61,16 +71,20 @@ export function coverageLine(report: AuditReport): string | null {
   if (!c) return null;
   const notes: string[] = [];
   if (c.carriedFindings > 0) {
-    notes.push(`${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward`);
+    notes.push(
+      `${c.carriedFindings} finding${c.carriedFindings === 1 ? "" : "s"} carried forward`
+    );
   }
   const unrendered = c.unrenderedFindings ?? 0;
   if (unrendered > 0) {
-    notes.push(`${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`);
+    notes.push(
+      `${unrendered} finding${unrendered === 1 ? "" : "s"} on pages not yet rendered`
+    );
   }
   const stale = c.pagesWithStaleCarry ?? 0;
   if (Number.isSafeInteger(stale) && stale > 0) {
     notes.push(
-      `${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`,
+      `${stale} re-crawled page${stale === 1 ? "" : "s"} still carry${stale === 1 ? "s" : ""} earlier findings`
     );
   }
   const suffix = notes.length > 0 ? ` (${notes.join("; ")})` : "";
@@ -88,7 +102,7 @@ export function coverageLine(report: AuditReport): string | null {
  * reduction that never happened.
  */
 export function clampedPageLimit(
-  scope: NonNullable<AuditReport["scanScope"]>,
+  scope: NonNullable<AuditReport["scanScope"]>
 ): { requested: number; effective: number } | null {
   const requested = scope.requestedMaxPages;
   const effective = scope.maxPages;
@@ -109,7 +123,10 @@ export function clampedPageLimit(
  */
 /** `0.0.137`, `1.2.3-beta.1+build`: letters, digits, `.`, `_`, `+` and `-`, nothing else. */
 export function isVersionLike(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$/.test(value)
+  );
 }
 
 /**
@@ -117,14 +134,16 @@ export function isVersionLike(value: unknown): value is string {
  * any origin: anything but a positive whole number counts as none.
  */
 export function canonicalVariantCount(
-  report: Pick<AuditReport, "canonicalVariants" | "scanScope">,
+  report: Pick<AuditReport, "canonicalVariants" | "scanScope">
 ): number {
   const raw = report.canonicalVariants ?? report.scanScope?.canonicalVariants;
-  return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? raw : 0;
+  return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0
+    ? raw
+    : 0;
 }
 
 export function canonicalVariantsNote(
-  report: Pick<AuditReport, "canonicalVariants" | "scanScope">,
+  report: Pick<AuditReport, "canonicalVariants" | "scanScope">
 ): string {
   const n = canonicalVariantCount(report);
   return n > 0
@@ -137,12 +156,13 @@ export function canonicalVariantsNote(
  * non-boolean flag means unknown (null), and a count that is not a whole number reads as zero.
  */
 export function robotsScope(
-  report: Pick<AuditReport, "scanScope">,
+  report: Pick<AuditReport, "scanScope">
 ): { respectRobots: boolean; robotsBlockedPages: number } | null {
   const scope = report.scanScope;
   if (!scope || typeof scope.respectRobots !== "boolean") return null;
   const n: unknown = scope.robotsBlockedPages;
-  const blocked = typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
+  const blocked =
+    typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
   return {
     respectRobots: scope.respectRobots,
     robotsBlockedPages: scope.respectRobots ? blocked : 0,
@@ -154,7 +174,9 @@ export function robotsScope(
  * When it was honoured and kept pages out, the sentence carries how many; when it was not, it says pages
  * robots.txt disallows were audited anyway.
  */
-export function robotsHonouredNote(report: Pick<AuditReport, "scanScope">): string | null {
+export function robotsHonouredNote(
+  report: Pick<AuditReport, "scanScope">
+): string | null {
   const r = robotsScope(report);
   if (!r) return null;
   if (!r.respectRobots) {
@@ -169,11 +191,15 @@ export function robotsHonouredNote(report: Pick<AuditReport, "scanScope">): stri
  * One plain line for a run narrowed with `--rule-include`/`--rule-exclude` (repo#1082) or a WCAG level
  * (repo#3093), or null for an unfiltered run. Shared by every renderer so the marker reads the same everywhere.
  */
-export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): string | null {
+export function partialAuditLine(
+  report: Pick<AuditReport, "partialAudit">
+): string | null {
   const p = report.partialAudit;
   if (!p) return null;
   const list = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : [];
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.length > 0)
+      : [];
   const shorten = (x: string) => (x.endsWith("/*") ? x.slice(0, -2) : x);
   const include = list(p.include).map(shorten);
   const exclude = list(p.exclude).map(shorten);
@@ -183,7 +209,8 @@ export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): str
   const parts: string[] = [];
   if (include.length > 0) parts.push(`included ${include.join(", ")}`);
   if (exclude.length > 0) parts.push(`excluded ${exclude.join(", ")}`);
-  if (wcagLevel) parts.push(`accessibility rules narrowed to WCAG Level ${wcagLevel}`);
+  if (wcagLevel)
+    parts.push(`accessibility rules narrowed to WCAG Level ${wcagLevel}`);
   const scored =
     categories.length > 0
       ? ` Scored on ${categories.join(", ")} only, so this is not the site's full state.`
@@ -192,7 +219,9 @@ export function partialAuditLine(report: Pick<AuditReport, "partialAudit">): str
 }
 
 /** `scanScope.errorPages` (repo#2404) read off a stored report of any origin: a positive whole number, else 0. */
-export function scanScopeErrorPages(report: Pick<AuditReport, "scanScope">): number {
+export function scanScopeErrorPages(
+  report: Pick<AuditReport, "scanScope">
+): number {
   const n: unknown = report.scanScope?.errorPages;
   return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : 0;
 }
@@ -203,22 +232,37 @@ export function scanScopeLine(report: AuditReport): string | null {
   // Stored reports of any origin reach this line: a count that is not a whole
   // number (NaN, Infinity, a string) is left out rather than printed.
   const whole = (v: unknown) =>
-    typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
-  const s = { ...raw, pagesCrawled: whole(raw.pagesCrawled) ?? 0, maxPages: whole(raw.maxPages) };
-  const origin = s.origin === "cloud" ? "squirrelscan cloud" : s.origin === "ci" ? "CI" : "the CLI";
+    typeof v === "number" && Number.isFinite(v) && v >= 0
+      ? Math.floor(v)
+      : undefined;
+  const s = {
+    ...raw,
+    pagesCrawled: whole(raw.pagesCrawled) ?? 0,
+    maxPages: whole(raw.maxPages),
+  };
+  const origin =
+    s.origin === "cloud"
+      ? "squirrelscan cloud"
+      : s.origin === "ci"
+        ? "CI"
+        : "the CLI";
   // A stored report's version is whatever its publisher wrote (#3522): only a
   // version-shaped value prints, on every surface that shows this line.
-  const version = isVersionLike(report.generatorVersion) ? ` v${report.generatorVersion}` : "";
+  const version = isVersionLike(report.generatorVersion)
+    ? ` v${report.generatorVersion}`
+    : "";
   // The UNCLAMPED wording is byte-for-byte what it has always been — a comma
   // only appears where the sentence now has two clauses to separate.
   const clamped = clampedPageLimit(s);
   // A time stop is its own clause: the page limit was NOT what ended the crawl,
   // so "reached" would be false and a bare "page limit N" would read as a
   // complete audit of fewer pages.
-  const timeStop = s.stopReason === "time" && !s.capped ? ", stopped early on time" : "";
+  const timeStop =
+    s.stopReason === "time" && !s.capped ? ", stopped early on time" : "";
   // A credit stop is likewise its own clause: the budget, not the page limit,
   // ended the crawl. Never "partial".
-  const creditStop = s.stopReason === "credits" && !s.capped ? ", capped by credits" : "";
+  const creditStop =
+    s.stopReason === "credits" && !s.capped ? ", capped by credits" : "";
   const limit = clamped
     ? `page limit ${clamped.effective} of ${clamped.requested} requested${s.capped ? ", reached" : ""}${timeStop}${creditStop}`
     : `page limit ${s.maxPages}${s.capped ? " reached" : ""}${timeStop}${creditStop}`;
@@ -226,7 +270,8 @@ export function scanScopeLine(report: AuditReport): string | null {
   // URLs were left queued, so every other report's line is unchanged. A
   // rate-limited run's own line already counts them (`rateLimited.unfetched`
   // is the abandoned URLs plus these), so saying it twice would read as more.
-  const unfetched = (report.rateLimited?.unfetched ?? 0) > 0 ? 0 : scanScopeUnfetched(report);
+  const unfetched =
+    (report.rateLimited?.unfetched ?? 0) > 0 ? 0 : scanScopeUnfetched(report);
   const parts = [
     s.maxPages !== undefined ? limit : "",
     unfetched > 0 ? `${unfetched} more discovered but not fetched` : "",
@@ -238,7 +283,10 @@ export function scanScopeLine(report: AuditReport): string | null {
   // Crawled pages that returned an error status (repo#2404). Read off a stored report of any origin: only a
   // positive whole number up to the crawled count prints, so a clean crawl's line is unchanged.
   const errors = Math.min(scanScopeErrorPages(report), s.pagesCrawled);
-  const errorNote = errors > 0 ? ` (${errors} returned ${errors === 1 ? "an error" : "errors"})` : "";
+  const errorNote =
+    errors > 0
+      ? ` (${errors} returned ${errors === 1 ? "an error" : "errors"})`
+      : "";
   return `Scan: ${s.pagesCrawled} page${s.pagesCrawled === 1 ? "" : "s"} crawled${errorNote} from ${origin}${version}${cap}.${canonicalVariantsNote(report)}${types ? ` ${types}` : ""}${targeted ? ` ${targeted}` : ""}${robots ? ` ${robots}` : ""}`;
 }
 
@@ -262,7 +310,11 @@ export function scanScopeTargeted(report: Pick<AuditReport, "scanScope">): {
   const audited = whole(t.audited);
   if (requested === undefined || audited === undefined) return null;
   const rows = Array.isArray(t.unaudited) ? t.unaudited : [];
-  const unaudited: Array<{ url: string; reason: string; destination?: string }> = [];
+  const unaudited: Array<{
+    url: string;
+    reason: string;
+    destination?: string;
+  }> = [];
   for (const r of rows) {
     if (unaudited.length >= 100) break;
     if (typeof r?.url !== "string") continue;
@@ -273,7 +325,9 @@ export function scanScopeTargeted(report: Pick<AuditReport, "scanScope">): {
     unaudited.push({
       url: r.url.slice(0, 2048),
       reason,
-      ...(typeof r.destination === "string" ? { destination: r.destination.slice(0, 2048) } : {}),
+      ...(typeof r.destination === "string"
+        ? { destination: r.destination.slice(0, 2048) }
+        : {}),
     });
   }
   const overLimit = whole(t.overLimit);
@@ -284,7 +338,9 @@ export function scanScopeTargeted(report: Pick<AuditReport, "scanScope">): {
  * "Targeted run: 3 of 4 URLs given were audited; rules that need the whole site were not run." (#1777), or null for an
  * ordinary audit. Read off a stored report of any origin: counts that are not whole numbers read as absent.
  */
-export function targetedRunNote(report: Pick<AuditReport, "scanScope">): string | null {
+export function targetedRunNote(
+  report: Pick<AuditReport, "scanScope">
+): string | null {
   const t = scanScopeTargeted(report);
   if (!t) return null;
   const { requested, audited } = t;
@@ -300,7 +356,7 @@ const PAGE_TYPE_LINE_ROWS = 6;
  * left out, and `audited` is clamped to `discovered`. Most pages first.
  */
 export function scanScopePageTypes(
-  report: Pick<AuditReport, "scanScope">,
+  report: Pick<AuditReport, "scanScope">
 ): Array<{ type: string; discovered: number; audited: number }> {
   const raw: unknown = report.scanScope?.pageTypes;
   if (!Array.isArray(raw)) return [];
@@ -315,7 +371,9 @@ export function scanScopePageTypes(
     if (discovered === undefined || audited === undefined) continue;
     rows.push({ type, discovered: Math.max(discovered, audited), audited });
   }
-  return rows.sort((a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type));
+  return rows.sort(
+    (a, b) => b.discovered - a.discovered || a.type.localeCompare(b.type)
+  );
 }
 
 /**
@@ -324,19 +382,27 @@ export function scanScopePageTypes(
  * `unknown` and print as "other". Rows past the first {@link PAGE_TYPE_LINE_ROWS} fold into
  * "other", so nothing the crawl found is dropped from the totals.
  */
-export function pageTypeCoverageLine(report: Pick<AuditReport, "scanScope">): string | null {
+export function pageTypeCoverageLine(
+  report: Pick<AuditReport, "scanScope">
+): string | null {
   const rows = scanScopePageTypes(report);
   if (rows.length === 0) return null;
   const named = rows.filter((r) => r.type !== "unknown");
   const shown = named.slice(0, PAGE_TYPE_LINE_ROWS);
-  const other = [...named.slice(PAGE_TYPE_LINE_ROWS), ...rows.filter((r) => r.type === "unknown")];
+  const other = [
+    ...named.slice(PAGE_TYPE_LINE_ROWS),
+    ...rows.filter((r) => r.type === "unknown"),
+  ];
   const parts = shown.map(
-    (r) => `${r.audited} of ${r.discovered} ${r.type} page${r.discovered === 1 ? "" : "s"}`,
+    (r) =>
+      `${r.audited} of ${r.discovered} ${r.type} page${r.discovered === 1 ? "" : "s"}`
   );
   if (other.length > 0) {
     const discovered = other.reduce((n, r) => n + r.discovered, 0);
     const audited = other.reduce((n, r) => n + r.audited, 0);
-    parts.push(`${audited} of ${discovered} other page${discovered === 1 ? "" : "s"}`);
+    parts.push(
+      `${audited} of ${discovered} other page${discovered === 1 ? "" : "s"}`
+    );
   }
   return `Page types audited: ${parts.join(", ")}.`;
 }
@@ -347,7 +413,7 @@ export function pageTypeCoverageLine(report: Pick<AuditReport, "scanScope">): st
  * recomputed as `sitemap + links`, so a stored total that disagrees cannot be shown. Never read by scoring.
  */
 export function scanScopeDiscovered(
-  report: Pick<AuditReport, "scanScope">,
+  report: Pick<AuditReport, "scanScope">
 ): { total: number; sitemap: number; links: number } | null {
   const raw: unknown = report.scanScope?.discovered;
   if (typeof raw !== "object" || raw === null) return null;
@@ -365,9 +431,13 @@ export function scanScopeDiscovered(
  * a whole number, or 0. Read off stored reports of any origin, so a value that
  * is not a safe non-negative integer counts as none.
  */
-export function scanScopeUnfetched(report: Pick<AuditReport, "scanScope">): number {
+export function scanScopeUnfetched(
+  report: Pick<AuditReport, "scanScope">
+): number {
   const unfetched = report.scanScope?.unfetched;
-  return typeof unfetched === "number" && Number.isSafeInteger(unfetched) && unfetched >= 0
+  return typeof unfetched === "number" &&
+    Number.isSafeInteger(unfetched) &&
+    unfetched >= 0
     ? unfetched
     : 0;
 }
@@ -394,7 +464,9 @@ function stampCount(value: unknown, fallback: number): number {
  * API's markdown, in the private repo's `published-report-detail`). The cloud
  * findings store is not served, so a cloud audit is pointed at the CLI.
  */
-export function publishedReportNote(report: Pick<AuditReport, "detail">): string | null {
+export function publishedReportNote(
+  report: Pick<AuditReport, "detail">
+): string | null {
   const d = report.detail;
   if (d?.capped !== true) return null;
   const pages = stampCount(d.caps?.pagesPerClass, 10);
@@ -456,7 +528,8 @@ export function fullScanHint(report: AuditReport): string | null {
     return `Partial scan: ${c.auditedPages} of ${c.knownPages} known pages were audited this run; the host rate limited the crawl, so the rest were never fetched. Re-run later, or crawl more slowly, for a full-site score.`;
   }
   if (partialUnion && c) {
-    const target = c.knownPages > (s?.maxPages ?? 0) ? String(c.knownPages) : null;
+    const target =
+      c.knownPages > (s?.maxPages ?? 0) ? String(c.knownPages) : null;
     const remedy = clamped
       ? `This run was limited to ${clamped.effective} of the ${clamped.requested} pages requested, so raising the limit alone will not extend it`
       : cloud
@@ -518,7 +591,8 @@ export interface SeedRedirect {
  * Worded without punctuation any renderer escapes, so it reads the same in the
  * raw markdown source as it does everywhere else.
  */
-const WITHHELD_TARGET = "The redirect target was not a valid URL and is withheld.";
+const WITHHELD_TARGET =
+  "The redirect target was not a valid URL and is withheld.";
 
 /**
  * Stand-in `finalUrl` for rebuilding a report whose redirect target was
@@ -530,7 +604,8 @@ const WITHHELD_TARGET = "The redirect target was not a valid URL and is withheld
  * did instead of quietly losing the fact that a redirect happened. Self-naming
  * so it explains itself if some other consumer ever prints `finalUrl` raw.
  */
-export const WITHHELD_SEED_REDIRECT_TARGET = "withheld:unparseable-redirect-target";
+export const WITHHELD_SEED_REDIRECT_TARGET =
+  "withheld:unparseable-redirect-target";
 
 /**
  * A refused off-site seed redirect (#1418), or null when there is nothing to
@@ -575,7 +650,8 @@ export function seedRedirect(report: AuditReport): SeedRedirect | null {
   }
   // Compared canonically so an equivalent pair ("https://example.com" vs
   // ".../") never prints a line saying the seed redirected to itself.
-  if (finalUrl === baseUrl || finalUrl === canonicalizeReportUrl(baseUrl)) return null;
+  if (finalUrl === baseUrl || finalUrl === canonicalizeReportUrl(baseUrl))
+    return null;
   return {
     finalUrl,
     baseUrl,
@@ -599,8 +675,14 @@ export function seedRedirectLine(report: AuditReport): string | null {
  * Null for any other report, and for a target that did not survive
  * {@link seedRedirect}'s canonicalization: nothing unvetted becomes a command.
  */
-export function seedRedirectFollowUp(report: AuditReport): OffSiteRedirectFollowUp | null {
-  if (report.status !== "failed" || reportFailureReasonCode(report) !== "redirect") return null;
+export function seedRedirectFollowUp(
+  report: AuditReport
+): OffSiteRedirectFollowUp | null {
+  if (
+    report.status !== "failed" ||
+    reportFailureReasonCode(report) !== "redirect"
+  )
+    return null;
   const target = seedRedirect(report)?.finalUrl;
   return target ? offSiteRedirectFollowUp(target) : null;
 }
@@ -626,21 +708,24 @@ export interface FollowedStartRedirect {
  * lands.
  */
 export function printableReportUrl(value: unknown): string {
-  const canonical = typeof value === "string" ? canonicalizeReportUrl(value) : null;
+  const canonical =
+    typeof value === "string" ? canonicalizeReportUrl(value) : null;
   if (canonical === null) return UNPRINTABLE;
   const redacted = redactUrl(canonical);
   return redacted.replace(
     /[`[\]()<>"'\\{}|^$]/g,
-    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
   );
 }
 
 export function safeChain(chain: unknown): SeedRedirectHop[] {
   if (!Array.isArray(chain)) return [];
-  return chain.slice(0, MAX_LISTED_HOPS).map((hop: Partial<SeedRedirectHop> | null) => ({
-    url: printableReportUrl(hop?.url),
-    status: Number.isInteger(hop?.status) ? (hop?.status as number) : 0,
-  }));
+  return chain
+    .slice(0, MAX_LISTED_HOPS)
+    .map((hop: Partial<SeedRedirectHop> | null) => ({
+      url: printableReportUrl(hop?.url),
+      status: Number.isInteger(hop?.status) ? (hop?.status as number) : 0,
+    }));
 }
 
 /** `301 https://a/ -> 200 https://b/`, the chain as one line. */
@@ -652,12 +737,20 @@ export function chainText(chain: SeedRedirectHop[]): string {
  * The followed start redirect a report records, or null when the start URL did
  * not redirect (or only within the one site: no `originalUrl` is stored then).
  */
-export function followedStartRedirect(report: AuditReport): FollowedStartRedirect | null {
-  if (typeof report.originalUrl !== "string" || report.originalUrl.trim() === "") return null;
+export function followedStartRedirect(
+  report: AuditReport
+): FollowedStartRedirect | null {
+  if (
+    typeof report.originalUrl !== "string" ||
+    report.originalUrl.trim() === ""
+  )
+    return null;
   const chain = safeChain(report.redirectChain);
   const originalUrl = printableReportUrl(report.originalUrl);
   const finalUrl =
-    chain.length > 0 ? chain[chain.length - 1]!.url : printableReportUrl(report.baseUrl);
+    chain.length > 0
+      ? chain[chain.length - 1]!.url
+      : printableReportUrl(report.baseUrl);
   const hops = Math.max(chain.length - 1, 1);
   return {
     originalUrl,
@@ -696,7 +789,9 @@ export function startRedirectLine(report: AuditReport): string | null {
  * Refusing keeps the allowlist the WHATWG parser already implements: callers
  * disclose the redirect with a fixed placeholder instead.
  */
-export function canonicalizeReportUrl(value: string | undefined): string | null {
+export function canonicalizeReportUrl(
+  value: string | undefined
+): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
@@ -794,13 +889,18 @@ export function timeAgo(epochMs: number, now: number = Date.now()): string {
  * has observed the finding, so any date would be fabricated — and on a first
  * audit "carried" itself would be.
  */
-export function carriedTag(check: GroupedCheck, now: number = Date.now()): string {
+export function carriedTag(
+  check: GroupedCheck,
+  now: number = Date.now()
+): string {
   if (check.unrenderedCount && check.unrenderedCount >= check.count) {
     return " (not yet rendered)";
   }
   if (!check.carriedCount || check.carriedCount < check.count) return "";
   const seen =
-    check.lastSeenAt !== undefined ? `, last seen ${timeAgo(check.lastSeenAt, now)}` : "";
+    check.lastSeenAt !== undefined
+      ? `, last seen ${timeAgo(check.lastSeenAt, now)}`
+      : "";
   return ` (carried${seen})`;
 }
 
@@ -811,10 +911,15 @@ export function carriedTag(check: GroupedCheck, now: number = Date.now()): strin
  * (partial-carry checks get {@link ruleCarriedRollupLine} instead, at the
  * rule level, since a check-level "N of M" would repeat the rule rollup).
  */
-export function checkCarriedLabel(check: GroupedCheck, now: number = Date.now()): string | null {
+export function checkCarriedLabel(
+  check: GroupedCheck,
+  now: number = Date.now()
+): string | null {
   if (!check.carriedCount || check.carriedCount < check.count) return null;
   const seen =
-    check.lastSeenAt !== undefined ? `, last verified ${timeAgo(check.lastSeenAt, now)}` : "";
+    check.lastSeenAt !== undefined
+      ? `, last verified ${timeAgo(check.lastSeenAt, now)}`
+      : "";
   return `Not re-checked this run${seen}.`;
 }
 
@@ -827,7 +932,8 @@ export function checkCarriedLabel(check: GroupedCheck, now: number = Date.now())
  * instance is unrendered, mirroring {@link checkCarriedLabel}.
  */
 export function checkUnrenderedLabel(check: GroupedCheck): string | null {
-  if (!check.unrenderedCount || check.unrenderedCount < check.count) return null;
+  if (!check.unrenderedCount || check.unrenderedCount < check.count)
+    return null;
   return "Not yet rendered in this scan.";
 }
 
@@ -837,8 +943,12 @@ export function checkUnrenderedLabel(check: GroupedCheck): string | null {
  * Returns null when nothing is carried, or when EVERY affected page is
  * carried (the rule-level "carried" state is obvious without a fraction).
  */
-export function ruleCarriedRollupLine(carriedPages: number, totalPages: number): string | null {
-  if (carriedPages <= 0 || totalPages <= 0 || carriedPages >= totalPages) return null;
+export function ruleCarriedRollupLine(
+  carriedPages: number,
+  totalPages: number
+): string | null {
+  if (carriedPages <= 0 || totalPages <= 0 || carriedPages >= totalPages)
+    return null;
   return `${carriedPages} of ${totalPages} page${totalPages === 1 ? "" : "s"} carried from previous crawls.`;
 }
 
@@ -877,13 +987,16 @@ export interface MixedProvenanceCheck {
  */
 export function ruleMixedProvenanceNote(
   checks: ReadonlyArray<MixedProvenanceCheck>,
-  freshTally?: Readonly<Record<string, CheckTally>>,
+  freshTally?: Readonly<Record<string, CheckTally>>
 ): string | undefined {
   const freshPassPages = new Set<string>();
   const carriedIssuePages = new Set<string>();
   const freshIssuePages = new Set<string>();
   for (const check of checks) {
-    const pages = checkAffectedPages({ pages: check.pages, items: check.items });
+    const pages = checkAffectedPages({
+      pages: check.pages,
+      items: check.items,
+    });
     if (check.pageUrl) pages.add(check.pageUrl);
     if (pages.size === 0) continue;
     // (#1652) An "unrendered" check belongs to NEITHER bucket: its page was
@@ -908,12 +1021,15 @@ export function ruleMixedProvenanceNote(
       passed += tally.passed ?? 0;
       issues += (tally.warnings ?? 0) + (tally.failed ?? 0);
     }
-    if (passed === 0 || pending === 0 || issues > 0 || freshIssuePages.size > 0) return undefined;
+    if (passed === 0 || pending === 0 || issues > 0 || freshIssuePages.size > 0)
+      return undefined;
     return `Fixed on all pages checked this run; ${pendingText}`;
   }
   // Disjoint the two buckets: a page counted as a carried issue can't also
   // count toward "checked clean", even if some other check passed it fresh.
-  const trulyClean = [...freshPassPages].filter((p) => !carriedIssuePages.has(p)).length;
+  const trulyClean = [...freshPassPages].filter(
+    (p) => !carriedIssuePages.has(p)
+  ).length;
   if (trulyClean === 0 || pending === 0 || freshIssuePages.size > 0) {
     return undefined;
   }
@@ -922,5 +1038,7 @@ export function ruleMixedProvenanceNote(
 
 /** Trailing note for the rate-limit line; empty when nothing is unfetched. */
 export function unfetchedNote(unfetched: number | undefined): string {
-  return unfetched && unfetched > 0 ? `; ${unfetched} more discovered but not fetched` : "";
+  return unfetched && unfetched > 0
+    ? `; ${unfetched} more discovered but not fetched`
+    : "";
 }

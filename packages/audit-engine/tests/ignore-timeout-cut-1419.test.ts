@@ -1,12 +1,16 @@
 // A rules phase cut after an `[[ignore]]` matcher exhausts its work budget must
 // retain the timeout index even though no RuleExecutionResult is returned (#1419).
 
+import type { Config } from "@squirrelscan/config";
+import type {
+  PageRecord,
+  ResponseHeaders,
+  SecurityHeaders,
+} from "@squirrelscan/core-contracts";
+
+import { SQLiteStorage } from "@squirrelscan/crawler";
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect } from "effect";
-
-import type { Config } from "@squirrelscan/config";
-import type { PageRecord, ResponseHeaders, SecurityHeaders } from "@squirrelscan/core-contracts";
-import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { runStreamingRules, type PreFetchedAssets } from "../src/adapter";
 
@@ -36,7 +40,10 @@ const HEADERS: ResponseHeaders = {
   xVercelCache: null,
   altSvc: null,
   acceptRanges: null,
-  setCookie: Array.from({ length: 20 }, (_, i) => `${"q".repeat(2040)}${i}=1; Path=/`).join("\n"),
+  setCookie: Array.from(
+    { length: 20 },
+    (_, i) => `${"q".repeat(2040)}${i}=1; Path=/`
+  ).join("\n"),
 };
 
 const SECURITY_HEADERS: SecurityHeaders = {
@@ -122,9 +129,9 @@ describe("an ignore timeout before a rules-phase cut (#1419)", () => {
               Bun.sleepSync(1100);
             },
           }),
-          Duration.millis(1000),
+          Duration.millis(1000)
         );
-      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
     );
 
     expect(result._tag).toBe("None");

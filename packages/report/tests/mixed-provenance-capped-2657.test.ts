@@ -4,15 +4,21 @@
 // the note silently vanished; with them it fires, minus the clean-page count a
 // per-check-name tally cannot give.
 
+import type {
+  CheckTallies,
+  ReportRuleResult,
+} from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
-import type { CheckTallies, ReportRuleResult } from "@squirrelscan/core-contracts";
 
 import { ruleMixedProvenanceNote } from "../src/coverage";
 import { groupIssuesByCategory } from "../src/grouping";
 
 const RULE = "legal/cookie-consent";
 
-function rule(checks: ReportRuleResult["checks"]): Record<string, ReportRuleResult> {
+function rule(
+  checks: ReportRuleResult["checks"]
+): Record<string, ReportRuleResult> {
   return {
     [RULE]: {
       meta: {
@@ -38,48 +44,63 @@ const carriedOnly = rule(
     pageUrl: `https://e.com/carried-${i}`,
     provenance: "carried" as const,
     lastSeenAt: 1,
-  })),
+  }))
 );
 
 describe("mixed-provenance note on a capped report (repo#2657)", () => {
   test("fires from the tallies when the rows hold no passes", () => {
-    const tallies: CheckTallies = { [RULE]: { "cookie-consent-missing": { passed: 75 } } };
+    const tallies: CheckTallies = {
+      [RULE]: { "cookie-consent-missing": { passed: 75 } },
+    };
     const grouped = groupIssuesByCategory(carriedOnly, tallies);
     expect(grouped[0]!.rules[0]!.mixedProvenanceNote).toBe(
-      "Fixed on all pages checked this run; 3 pages pending re-check.",
+      "Fixed on all pages checked this run; 3 pages pending re-check."
     );
   });
 
   test("stays silent without tallies, as before", () => {
-    expect(groupIssuesByCategory(carriedOnly)[0]!.rules[0]!.mixedProvenanceNote).toBeUndefined();
+    expect(
+      groupIssuesByCategory(carriedOnly)[0]!.rules[0]!.mixedProvenanceNote
+    ).toBeUndefined();
   });
 
   test("stays silent when the tallies count a fresh issue anywhere in the rule", () => {
     const checks = carriedOnly[RULE]!.checks;
     expect(
-      ruleMixedProvenanceNote(checks, { "cookie-consent-missing": { passed: 70, warnings: 5 } }),
+      ruleMixedProvenanceNote(checks, {
+        "cookie-consent-missing": { passed: 70, warnings: 5 },
+      })
     ).toBeUndefined();
     expect(
       ruleMixedProvenanceNote(checks, {
         "cookie-consent-missing": { passed: 70 },
         "cookie-consent-string": { failed: 1 },
-      }),
+      })
     ).toBeUndefined();
   });
 
   test("stays silent when nothing passed this run", () => {
     expect(
-      ruleMixedProvenanceNote(carriedOnly[RULE]!.checks, { "cookie-consent-missing": { skipped: 9 } }),
+      ruleMixedProvenanceNote(carriedOnly[RULE]!.checks, {
+        "cookie-consent-missing": { skipped: 9 },
+      })
     ).toBeUndefined();
   });
 
   test("an uncapped report's pass rows win: the clean-page count stays", () => {
     const checks: ReportRuleResult["checks"] = [
       ...carriedOnly[RULE]!.checks,
-      { name: "cookie-consent-missing", status: "pass", message: "ok", pageUrl: "https://e.com/a" },
+      {
+        name: "cookie-consent-missing",
+        status: "pass",
+        message: "ok",
+        pageUrl: "https://e.com/a",
+      },
     ];
-    expect(ruleMixedProvenanceNote(checks, { "cookie-consent-missing": { passed: 1 } })).toBe(
-      "Fixed on all 1 page checked this run; 3 pages pending re-check.",
-    );
+    expect(
+      ruleMixedProvenanceNote(checks, {
+        "cookie-consent-missing": { passed: 1 },
+      })
+    ).toBe("Fixed on all 1 page checked this run; 3 pages pending re-check.");
   });
 });

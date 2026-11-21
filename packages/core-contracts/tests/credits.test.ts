@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import type { CloudServiceId } from "../src/services";
+
 import {
   auditCreditsPerPage,
   clampAuditPages,
@@ -32,11 +33,19 @@ describe("pricing v13", () => {
   test("50 base, 2 per audited page, 1 per external link", () => {
     expect(CREDIT_COSTS.audit_base).toEqual({ cost: 50, per: 1, unit: "run" });
     expect(CREDIT_COSTS.audit_page).toEqual({ cost: 2, per: 1, unit: "page" });
-    expect(CREDIT_COSTS.external_link).toEqual({ cost: 1, per: 1, unit: "url" });
+    expect(CREDIT_COSTS.external_link).toEqual({
+      cost: 1,
+      per: 1,
+      unit: "url",
+    });
   });
 
   test("llm_rules_page is 2 per page and leaves the audit price untouched", () => {
-    expect(CREDIT_COSTS.llm_rules_page).toEqual({ cost: 2, per: 1, unit: "page" });
+    expect(CREDIT_COSTS.llm_rules_page).toEqual({
+      cost: 2,
+      per: 1,
+      unit: "page",
+    });
     expect(computeCost("llm_rules_page", 50)).toBe(100);
     expect(minimumAuditCredits()).toBe(52);
     expect(estimateAuditCap({ maxPages: 100 })).toBe(250);
@@ -59,7 +68,9 @@ describe("estimateAuditCap", () => {
   });
 
   test("a cloud audit checking external links reserves one per page: 19 pages → 107", () => {
-    expect(estimateAuditCap({ maxPages: 19, cloudExternalLinks: true })).toBe(50 + 19 * 3);
+    expect(estimateAuditCap({ maxPages: 19, cloudExternalLinks: true })).toBe(
+      50 + 19 * 3
+    );
     expect(externalLinkBudget(19)).toBe(19);
     expect(auditCreditsPerPage(true)).toBe(3);
     expect(auditCreditsPerPage()).toBe(2);
@@ -71,8 +82,13 @@ describe("estimateAuditCap", () => {
   });
 
   test("the range runs from a one-page audit to the cap", () => {
-    expect(estimateAuditRange({ maxPages: 100 })).toEqual({ min: 52, max: 250 });
-    expect(estimateAuditRange({ maxPages: 100, cloudExternalLinks: true })).toEqual({
+    expect(estimateAuditRange({ maxPages: 100 })).toEqual({
+      min: 52,
+      max: 250,
+    });
+    expect(
+      estimateAuditRange({ maxPages: 100, cloudExternalLinks: true })
+    ).toEqual({
       min: 52,
       max: 350,
     });
@@ -99,45 +115,68 @@ describe("clampAuditPages", () => {
 
   test("external links make each page cost 3: floor((balance − 50) / 3)", () => {
     expect(
-      clampAuditPages({ maxPages: 100, balance: 110, cloudExternalLinks: true }).maxPages,
+      clampAuditPages({ maxPages: 100, balance: 110, cloudExternalLinks: true })
+        .maxPages
     ).toBe(20);
   });
 
   test("below one page comes back as 0, for the caller to refuse", () => {
-    expect(clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() - 1 }).maxPages).toBe(0);
-    expect(clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() }).maxPages).toBe(1);
+    expect(
+      clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() - 1 })
+        .maxPages
+    ).toBe(0);
+    expect(
+      clampAuditPages({ maxPages: 10, balance: minimumAuditCredits() }).maxPages
+    ).toBe(1);
     expect(minimumAuditCredits(true)).toBe(53);
     expect(
-      clampAuditPages({ maxPages: 10, balance: 52, cloudExternalLinks: true }).maxPages,
+      clampAuditPages({ maxPages: 10, balance: 52, cloudExternalLinks: true })
+        .maxPages
     ).toBe(0);
   });
 
   test("a customer cap clamps too, and the tighter of the two limits wins", () => {
-    expect(clampAuditPages({ maxPages: 1000, balance: 100_000, cap: 1000 })).toMatchObject({
+    expect(
+      clampAuditPages({ maxPages: 1000, balance: 100_000, cap: 1000 })
+    ).toMatchObject({
       maxPages: 475,
       limitedBy: "cap",
     });
-    expect(clampAuditPages({ maxPages: 1000, balance: 150, cap: 1000 })).toMatchObject({
+    expect(
+      clampAuditPages({ maxPages: 1000, balance: 150, cap: 1000 })
+    ).toMatchObject({
       maxPages: 50,
       limitedBy: "balance",
     });
   });
 
   test("a cap of 0 is no cap, and an unmetered or unknown balance bounds nothing", () => {
-    expect(clampAuditPages({ maxPages: 5000, balance: 100_000, cap: 0 }).clamped).toBe(false);
-    expect(clampAuditPages({ maxPages: 5000, balance: 0, unlimited: true }).clamped).toBe(false);
-    expect(clampAuditPages({ maxPages: 5000, balance: null }).clamped).toBe(false);
+    expect(
+      clampAuditPages({ maxPages: 5000, balance: 100_000, cap: 0 }).clamped
+    ).toBe(false);
+    expect(
+      clampAuditPages({ maxPages: 5000, balance: 0, unlimited: true }).clamped
+    ).toBe(false);
+    expect(clampAuditPages({ maxPages: 5000, balance: null }).clamped).toBe(
+      false
+    );
   });
 
   test("the clamped cap never costs more than the credits that bound it", () => {
     for (let balance = 52; balance < 400; balance += 7) {
       for (const cloudExternalLinks of [false, true]) {
-        const { maxPages } = clampAuditPages({ maxPages: 1000, balance, cloudExternalLinks });
-        if (maxPages === 0) continue;
-        expect(estimateAuditCap({ maxPages, cloudExternalLinks })).toBeLessThanOrEqual(balance);
-        expect(estimateAuditCap({ maxPages: maxPages + 1, cloudExternalLinks })).toBeGreaterThan(
+        const { maxPages } = clampAuditPages({
+          maxPages: 1000,
           balance,
-        );
+          cloudExternalLinks,
+        });
+        if (maxPages === 0) continue;
+        expect(
+          estimateAuditCap({ maxPages, cloudExternalLinks })
+        ).toBeLessThanOrEqual(balance);
+        expect(
+          estimateAuditCap({ maxPages: maxPages + 1, cloudExternalLinks })
+        ).toBeGreaterThan(balance);
       }
     }
   });
@@ -145,7 +184,11 @@ describe("clampAuditPages", () => {
 
 describe("third-party scan plumbing", () => {
   test("third_party_scan is a free ledger feature, however many units", () => {
-    expect(CREDIT_COSTS.third_party_scan).toEqual({ cost: 0, per: 1, unit: "run" });
+    expect(CREDIT_COSTS.third_party_scan).toEqual({
+      cost: 0,
+      per: 1,
+      unit: "run",
+    });
     expect(computeCost("third_party_scan", 1)).toBe(0);
     expect(computeCost("third_party_scan", 40)).toBe(0);
   });
@@ -193,8 +236,16 @@ describe("top-up bonus curve (repo#3888)", () => {
   }
 
   test("at or below the floor a top-up is exactly 100 credits per $1 with no bonus", () => {
-    for (let usd = CREDIT_TOPUP.minUsd; usd <= TOPUP_BONUS_CURVE.floorUsd; usd++) {
-      expect(topupQuote(usd)).toMatchObject({ baseCredits: usd * 100, bonusCredits: 0, totalCredits: usd * 100 });
+    for (
+      let usd = CREDIT_TOPUP.minUsd;
+      usd <= TOPUP_BONUS_CURVE.floorUsd;
+      usd++
+    ) {
+      expect(topupQuote(usd)).toMatchObject({
+        baseCredits: usd * 100,
+        bonusCredits: 0,
+        totalCredits: usd * 100,
+      });
     }
   });
 
@@ -202,10 +253,14 @@ describe("top-up bonus curve (repo#3888)", () => {
     for (const usd of [1_000, 1_001, 5_000, 1_000_000]) {
       const q = topupQuote(usd);
       expect(q.bonusPercent).toBeLessThanOrEqual(TOPUP_BONUS_CURVE.capPercent);
-      expect(q.bonusCredits).toBeLessThanOrEqual((q.baseCredits * TOPUP_BONUS_CURVE.capPercent) / 100);
+      expect(q.bonusCredits).toBeLessThanOrEqual(
+        (q.baseCredits * TOPUP_BONUS_CURVE.capPercent) / 100
+      );
     }
     for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++) {
-      expect(topupBonusPercent(usd)).toBeLessThanOrEqual(TOPUP_BONUS_CURVE.capPercent);
+      expect(topupBonusPercent(usd)).toBeLessThanOrEqual(
+        TOPUP_BONUS_CURVE.capPercent
+      );
     }
   });
 
@@ -242,14 +297,27 @@ describe("top-up bonus curve (repo#3888)", () => {
   });
 
   test("the schedule lists the table amounts in order, and takes custom amounts", () => {
-    expect(topupBonusSchedule().map((r) => r.usd)).toEqual(table.map(([usd]) => usd));
-    expect(topupBonusSchedule([200]).map((r) => r.totalCredits)).toEqual([topupCreditsForUsd(200)]);
+    expect(topupBonusSchedule().map((r) => r.usd)).toEqual(
+      table.map(([usd]) => usd)
+    );
+    expect(topupBonusSchedule([200]).map((r) => r.totalCredits)).toEqual([
+      topupCreditsForUsd(200),
+    ]);
     expect(topupBonusSchedule([])).toEqual([]);
   });
 
   test("the curve numbers live in one object", () => {
-    expect(TOPUP_BONUS_CURVE).toEqual({ floorUsd: 100, endUsd: 1_000, capPercent: 20, exponent: 0.7 });
-    expect(CREDIT_TOPUP).toEqual({ minUsd: 10, maxUsd: 5_000, creditsPerUsd: 100 });
+    expect(TOPUP_BONUS_CURVE).toEqual({
+      floorUsd: 100,
+      endUsd: 1_000,
+      capPercent: 20,
+      exponent: 0.7,
+    });
+    expect(CREDIT_TOPUP).toEqual({
+      minUsd: 10,
+      maxUsd: 5_000,
+      creditsPerUsd: 100,
+    });
   });
 
   test("the curve ends at $1,000, not at the maximum: raising the maximum repriced nothing below it (repo#4314)", () => {
@@ -257,22 +325,36 @@ describe("top-up bonus curve (repo#3888)", () => {
     expect(topupCreditsForUsd(1_000)).toBe(120_000);
     expect(topupCreditsForUsd(1_001)).toBe(120_120);
     expect(topupCreditsForUsd(5_000)).toBe(600_000);
-    expect(topupQuote(5_000)).toMatchObject({ baseCredits: 500_000, bonusCredits: 100_000, bonusPercent: 20 });
+    expect(topupQuote(5_000)).toMatchObject({
+      baseCredits: 500_000,
+      bonusCredits: 100_000,
+      bonusPercent: 20,
+    });
   });
 
   test("every whole dollar $1,001 to $5,000 is exactly 120 credits per $1 (flat 20% bonus)", () => {
-    for (let usd = TOPUP_BONUS_CURVE.endUsd + 1; usd <= CREDIT_TOPUP.maxUsd; usd++) {
-      expect(topupQuote(usd)).toMatchObject({ baseCredits: usd * 100, bonusCredits: usd * 20, totalCredits: usd * 120 });
+    for (
+      let usd = TOPUP_BONUS_CURVE.endUsd + 1;
+      usd <= CREDIT_TOPUP.maxUsd;
+      usd++
+    ) {
+      expect(topupQuote(usd)).toMatchObject({
+        baseCredits: usd * 100,
+        bonusCredits: usd * 20,
+        totalCredits: usd * 120,
+      });
       expect(topupBonusPercent(usd)).toBe(20);
     }
   });
 
   test("every whole dollar $1 to $9 (below the minimum) still quotes 100 per $1, as before", () => {
-    for (let usd = 1; usd < CREDIT_TOPUP.minUsd; usd++) expect(topupCreditsForUsd(usd)).toBe(usd * 100);
+    for (let usd = 1; usd < CREDIT_TOPUP.minUsd; usd++)
+      expect(topupCreditsForUsd(usd)).toBe(usd * 100);
   });
 
   test("$5,001 is outside the purchasable range; $10 and $5,000 are its ends", () => {
-    const inRange = (usd: number) => usd >= CREDIT_TOPUP.minUsd && usd <= CREDIT_TOPUP.maxUsd;
+    const inRange = (usd: number) =>
+      usd >= CREDIT_TOPUP.minUsd && usd <= CREDIT_TOPUP.maxUsd;
     expect(inRange(5_001)).toBe(false);
     expect(inRange(5_000)).toBe(true);
     expect(inRange(10)).toBe(true);
@@ -280,8 +362,22 @@ describe("top-up bonus curve (repo#3888)", () => {
   });
 
   test("a non-finite or non-positive amount is a zero quote, never NaN or negative", () => {
-    const zero = { usd: 0, baseCredits: 0, bonusCredits: 0, totalCredits: 0, bonusPercent: 0 };
-    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -5, -0.5, 0.9]) {
+    const zero = {
+      usd: 0,
+      baseCredits: 0,
+      bonusCredits: 0,
+      totalCredits: 0,
+      bonusPercent: 0,
+    };
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      0,
+      -5,
+      -0.5,
+      0.9,
+    ]) {
       expect(topupQuote(bad)).toEqual(zero);
       expect(topupCreditsForUsd(bad)).toBe(0);
       expect(topupBonusPercent(bad)).toBe(0);
@@ -292,17 +388,24 @@ describe("top-up bonus curve (repo#3888)", () => {
     // Math.pow can differ in the last bits across engines; topupQuote rounds with toFixed(6) before flooring,
     // so the pinned list holds in Bun, workerd and browsers. Regenerate only when the curve is changed on purpose.
     const pinned = JSON.parse(
-      readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
+      readFileSync(
+        new URL("./fixtures/topup-total-credits.json", import.meta.url),
+        "utf8"
+      )
     ) as Record<string, number>;
     const actual: Record<string, number> = {};
-    for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++) actual[String(usd)] = topupCreditsForUsd(usd);
+    for (let usd = CREDIT_TOPUP.minUsd; usd <= CREDIT_TOPUP.maxUsd; usd++)
+      actual[String(usd)] = topupCreditsForUsd(usd);
     expect(Object.keys(pinned).length).toBe(4_991);
     expect(actual).toEqual(pinned);
   });
 
   test("the pinned $10 to $1,000 rows are the pre-repo#4314 list, unchanged (spot values and the rows' sum)", () => {
     const pinned = JSON.parse(
-      readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
+      readFileSync(
+        new URL("./fixtures/topup-total-credits.json", import.meta.url),
+        "utf8"
+      )
     ) as Record<string, number>;
     let sum = 0;
     for (let usd = 10; usd <= 1_000; usd++) sum += pinned[String(usd)]!;
@@ -314,7 +417,10 @@ describe("top-up bonus curve (repo#3888)", () => {
 
   test("the table rows are spelled out in the pinned list", () => {
     const pinned = JSON.parse(
-      readFileSync(new URL("./fixtures/topup-total-credits.json", import.meta.url), "utf8"),
+      readFileSync(
+        new URL("./fixtures/topup-total-credits.json", import.meta.url),
+        "utf8"
+      )
     ) as Record<string, number>;
     expect(pinned["100"]).toBe(10_000);
     expect(pinned["250"]).toBe(26_426);

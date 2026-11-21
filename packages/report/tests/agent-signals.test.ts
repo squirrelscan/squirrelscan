@@ -1,7 +1,11 @@
 // #1386: the Agents score does not measure agent support. llms.txt, Markdown
 // response and AGENTS.md are advisory; they are listed beside the score.
 
+import type { GroupScore } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
+
+import type { AuditReport, ReportRuleResult } from "../src/types";
 
 import {
   AGENTS_SCORE_MEASURES,
@@ -13,10 +17,12 @@ import {
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
-import type { GroupScore } from "@squirrelscan/core-contracts";
-import type { AuditReport, ReportRuleResult } from "../src/types";
 
-function rule(id: string, check: string, value: string | null): ReportRuleResult {
+function rule(
+  id: string,
+  check: string,
+  value: string | null
+): ReportRuleResult {
   return {
     meta: {
       id,
@@ -36,7 +42,7 @@ type FixtureGroup = Omit<GroupScore, "group" | "total"> & { group: string };
 
 function report(
   results: ReportRuleResult[],
-  groups: FixtureGroup[],
+  groups: FixtureGroup[]
 ): AuditReport {
   return {
     baseUrl: "https://example.com",
@@ -62,14 +68,20 @@ const ruleSet = [
   rule("ax/markdown-response", "markdown-response", "absent"),
   rule("ax/agents-md", "agents-md-present", "spa-fallback"),
 ];
-const agents = [{ group: "ai", name: "Agents", score: 90, passed: 3, warnings: 0, failed: 0 }];
-const seo = [{ group: "seo", name: "SEO", score: 90, passed: 3, warnings: 0, failed: 0 }];
+const agents = [
+  { group: "ai", name: "Agents", score: 90, passed: 3, warnings: 0, failed: 0 },
+];
+const seo = [
+  { group: "seo", name: "SEO", score: 90, passed: 3, warnings: 0, failed: 0 },
+];
 const LINE =
   "Site-level signals (not scored): llms.txt present, Markdown response missing, AGENTS.md not checked";
 
 describe("getAgentSignals", () => {
   test("maps present, missing and unchecked", () => {
-    expect(getAgentSignals(report(ruleSet, agents)).map((s) => [s.id, s.status])).toEqual([
+    expect(
+      getAgentSignals(report(ruleSet, agents)).map((s) => [s.id, s.status])
+    ).toEqual([
       ["llms-txt", "present"],
       ["markdown-response", "missing"],
       ["agents-md", "unchecked"],
@@ -78,13 +90,22 @@ describe("getAgentSignals", () => {
 
   test("available counts as present; a missing rule is unchecked", () => {
     const signals = getAgentSignals(
-      report([rule("ax/markdown-response", "markdown-response", "available")], agents),
+      report(
+        [rule("ax/markdown-response", "markdown-response", "available")],
+        agents
+      )
     );
-    expect(signals.map((s) => s.status)).toEqual(["unchecked", "present", "unchecked"]);
+    expect(signals.map((s) => s.status)).toEqual([
+      "unchecked",
+      "present",
+      "unchecked",
+    ]);
   });
 
   test("legacy ai/ rule ids are read", () => {
-    const signals = getAgentSignals(report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents));
+    const signals = getAgentSignals(
+      report([rule("ai/llms-txt", "llms-txt-present", "absent")], agents)
+    );
     expect(signals[0].status).toBe("missing");
   });
 
@@ -93,7 +114,9 @@ describe("getAgentSignals", () => {
   });
 
   test("line wording", () => {
-    expect(agentSignalsLine(getAgentSignals(report(ruleSet, agents)))).toBe(LINE);
+    expect(agentSignalsLine(getAgentSignals(report(ruleSet, agents)))).toBe(
+      LINE
+    );
   });
 });
 
@@ -134,8 +157,12 @@ describe("citability cross-link (repo#3882)", () => {
 
   test("links existing rules by status without re-emitting their findings", () => {
     const r = report(
-      [rule("eeat/content-dates", "c", null), warnRule("eeat/author-byline"), warnRule("ax/answer-blocks")],
-      agents,
+      [
+        rule("eeat/content-dates", "c", null),
+        warnRule("eeat/author-byline"),
+        warnRule("ax/answer-blocks"),
+      ],
+      agents
     );
     const line = citabilityLine(getCitabilitySignals(r));
     expect(line).toContain("dates ok");

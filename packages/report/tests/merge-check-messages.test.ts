@@ -7,9 +7,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { mergeCheckMessages, messageMergeKey } from "../src/message-merge";
-import { groupIssuesByCategory } from "../src/grouping";
 import type { ReportRuleResult } from "../src/types";
+
+import { groupIssuesByCategory } from "../src/grouping";
+import { mergeCheckMessages, messageMergeKey } from "../src/message-merge";
 
 const thin = (words: number) => `Thin content: ${words} words (min 300)`;
 
@@ -23,7 +24,9 @@ describe("mergeCheckMessages", () => {
   });
 
   test("messages that agree print exactly what they said", () => {
-    expect(mergeCheckMessages([thin(197), thin(197), thin(197)])).toBe(thin(197));
+    expect(mergeCheckMessages([thin(197), thin(197), thin(197)])).toBe(
+      thin(197)
+    );
   });
 
   test("a count they disagree on becomes the range it covers", () => {
@@ -96,9 +99,9 @@ describe("mergeCheckMessages", () => {
   test("a count that agrees keeps the digits it was written with", () => {
     // Not re-rendered through Number: a leading-zero or padded form that every
     // page agrees on comes back byte-identical.
-    expect(mergeCheckMessages(["Code 007 seen 3 times", "Code 007 seen 5 times"])).toBe(
-      "Code 007 seen 3 to 5 times"
-    );
+    expect(
+      mergeCheckMessages(["Code 007 seen 3 times", "Code 007 seen 5 times"])
+    ).toBe("Code 007 seen 3 to 5 times");
   });
 
   describe("messages that must not merge come back null", () => {
@@ -115,9 +118,7 @@ describe("mergeCheckMessages", () => {
     });
 
     test("a decimal is not a count", () => {
-      expect(
-        mergeCheckMessages(["HTML is 4.3MB", "HTML is 7.1MB"])
-      ).toBeNull();
+      expect(mergeCheckMessages(["HTML is 4.3MB", "HTML is 7.1MB"])).toBeNull();
     });
 
     test("a ratio is not a count", () => {
@@ -128,7 +129,10 @@ describe("mergeCheckMessages", () => {
 
     test("different wording is not a disagreement about a count", () => {
       expect(
-        mergeCheckMessages(["Thin content: 197 words", "Sparse content: 197 words"])
+        mergeCheckMessages([
+          "Thin content: 197 words",
+          "Sparse content: 197 words",
+        ])
       ).toBeNull();
     });
 
@@ -186,10 +190,17 @@ describe("messageMergeKey", () => {
 });
 
 describe("the export is what the report itself uses", () => {
-  const ruleResults = (messages: string[]): Record<string, ReportRuleResult> => ({
+  const ruleResults = (
+    messages: string[]
+  ): Record<string, ReportRuleResult> => ({
     "content/thin": {
       ruleId: "content/thin",
-      meta: { id: "content/thin", name: "Thin", category: "content", severity: "warning" },
+      meta: {
+        id: "content/thin",
+        name: "Thin",
+        category: "content",
+        severity: "warning",
+      },
       checks: messages.map((message, i) => ({
         name: "thin-content",
         status: "warn" as const,

@@ -5,9 +5,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { AuditReport } from "../src/types";
+
 import { fetchFallbacksLine } from "../src/coverage";
-import { renderText } from "../src/output/text";
 import { renderMarkdown } from "../src/output/markdown";
+import { renderText } from "../src/output/text";
 
 function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
   return {
@@ -25,16 +26,18 @@ function baseReport(overrides: Partial<AuditReport> = {}): AuditReport {
 describe("fetchFallbacksLine (#512)", () => {
   test("null when nothing recovered / field absent", () => {
     expect(fetchFallbacksLine(baseReport())).toBeNull();
-    expect(fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 0 } }))).toBeNull();
+    expect(
+      fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 0 } }))
+    ).toBeNull();
   });
 
   test("pluralizes the recovered count", () => {
-    expect(fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 1 } }))).toBe(
-      "1 page recovered via direct fetch after a render block."
-    );
-    expect(fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 3 } }))).toBe(
-      "3 pages recovered via direct fetch after a render block."
-    );
+    expect(
+      fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 1 } }))
+    ).toBe("1 page recovered via direct fetch after a render block.");
+    expect(
+      fetchFallbacksLine(baseReport({ fetchFallbacks: { recovered: 3 } }))
+    ).toBe("3 pages recovered via direct fetch after a render block.");
   });
 
   test("text + markdown outputs surface the note only when recovered > 0", () => {
@@ -43,7 +46,11 @@ describe("fetchFallbacksLine (#512)", () => {
     expect(renderText(withNote)).toContain(note);
     expect(renderMarkdown(withNote)).toContain(note);
 
-    expect(renderText(baseReport())).not.toContain("recovered via direct fetch");
-    expect(renderMarkdown(baseReport())).not.toContain("recovered via direct fetch");
+    expect(renderText(baseReport())).not.toContain(
+      "recovered via direct fetch"
+    );
+    expect(renderMarkdown(baseReport())).not.toContain(
+      "recovered via direct fetch"
+    );
   });
 });

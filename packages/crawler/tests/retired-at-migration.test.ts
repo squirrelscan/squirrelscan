@@ -11,12 +11,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import { Effect } from "effect";
 import { unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { Effect } from "effect";
 
 import type { CrawlMetadata } from "../src/storage/types";
+
 import { SCHEMA_VERSION, SQLiteStorage } from "../src/storage/sqlite";
 
 function run<A>(eff: Effect.Effect<A, unknown, never>): Promise<A> {
@@ -78,7 +79,9 @@ function seedWithoutColumn(path: string): string {
     );
     CREATE TABLE schema_version (version INTEGER NOT NULL);
   `);
-  db.query("INSERT INTO schema_version (version) VALUES (?)").run(SCHEMA_VERSION);
+  db.query("INSERT INTO schema_version (version) VALUES (?)").run(
+    SCHEMA_VERSION
+  );
   const id = randomUUID();
   db.query(
     "INSERT INTO crawls (id, base_url, started_at, status, config, stats) VALUES (?, ?, ?, ?, ?, ?)"
@@ -143,18 +146,22 @@ describe("crawls.retired_at (#1912)", () => {
     const path = tempDbPath();
     seedWithoutColumn(path);
     const before = new Database(path, { readonly: true });
-    const had = (before.query("PRAGMA table_info(crawls)").all() as Array<{
-      name: string;
-    }>).some((c) => c.name === "retired_at");
+    const had = (
+      before.query("PRAGMA table_info(crawls)").all() as Array<{
+        name: string;
+      }>
+    ).some((c) => c.name === "retired_at");
     before.close();
     expect(had).toBe(false);
 
     const store = new SQLiteStorage(path);
     Effect.runSync(Effect.orDie(store.init()));
     const after = new Database(path, { readonly: true });
-    const now = (after.query("PRAGMA table_info(crawls)").all() as Array<{
-      name: string;
-    }>).some((c) => c.name === "retired_at");
+    const now = (
+      after.query("PRAGMA table_info(crawls)").all() as Array<{
+        name: string;
+      }>
+    ).some((c) => c.name === "retired_at");
     after.close();
     expect(now).toBe(true);
     Effect.runSync(Effect.orDie(store.close()));

@@ -1,9 +1,9 @@
 // eeat/terms-of-service - Terms of service page presence
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 export const termsOfServiceRule: Rule = {
   meta: {

@@ -8,20 +8,38 @@
 import { describe, expect, test } from "bun:test";
 import { Duration, Effect, Fiber, Stream } from "effect";
 
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
+
 import { createCrawler } from "../src/core/crawler";
 import { applyStatusGuards, type CrawlFetcher } from "../src/fetcher";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 const ORIGIN = "https://example.com";
 const EMPTY_RESPONSE_HEADERS = {
-  contentType: null, contentEncoding: null, cacheControl: null, expires: null,
-  vary: null, etag: null, server: null, lastModified: null, link: null,
-  serverTiming: null, age: null, xCache: null, cfCacheStatus: null,
-  xVercelCache: null, altSvc: null, acceptRanges: null,
+  contentType: null,
+  contentEncoding: null,
+  cacheControl: null,
+  expires: null,
+  vary: null,
+  etag: null,
+  server: null,
+  lastModified: null,
+  link: null,
+  serverTiming: null,
+  age: null,
+  xCache: null,
+  cfCacheStatus: null,
+  xVercelCache: null,
+  altSvc: null,
+  acceptRanges: null,
 } as const;
 const EMPTY_SECURITY_HEADERS = {
-  hsts: null, csp: null, xFrameOptions: null, xContentTypeOptions: null,
-  referrerPolicy: null, permissionsPolicy: null, xRobotsTag: null,
+  hsts: null,
+  csp: null,
+  xFrameOptions: null,
+  xContentTypeOptions: null,
+  referrerPolicy: null,
+  permissionsPolicy: null,
+  xRobotsTag: null,
 } as const;
 
 // A fetcher whose fetch never returns on its own. `mode` selects how it hangs:
@@ -31,7 +49,10 @@ const EMPTY_SECURITY_HEADERS = {
 //    promise can't be cancelled.
 // onInterrupt records that the in-flight op was actually interrupted (not just
 // abandoned by a returning-early loop).
-function wedgedFetcher(mode: "never" | "promise", onInterrupt: () => void): CrawlFetcher {
+function wedgedFetcher(
+  mode: "never" | "promise",
+  onInterrupt: () => void
+): CrawlFetcher {
   return (url) =>
     Effect.gen(function* () {
       yield* applyStatusGuards(url, 200, new Headers(), "<html></html>");
@@ -42,12 +63,29 @@ function wedgedFetcher(mode: "never" | "promise", onInterrupt: () => void): Craw
       }
       // Unreachable — present only to satisfy the return type.
       return {
-        url, finalUrl: url, status: 200, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status: 200,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body: "<html></html>", sizeBytes: 13,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body: "<html></html>",
+        sizeBytes: 13,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 }
@@ -59,12 +97,29 @@ function healthyFetcher(site: Record<string, string>): CrawlFetcher {
       const status = site[url] !== undefined ? 200 : 404;
       yield* applyStatusGuards(url, status, new Headers(), body);
       return {
-        url, finalUrl: url, status, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body, sizeBytes: body.length,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body,
+        sizeBytes: body.length,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     });
 }
@@ -73,7 +128,10 @@ function healthyFetcher(site: Record<string, string>): CrawlFetcher {
 // child — so the crawl stores the root, discovers the child, then wedges
 // mid-frontier when it tries to fetch it. Produces a genuine "stopped" crawl
 // with a live frontier to resume.
-function serveRootHangChild(childUrl: string, onInterrupt: () => void): CrawlFetcher {
+function serveRootHangChild(
+  childUrl: string,
+  onInterrupt: () => void
+): CrawlFetcher {
   const rootBody = `<!doctype html><html><body><a href="${childUrl}">a</a></body></html>`;
   return (url) =>
     Effect.gen(function* () {
@@ -85,12 +143,29 @@ function serveRootHangChild(childUrl: string, onInterrupt: () => void): CrawlFet
       const status = url === `${ORIGIN}/` ? 200 : 404;
       yield* applyStatusGuards(url, status, new Headers(), body);
       return {
-        url, finalUrl: url, status, loadTime: 1, ttfb: 1, downloadTime: 1,
+        url,
+        finalUrl: url,
+        status,
+        loadTime: 1,
+        ttfb: 1,
+        downloadTime: 1,
         headers: { ...EMPTY_RESPONSE_HEADERS, contentType: "text/html" },
-        securityHeaders: EMPTY_SECURITY_HEADERS, contentType: "text/html",
-        body, sizeBytes: body.length,
-        redirectChain: { sourceUrl: url, finalUrl: url, hops: [], chainLength: 0, isLoop: false, endsInError: false, httpsToHttp: false, httpToHttps: false },
-        fetcherId: undefined, fallbackReason: undefined,
+        securityHeaders: EMPTY_SECURITY_HEADERS,
+        contentType: "text/html",
+        body,
+        sizeBytes: body.length,
+        redirectChain: {
+          sourceUrl: url,
+          finalUrl: url,
+          hops: [],
+          chainLength: 0,
+          isLoop: false,
+          endsInError: false,
+          httpsToHttp: false,
+          httpToHttps: false,
+        },
+        fetcherId: undefined,
+        fallbackReason: undefined,
       };
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 }
@@ -103,17 +178,35 @@ const GRACE_MS = 300;
 const WATCHDOG_FLOOR_MS = 120_000;
 
 const CONFIG: Partial<CrawlerConfig> = {
-  concurrency: 1, perHostConcurrency: 1, delayMs: 0, perHostDelayMs: 0,
-  timeoutMs: 1000, userAgent: "test", respectRobots: false, incremental: false,
-  useCacheControl: false, breadthFirst: false, disableLinkDiscovery: false,
-  coverageMode: "full", maxPages: 100, stopGraceMs: GRACE_MS,
+  concurrency: 1,
+  perHostConcurrency: 1,
+  delayMs: 0,
+  perHostDelayMs: 0,
+  timeoutMs: 1000,
+  userAgent: "test",
+  respectRobots: false,
+  incremental: false,
+  useCacheControl: false,
+  breadthFirst: false,
+  disableLinkDiscovery: false,
+  coverageMode: "full",
+  maxPages: 100,
+  stopGraceMs: GRACE_MS,
 };
 
 function stubPreamble(): () => void {
   const original = globalThis.fetch;
   globalThis.fetch = ((input: Parameters<typeof fetch>[0]) => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-    const res = new Response("", { status: 404, headers: { "content-type": "text/plain" } });
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+    const res = new Response("", {
+      status: 404,
+      headers: { "content-type": "text/plain" },
+    });
     Object.defineProperty(res, "url", { value: url, configurable: true });
     return Promise.resolve(res);
   }) as typeof globalThis.fetch;
@@ -141,7 +234,9 @@ function runWedgedThenStop(mode: "never" | "promise"): Promise<StopOutcome> {
       }),
       config: CONFIG,
     });
-    const startFiber = yield* crawler.start(ORIGIN).pipe(Effect.either, Effect.fork);
+    const startFiber = yield* crawler
+      .start(ORIGIN)
+      .pipe(Effect.either, Effect.fork);
 
     // Simulate the backstop firing after CAP_MS, then stop().
     yield* Effect.sleep(Duration.millis(CAP_MS));
@@ -150,11 +245,16 @@ function runWedgedThenStop(mode: "never" | "promise"): Promise<StopOutcome> {
 
     // Bounded well under the 120s watchdog: if the crawl only returns via the
     // watchdog this join times out and returnedCleanly is false.
-    const res = yield* Fiber.join(startFiber).pipe(Effect.timeout(Duration.seconds(10)), Effect.either);
+    const res = yield* Fiber.join(startFiber).pipe(
+      Effect.timeout(Duration.seconds(10)),
+      Effect.either
+    );
     const sinceStopMs = Date.now() - stopAt;
 
     const crawlId = crawler.currentCrawlId;
-    const crawl = crawlId ? yield* crawler.storage.getCrawl(crawlId) : undefined;
+    const crawl = crawlId
+      ? yield* crawler.storage.getCrawl(crawlId)
+      : undefined;
 
     return {
       returnedCleanly: res._tag === "Right",
@@ -218,7 +318,10 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
       let completed = false;
       const collector = yield* Stream.runForEach(
         crawler.events.pipe(Stream.takeUntil((e) => e.type === "completed")),
-        (e: CrawlerEvent) => Effect.sync(() => { if (e.type === "completed") completed = true; }),
+        (e: CrawlerEvent) =>
+          Effect.sync(() => {
+            if (e.type === "completed") completed = true;
+          })
       ).pipe(Effect.fork);
       yield* Effect.yieldNow();
 
@@ -226,12 +329,20 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
       const crawlId = yield* crawler.start(ORIGIN);
       const elapsed = Date.now() - startedAt;
 
-      yield* Fiber.join(collector).pipe(Effect.timeout(Duration.seconds(2)), Effect.ignore);
+      yield* Fiber.join(collector).pipe(
+        Effect.timeout(Duration.seconds(2)),
+        Effect.ignore
+      );
       yield* Fiber.interrupt(collector);
 
       const pages = yield* crawler.storage.getPages(crawlId);
       const crawl = yield* crawler.storage.getCrawl(crawlId);
-      return { elapsed, completed, pageCount: pages.length, status: crawl?.status };
+      return {
+        elapsed,
+        completed,
+        pageCount: pages.length,
+        status: crawl?.status,
+      };
     });
 
     const out = await Effect.runPromise(program).finally(restore);
@@ -266,7 +377,7 @@ describe("crawl-phase backstop stop() hard cap (#923)", () => {
       yield* crawlerA.stop();
       yield* Fiber.join(startFiber).pipe(
         Effect.timeout(Duration.seconds(10)),
-        Effect.either,
+        Effect.either
       );
 
       const crawlId = crawlerA.currentCrawlId;

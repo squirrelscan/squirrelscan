@@ -43,7 +43,8 @@ export const SIGN_IN_FIRST_LABELS: ReadonlySet<string> = new Set([
 ]);
 
 /** Where the guide says what to do about a sign-in page or access gateway. */
-export const SIGN_IN_DOCS_URL = "https://docs.squirrelscan.com/guides/failed-audits#access-gateway";
+export const SIGN_IN_DOCS_URL =
+  "https://docs.squirrelscan.com/guides/failed-audits#access-gateway";
 
 /**
  * Is `host` (a URL `host`, port allowed) a sign-in host? One in
@@ -51,11 +52,13 @@ export const SIGN_IN_DOCS_URL = "https://docs.squirrelscan.com/guides/failed-aud
  * is in {@link SIGN_IN_FIRST_LABELS}.
  */
 export function isSignInHost(host: string): boolean {
-  const bare = host
-    .toLowerCase()
-    .replace(/:\d+$/, "")
-    .replace(/\.$/, "");
-  if (SIGN_IN_HOSTS.some((h) => (h.startsWith(".") ? bare.endsWith(h) : bare === h))) return true;
+  const bare = host.toLowerCase().replace(/:\d+$/, "").replace(/\.$/, "");
+  if (
+    SIGN_IN_HOSTS.some((h) =>
+      h.startsWith(".") ? bare.endsWith(h) : bare === h
+    )
+  )
+    return true;
   const labels = bare.split(".");
   return labels.length > 2 && SIGN_IN_FIRST_LABELS.has(labels[0] ?? "");
 }
@@ -72,7 +75,9 @@ export type OffSiteRedirectFollowUp =
  * query of a redirect are the site's to choose and can carry a session or a
  * return address, and an audit starts from a site, not a deep link.
  */
-export function offSiteRedirectFollowUp(targetUrl: string): OffSiteRedirectFollowUp | null {
+export function offSiteRedirectFollowUp(
+  targetUrl: string
+): OffSiteRedirectFollowUp | null {
   let url: URL;
   try {
     url = new URL(targetUrl);
@@ -81,8 +86,13 @@ export function offSiteRedirectFollowUp(targetUrl: string): OffSiteRedirectFollo
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   const origin = url.origin;
-  if (isSignInHost(url.host)) return { kind: "sign_in", origin, docsUrl: SIGN_IN_DOCS_URL };
-  return { kind: "audit", origin, command: `squirrel audit ${shellWord(origin)}` };
+  if (isSignInHost(url.host))
+    return { kind: "sign_in", origin, docsUrl: SIGN_IN_DOCS_URL };
+  return {
+    kind: "audit",
+    origin,
+    command: `squirrel audit ${shellWord(origin)}`,
+  };
 }
 
 /**
@@ -91,5 +101,7 @@ export function offSiteRedirectFollowUp(targetUrl: string): OffSiteRedirectFollo
  * glob in zsh).
  */
 export function shellWord(value: string): string {
-  return /^[A-Za-z0-9.:/_-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
+  return /^[A-Za-z0-9.:/_-]+$/.test(value)
+    ? value
+    : `'${value.replace(/'/g, "'\\''")}'`;
 }

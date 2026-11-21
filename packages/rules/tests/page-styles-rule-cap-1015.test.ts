@@ -3,43 +3,59 @@
 // at the cap, so an element hidden by 5,000 flat rules read shown (and an unnamed
 // control inside it FAILED) while at 4,900 it read hidden.
 
+import type { CheckResult } from "@squirrelscan/core-contracts";
+
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { CheckResult } from "@squirrelscan/core-contracts";
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { buttonNameRule } from "../src/a11y/button-name";
 import { createStaticVisibility } from "../src/shared/static-hidden";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const page = (rules: number, body: string): string => {
-  const filler = Array.from({ length: rules - 1 }, (_, i) => `.f${i}{display:none}`).join("");
+  const filler = Array.from(
+    { length: rules - 1 },
+    (_, i) => `.f${i}{display:none}`
+  ).join("");
   return `<!doctype html><html lang="en"><head><title>t</title><style>.gone{display:none}${filler}</style></head><body>${body}</body></html>`;
 };
 
 function state(rules: number, id = "t"): string {
-  const html = page(rules, `<div class="gone" id="t"><p id="u">x</p></div><p id="s">shown</p>`);
-  const { document } = parsePage(html, "https://example.com/") as unknown as { document: Document };
+  const html = page(
+    rules,
+    `<div class="gone" id="t"><p id="u">x</p></div><p id="s">shown</p>`
+  );
+  const { document } = parsePage(html, "https://example.com/") as unknown as {
+    document: Document;
+  };
   const vis = createStaticVisibility({ ariaHidden: true });
   return vis.visibility(document.getElementById(id) as Element).state;
 }
 
 async function buttonChecks(rules: number): Promise<string[]> {
-  const html = page(rules, `<main><div class="gone"><button></button></div></main>`);
+  const html = page(
+    rules,
+    `<main><div class="gone"><button></button></div></main>`
+  );
   const url = "https://example.com/";
   const ctx: RuleContext = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url) as ParsedPage,
     options: {},
   };
-  return ((await buttonNameRule.run(ctx)).checks as CheckResult[]).map((c) => `${c.name}:${c.status}`);
+  return ((await buttonNameRule.run(ctx)).checks as CheckResult[]).map(
+    (c) => `${c.name}:${c.status}`
+  );
 }
 
 function stateOf(css: string, body: string, id = "t"): string {
   const html = `<!doctype html><html lang="en"><head><title>t</title><style>${css}</style></head><body>${body}</body></html>`;
-  const { document } = parsePage(html, "https://example.com/") as unknown as { document: Document };
+  const { document } = parsePage(html, "https://example.com/") as unknown as {
+    document: Document;
+  };
   return createStaticVisibility({ ariaHidden: true }).visibility(
-    document.getElementById(id) as Element,
+    document.getElementById(id) as Element
   ).state;
 }
 
@@ -75,8 +91,12 @@ describe("the style rule cap (pub#1015)", () => {
   test("a no-break space in the stylesheet: the rules in it are unknown, not absent", () => {
     // U+00A0 is part of a CSS name, so the reader does not read the rule.
     const css = "\u00a0.gone{display:none}";
-    expect(stateOf(css, '<div class="gone" id="t"><p id="u">x</p></div>')).toBe("unknown");
-    expect(stateOf(css, '<div class="gone"><p id="u">x</p></div>', "u")).toBe("unknown");
+    expect(stateOf(css, '<div class="gone" id="t"><p id="u">x</p></div>')).toBe(
+      "unknown"
+    );
+    expect(stateOf(css, '<div class="gone"><p id="u">x</p></div>', "u")).toBe(
+      "unknown"
+    );
   });
 
   test("more selector entries than the cap: unknown, not shown", () => {
@@ -90,6 +110,8 @@ describe("the style rule cap (pub#1015)", () => {
   test("the give-up result is fresh per page: one page spending its steps leaves the next whole", () => {
     expect(state(5_100)).toBe("unknown");
     expect(state(4_900)).toBe("hidden");
-    expect(stateOf(".gone{display:none}", '<div class="gone" id="t"></div>')).toBe("hidden");
+    expect(
+      stateOf(".gone{display:none}", '<div class="gone" id="t"></div>')
+    ).toBe("hidden");
   });
 });

@@ -3,6 +3,7 @@
 // NEVER affect the score (mirrors site-metadata.ts / technologies.ts).
 
 import type { CacheFreshness, CacheHitReason, CacheStats } from "./types";
+
 import { formatBytes } from "./utils";
 
 /** Human label per hit reason, in the order we display them. */
@@ -82,7 +83,9 @@ export function cacheFreshnessLines(note: CacheFreshness): string[] {
       );
       for (const p of note.stalePages) lines.push(`  ${p.url} (${p.signal})`);
       if (note.stalePageCount > note.stalePages.length) {
-        lines.push(`  ...and ${note.stalePageCount - note.stalePages.length} more`);
+        lines.push(
+          `  ...and ${note.stalePageCount - note.stalePages.length} more`
+        );
       }
     }
   }

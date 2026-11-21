@@ -2,7 +2,10 @@
 // Each producer runs in its own process so heap numbers are not polluted:
 //   bun scripts/bench-grouped-stream.ts --mode per-page
 //   bun scripts/bench-grouped-stream.ts --mode grouped
-import { buildGroupedStreamFindings, buildStreamFindings } from "../src/stream-findings";
+import {
+  buildGroupedStreamFindings,
+  buildStreamFindings,
+} from "../src/stream-findings";
 import { buildDrschollsFixture } from "../tests/helpers/grouped-stream-fixture";
 
 const arg = process.argv.indexOf("--mode");
@@ -17,7 +20,9 @@ Bun.gc(true);
 const before = process.memoryUsage();
 const t0 = performance.now();
 const lines =
-  mode === "grouped" ? buildGroupedStreamFindings(rules, 1) : buildStreamFindings(rules, 1);
+  mode === "grouped"
+    ? buildGroupedStreamFindings(rules, 1)
+    : buildStreamFindings(rules, 1);
 const ndjson = lines.map((l) => JSON.stringify(l)).join("\n");
 const ms = performance.now() - t0;
 const after = process.memoryUsage();
@@ -31,5 +36,5 @@ console.log(
     rssDeltaMB: mb(after.rss - before.rss),
     ms: Math.round(ms),
     peakRssMB: mb(process.resourceUsage().maxRSS * 1024),
-  }),
+  })
 );

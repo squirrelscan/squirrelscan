@@ -38,7 +38,10 @@ import {
   type EntityMapProperties,
   type EntityMapTruncation,
 } from "./entity-map";
-import { ENTITY_PROBLEM_CLASSES, entityProblemNodes } from "./entity-map-findings";
+import {
+  ENTITY_PROBLEM_CLASSES,
+  entityProblemNodes,
+} from "./entity-map-findings";
 import { buildGroups, groupNodes, type NodeGroups } from "./entity-map-groups";
 
 function clampString(value: string, limits: EntityMapLimits): string {
@@ -47,30 +50,47 @@ function clampString(value: string, limits: EntityMapLimits): string {
     : value;
 }
 
-function clampStrings(values: string[], max: number, limits: EntityMapLimits): string[] {
+function clampStrings(
+  values: string[],
+  max: number,
+  limits: EntityMapLimits
+): string[] {
   return values.slice(0, max).map((value) => clampString(value, limits));
 }
 
 /** Every property value clamped, and the array-valued ones sampled. */
 function clampProperties(
   properties: EntityMapProperties,
-  limits: EntityMapLimits,
+  limits: EntityMapLimits
 ): EntityMapProperties {
   const out: EntityMapProperties = {};
-  if (properties.name !== undefined) out.name = clampString(properties.name, limits);
-  if (properties.url !== undefined) out.url = clampString(properties.url, limits);
-  if (properties.logo !== undefined) out.logo = clampString(properties.logo, limits);
+  if (properties.name !== undefined)
+    out.name = clampString(properties.name, limits);
+  if (properties.url !== undefined)
+    out.url = clampString(properties.url, limits);
+  if (properties.logo !== undefined)
+    out.logo = clampString(properties.logo, limits);
   if (properties.image !== undefined) {
-    out.image = clampStrings(properties.image, limits.maxConflictValues, limits);
+    out.image = clampStrings(
+      properties.image,
+      limits.maxConflictValues,
+      limits
+    );
   }
   if (properties.sameAs !== undefined) {
-    out.sameAs = clampStrings(properties.sameAs, limits.maxConflictValues, limits);
+    out.sameAs = clampStrings(
+      properties.sameAs,
+      limits.maxConflictValues,
+      limits
+    );
   }
   if (properties.telephone !== undefined) {
     out.telephone = clampString(properties.telephone, limits);
   }
-  if (properties.email !== undefined) out.email = clampString(properties.email, limits);
-  if (properties.address !== undefined) out.address = clampString(properties.address, limits);
+  if (properties.email !== undefined)
+    out.email = clampString(properties.email, limits);
+  if (properties.address !== undefined)
+    out.address = clampString(properties.address, limits);
   if (properties.description !== undefined) {
     out.description = clampString(properties.description, limits);
   }
@@ -79,7 +99,7 @@ function clampProperties(
 
 function clampConflicts(
   conflicts: EntityMapConflict[],
-  limits: EntityMapLimits,
+  limits: EntityMapLimits
 ): EntityMapConflict[] {
   return conflicts.map((conflict) => ({
     property: conflict.property,
@@ -88,12 +108,16 @@ function clampConflicts(
       pages: clampStrings(value.pages, limits.maxPages, limits),
       // The dropped page URLs are still counted, so a reader sees the real
       // spread rather than a number that shrank with the payload.
-      morePages: value.morePages + Math.max(0, value.pages.length - limits.maxPages),
+      morePages:
+        value.morePages + Math.max(0, value.pages.length - limits.maxPages),
     })),
   }));
 }
 
-function clampNode(node: EntityMapNode, limits: EntityMapLimits): EntityMapNode {
+function clampNode(
+  node: EntityMapNode,
+  limits: EntityMapLimits
+): EntityMapNode {
   return {
     ...node,
     id: node.id === null ? null : clampString(node.id, limits),
@@ -101,18 +125,23 @@ function clampNode(node: EntityMapNode, limits: EntityMapLimits): EntityMapNode 
     name: node.name === null ? null : clampString(node.name, limits),
     properties: clampProperties(node.properties, limits),
     pages: clampStrings(node.pages, limits.maxPages, limits),
-    morePages: node.morePages + Math.max(0, node.pages.length - limits.maxPages),
+    morePages:
+      node.morePages + Math.max(0, node.pages.length - limits.maxPages),
     conflicts: clampConflicts(node.conflicts, limits),
   };
 }
 
-function clampEdge(edge: EntityMapEdge, limits: EntityMapLimits): EntityMapEdge {
+function clampEdge(
+  edge: EntityMapEdge,
+  limits: EntityMapLimits
+): EntityMapEdge {
   return {
     ...edge,
     source: clampString(edge.source, limits),
     target: clampString(edge.target, limits),
     pages: clampStrings(edge.pages, limits.maxPages, limits),
-    morePages: edge.morePages + Math.max(0, edge.pages.length - limits.maxPages),
+    morePages:
+      edge.morePages + Math.max(0, edge.pages.length - limits.maxPages),
   };
 }
 
@@ -159,7 +188,10 @@ type NodeCompare = (a: EntityMapNode, b: EntityMapNode) => number;
  * Groups are ordered by their own best node, so a budget too small to reach
  * every type still spends itself on the types that reach furthest.
  */
-function bucketsByType(nodes: EntityMapNode[], compare: NodeCompare): EntityMapNode[][] {
+function bucketsByType(
+  nodes: EntityMapNode[],
+  compare: NodeCompare
+): EntityMapNode[][] {
   const byType = new Map<string, EntityMapNode[]>();
   for (const node of nodes) {
     const type = node.types[0] ?? "";
@@ -171,7 +203,9 @@ function bucketsByType(nodes: EntityMapNode[], compare: NodeCompare): EntityMapN
     bucket.sort(compare);
     return { type, bucket };
   });
-  buckets.sort((a, b) => compare(a.bucket[0]!, b.bucket[0]!) || compareKeys(a.type, b.type));
+  buckets.sort(
+    (a, b) => compare(a.bucket[0]!, b.bucket[0]!) || compareKeys(a.type, b.type)
+  );
   return buckets.map(({ bucket }) => bucket);
 }
 
@@ -185,7 +219,10 @@ function bucketsByType(nodes: EntityMapNode[], compare: NodeCompare): EntityMapN
  * for the last. A type that runs out early gives its remaining slots back to
  * the types that still have nodes, so nothing is wasted on a rare type.
  */
-function takeStratified(buckets: EntityMapNode[][], budget: number): EntityMapNode[] {
+function takeStratified(
+  buckets: EntityMapNode[][],
+  budget: number
+): EntityMapNode[] {
   const taken: EntityMapNode[] = [];
   for (let round = 0; taken.length < budget; round += 1) {
     let progressed = false;
@@ -213,7 +250,10 @@ function takeStratified(buckets: EntityMapNode[][], budget: number): EntityMapNo
 // predicates the rules import, so the two cannot drift.
 
 /** Nodes per problem class, each in `compare` order. A node may sit in several. */
-function problemBuckets(map: EntityMap, compare: NodeCompare): EntityMapNode[][] {
+function problemBuckets(
+  map: EntityMap,
+  compare: NodeCompare
+): EntityMapNode[][] {
   const byClass = entityProblemNodes(map);
   return ENTITY_PROBLEM_CLASSES.flatMap((cls) => {
     const bucket = byClass[cls];
@@ -227,16 +267,20 @@ function problemBuckets(map: EntityMap, compare: NodeCompare): EntityMapNode[][]
  * another class, so every class present gets its first node before any gets a
  * second.
  */
-function takeProblems(buckets: EntityMapNode[][], budget: number): EntityMapNode[] {
+function takeProblems(
+  buckets: EntityMapNode[][],
+  budget: number
+): EntityMapNode[] {
   const taken: EntityMapNode[] = [];
   const seen = new Set<string>();
   const cursors = buckets.map(() => 0);
-  for (let progressed = true; progressed && taken.length < budget;) {
+  for (let progressed = true; progressed && taken.length < budget; ) {
     progressed = false;
     for (const [i, bucket] of buckets.entries()) {
       if (taken.length >= budget) break;
       let node = bucket[cursors[i]!];
-      while (node !== undefined && seen.has(node.key)) node = bucket[++cursors[i]!];
+      while (node !== undefined && seen.has(node.key))
+        node = bucket[++cursors[i]!];
       if (node === undefined) continue;
       cursors[i]! += 1;
       seen.add(node.key);
@@ -259,7 +303,7 @@ function takeProblems(buckets: EntityMapNode[][], budget: number): EntityMapNode
 function edgesFor(
   edges: EntityMapEdge[],
   rank: ReadonlyMap<string, number>,
-  limits: EntityMapLimits,
+  limits: EntityMapLimits
 ): EntityMapEdge[] {
   // Each surviving edge with its score, in one pass: the rank of its less
   // important end, or of its source alone when it dangles.
@@ -272,17 +316,21 @@ function edgesFor(
       continue;
     }
     const target = rank.get(edge.target);
-    if (target !== undefined) candidates.push({ edge, score: Math.max(source, target) });
+    if (target !== undefined)
+      candidates.push({ edge, score: Math.max(source, target) });
   }
-  if (candidates.length <= limits.maxEdges) return candidates.map(({ edge }) => edge);
+  if (candidates.length <= limits.maxEdges)
+    return candidates.map(({ edge }) => edge);
   const kept = new Set(
     candidates
       .map(({ score }, index) => ({ index, score }))
       .sort((a, b) => a.score - b.score || a.index - b.index)
       .slice(0, Math.max(0, limits.maxEdges))
-      .map(({ index }) => index),
+      .map(({ index }) => index)
   );
-  return candidates.filter((_, index) => kept.has(index)).map(({ edge }) => edge);
+  return candidates
+    .filter((_, index) => kept.has(index))
+    .map(({ edge }) => edge);
 }
 
 /**
@@ -326,7 +374,7 @@ function edgesFor(
 export function projectEntityMap(
   map: EntityMap,
   limits: EntityMapLimits,
-  reason: EntityMapTruncation["reason"],
+  reason: EntityMapTruncation["reason"]
 ): EntityMap {
   const degrees = degreesByKey(map.edges);
   const groups: NodeGroups | null = limits.summarize
@@ -334,9 +382,13 @@ export function projectEntityMap(
     : null;
   const degree = (node: EntityMapNode): number => degrees.get(node.key) ?? 0;
   const byReach: NodeCompare = (a, b) =>
-    b.occurrences - a.occurrences || degree(b) - degree(a) || compareKeys(a.key, b.key);
+    b.occurrences - a.occurrences ||
+    degree(b) - degree(a) ||
+    compareKeys(a.key, b.key);
   const byDegree: NodeCompare = (a, b) =>
-    degree(b) - degree(a) || b.occurrences - a.occurrences || compareKeys(a.key, b.key);
+    degree(b) - degree(a) ||
+    b.occurrences - a.occurrences ||
+    compareKeys(a.key, b.key);
 
   // Summarize first (#407): a grouped node outside its group's exemplars leaves
   // the sampling pools, so the budget goes to distinct shapes. Problem nodes
@@ -344,7 +396,9 @@ export function projectEntityMap(
   const exemplarKeys = new Set<string>();
   if (groups && limits.summarize) {
     for (const members of groups.members.values()) {
-      for (const node of [...members].sort(byReach).slice(0, limits.summarize.exemplars)) {
+      for (const node of [...members]
+        .sort(byReach)
+        .slice(0, limits.summarize.exemplars)) {
         exemplarKeys.add(node.key);
       }
     }
@@ -353,7 +407,10 @@ export function projectEntityMap(
     groups && groups.members.size > 0
       ? map.nodes.filter((node) => {
           const signature = groups.signatureOf.get(node.key);
-          return !(signature && groups.members.has(signature)) || exemplarKeys.has(node.key);
+          return (
+            !(signature && groups.members.has(signature)) ||
+            exemplarKeys.has(node.key)
+          );
         })
       : map.nodes;
 
@@ -372,10 +429,15 @@ export function projectEntityMap(
   const sharedBuckets = bucketsByType(shared, byReach);
   const oneOffBuckets = bucketsByType(oneOff, byDegree);
   const pageLocalBuckets = bucketsByType(pageLocal, byReach);
-  const pageLocalShare = limits.maxPageLocalShare ?? ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE;
-  const problemShare = limits.maxProblemShare ?? ENTITY_MAP_DEFAULT_PROBLEM_SHARE;
+  const pageLocalShare =
+    limits.maxPageLocalShare ?? ENTITY_MAP_DEFAULT_PAGE_LOCAL_SHARE;
+  const problemShare =
+    limits.maxProblemShare ?? ENTITY_MAP_DEFAULT_PROBLEM_SHARE;
 
-  const without = (buckets: EntityMapNode[][], keys: Set<string>): EntityMapNode[][] =>
+  const without = (
+    buckets: EntityMapNode[][],
+    keys: Set<string>
+  ): EntityMapNode[][] =>
     keys.size === 0
       ? buckets
       : buckets.map((bucket) => bucket.filter((node) => !keys.has(node.key)));
@@ -391,7 +453,7 @@ export function projectEntityMap(
     const problemBudget = Math.min(
       problemCount,
       budget,
-      Math.max(Math.floor(budget * problemShare), problemPool.length),
+      Math.max(Math.floor(budget * problemShare), problemPool.length)
     );
     const problems = takeProblems(problemPool, problemBudget);
     const taken = new Set(problems.map((node) => node.key));
@@ -401,16 +463,29 @@ export function projectEntityMap(
     // tier 3 still gets its share, and held to what the pool actually holds so
     // a site with none of them spends the whole budget on subjects.
     const localPool = without(pageLocalBuckets, taken);
-    const localAvailable = localPool.reduce((n, bucket) => n + bucket.length, 0);
-    const localBudget = Math.min(localAvailable, Math.floor(budget * pageLocalShare), room);
-    const subjects = takeStratified(without(sharedBuckets, taken), room - localBudget);
+    const localAvailable = localPool.reduce(
+      (n, bucket) => n + bucket.length,
+      0
+    );
+    const localBudget = Math.min(
+      localAvailable,
+      Math.floor(budget * pageLocalShare),
+      room
+    );
+    const subjects = takeStratified(
+      without(sharedBuckets, taken),
+      room - localBudget
+    );
     const rest = takeStratified(
       without(oneOffBuckets, taken),
-      room - localBudget - subjects.length,
+      room - localBudget - subjects.length
     );
     // Whatever tiers 1 and 2 could not fill falls back here rather than going
     // unspent, so a page-local-heavy map still publishes a full budget.
-    const locals = takeStratified(localPool, room - subjects.length - rest.length);
+    const locals = takeStratified(
+      localPool,
+      room - subjects.length - rest.length
+    );
     return [...problems, ...subjects, ...rest, ...locals];
   };
 
@@ -421,7 +496,8 @@ export function projectEntityMap(
   // for its index by losing nodes (#2117).
   const graphLimit = limits.maxBytes - (limits.maxPageIndexBytes ?? 0);
   const graphSize = (r: EntityMap): number =>
-    JSON.stringify(r).length - (r.pages.length === 0 ? 0 : JSON.stringify(r.pages).length - 2);
+    JSON.stringify(r).length -
+    (r.pages.length === 0 ? 0 : JSON.stringify(r.pages).length - 2);
   let size = graphSize(result);
 
   // Only now does byte size enter, and only when the clamps were not enough.
@@ -460,14 +536,16 @@ function project(
   map: EntityMap,
   limits: EntityMapLimits,
   reason: EntityMapTruncation["reason"],
-  groups: NodeGroups | null = null,
+  groups: NodeGroups | null = null
 ): EntityMap {
   // Sample order, before the nodes are sorted for output: it ranks the edges.
   const rank = new Map(selected.map((node, index) => [node.key, index]));
   const kept = selected
     .map((node) => clampNode(node, limits))
     .sort((a, b) => compareKeys(a.key, b.key));
-  const edges = edgesFor(map.edges, rank, limits).map((edge) => clampEdge(edge, limits));
+  const edges = edgesFor(map.edges, rank, limits).map((edge) =>
+    clampEdge(edge, limits)
+  );
   const index = projectPageIndex(map, selected, limits);
   return {
     ...map,
@@ -482,7 +560,9 @@ function project(
       pages: map.pages.length - index.pages.length,
       ...(index.truncated ? { pagesTruncated: true } : {}),
     },
-    ...(groups && groups.members.size > 0 ? { groups: buildGroups(map, groups, selected) } : {}),
+    ...(groups && groups.members.size > 0
+      ? { groups: buildGroups(map, groups, selected) }
+      : {}),
   };
 }
 
@@ -500,17 +580,19 @@ function project(
 function projectPageIndex(
   map: EntityMap,
   kept: EntityMapNode[],
-  limits: EntityMapLimits,
+  limits: EntityMapLimits
 ): { pages: EntityMapPage[]; truncated: boolean } {
   const budget = limits.maxPageIndexBytes;
-  if (budget === undefined || map.pages.length === 0) return { pages: [], truncated: false };
+  if (budget === undefined || map.pages.length === 0)
+    return { pages: [], truncated: false };
 
   // Fewest occurrences first; the key breaks ties so the cut is deterministic.
   const keyRank = [...kept]
     .sort((a, b) => a.occurrences - b.occurrences || compareKeys(b.key, a.key))
     .map((node) => node.key);
   const rankOf = new Map(keyRank.map((key, index) => [key, index]));
-  const sizeOf = (page: EntityMapPage): number => JSON.stringify(page).length + 1;
+  const sizeOf = (page: EntityMapPage): number =>
+    JSON.stringify(page).length + 1;
   const build = (dropped: number): EntityMapPage[] =>
     map.pages.map((page) => ({
       url: clampString(page.url, limits),

@@ -17,9 +17,34 @@ import type {
   WafBlockedSummary,
   WafSuspectSummary,
 } from "@squirrelscan/core-contracts";
-import { isAuditFailed, type PartialAudit } from "@squirrelscan/core-contracts";
-import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
+import type { ReportHost } from "@squirrelscan/core-contracts";
 import type { ResolvedAuditSettings } from "@squirrelscan/core-contracts/audit-levels";
+import type {
+  ComponentShape,
+  PackedComponentOccurrence,
+  PackedSubtreeLadder,
+} from "@squirrelscan/core-contracts/component-evidence";
+import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
+import type { RuleOutcome } from "@squirrelscan/core-contracts/rule-outcome";
+import type {
+  WcagCriterion,
+  WcagLevel,
+} from "@squirrelscan/core-contracts/wcag";
+
+import { isAuditFailed, type PartialAudit } from "@squirrelscan/core-contracts";
+import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
+import {
+  JSON_REPORT_PAGES,
+  JSON_REPORT_SCHEMA_VERSION,
+} from "@squirrelscan/core-contracts/limits";
+import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
+import {
+  isWcagLevel,
+  lowestWcagLevel,
+} from "@squirrelscan/core-contracts/wcag";
+
+import type { ComponentFixGroup } from "../component-fix-groups";
+import type { GroupedCheck } from "../grouping";
 import type {
   AuditReport,
   AuditStatus,
@@ -29,47 +54,12 @@ import type {
   EntityMap,
   ReportStructure,
 } from "../types";
-import type { ComponentFixGroup } from "../component-fix-groups";
-import type {
-  ComponentShape,
-  PackedComponentOccurrence,
-  PackedSubtreeLadder,
-} from "@squirrelscan/core-contracts/component-evidence";
-import { JSON_REPORT_PAGES, JSON_REPORT_SCHEMA_VERSION } from "@squirrelscan/core-contracts/limits";
-import { packComponentOccurrences } from "@squirrelscan/core-contracts/component-evidence";
-import { packSiteResourceOccurrences } from "@squirrelscan/core-contracts/site-resource-evidence";
-import { componentOccurrenceKey } from "../component-fix-groups";
-import type { GroupedCheck } from "../grouping";
 
-import { REPORT_PAGES_HARD_CAP } from "../constants";
-import { siteWideContext, siteWideItem } from "../site-wide-items";
-import { fixUnits, ruleFixCoverage } from "../component-presentation";
-import { siteResourceFixGroups } from "../site-resource-fix-groups";
-import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
-import { reportFailureReasonCode } from "../failure-notice";
-import { safeWafBlocked, safeWafSuspect } from "../waf-blocked";
-import { getScoreGrade } from "../scoring";
-import { getGroupName } from "../categories";
-import { groupIssuesByCategory, flattenIssuesBySeverity, reportPassedRules } from "../grouping";
 import { affectedPages } from "../affected-pages";
-import type { WcagCriterion, WcagLevel } from "@squirrelscan/core-contracts/wcag";
-import { isWcagLevel, lowestWcagLevel } from "@squirrelscan/core-contracts/wcag";
-import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
-import {
-  checkRegionScope,
-  itemLabel,
-  itemRegionScope,
-  regionScopeData,
-  type RegionScope,
-} from "../region-scope";
-import { checkPageTypeScope, pageTypeScopeData, type PageTypeScope } from "../page-type-scope";
-import type { ReportHost } from "@squirrelscan/core-contracts";
-import { isLocalOnlyTech, techIconUrl } from "../technologies";
-import { javascriptShipped } from "../javascript-shipped";
-import { domainAgeYears, siteProfileRows } from "../site-metadata";
-import { editorSummaryView } from "../editor-summary";
-import type { IgnoreSummary } from "@squirrelscan/core-contracts/ignore";
-import { ruleRuns, type RuleRun } from "../rule-runs";
+import { getGroupName } from "../categories";
+import { componentOccurrenceKey } from "../component-fix-groups";
+import { fixUnits, ruleFixCoverage } from "../component-presentation";
+import { REPORT_PAGES_HARD_CAP } from "../constants";
 import {
   partialAuditLine,
   robotsScope,
@@ -81,11 +71,43 @@ import {
   scanScopeDiscovered,
   seedRedirect,
 } from "../coverage";
+import { editorSummaryView } from "../editor-summary";
+import { reportFailureReasonCode } from "../failure-notice";
+import {
+  groupIssuesByCategory,
+  flattenIssuesBySeverity,
+  reportPassedRules,
+} from "../grouping";
 import { safeIgnored } from "../ignored";
-import { privateTargetLine, privateTargetSkippedRules } from "../private-target";
-import { notCheckedLine, notCheckedRules } from "../not-checked";
 import { collectInfoChecks, type InfoCheck } from "../info-checks";
+import { javascriptShipped } from "../javascript-shipped";
+import { lockedRuleView, lockedRulesMessage } from "../locked-rules";
+import { notCheckedLine, notCheckedRules } from "../not-checked";
+import {
+  checkPageTypeScope,
+  pageTypeScopeData,
+  type PageTypeScope,
+} from "../page-type-scope";
+import {
+  privateTargetLine,
+  privateTargetSkippedRules,
+} from "../private-target";
+import {
+  checkRegionScope,
+  itemLabel,
+  itemRegionScope,
+  regionScopeData,
+  type RegionScope,
+} from "../region-scope";
+import { ruleRuns, type RuleRun } from "../rule-runs";
+import { getScoreGrade } from "../scoring";
+import { domainAgeYears, siteProfileRows } from "../site-metadata";
+import { siteResourceFixGroups } from "../site-resource-fix-groups";
+import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
+import { siteWideContext, siteWideItem } from "../site-wide-items";
 import { collectSkippedChecks, type SkippedCheck } from "../skipped";
+import { isLocalOnlyTech, techIconUrl } from "../technologies";
+import { safeWafBlocked, safeWafSuspect } from "../waf-blocked";
 
 /**
  * A fix group as it is SERIALIZED: identical to {@link ComponentFixGroup} except
@@ -120,19 +142,26 @@ type SlimComponentFixGroup = Omit<ComponentFixGroup, "occurrences"> & {
 function slimComponentFixGroups(
   groups: ComponentFixGroup[],
   checks: GroupedCheck[],
-  pageSampleLimit: number,
+  pageSampleLimit: number
 ): SlimComponentFixGroup[] {
-  const positions = new Map<string, { checkIndex: number; occurrenceIndex: number }>();
+  const positions = new Map<
+    string,
+    { checkIndex: number; occurrenceIndex: number }
+  >();
   checks.forEach((check, checkIndex) => {
     check.componentOccurrences?.forEach((occurrence, occurrenceIndex) => {
       const key = componentOccurrenceKey(occurrence);
-      if (!positions.has(key)) positions.set(key, { checkIndex, occurrenceIndex });
+      if (!positions.has(key))
+        positions.set(key, { checkIndex, occurrenceIndex });
     });
   });
   return groups.map(({ occurrences, affectedPages: pages, ...group }) => {
     const occurrenceRefs = occurrences
       .map((occurrence) => positions.get(componentOccurrenceKey(occurrence)))
-      .filter((position): position is NonNullable<typeof position> => position !== undefined);
+      .filter(
+        (position): position is NonNullable<typeof position> =>
+          position !== undefined
+      );
     return {
       ...group,
       affectedPages: pages.slice(0, pageSampleLimit),
@@ -152,7 +181,12 @@ function slimComponentFixGroups(
  * stored no page for is listed after the pages (#1396) as `error` (the request failed) or `skipped`
  * (the crawl chose not to request it: excluded, another site, robots.txt), with a `reason`.
  */
-export type JsonPageOutcome = "ok" | "http-error" | "rate-limited" | "error" | "skipped";
+export type JsonPageOutcome =
+  | "ok"
+  | "http-error"
+  | "rate-limited"
+  | "error"
+  | "skipped";
 
 /** The {@link JsonPageOutcome} of an HTTP status. */
 export function pageOutcome(status: number): JsonPageOutcome {
@@ -168,16 +202,17 @@ export function pageOutcome(status: number): JsonPageOutcome {
 export function collectExecutedRules(
   ruleResults: Record<
     string,
-    { checks: ReadonlyArray<{ status: string; provenance?: string }> } | undefined
-  >,
+    | { checks: ReadonlyArray<{ status: string; provenance?: string }> }
+    | undefined
+  >
 ): string[] {
   // A check carried over from an earlier audit (a smart audit keeps findings of pages it did not re-crawl) is not a
   // rule that ran in this one.
   return Object.keys(ruleResults)
     .filter((ruleId) =>
       ruleResults[ruleId]?.checks.some(
-        (check) => check.status !== "skipped" && check.provenance !== "carried",
-      ),
+        (check) => check.status !== "skipped" && check.provenance !== "carried"
+      )
     )
     .sort();
 }
@@ -209,7 +244,12 @@ export interface JsonRenderOptions {
   /** The real number of rows when `pages` carries fewer than there are (unstored URLs past the loaded cap), for `pagesTotal`. */
   pagesTotal?: number;
   /** URLs recorded as redirects, not pages (#1762), listed beside `pages`: `{ url, finalUrl, status, hops }` each. */
-  redirects?: readonly { url: string; finalUrl: string; status: number; hops: number }[];
+  redirects?: readonly {
+    url: string;
+    finalUrl: string;
+    status: number;
+    hops: number;
+  }[];
   /** The real number of redirects when `redirects` is cut. */
   redirectsTotal?: number;
 }
@@ -321,7 +361,12 @@ interface SlimJsonReport {
     count: number;
     audience: string;
     message: string;
-    rules: Array<{ id: string; name: string; reason?: LockedRuleReason; detail?: string }>;
+    rules: Array<{
+      id: string;
+      name: string;
+      reason?: LockedRuleReason;
+      detail?: string;
+    }>;
   };
   /** What cloud rendering did (#1664): mode, pages rendered and fetched plain, and why it fell back; present on a report an audit just wrote and on one `squirrel report` rebuilds (the block the audit saved; approximate, with no fallback reason, for an older store). */
   render?: ReportRender;
@@ -422,7 +467,12 @@ interface SlimJsonReport {
   pagesTotal?: number;
   pagesTruncated?: boolean;
   /** URLs that redirected, listed beside `pages` with `--include-pages` (#1762, schema 1.15). */
-  redirects?: Array<{ url: string; finalUrl: string; status: number; hops: number }>;
+  redirects?: Array<{
+    url: string;
+    finalUrl: string;
+    status: number;
+    hops: number;
+  }>;
   redirectsTotal?: number;
   issues: Array<{
     ruleId: string;
@@ -482,7 +532,12 @@ interface SlimJsonReport {
        * `scope` (pub#846). Items the human renderers collapse carry a `siteWide` flag so an agent
        * gets the same collapse without re-deriving the threshold.
        */
-      items?: Array<CheckItem & { scope?: RegionScope; siteWide?: { pages: number; of: number } }>;
+      items?: Array<
+        CheckItem & {
+          scope?: RegionScope;
+          siteWide?: { pages: number; of: number };
+        }
+      >;
       details?: Record<string, unknown>;
       observation?: {
         mode: "static" | "crawl" | "browser" | "field";
@@ -682,10 +737,13 @@ function buildSlimReport(
   pages?: readonly JsonPageRow[],
   pagesTotal?: number,
   redirects?: JsonRenderOptions["redirects"],
-  redirectsTotal?: number,
+  redirectsTotal?: number
 ): SlimJsonReport {
   const siteWide = siteWideContext(report);
-  const categoryIssues = groupIssuesByCategory(report.ruleResults, report.checkTallies);
+  const categoryIssues = groupIssuesByCategory(
+    report.ruleResults,
+    report.checkTallies
+  );
   const passedRules = reportPassedRules(report, includePassed);
   const es = editorSummaryView(report.editorSummary, report);
   const refusedSeedRedirect = seedRedirect(report);
@@ -714,13 +772,17 @@ function buildSlimReport(
               exclude: report.partialAudit.exclude,
               includedCategories: report.partialAudit.includedCategories,
               // repo#3093: the WCAG level the run's accessibility rules were narrowed to.
-              ...(isWcagLevel(report.partialAudit.wcagLevel) ? { wcagLevel: report.partialAudit.wcagLevel } : {}),
+              ...(isWcagLevel(report.partialAudit.wcagLevel)
+                ? { wcagLevel: report.partialAudit.wcagLevel }
+                : {}),
             },
           }
         : {}),
       ...(report.resume ? { resume: report.resume } : {}),
       // #1667: page bodies the local content store has evicted since this audit ran. Absent when none were.
-      ...(report.storeIntegrity ? { storeIntegrity: report.storeIntegrity } : {}),
+      ...(report.storeIntegrity
+        ? { storeIntegrity: report.storeIntegrity }
+        : {}),
       // Sits next to the `baseUrl` it qualifies (#1418): a consumer reading the
       // graded URL sees, in the same object, that the seed pointed elsewhere.
       ...(refusedSeedRedirect
@@ -733,12 +795,17 @@ function buildSlimReport(
           }
         : {}),
       ...(startRedirect
-        ? { originalUrl: startRedirect.originalUrl, redirectChain: startRedirect.chain }
+        ? {
+            originalUrl: startRedirect.originalUrl,
+            redirectChain: startRedirect.chain,
+          }
         : {}),
       ...(ignoredSummary ? { ignored: ignoredSummary } : {}),
       timestamp: report.timestamp,
       totalPages: report.totalPages,
-      ...(report.scanScope?.maxPages !== undefined ? { maxPages: report.scanScope.maxPages } : {}),
+      ...(report.scanScope?.maxPages !== undefined
+        ? { maxPages: report.scanScope.maxPages }
+        : {}),
       ...(report.scanScope?.requestedMaxPages !== undefined
         ? { requestedMaxPages: report.scanScope.requestedMaxPages }
         : {}),
@@ -747,22 +814,32 @@ function buildSlimReport(
         : {}),
       ...(unfetched > 0 ? { unfetched } : {}),
       // repo#3079: distinct URLs the crawl knew of, split by sitemap and links.
-      ...(scanScopeDiscovered(report) ? { discovered: scanScopeDiscovered(report) } : {}),
+      ...(scanScopeDiscovered(report)
+        ? { discovered: scanScopeDiscovered(report) }
+        : {}),
       // #1782: whether robots.txt was honoured and how many pages it kept out of the audit.
       ...(robotsScope(report) ?? {}),
       // #1744: pages known and pages audited per URL-based page type.
-      ...(scanScopePageTypes(report).length > 0 ? { pageTypes: scanScopePageTypes(report) } : {}),
+      ...(scanScopePageTypes(report).length > 0
+        ? { pageTypes: scanScopePageTypes(report) }
+        : {}),
       // #1777: a targeted run says which URLs it was given and which it did not audit.
-      ...(scanScopeTargeted(report) ? { targeted: scanScopeTargeted(report) } : {}),
+      ...(scanScopeTargeted(report)
+        ? { targeted: scanScopeTargeted(report) }
+        : {}),
       // Query-string variants counted with their canonical page; `totalPages` excludes them (#858).
       ...(canonicalVariantCount(report) > 0
         ? { canonicalVariants: canonicalVariantCount(report) }
         : {}),
-      ...(canonicalVariantCount(report) > 0 && report.canonicalVariantPages?.length
+      ...(canonicalVariantCount(report) > 0 &&
+      report.canonicalVariantPages?.length
         ? {
             canonicalVariantPages: report.canonicalVariantPages
               .slice(0, 100)
-              .map((v) => ({ page: String(v.page), canonical: String(v.canonical) })),
+              .map((v) => ({
+                page: String(v.page),
+                canonical: String(v.canonical),
+              })),
           }
         : {}),
       ...(report.coverage ? { coverage: report.coverage } : {}),
@@ -791,7 +868,8 @@ function buildSlimReport(
     // it does not have to special-case older reports.
     ...(isAuditFailed(report.status)
       ? { statusReasonCode: reportFailureReasonCode(report) }
-      : report.status === "partial" && report.statusReasonCode === "max_duration"
+      : report.status === "partial" &&
+          report.statusReasonCode === "max_duration"
         ? { statusReasonCode: report.statusReasonCode }
         : {}),
     ...(report.maxDuration ? { maxDuration: report.maxDuration } : {}),
@@ -799,13 +877,17 @@ function buildSlimReport(
     ...(report.rateLimited && report.rateLimited.pages > 0
       ? { rateLimited: report.rateLimited }
       : {}),
-    ...(report.refusedFetches?.length ? { refusedFetches: report.refusedFetches } : {}),
+    ...(report.refusedFetches?.length
+      ? { refusedFetches: report.refusedFetches }
+      : {}),
     ...(report.undecodableFetches?.length
       ? { undecodableFetches: report.undecodableFetches }
       : {}),
     ...(safeWafBlocked(report) ? { wafBlocked: safeWafBlocked(report)! } : {}),
     ...(safeWafSuspect(report) ? { wafSuspect: safeWafSuspect(report)! } : {}),
-    ...(report.cacheStats && report.cacheStats.hits > 0 ? { cacheStats: report.cacheStats } : {}),
+    ...(report.cacheStats && report.cacheStats.hits > 0
+      ? { cacheStats: report.cacheStats }
+      : {}),
     ...(report.cacheFreshness ? { cacheFreshness: report.cacheFreshness } : {}),
     ...(locked
       ? {
@@ -821,7 +903,9 @@ function buildSlimReport(
       // null ⇒ N/A (failed/0-page audit); preserved through save/reload (#586).
       overall: report.healthScore?.overall ?? null,
       grade:
-        report.healthScore?.overall == null ? "N/A" : getScoreGrade(report.healthScore.overall),
+        report.healthScore?.overall == null
+          ? "N/A"
+          : getScoreGrade(report.healthScore.overall),
       groups:
         report.healthScore?.groups?.map((g) => ({
           group: g.group,
@@ -834,10 +918,16 @@ function buildSlimReport(
           total: g.total,
         })) ?? [],
       categories:
-        report.healthScore?.categories.map((c) => ({ name: c.name, score: c.score })) ?? [],
+        report.healthScore?.categories.map((c) => ({
+          name: c.name,
+          score: c.score,
+        })) ?? [],
     },
     ...((report as { reportBody?: SlimJsonReport["reportBody"] }).reportBody
-      ? { reportBody: (report as { reportBody?: SlimJsonReport["reportBody"] }).reportBody }
+      ? {
+          reportBody: (report as { reportBody?: SlimJsonReport["reportBody"] })
+            .reportBody,
+        }
       : {}),
     summary: {
       passed: report.passed,
@@ -874,16 +964,20 @@ function buildSlimReport(
             ...(page.reason ? { reason: page.reason } : {}),
           })),
           pagesTotal: Math.max(pages.length, pagesTotal ?? 0),
-          pagesTruncated: Math.max(pages.length, pagesTotal ?? 0) > JSON_REPORT_PAGES.maxEntries,
+          pagesTruncated:
+            Math.max(pages.length, pagesTotal ?? 0) >
+            JSON_REPORT_PAGES.maxEntries,
           // #1762: a URL that redirected is not a page; it is listed here, with where it went.
           ...(redirects && redirects.length > 0
             ? {
-                redirects: redirects.slice(0, JSON_REPORT_PAGES.maxEntries).map((r) => ({
-                  url: r.url,
-                  finalUrl: r.finalUrl,
-                  status: r.status,
-                  hops: r.hops,
-                })),
+                redirects: redirects
+                  .slice(0, JSON_REPORT_PAGES.maxEntries)
+                  .map((r) => ({
+                    url: r.url,
+                    finalUrl: r.finalUrl,
+                    status: r.status,
+                    hops: r.hops,
+                  })),
                 redirectsTotal: Math.max(redirects.length, redirectsTotal ?? 0),
               }
             : {}),
@@ -914,7 +1008,7 @@ function buildSlimReport(
             componentFixGroups: slimComponentFixGroups(
               rule.componentFixGroups,
               rule.checks,
-              REPORT_PAGES_HARD_CAP,
+              REPORT_PAGES_HARD_CAP
             ),
           }
         : {}),
@@ -933,7 +1027,10 @@ function buildSlimReport(
                 kind: group.kind,
                 siteOrigin: group.siteOrigin,
                 resourceKeys: group.resourceKeys,
-                affectedPages: group.affectedPages.slice(0, REPORT_PAGES_HARD_CAP),
+                affectedPages: group.affectedPages.slice(
+                  0,
+                  REPORT_PAGES_HARD_CAP
+                ),
                 affectedPageCount: group.affectedPageCount,
                 rendered: isRenderableSiteResourceGroup(group),
               })),
@@ -943,7 +1040,7 @@ function buildSlimReport(
       ...(() => {
         // Both levels, so a consumer sees the same units the renderers print.
         const rollups = fixUnits(ruleFixCoverage(rule).groups).filter(
-          (rollup) => rollup.groups.length > 1 || rollup.variantCount > 1,
+          (rollup) => rollup.groups.length > 1 || rollup.variantCount > 1
         );
         return rollups.length > 0
           ? {
@@ -992,31 +1089,41 @@ function buildSlimReport(
               else shown.label = label;
             }
             const info = siteWideItem(item, siteWide.total, siteWide.pageUrls);
-            return info ? { ...shown, siteWide: { pages: info.pages, of: info.of } } : shown;
+            return info
+              ? { ...shown, siteWide: { pages: info.pages, of: info.of } }
+              : shown;
           }),
           details: check.details,
           ...(check.observation ? { observation: check.observation } : {}),
           ...(check.componentOccurrences?.length
             ? (() => {
-                const packed = packComponentOccurrences(check.componentOccurrences);
+                const packed = packComponentOccurrences(
+                  check.componentOccurrences
+                );
                 return {
                   componentOccurrences: packed.occurrences,
                   componentShapes: {
                     v: packed.v,
                     shapes: packed.shapes,
-                    ...(packed.ladders?.length ? { ladders: packed.ladders } : {}),
+                    ...(packed.ladders?.length
+                      ? { ladders: packed.ladders }
+                      : {}),
                   },
                 };
               })()
             : {}),
-          ...(check.componentEvidence ? { componentEvidence: check.componentEvidence } : {}),
+          ...(check.componentEvidence
+            ? { componentEvidence: check.componentEvidence }
+            : {}),
           // #2341: the raw evidence, packed. The derived `siteResourceFixGroups`
           // above are NOT what a re-import reads back — they are derived, and
           // `report -i` re-derives them from this, so there is one source of
           // truth rather than two that can disagree.
           ...(check.siteResourceOccurrences?.length
             ? {
-                siteResourceOccurrences: packSiteResourceOccurrences(check.siteResourceOccurrences),
+                siteResourceOccurrences: packSiteResourceOccurrences(
+                  check.siteResourceOccurrences
+                ),
               }
             : {}),
           ...(check.siteResourceEvidence
@@ -1058,7 +1165,10 @@ function buildSlimReport(
           notApplicable: {
             reason: "private-target" as const,
             message: privateTarget,
-            rules: privateTargetSkippedRules(report).map((r) => ({ ruleId: r.id, name: r.name })),
+            rules: privateTargetSkippedRules(report).map((r) => ({
+              ruleId: r.id,
+              name: r.name,
+            })),
           },
         }
       : {}),
@@ -1078,15 +1188,23 @@ function buildSlimReport(
           })),
         }
       : {}),
-    ...(javascriptShipped(report) ? { javascript: javascriptShipped(report) } : {}),
-    ...(report.userAgentFallback ? { userAgentFallback: report.userAgentFallback } : {}),
+    ...(javascriptShipped(report)
+      ? { javascript: javascriptShipped(report) }
+      : {}),
+    ...(report.userAgentFallback
+      ? { userAgentFallback: report.userAgentFallback }
+      : {}),
     ...(report.host ? { host: report.host } : {}),
     ...(report.technologies &&
     (report.technologies.items.length > 0 || report.technologies.truncated)
       ? {
           technologies: {
-            ...(report.technologies.source ? { source: report.technologies.source } : {}),
-            ...(report.technologies.truncated ? { truncated: report.technologies.truncated } : {}),
+            ...(report.technologies.source
+              ? { source: report.technologies.source }
+              : {}),
+            ...(report.technologies.truncated
+              ? { truncated: report.technologies.truncated }
+              : {}),
             firstScan: report.technologies.firstScan,
             added: report.technologies.added,
             removed: report.technologies.removed,
@@ -1116,7 +1234,9 @@ function buildSlimReport(
             businessCategory: report.siteMetadata.businessCategory ?? null,
             primaryCountry: report.siteMetadata.primaryCountry ?? null,
             audienceScope: report.siteMetadata.audienceScope ?? null,
-            ...(report.siteMetadata.languages ? { languages: report.siteMetadata.languages } : {}),
+            ...(report.siteMetadata.languages
+              ? { languages: report.siteMetadata.languages }
+              : {}),
             title: report.siteMetadata.title ?? null,
             entityName: report.siteMetadata.entityName ?? null,
             ...(report.siteMetadata.entityType
@@ -1162,7 +1282,10 @@ function buildSlimReport(
   };
 }
 
-export function renderJson(report: AuditReport, options?: JsonRenderOptions): string {
+export function renderJson(
+  report: AuditReport,
+  options?: JsonRenderOptions
+): string {
   const version = options?.version ?? "";
   const slim = buildSlimReport(
     report,
@@ -1171,7 +1294,7 @@ export function renderJson(report: AuditReport, options?: JsonRenderOptions): st
     options?.pages,
     options?.pagesTotal,
     options?.redirects,
-    options?.redirectsTotal,
+    options?.redirectsTotal
   );
   return JSON.stringify(slim, null, 2);
 }

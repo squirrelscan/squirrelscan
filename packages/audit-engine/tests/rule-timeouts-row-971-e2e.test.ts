@@ -8,12 +8,12 @@
 // budget at 1 ms so a real rule over a real page times out. A control page makes
 // sure the rule still runs fine where it is fast.
 
-import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
-
 import type { Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
+
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 
 import {
   buildSiteContext,
@@ -82,7 +82,11 @@ function pageRecord(path: string, body: string): PageRecord {
 
 type Engine = "v1" | "streaming";
 
-async function audit(engine: Engine, config: Config = CONFIG, bigBody: string = BIG_BODY) {
+async function audit(
+  engine: Engine,
+  config: Config = CONFIG,
+  bigBody: string = BIG_BODY
+) {
   const storage = new SQLiteStorage(":memory:");
   return run(
     Effect.gen(function* () {
@@ -110,14 +114,27 @@ async function audit(engine: Engine, config: Config = CONFIG, bigBody: string = 
       yield* storage.upsertPage(crawlId, pageRecord("/big-b", bigBody));
 
       if (engine === "streaming") {
-        return yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS, undefined, {
-          batchSize: 1,
-        });
+        return yield* runStreamingRules(
+          storage,
+          crawlId,
+          config,
+          EMPTY_ASSETS,
+          undefined,
+          {
+            batchSize: 1,
+          }
+        );
       }
       const stored = yield* storage.getPages(crawlId);
       const siteContext = yield* buildSiteContext(stored);
-      return yield* runRulesOnStorage(storage, crawlId, siteContext, config, EMPTY_ASSETS);
-    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie))),
+      return yield* runRulesOnStorage(
+        storage,
+        crawlId,
+        siteContext,
+        config,
+        EMPTY_ASSETS
+      );
+    }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
   );
 }
 
@@ -134,16 +151,22 @@ describe("the <rule>-timeouts row reaches the stored results (pub#971)", () => {
         status: "info",
         details: { timedOut: true, ruleId: RULE, budgetMs: 1 },
       });
-      const pagesNotChecked = (rows[0]!.details as { pagesNotChecked: number }).pagesNotChecked;
+      const pagesNotChecked = (rows[0]!.details as { pagesNotChecked: number })
+        .pagesNotChecked;
       expect(pagesNotChecked).toBeGreaterThanOrEqual(1);
-      expect((rows[0]!.details as { maxElapsedMs?: number }).maxElapsedMs).toBeGreaterThanOrEqual(1);
+      expect(
+        (rows[0]!.details as { maxElapsedMs?: number }).maxElapsedMs
+      ).toBeGreaterThanOrEqual(1);
 
       // And in the per-rule results the report is built from.
-      const inReport = result.ruleResultsMap.get(RULE)?.checks.filter((c) => c.name === `${RULE}-timeouts`);
+      const inReport = result.ruleResultsMap
+        .get(RULE)
+        ?.checks.filter((c) => c.name === `${RULE}-timeouts`);
       expect(inReport).toHaveLength(1);
       // No failed check for a timeout, on any page.
       for (const checks of result.pageRuleResults.values()) {
-        for (const [, list] of checks) expect(list.some((c) => c.status === "fail")).toBe(false);
+        for (const [, list] of checks)
+          expect(list.some((c) => c.status === "fail")).toBe(false);
       }
     }, 60_000);
   }
@@ -163,13 +186,19 @@ describe("a page-time extractor timeout leaves the row too (pub#971)", () => {
     const result = await audit("streaming", config, body);
 
     const checks = result.siteRuleResults.get("security/leaked-secrets") ?? [];
-    const rows = checks.filter((c) => c.name === "security/leaked-secrets-timeouts");
+    const rows = checks.filter(
+      (c) => c.name === "security/leaked-secrets-timeouts"
+    );
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "info", details: { timedOut: true, pagesNotChecked: 2 } });
+    expect(rows[0]).toMatchObject({
+      status: "info",
+      details: { timedOut: true, pagesNotChecked: 2 },
+    });
     expect(checks.some((c) => c.status === "fail")).toBe(false);
-    expect(checks.filter((c) => c.name === "security/leaked-secrets-error").map((c) => c.status)).toEqual([
-      "skipped",
-      "skipped",
-    ]);
+    expect(
+      checks
+        .filter((c) => c.name === "security/leaked-secrets-error")
+        .map((c) => c.status)
+    ).toEqual(["skipped", "skipped"]);
   }, 60_000);
 });

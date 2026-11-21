@@ -7,12 +7,12 @@
 // heading's own length: a heading that starts at 1999 and ends at 2012 counts,
 // and slicing at a flat 2000 truncates it and silently loses the bypass.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { RuleContext } from "../src/types";
 
 import { skipLinkRule } from "../src/a11y/skip-link";
-import type { RuleContext } from "../src/types";
 
 const HEADING = "<h2>Section</h2>";
 
@@ -30,13 +30,21 @@ async function methods(bodyHtml: string): Promise<string[]> {
   const ctx = {
     page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, url),
-    site: { baseUrl: "https://example.com", pages: [], robotsTxt: null, sitemaps: null, scripts: [] },
+    site: {
+      baseUrl: "https://example.com",
+      pages: [],
+      robotsTxt: null,
+      sitemaps: null,
+      scripts: [],
+    },
     options: {},
   } as unknown as RuleContext;
   const check = (await skipLinkRule.run(ctx)).checks[0];
   // The passing branch reports the bypasses under `methods`, the warning branch
   // under `found`; this rule is about which bypasses were seen either way.
-  const details = check?.details as { methods?: string[]; found?: string[] } | undefined;
+  const details = check?.details as
+    | { methods?: string[]; found?: string[] }
+    | undefined;
   return [...(details?.methods ?? details?.found ?? [])];
 }
 
@@ -55,17 +63,25 @@ describe("a11y/skip-link: the early-heading window", () => {
   });
 
   test("a heading starting at exactly 2000 does not count", async () => {
-    expect(await methods(bodyWithHeadingAt(2000))).not.toContain("early heading");
+    expect(await methods(bodyWithHeadingAt(2000))).not.toContain(
+      "early heading"
+    );
   });
 
   test("a heading far past the window does not count, whatever follows it", async () => {
-    expect(await methods(bodyWithHeadingAt(40_000))).not.toContain("early heading");
+    expect(await methods(bodyWithHeadingAt(40_000))).not.toContain(
+      "early heading"
+    );
   });
 
   test("content after the heading does not change the answer", async () => {
     // The searched prefix is shorter than the document; a rule that only looked
     // at the prefix would still have to agree with one that looked at all of it.
-    expect(await methods(bodyWithHeadingAt(1999, 50_000))).toContain("early heading");
-    expect(await methods(bodyWithHeadingAt(2000, 50_000))).not.toContain("early heading");
+    expect(await methods(bodyWithHeadingAt(1999, 50_000))).toContain(
+      "early heading"
+    );
+    expect(await methods(bodyWithHeadingAt(2000, 50_000))).not.toContain(
+      "early heading"
+    );
   });
 });

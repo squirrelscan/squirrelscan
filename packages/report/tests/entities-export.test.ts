@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { EntityMap, EntityMapNode } from "../src/types";
+
 import {
   MERMAID_NODE_CAP,
   renderEntitiesCsv,
@@ -32,7 +33,10 @@ function node(overrides: Partial<EntityMapNode> = {}): EntityMapNode {
   };
 }
 
-function map(nodes: EntityMapNode[], edges: EntityMap["edges"] = []): EntityMap {
+function map(
+  nodes: EntityMapNode[],
+  edges: EntityMap["edges"] = []
+): EntityMap {
   return {
     format: "squirrelscan/entity-map",
     version: 1,
@@ -88,7 +92,9 @@ describe("csv", () => {
     // Not a CSV concern at all: Excel, Sheets and LibreOffice run a field that
     // starts =, +, - or @, and the site chooses this string.
     for (const prefix of ["=", "+", "-", "@"]) {
-      const out = renderEntitiesCsv(map([node({ name: `${prefix}HYPERLINK("http://evil")` })]));
+      const out = renderEntitiesCsv(
+        map([node({ name: `${prefix}HYPERLINK("http://evil")` })])
+      );
       expect(out).toContain(`'${prefix}HYPERLINK`);
     }
   });
@@ -130,7 +136,9 @@ describe("graphml", () => {
   });
 
   test("escapes the five XML entities", () => {
-    const out = renderEntitiesGraphml(map([node({ name: `A & B < C > D " E ' F` })]));
+    const out = renderEntitiesGraphml(
+      map([node({ name: `A & B < C > D " E ' F` })])
+    );
     expect(out).toContain("A &amp; B &lt; C &gt; D &quot; E &apos; F");
   });
 
@@ -139,8 +147,13 @@ describe("graphml", () => {
     // not a character at all: xmllint rejects a document containing any of
     // them exactly as it rejects a control byte.
     const hostile =
-      "A" + String.fromCharCode(0xfffe) + "B" + String.fromCharCode(0xffff) + "C" +
-      String.fromCharCode(0xd800) + "D";
+      "A" +
+      String.fromCharCode(0xfffe) +
+      "B" +
+      String.fromCharCode(0xffff) +
+      "C" +
+      String.fromCharCode(0xd800) +
+      "D";
     const out = renderEntitiesGraphml(map([node({ name: hostile })]));
     expect(out).toContain("ABCD");
     for (const code of [0xfffe, 0xffff, 0xd800]) {
@@ -170,7 +183,9 @@ describe("mermaid", () => {
   test("an emptied predicate still yields a parseable edge", () => {
     // The label sits between bare pipes, so a predicate that escaping empties
     // would leave `||` and the grammar rejects the whole graph.
-    const out = renderEntitiesMermaid(map([node()], [{ ...DANGLING[0]!, predicate: "|;|" }]));
+    const out = renderEntitiesMermaid(
+      map([node()], [{ ...DANGLING[0]!, predicate: "|;|" }])
+    );
     expect(out).toContain('|"unnamed"|');
     expect(out).not.toContain("||");
   });
@@ -183,18 +198,27 @@ describe("mermaid", () => {
   });
 
   test("strips the characters that end a mermaid label", () => {
-    const out = renderEntitiesMermaid(map([node({ name: "Acme [Inc] (Ltd) {x} |y| ;z" })]));
+    const out = renderEntitiesMermaid(
+      map([node({ name: "Acme [Inc] (Ltd) {x} |y| ;z" })])
+    );
     expect(out).toContain("Acme Inc Ltd x y z");
     expect(out).not.toContain("[Inc]");
   });
 
   test(`caps at ${MERMAID_NODE_CAP} nodes and says so`, () => {
     const many = Array.from({ length: MERMAID_NODE_CAP + 40 }, (_, i) =>
-      node({ key: `k${i}`, id: `https://example.com/#${i}`, name: `E${i}`, occurrences: i }),
+      node({
+        key: `k${i}`,
+        id: `https://example.com/#${i}`,
+        name: `E${i}`,
+        occurrences: i,
+      })
     );
     const out = renderEntitiesMermaid(map(many));
 
-    expect(out).toContain(`%% Showing the ${MERMAID_NODE_CAP} most-declared of ${many.length}`);
+    expect(out).toContain(
+      `%% Showing the ${MERMAID_NODE_CAP} most-declared of ${many.length}`
+    );
     expect(out).toContain("-f dot or -f graphml");
     // The busiest survived, the quietest did not.
     expect(out).toContain(`E${MERMAID_NODE_CAP + 39}`);

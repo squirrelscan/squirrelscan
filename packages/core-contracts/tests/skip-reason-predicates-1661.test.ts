@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { IGNORED_SKIP_REASON } from "../src/ignore";
 import {
   CLOUD_PREFETCH_OUT_OF_TIME_SKIP_REASON,
   CRAWL_CAPPED_SKIP_REASON,
@@ -22,7 +23,6 @@ import {
   TARGETED_RUN_SKIP_REASON,
   TLS_CERTIFICATE_NOT_CHECKED_SKIP_REASON,
 } from "../src/index";
-import { IGNORED_SKIP_REASON } from "../src/ignore";
 import {
   CHECK_NOT_APPLICABLE_SKIP_REASON,
   CLASSIFIER_OFF_SKIP_REASON,
@@ -97,7 +97,9 @@ describe("the predicates over every coded skip reason", () => {
 
   test("the not-checked set is exactly the reasons the table marks", () => {
     expect([...NOT_CHECKED_SKIP_REASONS].sort()).toEqual(
-      TABLE.filter((r) => r[3]).map((r) => r[0]).sort(),
+      TABLE.filter((r) => r[3])
+        .map((r) => r[0])
+        .sort()
     );
   });
 });

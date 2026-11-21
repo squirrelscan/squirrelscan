@@ -3,13 +3,14 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { techChangeSummary } from "../src/technologies";
+import type { AuditReport } from "../src/types";
+
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
 import { renderMarkdown } from "../src/output/markdown";
 import { renderText } from "../src/output/text";
 import { renderXml } from "../src/output/xml";
-import type { AuditReport } from "../src/types";
+import { techChangeSummary } from "../src/technologies";
 
 const item = {
   id: "wordpress",
@@ -43,39 +44,45 @@ function report(technologies: object): AuditReport {
 describe("technologies source (#1263)", () => {
   test("a local section names its origin instead of a scan diff", () => {
     for (const firstScan of [true, false]) {
-      expect(techChangeSummary(section({ source: "local", firstScan }) as never)).toBe(
-        "Detected locally from the crawled pages (no scan history)",
-      );
+      expect(
+        techChangeSummary(section({ source: "local", firstScan }) as never)
+      ).toBe("Detected locally from the crawled pages (no scan history)");
     }
   });
 
   test("a cloud section, and one with no source, keep the diff wording", () => {
     expect(techChangeSummary(section({ source: "cloud" }) as never)).toBe(
-      "No changes since last scan",
+      "No changes since last scan"
     );
-    expect(techChangeSummary(section({ source: "cloud", firstScan: true }) as never)).toBe(
-      "First recorded scan of this domain",
+    expect(
+      techChangeSummary(section({ source: "cloud", firstScan: true }) as never)
+    ).toBe("First recorded scan of this domain");
+    expect(techChangeSummary(section({}) as never)).toBe(
+      "No changes since last scan"
     );
-    expect(techChangeSummary(section({}) as never)).toBe("No changes since last scan");
   });
 
   test("the text, markdown and JSON reports carry it", () => {
     const local = report(section({ source: "local" }));
-    expect(String(renderText(local as never))).toContain("Detected locally from the crawled pages");
+    expect(String(renderText(local as never))).toContain(
+      "Detected locally from the crawled pages"
+    );
     expect(String(renderMarkdown(local as never))).toContain(
-      "Detected locally from the crawled pages",
+      "Detected locally from the crawled pages"
     );
     const json = JSON.parse(renderJson(local as never) as string) as {
       technologies?: { source?: string };
     };
     expect(json.technologies?.source).toBe("local");
     const cloud = JSON.parse(
-      renderJson(report(section({ source: "cloud" })) as never) as string,
+      renderJson(report(section({ source: "cloud" })) as never) as string
     ) as {
       technologies?: { source?: string };
     };
     expect(cloud.technologies?.source).toBe("cloud");
-    const legacy = JSON.parse(renderJson(report(section({})) as never) as string) as {
+    const legacy = JSON.parse(
+      renderJson(report(section({})) as never) as string
+    ) as {
       technologies?: { source?: string };
     };
     expect(legacy.technologies?.source).toBeUndefined();
@@ -93,7 +100,10 @@ describe("technologies source (#1263)", () => {
   });
 
   test("the llm and xml reports keep the diff attributes for a cloud section, and for one with no source", () => {
-    for (const make of [() => section({ source: "cloud" }), () => section({})]) {
+    for (const make of [
+      () => section({ source: "cloud" }),
+      () => section({}),
+    ]) {
       for (const out of [
         String(renderLlm(report(make()) as never)),
         String(renderXml(report(make()) as never)),
@@ -101,9 +111,11 @@ describe("technologies source (#1263)", () => {
         expect(out).toContain('first-scan="false" added="0" removed="0"');
       }
     }
-    expect(String(renderLlm(report(section({ source: "cloud" })) as never))).toContain(
-      'source="cloud"',
+    expect(
+      String(renderLlm(report(section({ source: "cloud" })) as never))
+    ).toContain('source="cloud"');
+    expect(String(renderXml(report(section({})) as never))).not.toContain(
+      "source="
     );
-    expect(String(renderXml(report(section({})) as never))).not.toContain("source=");
   });
 });

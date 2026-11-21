@@ -38,10 +38,18 @@ export {
 export type { CategoryInfo, GroupInfo, RuleGroup } from "./categories";
 
 // Occurrence counting for folded aggregate checks (#910)
-export { collectSkippedChecks, parseSkippedChecks, restoreSkippedChecks } from "./skipped";
+export {
+  collectSkippedChecks,
+  parseSkippedChecks,
+  restoreSkippedChecks,
+} from "./skipped";
 export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
-export { pageShare, PAGE_SHARE_SITE_WIDE, PAGE_SHARE_TEMPLATE } from "./page-share";
+export {
+  pageShare,
+  PAGE_SHARE_SITE_WIDE,
+  PAGE_SHARE_TEMPLATE,
+} from "./page-share";
 export type { PageShare, PageShareLabel } from "./page-share";
 
 // Cross-site prevalence (#2491)
@@ -79,7 +87,10 @@ export {
   componentOccurrenceIdentity,
   componentOccurrenceKey,
 } from "./component-fix-groups";
-export type { ComponentFixGroup, ComponentFixAttribution } from "./component-fix-groups";
+export type {
+  ComponentFixGroup,
+  ComponentFixAttribution,
+} from "./component-fix-groups";
 // Human-facing presentation of those groups. Renderers share these so llm,
 // markdown, text and console cannot drift in wording or in what they suppress.
 export {
@@ -96,7 +107,11 @@ export {
   ruleFixCoverage,
   uncoveredItems,
 } from "./component-presentation";
-export type { FixCoverage, FixCoverageMode, PageSample } from "./component-presentation";
+export type {
+  FixCoverage,
+  FixCoverageMode,
+  PageSample,
+} from "./component-presentation";
 // One block, one line: roll up groups that are demonstrably the same repair.
 export {
   ROLLUP_MAX_DISTINCT_VALUES,
@@ -104,7 +119,10 @@ export {
   componentFixRollups,
   describeRollupDefect,
 } from "./component-fix-rollup";
-export type { ComponentFixRollup, ComponentFixRollupLevel } from "./component-fix-rollup";
+export type {
+  ComponentFixRollup,
+  ComponentFixRollupLevel,
+} from "./component-fix-rollup";
 // One build, one line: shared SITE RESOURCES (source maps today) grouped by the
 // page set that references them, so a template site's shared bundle is one
 // finding rather than one per page (#2341).
@@ -147,7 +165,12 @@ export {
 } from "./agent-signals";
 
 // Scoring
-export { getScoreGrade, getScoreColor, getGroupColor, GROUP_COLORS } from "./scoring";
+export {
+  getScoreGrade,
+  getScoreColor,
+  getGroupColor,
+  GROUP_COLORS,
+} from "./scoring";
 export type { GroupColor } from "./scoring";
 
 // Constants
@@ -184,7 +207,11 @@ export { ruleCatalogLookup, withCatalogRuleText } from "./rule-catalog";
 export type { RuleCatalogLookup, RuleCatalogText } from "./rule-catalog";
 
 // Output formatters
-export { renderHtml, reportInlineScripts, type HtmlRenderOptions } from "./output/html";
+export {
+  renderHtml,
+  reportInlineScripts,
+  type HtmlRenderOptions,
+} from "./output/html";
 export { renderMarkdown } from "./output/markdown";
 export { renderText } from "./output/text";
 export { renderXml } from "./output/xml";
@@ -311,9 +338,22 @@ export {
 
 // Start URL redirects (#1281): the followed-redirect disclosure and the
 // no-audit outcome a redirect that was not followed prints.
-export { ruleRuns, ruleRunOf, type RuleRun, type RuleRunScope, type RuleRunStatus } from "./rule-runs";
-export { followedStartRedirect, startRedirectLine, type FollowedStartRedirect } from "./coverage";
-export { renderRedirectedOutcome, type RedirectedOutcomeFormat } from "./start-redirect";
+export {
+  ruleRuns,
+  ruleRunOf,
+  type RuleRun,
+  type RuleRunScope,
+  type RuleRunStatus,
+} from "./rule-runs";
+export {
+  followedStartRedirect,
+  startRedirectLine,
+  type FollowedStartRedirect,
+} from "./coverage";
+export {
+  renderRedirectedOutcome,
+  type RedirectedOutcomeFormat,
+} from "./start-redirect";
 
 // Editor's summary helpers (report-only / non-scoring; shared across formats + CLI console)
 export {
@@ -327,7 +367,10 @@ export {
 } from "./editor-summary";
 
 // Re-export the persisted editor-summary report type for renderers + consumers.
-export type { EditorSummary, EditorSummaryPriority } from "@squirrelscan/core-contracts";
+export type {
+  EditorSummary,
+  EditorSummaryPriority,
+} from "@squirrelscan/core-contracts";
 
 // White-label report branding (#810) — threaded through every renderer option.
 export type { ReportBranding } from "@squirrelscan/core-contracts";
@@ -343,7 +386,11 @@ export {
   POSITION_BANDS,
   type DomainStatLine,
 } from "./domain-stats";
-export type { DomainStats, DomainStatsMetrics, DomainStatsPositions } from "./types";
+export type {
+  DomainStats,
+  DomainStatsMetrics,
+  DomainStatsPositions,
+} from "./types";
 
 // Cache-stats helpers (report-only / non-scoring; shared across formats) (#108)
 export {
@@ -449,7 +496,11 @@ export {
   moreSourcePages,
   sourceRowText,
 } from "./item-sources";
-export type { ItemSourceList, ItemSourceRow, ItemSourceView } from "./item-sources";
+export type {
+  ItemSourceList,
+  ItemSourceRow,
+  ItemSourceView,
+} from "./item-sources";
 
 // pub#846: a finding in a shared page region names the region instead of listing its pages.
 export {
@@ -549,7 +600,11 @@ export type {
   PageMapDiffField,
   PageMapDiffMeta,
 } from "./page-map-diff";
-export { buildPageMap, projectPageMap, publishPageMapRow } from "./page-map-publish";
+export {
+  buildPageMap,
+  projectPageMap,
+  publishPageMapRow,
+} from "./page-map-publish";
 export { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "./page-map-html";
 
 // Top line of a report: section scores + counts, shared with the dashboard
@@ -562,7 +617,11 @@ export {
 export type { ReportTopLineCounts, SectionScoreRow } from "./top-line";
 
 // Why the overall can sit below every section score, from healthScore.debug
-export { scoreAdjustment, scoreAdjustmentNote, scoreAdjustmentNoteFor } from "./score-adjustment";
+export {
+  scoreAdjustment,
+  scoreAdjustmentNote,
+  scoreAdjustmentNoteFor,
+} from "./score-adjustment";
 export type { ScoreAdjustment } from "./score-adjustment";
 
 // Accessibility checklist: what the rules found per WCAG 2.2 A/AA criterion (repo#3094)
@@ -577,4 +636,8 @@ export {
   wcagChecklistMarkdown,
   wcagChecklistMarkdownLines,
 } from "./wcag-checklist";
-export type { WcagChecklistRow, WcagChecklistRule, WcagChecklistStatus } from "./wcag-checklist";
+export type {
+  WcagChecklistRow,
+  WcagChecklistRule,
+  WcagChecklistStatus,
+} from "./wcag-checklist";

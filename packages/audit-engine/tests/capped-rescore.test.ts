@@ -9,8 +9,6 @@
 // scores, issue counts and coverage. The merge decisions on a capped body are
 // the ones the #1185 resolution signal already makes for clipped pages.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
@@ -19,15 +17,16 @@ import type {
   ResolutionSignal,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+
 import {
   resolutionUrlHash,
   SCAN_TRUNCATED_SKIP_REASON,
 } from "@squirrelscan/core-contracts/resolution";
-import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import {
   buildCompactResolutionSignal,
   buildResolutionSignal,
 } from "@squirrelscan/rules/resolution";
+import { decodeResolutionSignal } from "@squirrelscan/rules/resolution-decode";
 import {
   CHECK_NAME_ROBOTS_DISALLOW,
   CHECK_NAME_ROBOTS_EXISTS,
@@ -35,6 +34,7 @@ import {
   RULE_ID_ROBOTS_TXT,
   RULE_ID_SITEMAP_EXISTS,
 } from "@squirrelscan/utils/constants";
+import { describe, expect, test } from "bun:test";
 
 import {
   aggregateUntouchedCarried,
@@ -62,7 +62,10 @@ class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -71,7 +74,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -81,7 +87,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -93,16 +99,26 @@ class MemStore implements SmartAuditStore {
     });
     for (const [k, f] of this.findings) {
       if (f.normalizedUrl === normalizedUrl && f.state === "open") {
-        this.findings.set(k, { ...f, state: "stale", lastSeenCrawlId: crawlId });
+        this.findings.set(k, {
+          ...f,
+          state: "stale",
+          lastSeenCrawlId: crawlId,
+        });
       }
     }
   }
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
-    for (const p of pages) await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+    for (const p of pages)
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
   }
   async compactFindings(): Promise<number> {
     return 0;
@@ -129,7 +145,9 @@ const noisy = (u: string): string =>
   `${u}-${[0, 1, 2, 3, 4, 5].map((k) => resolutionUrlHash(`${u}${"#".repeat(k)}`)).join("")}`;
 
 /** `report` with every page URL made {@link noisy}. */
-function withNoisyUrls<T extends { pages: Array<{ url: string }>; ruleResults: Rules }>(report: T): T {
+function withNoisyUrls<
+  T extends { pages: Array<{ url: string }>; ruleResults: Rules },
+>(report: T): T {
   const out = structuredClone(report);
   for (const page of out.pages) page.url = noisy(page.url);
   for (const rule of Object.values(out.ruleResults)) {
@@ -152,8 +170,17 @@ const meta = (
   category: string,
   scope: "page" | "site",
   severity: "error" | "warning" | "info",
-  weight: number,
-): Meta => ({ id, name: id, description: `${id} rule`, category, scope, severity, weight }) as Meta;
+  weight: number
+): Meta =>
+  ({
+    id,
+    name: id,
+    description: `${id} rule`,
+    category,
+    scope,
+    severity,
+    weight,
+  }) as Meta;
 
 /** What a page of this audit looks like: which checks fail or warn on it. */
 interface PageShape {
@@ -177,9 +204,13 @@ interface PageShape {
  * A full per-page report, as the producer holds it before publish: every
  * page-scope rule emits one row per page and check name, passes included.
  */
-function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {}) {
-  const rows = (fn: (s: PageShape) => CheckResult | CheckResult[] | undefined): CheckResult[] =>
-    shapes.flatMap((s) => fn(s) ?? []);
+function fullReport(
+  shapes: PageShape[],
+  opts: { robotsMissing?: boolean } = {}
+) {
+  const rows = (
+    fn: (s: PageShape) => CheckResult | CheckResult[] | undefined
+  ): CheckResult[] => shapes.flatMap((s) => fn(s) ?? []);
   const ruleResults: Rules = {
     "core/meta-description": {
       meta: meta("core/meta-description", "core", "page", "warning", 10),
@@ -209,7 +240,12 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
               })),
               ...(s.extra ? { details: { additional: s.extra } } : {}),
             }
-          : { name: "img-alt", status: "pass" as const, message: "All images have alt", pageUrl: url(s.i) },
+          : {
+              name: "img-alt",
+              status: "pass" as const,
+              message: "All images have alt",
+              pageUrl: url(s.i),
+            },
         {
           name: "img-alt-empty",
           status: s.emptyAlt ? ("warn" as const) : ("pass" as const),
@@ -222,8 +258,18 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
       meta: meta("perf/ttfb", "perf", "page", "warning", 6),
       checks: rows((s) => ({
         name: "ttfb",
-        status: s.ttfb === "slow" ? "warn" : s.ttfb === "skipped" ? "skipped" : "pass",
-        message: s.ttfb === "slow" ? "Slow TTFB" : s.ttfb === "skipped" ? "No timing data" : "TTFB ok",
+        status:
+          s.ttfb === "slow"
+            ? "warn"
+            : s.ttfb === "skipped"
+              ? "skipped"
+              : "pass",
+        message:
+          s.ttfb === "slow"
+            ? "Slow TTFB"
+            : s.ttfb === "skipped"
+              ? "No timing data"
+              : "TTFB ok",
         pageUrl: url(s.i),
       })),
     },
@@ -251,14 +297,26 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
         {
           name: CHECK_NAME_ROBOTS_EXISTS,
           status: opts.robotsMissing ? "fail" : "pass",
-          message: opts.robotsMissing ? "robots.txt missing" : "robots.txt found",
+          message: opts.robotsMissing
+            ? "robots.txt missing"
+            : "robots.txt found",
         },
-        { name: CHECK_NAME_ROBOTS_DISALLOW, status: "pass", message: "Not blocking all" },
+        {
+          name: CHECK_NAME_ROBOTS_DISALLOW,
+          status: "pass",
+          message: "Not blocking all",
+        },
       ],
     },
     [RULE_ID_SITEMAP_EXISTS]: {
       meta: meta(RULE_ID_SITEMAP_EXISTS, "crawl", "site", "warning", 5),
-      checks: [{ name: CHECK_NAME_SITEMAP_EXISTS, status: "pass", message: "Sitemap found" }],
+      checks: [
+        {
+          name: CHECK_NAME_SITEMAP_EXISTS,
+          status: "pass",
+          message: "Sitemap found",
+        },
+      ],
     },
   };
   return {
@@ -269,7 +327,9 @@ function fullReport(shapes: PageShape[], opts: { robotsMissing?: boolean } = {})
 }
 
 /** A producer's report, with the signal it built when it brings its own. */
-type Produced = ReturnType<typeof fullReport> & { resolutionSignal?: ResolutionSignal };
+type Produced = ReturnType<typeof fullReport> & {
+  resolutionSignal?: ResolutionSignal;
+};
 
 /** Today's uncapped body: every row, the non-2xx statuses, the unsampled signal. */
 function uncappedBody(report: Produced) {
@@ -282,7 +342,7 @@ function uncappedBody(report: Produced) {
       report.resolutionSignal ??
       buildResolutionSignal(
         report.ruleResults,
-        report.pages.map((p) => p.url),
+        report.pages.map((p) => p.url)
       ),
   };
 }
@@ -313,7 +373,10 @@ function rescored(r: CloudSmartAuditsResult): {
 } {
   if (r.scoringTallies) {
     return {
-      healthScore: calculateHealthScoreFromTallies(r.scoringTallies, r.unionRuleResults),
+      healthScore: calculateHealthScoreFromTallies(
+        r.scoringTallies,
+        r.unionRuleResults
+      ),
       totals: r.reportTotals!,
     };
   }
@@ -329,7 +392,10 @@ function rescored(r: CloudSmartAuditsResult): {
       else if (c.status === "fail") totals.failed++;
     }
   }
-  return { healthScore: calculateHealthScore({ results: r.unionRuleResults }), totals };
+  return {
+    healthScore: calculateHealthScore({ results: r.unionRuleResults }),
+    totals,
+  };
 }
 
 /**
@@ -343,13 +409,15 @@ function comparable(s: ReturnType<typeof rescored>) {
     healthScore: {
       ...s.healthScore,
       categories: [...s.healthScore.categories].sort((a, b) =>
-        a.category < b.category ? -1 : a.category > b.category ? 1 : 0,
+        a.category < b.category ? -1 : a.category > b.category ? 1 : 0
       ),
     },
   };
 }
 
-type Body = ReturnType<typeof uncappedBody> | Awaited<ReturnType<typeof cappedBody>>;
+type Body =
+  | ReturnType<typeof uncappedBody>
+  | Awaited<ReturnType<typeof cappedBody>>;
 
 function publish(store: MemStore, crawlId: string, body: Body, now: number) {
   return runCloudSmartAudits({ store, siteKey: "site", crawlId, now, ...body });
@@ -361,9 +429,20 @@ async function bothWays(seed: MemStore, crawlId: string, report: Produced) {
   const uncappedStore = seed.clone();
   const cappedStore = seed.clone();
   const capped = await cappedBody(report);
-  const uncapped = await publish(uncappedStore, crawlId, uncappedBody(report), now);
+  const uncapped = await publish(
+    uncappedStore,
+    crawlId,
+    uncappedBody(report),
+    now
+  );
   const cappedResult = await publish(cappedStore, crawlId, capped, now);
-  return { uncapped, capped: cappedResult, cappedStore, uncappedStore, cappedBody: capped };
+  return {
+    uncapped,
+    capped: cappedResult,
+    cappedStore,
+    uncappedStore,
+    cappedBody: capped,
+  };
 }
 
 /** 60 pages, every kind of check: issue classes wider than the 10-page sample. */
@@ -379,47 +458,70 @@ function busyShapes(pages: number[]): PageShape[] {
   }));
 }
 
-async function seeded(report: ReturnType<typeof fullReport>): Promise<MemStore> {
+async function seeded(
+  report: ReturnType<typeof fullReport>
+): Promise<MemStore> {
   const store = new MemStore();
   await publish(store, "audit_1", uncappedBody(report), 1_779_000_000_000);
   return store;
 }
 
-const openUrls = async (store: MemStore, ruleId: string, checkName: string): Promise<Set<string>> =>
+const openUrls = async (
+  store: MemStore,
+  ruleId: string,
+  checkName: string
+): Promise<Set<string>> =>
   new Set(
     (await store.getFindings("site", ["open"]))
       .filter((f) => f.ruleId === ruleId && f.checkName === checkName)
-      .map((f) => f.normalizedUrl),
+      .map((f) => f.normalizedUrl)
   );
 
 describe("rescore of a capped report (repo#2657)", () => {
   test("first audit: the capped body scores exactly as the uncapped one", async () => {
-    const report = fullReport(busyShapes(range(0, 60)), { robotsMissing: true });
-    const { uncapped, capped, cappedBody: body } = await bothWays(new MemStore(), "audit_1", report);
+    const report = fullReport(busyShapes(range(0, 60)), {
+      robotsMissing: true,
+    });
+    const {
+      uncapped,
+      capped,
+      cappedBody: body,
+    } = await bothWays(new MemStore(), "audit_1", report);
 
     // The body really is capped: no pass rows, at most 10 pages per class.
     for (const rule of Object.values(body.ruleResults)) {
       for (const c of rule.checks) {
-        if (c.pageUrl || c.details?.aggregated) expect(c.status).not.toBe("pass");
+        if (c.pageUrl || c.details?.aggregated)
+          expect(c.status).not.toBe("pass");
         expect(c.pages?.length ?? 0).toBeLessThanOrEqual(10);
       }
     }
     expect(capped.scoringTallies).toBeDefined();
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     expect(rescored(capped).healthScore.overall).toBeLessThan(100);
     expect(capped.coverage).toEqual(uncapped.coverage);
   });
 
   test("no page findings at all: the capped body scores as the uncapped one", async () => {
     const report = fullReport(range(0, 40).map((i) => ({ i })));
-    const { uncapped, capped, cappedBody: body } = await bothWays(new MemStore(), "audit_1", report);
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    const {
+      uncapped,
+      capped,
+      cappedBody: body,
+    } = await bothWays(new MemStore(), "audit_1", report);
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     expect(rescored(capped).totals.passed).toBeGreaterThan(0);
     expect(capped.coverage).toEqual(uncapped.coverage);
     // Rules of passes only publish no rows at all, and still score from their tallies.
     expect(body.ruleResults["core/meta-description"]!.checks).toEqual([]);
     for (const ruleId of Object.keys(body.checkTallies)) {
-      expect(capped.scoringTallies!.get(ruleId)?.tally.passed).toBeGreaterThan(0);
+      expect(capped.scoringTallies!.get(ruleId)?.tally.passed).toBeGreaterThan(
+        0
+      );
     }
   });
 
@@ -431,7 +533,10 @@ describe("rescore of a capped report (repo#2657)", () => {
     // it is truncated and lists no page as not evaluated.
     const report = fullReport(shapes);
     const key = "core/meta-description|has-meta-description";
-    const signal = buildResolutionSignal(report.ruleResults, report.pages.map((p) => p.url))!;
+    const signal = buildResolutionSignal(
+      report.ruleResults,
+      report.pages.map((p) => p.url)
+    )!;
     signal.failing[key] = signal.failing[key]!.slice(0, 3);
     signal.truncated = [...(signal.truncated ?? []), key];
     if (signal.notEvaluated) delete signal.notEvaluated[key];
@@ -439,7 +544,9 @@ describe("rescore of a capped report (repo#2657)", () => {
       ...report,
       resolutionSignal: signal,
     });
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     expect(capped.coverage).toEqual(uncapped.coverage);
     expect(capped.coverage.carriedFindings).toBe(0);
     expect(capped.carriedLastSeen.size).toBe(0);
@@ -452,34 +559,50 @@ describe("rescore of a capped report (repo#2657)", () => {
     // newly fails on 20-29, page 30 is now 404, and ttfb is skipped on 31-33.
     const shapes = busyShapes(range(0, 40)).map((s) => ({
       ...s,
-      metaMissing: s.i >= 20 && s.i < 30 ? true : s.i < 20 ? false : s.metaMissing,
+      metaMissing:
+        s.i >= 20 && s.i < 30 ? true : s.i < 20 ? false : s.metaMissing,
       status: s.i === 30 ? 404 : undefined,
       ttfb: s.i >= 31 && s.i <= 33 ? ("skipped" as const) : s.ttfb,
     }));
-    const { uncapped, capped, cappedStore } = await bothWays(seed, "audit_2", fullReport(shapes));
+    const { uncapped, capped, cappedStore } = await bothWays(
+      seed,
+      "audit_2",
+      fullReport(shapes)
+    );
 
     expect(capped.coverage.carriedFindings).toBeGreaterThan(0);
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     // The coverage line counts what the report shows as carried: not the
     // still-failing pages the sample clipped, which the tallies already count.
     expect(capped.coverage).toEqual(uncapped.coverage);
 
-    const open = await openUrls(cappedStore, "core/meta-description", "has-meta-description");
+    const open = await openUrls(
+      cappedStore,
+      "core/meta-description",
+      "has-meta-description"
+    );
     // Crawled clean this run: resolved, though most of them were never in a sample.
     for (const i of range(0, 20)) expect(open.has(url(i))).toBe(false);
     // Not crawled this run: carried.
-    for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(open.has(url(i))).toBe(true);
+    for (const i of range(40, 60).filter((i) => i % 3 === 0))
+      expect(open.has(url(i))).toBe(true);
     // Failing this run, in the 10-page sample (20-29) or clipped from it (33,
     // 36, 39 failed in both runs): open, not resolved.
-    for (const i of [...range(20, 30), 33, 36, 39]) expect(open.has(url(i))).toBe(true);
+    for (const i of [...range(20, 30), 33, 36, 39])
+      expect(open.has(url(i))).toBe(true);
     // Gone (404): staled.
     expect(open.has(url(30))).toBe(false);
     // Only what the union shows as carried is tagged carried: the clipped pages
     // are counted by the tallies, the uncrawled ones are carried.
     const tagged = (i: number) =>
-      capped.carriedLastSeen.has(`${url(i)}|core/meta-description|has-meta-description`);
+      capped.carriedLastSeen.has(
+        `${url(i)}|core/meta-description|has-meta-description`
+      );
     for (const i of [33, 36, 39]) expect(tagged(i)).toBe(false);
-    for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(tagged(i)).toBe(true);
+    for (const i of range(40, 60).filter((i) => i % 3 === 0))
+      expect(tagged(i)).toBe(true);
   });
 
   /**
@@ -489,23 +612,30 @@ describe("rescore of a capped report (repo#2657)", () => {
   async function clippedBody(
     report: ReturnType<typeof fullReport>,
     listed: number,
-    { hashes = true }: { hashes?: boolean } = {},
+    { hashes = true }: { hashes?: boolean } = {}
   ) {
     const urls = report.pages.map((p) => p.url);
-    let budget = JSON.stringify(buildCompactResolutionSignal(report.ruleResults, urls)).length;
+    let budget = JSON.stringify(
+      buildCompactResolutionSignal(report.ruleResults, urls)
+    ).length;
     let signal: ResolutionSignal;
     do {
       budget -= 64;
       // With page hashes as the capper asks for them (it sends tallies, #2673).
       signal = await decodeResolutionSignal(
-        buildCompactResolutionSignal(report.ruleResults, urls, budget, [], { pageHashes: hashes })!,
+        buildCompactResolutionSignal(report.ruleResults, urls, budget, [], {
+          pageHashes: hashes,
+        })!
       );
     } while (signal.crawledUrls.length > listed);
     expect(signal.crawledComplete).toBe(false);
     expect(signal.crawledCount).toBe(urls.length);
     // (#2673) The unlisted crawled pages' hashes ride along; a producer before
     // #2673, or one that sends no tallies, sends none.
-    if (hashes) expect(signal.crawledHashes).toHaveLength(urls.length - signal.crawledUrls.length);
+    if (hashes)
+      expect(signal.crawledHashes).toHaveLength(
+        urls.length - signal.crawledUrls.length
+      );
     else expect(signal.crawledHashes).toBeUndefined();
     return { ...(await cappedBody(report)), resolutionSignal: signal };
   }
@@ -515,13 +645,25 @@ describe("rescore of a capped report (repo#2657)", () => {
     // A clean first audit leaves no findings, only pages. Run 2 crawls the same
     // 40 pages and its tallies count every one of them; past the list the signal
     // cannot say they were crawled, and crediting them would count their passes twice.
-    const seed = await seeded(withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i })))));
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i }))))
+    );
     const report = withNoisyUrls(fullReport(busyShapes(range(0, 40))));
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
-    const capped = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
+    );
+    const capped = await publish(
+      seed.clone(),
+      "audit_2",
+      await clippedBody(report, 15),
+      NOW
+    );
     expect(capped.scoringTallies).toBeDefined();
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall!,
+      rescored(uncapped).healthScore.overall!
     );
   });
 
@@ -531,7 +673,9 @@ describe("rescore of a capped report (repo#2657)", () => {
     // clipped list does not. Without the hashes there is no telling the page was
     // crawled, so its ttfb carry stays scored.
     const seed = await seeded(
-      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
+      withNoisyUrls(
+        fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))
+      )
     );
     const report = withNoisyUrls(
       fullReport(
@@ -539,19 +683,28 @@ describe("rescore of a capped report (repo#2657)", () => {
           i,
           ttfb: i === 33 ? ("skipped" as const) : ("slow" as const),
           metaMissing: i >= 30,
-        })),
-      ),
+        }))
+      )
     );
     const body = await clippedBody(report, 15, { hashes: false });
-    expect(body.ruleResults["core/meta-description"]!.checks.flatMap((c) => c.pages ?? [])).toContain(
-      noisy(url(33)),
+    expect(
+      body.ruleResults["core/meta-description"]!.checks.flatMap(
+        (c) => c.pages ?? []
+      )
+    ).toContain(noisy(url(33)));
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
     );
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall!,
+      rescored(uncapped).healthScore.overall!
     );
-    expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(true);
+    expect(capped.carriedLastSeen.has(`${noisy(url(33))}|perf/ttfb|ttfb`)).toBe(
+      true
+    );
   });
 
   test("(#2673) an unlisted page the hashes name counts as evaluated: its carry is not counted twice", async () => {
@@ -561,21 +714,33 @@ describe("rescore of a capped report (repo#2657)", () => {
     const shapes = range(0, 40).map((i) => ({ i, metaMissing: true }));
     const seed = await seeded(withNoisyUrls(fullReport(shapes)));
     const report = withNoisyUrls(fullReport(shapes));
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
-    const hashed = await publish(seed.clone(), "audit_2", await clippedBody(report, 15), NOW);
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
+    );
+    const hashed = await publish(
+      seed.clone(),
+      "audit_2",
+      await clippedBody(report, 15),
+      NOW
+    );
     const bare = await publish(
       seed.clone(),
       "audit_2",
       await clippedBody(report, 15, { hashes: false }),
-      NOW,
+      NOW
     );
     const carried = (r: CloudSmartAuditsResult) =>
       [...r.carriedLastSeen.keys()].filter((k) =>
-        k.endsWith("|core/meta-description|has-meta-description"),
+        k.endsWith("|core/meta-description|has-meta-description")
       );
     expect(carried(hashed)).toEqual([]);
     expect(carried(bare).length).toBeGreaterThan(0);
-    expect(comparable(rescored(hashed))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(hashed))).toEqual(
+      comparable(rescored(uncapped))
+    );
   });
 
   test("(#2688) an unlisted page the check skipped keeps its carry, one it evaluated does not", async () => {
@@ -583,7 +748,9 @@ describe("rescore of a capped report (repo#2657)", () => {
     // The signal names the unlisted ones the check skipped: their carries stay,
     // where no tally replaces them, and every other carry leaves the union.
     const seed = await seeded(
-      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))),
+      withNoisyUrls(
+        fullReport(range(0, 40).map((i) => ({ i, ttfb: "slow" as const })))
+      )
     );
     const skipped = range(0, 40).filter((i) => i % 4 === 3);
     const report = withNoisyUrls(
@@ -591,20 +758,33 @@ describe("rescore of a capped report (repo#2657)", () => {
         range(0, 40).map((i) => ({
           i,
           ttfb: skipped.includes(i) ? ("skipped" as const) : ("slow" as const),
-        })),
-      ),
+        }))
+      )
     );
     const body = await clippedBody(report, 15);
     const listed = new Set(body.resolutionSignal.crawledUrls);
-    const unlisted = skipped.map((i) => noisy(url(i))).filter((u) => !listed.has(u));
+    const unlisted = skipped
+      .map((i) => noisy(url(i)))
+      .filter((u) => !listed.has(u));
     expect(unlisted.length).toBeGreaterThan(0);
     expect(unlisted.length).toBeLessThan(skipped.length);
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
+    );
     // Shown as carried: the skipped pages, listed or not, and no other.
-    const ttfbCarries = [...capped.carriedLastSeen.keys()].filter((k) => k.endsWith("|perf/ttfb|ttfb"));
-    expect(new Set(ttfbCarries)).toEqual(new Set(skipped.map((i) => `${noisy(url(i))}|perf/ttfb|ttfb`)));
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    const ttfbCarries = [...capped.carriedLastSeen.keys()].filter((k) =>
+      k.endsWith("|perf/ttfb|ttfb")
+    );
+    expect(new Set(ttfbCarries)).toEqual(
+      new Set(skipped.map((i) => `${noisy(url(i))}|perf/ttfb|ttfb`))
+    );
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
   });
 
   test("(#2688) one skipped unlisted page keeps its prior fail in the score, on a check that evaluated every listed page", async () => {
@@ -614,27 +794,42 @@ describe("rescore of a capped report (repo#2657)", () => {
     // its fail carried, as the uncapped merge carries it; without it the capped
     // score comes out above the uncapped one.
     const seed = await seeded(
-      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i, metaMissing: true })))),
+      withNoisyUrls(
+        fullReport(range(0, 40).map((i) => ({ i, metaMissing: true })))
+      )
     );
     const report = withNoisyUrls(
-      fullReport(range(0, 40).map((i) => ({ i, metaSkipped: i === 39 }))),
+      fullReport(range(0, 40).map((i) => ({ i, metaSkipped: i === 39 })))
     );
     const body = await clippedBody(report, 15);
     const page = noisy(url(39));
     expect(body.resolutionSignal.crawledUrls).not.toContain(page);
-    expect(body.resolutionSignal.crawledHashes).toContain(resolutionUrlHash(page));
-    const key = "core/meta-description|has-meta-description";
-    const listed = new Set(body.resolutionSignal.crawledUrls.map((u) => resolutionUrlHash(u)));
-    expect(body.resolutionSignal.notEvaluated?.[key]?.some((hash) => listed.has(hash)) ?? false).toBe(
-      false,
+    expect(body.resolutionSignal.crawledHashes).toContain(
+      resolutionUrlHash(page)
     );
+    const key = "core/meta-description|has-meta-description";
+    const listed = new Set(
+      body.resolutionSignal.crawledUrls.map((u) => resolutionUrlHash(u))
+    );
+    expect(
+      body.resolutionSignal.notEvaluated?.[key]?.some((hash) =>
+        listed.has(hash)
+      ) ?? false
+    ).toBe(false);
 
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
+    );
     const capped = await publish(seed.clone(), "audit_2", body, NOW);
     expect(rescored(capped).healthScore.overall).toBeLessThanOrEqual(
-      rescored(uncapped).healthScore.overall!,
+      rescored(uncapped).healthScore.overall!
     );
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     expect(uncapped.carriedLastSeen.has(`${page}|${key}`)).toBe(true);
     expect(capped.carriedLastSeen.has(`${page}|${key}`)).toBe(true);
   });
@@ -643,20 +838,32 @@ describe("rescore of a capped report (repo#2657)", () => {
     // Run 2 crawls 30 of the 40 known pages, clipped to 15 listed. Pages 30-39
     // were not crawled: the uncapped merge credits them with clean passes, and
     // with the hashes the capped one does too. Without them it credits none.
-    const seed = await seeded(withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i })))));
+    const seed = await seeded(
+      withNoisyUrls(fullReport(range(0, 40).map((i) => ({ i }))))
+    );
     const report = withNoisyUrls(fullReport(busyShapes(range(0, 30))));
-    const uncapped = await publish(seed.clone(), "audit_2", uncappedBody(report), NOW);
+    const uncapped = await publish(
+      seed.clone(),
+      "audit_2",
+      uncappedBody(report),
+      NOW
+    );
     const body = await clippedBody(report, 15);
     const hashed = await publish(seed.clone(), "audit_2", body, NOW);
     const bare = await publish(
       seed.clone(),
       "audit_2",
       await clippedBody(report, 15, { hashes: false }),
-      NOW,
+      NOW
     );
-    expect(rescored(hashed).healthScore.overall).toBe(rescored(uncapped).healthScore.overall);
+    expect(rescored(hashed).healthScore.overall).toBe(
+      rescored(uncapped).healthScore.overall
+    );
     const passed = (r: CloudSmartAuditsResult) =>
-      [...r.scoringTallies!.values()].reduce((n, rule) => n + rule.tally.passed, 0);
+      [...r.scoringTallies!.values()].reduce(
+        (n, rule) => n + rule.tally.passed,
+        0
+      );
     expect(passed(bare)).toBeLessThan(passed(hashed));
 
     // An uncrawled page whose hash collides with a crawled one is not credited.
@@ -667,49 +874,67 @@ describe("rescore of a capped report (repo#2657)", () => {
         ...body,
         resolutionSignal: {
           ...body.resolutionSignal,
-          crawledHashes: [...body.resolutionSignal.crawledHashes!, resolutionUrlHash(noisy(url(35)))],
+          crawledHashes: [
+            ...body.resolutionSignal.crawledHashes!,
+            resolutionUrlHash(noisy(url(35))),
+          ],
         },
       },
-      NOW,
+      NOW
     );
     expect(passed(collided)).toBeLessThan(passed(hashed));
     expect(passed(collided)).toBeGreaterThan(passed(bare));
   });
 
-  test(
-    "(#2673) a clipped 10,000-page crawl of random URLs scores at most the uncapped body, within a point",
-    async () => {
-      // Run 1 audits 10,000 pages. Run 2 re-crawls 9,000 of them through the real
-      // capper, whose signal budget clips the list of random URLs; the other
-      // 1,000 are carried.
-      const seed = await seeded(withNoisyUrls(fullReport(busyShapes(range(0, 10_000)))));
-      const report = withNoisyUrls(
-        fullReport(busyShapes(range(0, 9_000)).map((s) => ({ ...s, readability: !s.readability }))),
-      );
-      const body = await cappedBody(report);
-      expect(body.resolutionSignal?.crawledComplete).toBe(false);
-      expect(body.resolutionSignal?.crawledHashes?.length).toBeGreaterThan(0);
-      const uncapped = rescored(await publish(seed.clone(), "audit_2", uncappedBody(report), NOW));
-      const capped = rescored(await publish(seed.clone(), "audit_2", body, NOW));
-      expect(capped.healthScore.overall!).toBeLessThanOrEqual(uncapped.healthScore.overall!);
-      expect(uncapped.healthScore.overall! - capped.healthScore.overall!).toBeLessThanOrEqual(1);
-      // (#2688) With the unlisted skips named, the counts come out exact.
-      expect(capped.totals).toEqual(uncapped.totals);
-    },
-    240_000,
-  );
+  test("(#2673) a clipped 10,000-page crawl of random URLs scores at most the uncapped body, within a point", async () => {
+    // Run 1 audits 10,000 pages. Run 2 re-crawls 9,000 of them through the real
+    // capper, whose signal budget clips the list of random URLs; the other
+    // 1,000 are carried.
+    const seed = await seeded(
+      withNoisyUrls(fullReport(busyShapes(range(0, 10_000))))
+    );
+    const report = withNoisyUrls(
+      fullReport(
+        busyShapes(range(0, 9_000)).map((s) => ({
+          ...s,
+          readability: !s.readability,
+        }))
+      )
+    );
+    const body = await cappedBody(report);
+    expect(body.resolutionSignal?.crawledComplete).toBe(false);
+    expect(body.resolutionSignal?.crawledHashes?.length).toBeGreaterThan(0);
+    const uncapped = rescored(
+      await publish(seed.clone(), "audit_2", uncappedBody(report), NOW)
+    );
+    const capped = rescored(await publish(seed.clone(), "audit_2", body, NOW));
+    expect(capped.healthScore.overall!).toBeLessThanOrEqual(
+      uncapped.healthScore.overall!
+    );
+    expect(
+      uncapped.healthScore.overall! - capped.healthScore.overall!
+    ).toBeLessThanOrEqual(1);
+    // (#2688) With the unlisted skips named, the counts come out exact.
+    expect(capped.totals).toEqual(uncapped.totals);
+  }, 240_000);
 
   test("a check skipped on a page keeps that page's finding open, and the score still matches", async () => {
     const seed = await seeded(
-      fullReport(range(0, 30).map((i) => ({ i, ttfb: "slow" as const }))),
+      fullReport(range(0, 30).map((i) => ({ i, ttfb: "slow" as const })))
     );
     // Run 2: ttfb is fine on 0-19 and has no timing data on 20-29.
     const shapes = range(0, 30).map((i) => ({
       i,
       ttfb: i >= 20 ? ("skipped" as const) : undefined,
     }));
-    const { uncapped, capped, cappedStore } = await bothWays(seed, "audit_2", fullReport(shapes));
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    const { uncapped, capped, cappedStore } = await bothWays(
+      seed,
+      "audit_2",
+      fullReport(shapes)
+    );
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     const open = await openUrls(cappedStore, "perf/ttfb", "ttfb");
     expect(open).toEqual(new Set(range(20, 30).map(url)));
   });
@@ -718,8 +943,11 @@ describe("rescore of a capped report (repo#2657)", () => {
     const slowRun1 = [0, 6, 12, 18, 24];
     const seed = await seeded(
       fullReport(
-        range(0, 40).map((i) => ({ i, ttfb: slowRun1.includes(i) ? ("slow" as const) : undefined })),
-      ),
+        range(0, 40).map((i) => ({
+          i,
+          ttfb: slowRun1.includes(i) ? ("slow" as const) : undefined,
+        }))
+      )
     );
     // Run 2: no timing data on pages 1-12 (a class wider than the 10-page sample),
     // slow on 30 and 36, fine elsewhere. Pages 0, 18 and 24 were evaluated and passed.
@@ -727,18 +955,33 @@ describe("rescore of a capped report (repo#2657)", () => {
       fullReport(
         range(0, 40).map((i) => ({
           i,
-          ttfb: i >= 1 && i <= 12 ? ("skipped" as const) : i === 30 || i === 36 ? ("slow" as const) : undefined,
-        })),
+          ttfb:
+            i >= 1 && i <= 12
+              ? ("skipped" as const)
+              : i === 30 || i === 36
+                ? ("slow" as const)
+                : undefined,
+        }))
       );
-    const { uncapped, capped, cappedStore } = await bothWays(seed, "audit_2", run2());
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    const { uncapped, capped, cappedStore } = await bothWays(
+      seed,
+      "audit_2",
+      run2()
+    );
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
     const open = await openUrls(cappedStore, "perf/ttfb", "ttfb");
     expect(open).toEqual(new Set([6, 12, 30, 36].map(url)));
 
     for (const driver of DRIVERS) {
       const store = seed.clone();
-      await publishChunked(store, "audit_2", run2(), 1_780_000_000_000, { driver });
-      expect(await openUrls(store, "perf/ttfb", "ttfb")).toEqual(new Set([6, 12, 30, 36].map(url)));
+      await publishChunked(store, "audit_2", run2(), 1_780_000_000_000, {
+        driver,
+      });
+      expect(await openUrls(store, "perf/ttfb", "ttfb")).toEqual(
+        new Set([6, 12, 30, 36].map(url))
+      );
     }
   });
 
@@ -747,7 +990,12 @@ describe("rescore of a capped report (repo#2657)", () => {
     // skips every page, so the capped sample (10 pages per class) leaves page 10
     // out of the payload: it must still not read as an uncrawled clean page.
     const seed = await seeded(
-      fullReport(range(0, 11).map((i) => ({ i, ttfb: i === 10 ? ("slow" as const) : undefined }))),
+      fullReport(
+        range(0, 11).map((i) => ({
+          i,
+          ttfb: i === 10 ? ("slow" as const) : undefined,
+        }))
+      )
     );
     const skipped = (name: string, i: number): CheckResult => ({
       name,
@@ -773,7 +1021,9 @@ describe("rescore of a capped report (repo#2657)", () => {
     };
     const { uncapped, capped } = await bothWays(seed, "audit_2", run2);
     expect(capped.coverage.carriedFindings).toBe(1);
-    expect(comparable(rescored(capped))).toEqual(comparable(rescored(uncapped)));
+    expect(comparable(rescored(capped))).toEqual(
+      comparable(rescored(uncapped))
+    );
   });
 
   test("a carry the merge keeps on a page the tallies count adds nothing to the score", async () => {
@@ -792,7 +1042,12 @@ describe("rescore of a capped report (repo#2657)", () => {
           "a11y/img-alt": {
             meta: base.ruleResults["a11y/img-alt"]!.meta,
             checks: [
-              { name: "img-alt", status: "skipped" as const, message: "n/a", pageUrl: P },
+              {
+                name: "img-alt",
+                status: "skipped" as const,
+                message: "n/a",
+                pageUrl: P,
+              },
               {
                 name: "img-alt",
                 status: "fail" as const,
@@ -821,7 +1076,10 @@ describe("rescore of a capped report (repo#2657)", () => {
     const body = await cappedBody(report);
     const ghost = {
       ...body,
-      checkTallies: { ...body.checkTallies, "core/ghost": { ghost: { failed: 99, failUnits: 99 } } },
+      checkTallies: {
+        ...body.checkTallies,
+        "core/ghost": { ghost: { failed: 99, failUnits: 99 } },
+      },
     };
     const now = 1_780_000_000_000;
     const plain = await publish(new MemStore(), "audit_1", body, now);
@@ -841,7 +1099,9 @@ describe("rescore of a capped report (repo#2657)", () => {
 // ── repo#3348: the same capped report, published chunked ─────────────────────
 
 /** The store's open rows, one page at a time in primary-key order. */
-async function openRowsByPage(store: MemStore): Promise<Array<[string, PageFindingRecord[]]>> {
+async function openRowsByPage(
+  store: MemStore
+): Promise<Array<[string, PageFindingRecord[]]>> {
   const rows = (await store.getFindings("site", ["open"])).sort((a, b) => {
     const ka = findingKey(a.normalizedUrl, a.ruleId, a.checkName, a.locator);
     const kb = findingKey(b.normalizedUrl, b.ruleId, b.checkName, b.locator);
@@ -875,7 +1135,7 @@ async function publishChunked(
   crawlId: string,
   report: Produced,
   now: number,
-  opts: { driver?: Driver; tallies?: boolean; signal?: boolean } = {},
+  opts: { driver?: Driver; tallies?: boolean; signal?: boolean } = {}
 ) {
   const body = await cappedBody(report);
   await store.upsertFindings(
@@ -883,31 +1143,41 @@ async function publishChunked(
       ...line,
       siteKey: "site",
       lastSeenCrawlId: crawlId,
-    })),
+    }))
   );
   const pages = await openRowsByPage(store);
-  const fresh = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId === crawlId);
-  const prior = (rows: PageFindingRecord[]) => rows.filter((f) => f.lastSeenCrawlId !== crawlId);
+  const fresh = (rows: PageFindingRecord[]) =>
+    rows.filter((f) => f.lastSeenCrawlId === crawlId);
+  const prior = (rows: PageFindingRecord[]) =>
+    rows.filter((f) => f.lastSeenCrawlId !== crawlId);
   const openPage = (normalizedUrl: string, rows: PageFindingRecord[]) => ({
     normalizedUrl,
     fresh: fresh(rows),
     prior: prior(rows),
   });
   async function* openPages() {
-    for (const [normalizedUrl, rows] of pages) yield openPage(normalizedUrl, rows);
+    for (const [normalizedUrl, rows] of pages)
+      yield openPage(normalizedUrl, rows);
   }
   async function* findingPages() {
     for (const [, rows] of pages) if (fresh(rows).length > 0) yield fresh(rows);
   }
   const untouchedCarried = async (scope: CompleteStoreScope) => {
     const isTouched = (u: string, rows: PageFindingRecord[]) =>
-      scope.crawledUrls.has(u) || scope.removedUrls.has(u) || fresh(rows).length > 0;
+      scope.crawledUrls.has(u) ||
+      scope.removedUrls.has(u) ||
+      fresh(rows).length > 0;
     const untouched: UntouchedCarriedPage[] = [];
     for (const [u, rows] of pages) {
       if (isTouched(u, rows)) continue;
       expect(rows.every(isAggregatableCarriedRow)).toBe(true);
       const page = store.pages.get(u);
-      untouched.push({ normalizedUrl: u, rows, rendered: !!page, active: page?.state === "active" });
+      untouched.push({
+        normalizedUrl: u,
+        rows,
+        rendered: !!page,
+        active: page?.state === "active",
+      });
     }
     const { aggregate, sample } = aggregateUntouchedCarried(untouched);
     const sampleByUrl = new Map(sample.map((p) => [p.normalizedUrl, p]));
@@ -933,7 +1203,9 @@ async function publishChunked(
     now,
     ruleResults: body.ruleResults,
     pageStatuses: body.pageStatuses,
-    ...(opts.signal === false ? {} : { resolutionSignal: body.resolutionSignal }),
+    ...(opts.signal === false
+      ? {}
+      : { resolutionSignal: body.resolutionSignal }),
     ...(opts.tallies === false ? {} : { checkTallies: body.checkTallies }),
     completeStore:
       opts.driver === "arrays"
@@ -967,23 +1239,46 @@ function skipShapes(pages: number[]): PageShape[] {
 }
 
 /** The perf/ttfb rule's scored tally (pub#2099). */
-const ttfbTally = (r: CloudSmartAuditsResult) => r.scoringTallies?.get("perf/ttfb")?.tally;
+const ttfbTally = (r: CloudSmartAuditsResult) =>
+  r.scoringTallies?.get("perf/ttfb")?.tally;
 
 const categoriesOf = (r: CloudSmartAuditsResult): string[] =>
   rescored(r).healthScore.categories.map((c) => c.category);
 
 describe("a capped report published chunked scores as published in one POST (repo#3348)", () => {
   test("first audit: either finalize driver gives the one-POST score, totals and coverage", async () => {
-    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const report = withIdleRules(
+      fullReport(skipShapes(range(0, 60)), { robotsMissing: true })
+    );
     const now = 1_780_000_000_000;
-    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
-    const uncapped = await publish(new MemStore(), "audit_1", uncappedBody(report), now);
-    expect(comparable(rescored(single))).toEqual(comparable(rescored(uncapped)));
+    const single = await publish(
+      new MemStore(),
+      "audit_1",
+      await cappedBody(report),
+      now
+    );
+    const uncapped = await publish(
+      new MemStore(),
+      "audit_1",
+      uncappedBody(report),
+      now
+    );
+    expect(comparable(rescored(single))).toEqual(
+      comparable(rescored(uncapped))
+    );
 
     for (const driver of DRIVERS) {
-      const chunked = await publishChunked(new MemStore(), "audit_1", report, now, { driver });
+      const chunked = await publishChunked(
+        new MemStore(),
+        "audit_1",
+        report,
+        now,
+        { driver }
+      );
       expect(chunked.completeStore).toBe(true);
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
       expect(chunked.coverage).toEqual(single.coverage);
       // Rules that evaluated no page score nothing, so their categories stay out.
       expect(categoriesOf(chunked)).not.toContain("video");
@@ -993,26 +1288,53 @@ describe("a capped report published chunked scores as published in one POST (rep
 
   test("tallies without the signal leave the chunked shell on its findings, as one POST leaves them", async () => {
     // The signal is what says which carries the tallies already count.
-    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const report = withIdleRules(
+      fullReport(skipShapes(range(0, 60)), { robotsMissing: true })
+    );
     const now = 1_780_000_000_000;
-    const noSignal = await publishChunked(new MemStore(), "audit_1", report, now, { signal: false });
-    const noTallies = await publishChunked(new MemStore(), "audit_1", report, now, { tallies: false });
+    const noSignal = await publishChunked(
+      new MemStore(),
+      "audit_1",
+      report,
+      now,
+      { signal: false }
+    );
+    const noTallies = await publishChunked(
+      new MemStore(),
+      "audit_1",
+      report,
+      now,
+      { tallies: false }
+    );
     expect(noSignal.reportTotals).toBeUndefined();
     expect(comparable(rescored(noSignal)).healthScore).toEqual(
-      comparable(rescored(noTallies)).healthScore,
+      comparable(rescored(noTallies)).healthScore
     );
   });
 
   test("without the tallies the chunked shell scores skipped and idle pages as passes", async () => {
     // The drift the tallies remove, measured on the fixture above.
-    const report = withIdleRules(fullReport(skipShapes(range(0, 60)), { robotsMissing: true }));
+    const report = withIdleRules(
+      fullReport(skipShapes(range(0, 60)), { robotsMissing: true })
+    );
     const now = 1_780_000_000_000;
-    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
-    const control = await publishChunked(new MemStore(), "audit_1", report, now, { tallies: false });
+    const single = await publish(
+      new MemStore(),
+      "audit_1",
+      await cappedBody(report),
+      now
+    );
+    const control = await publishChunked(
+      new MemStore(),
+      "audit_1",
+      report,
+      now,
+      { tallies: false }
+    );
     expect(control.reportTotals).toBeUndefined();
     expect(categoriesOf(control)).toContain("video");
     expect(rescored(control).healthScore.overall).toBeGreaterThan(
-      rescored(single).healthScore.overall!,
+      rescored(single).healthScore.overall!
     );
   });
 
@@ -1028,7 +1350,9 @@ describe("a capped report published chunked scores as published in one POST (rep
 
     const keys = async (store: MemStore) =>
       (await store.getFindings("site", ["open"]))
-        .map((f) => findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator))
+        .map((f) =>
+          findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator)
+        )
         .sort();
     expect(await keys(viaChunked)).toEqual(await keys(viaUncapped));
     const failing = range(0, 60).filter((i) => i % 3 === 0).length;
@@ -1044,7 +1368,9 @@ describe("a capped report published chunked scores as published in one POST (rep
     const afterChunked = await publish(viaChunked, "audit_2", rerun, now);
     const afterUncapped = await publish(viaUncapped, "audit_2", rerun, now);
     const afterCapped = await publish(viaCapped, "audit_2", rerun, now);
-    expect(comparable(rescored(afterChunked))).toEqual(comparable(rescored(afterUncapped)));
+    expect(comparable(rescored(afterChunked))).toEqual(
+      comparable(rescored(afterUncapped))
+    );
     expect(afterChunked.coverage).toEqual(afterUncapped.coverage);
     // The carried side is the whole class, counted in the full audit's check units
     // (repo#3360), and (pub#2099) a carried page earns no perf/ttfb pass where the
@@ -1054,15 +1380,24 @@ describe("a capped report published chunked scores as published in one POST (rep
     // The 1-point gap left (47 vs 46) is the info-only rules (content/word-count):
     // a carried page earns them a pass the full audit scores as nothing (pub#2167).
     const fullScore = rescored(first).healthScore.overall!;
-    expect(Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(rescored(afterChunked).healthScore.overall! - fullScore)
+    ).toBeLessThanOrEqual(1);
     // After the sampled store the re-run scores the clipped pages clean.
-    expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(fullScore);
+    expect(rescored(afterCapped).healthScore.overall!).toBeGreaterThan(
+      fullScore
+    );
   });
 
   test("(repo#3360) a 3-page re-run of an unchanged 60-page site scores within 2 points of the full audit", async () => {
     const full = fullReport(busyShapes(range(0, 60)));
     const store = new MemStore();
-    const first = await publishChunked(store, "audit_1", full, 1_779_000_000_000);
+    const first = await publishChunked(
+      store,
+      "audit_1",
+      full,
+      1_779_000_000_000
+    );
     const rerun = await cappedBody(fullReport(busyShapes(range(0, 3))));
     const after = await publish(store, "audit_2", rerun, 1_780_000_000_000);
     const a = rescored(first).healthScore;
@@ -1079,21 +1414,36 @@ describe("a capped report published chunked scores as published in one POST (rep
     const seed = await seeded(fullReport(busyShapes(range(0, 60))));
     const shapes = busyShapes(range(0, 40)).map((s) => ({
       ...s,
-      metaMissing: s.i >= 20 && s.i < 30 ? true : s.i < 20 ? false : s.metaMissing,
+      metaMissing:
+        s.i >= 20 && s.i < 30 ? true : s.i < 20 ? false : s.metaMissing,
       status: s.i === 30 ? 404 : undefined,
     }));
     const report = fullReport(shapes);
     const now = 1_780_000_000_000;
-    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    const single = await publish(
+      seed.clone(),
+      "audit_2",
+      await cappedBody(report),
+      now
+    );
     for (const driver of DRIVERS) {
       const store = seed.clone();
-      const chunked = await publishChunked(store, "audit_2", report, now, { driver });
+      const chunked = await publishChunked(store, "audit_2", report, now, {
+        driver,
+      });
       expect(chunked.coverage.carriedFindings).toBeGreaterThan(0);
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
-      const open = await openUrls(store, "core/meta-description", "has-meta-description");
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
+      const open = await openUrls(
+        store,
+        "core/meta-description",
+        "has-meta-description"
+      );
       for (const i of range(0, 20)) expect(open.has(url(i))).toBe(false);
       for (const i of range(20, 30)) expect(open.has(url(i))).toBe(true);
-      for (const i of range(40, 60).filter((i) => i % 3 === 0)) expect(open.has(url(i))).toBe(true);
+      for (const i of range(40, 60).filter((i) => i % 3 === 0))
+        expect(open.has(url(i))).toBe(true);
       expect(open.has(url(30))).toBe(false);
       expect(chunked.coverage).toEqual(single.coverage);
     }
@@ -1111,20 +1461,33 @@ describe("a capped report published chunked scores as published in one POST (rep
     const report = fullReport(shapes);
     const now = 1_780_000_000_000;
     const singleStore = seed.clone();
-    const single = await publish(singleStore, "audit_2", await cappedBody(report), now);
+    const single = await publish(
+      singleStore,
+      "audit_2",
+      await cappedBody(report),
+      now
+    );
     const skippedOpen = async (store: MemStore) => ({
       ttfb: [...(await openUrls(store, "perf/ttfb", "ttfb"))].filter((u) =>
-        [12, 18, 24].map(url).includes(u),
+        [12, 18, 24].map(url).includes(u)
       ).length,
-      meta: [...(await openUrls(store, "core/meta-description", "has-meta-description"))].filter(
-        (u) => [0, 3, 6].map(url).includes(u),
-      ).length,
+      meta: [
+        ...(await openUrls(
+          store,
+          "core/meta-description",
+          "has-meta-description"
+        )),
+      ].filter((u) => [0, 3, 6].map(url).includes(u)).length,
     });
     expect(await skippedOpen(singleStore)).toEqual({ ttfb: 3, meta: 3 });
     for (const driver of DRIVERS) {
       const store = seed.clone();
-      const chunked = await publishChunked(store, "audit_2", report, now, { driver });
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      const chunked = await publishChunked(store, "audit_2", report, now, {
+        driver,
+      });
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
       expect(chunked.coverage).toEqual(single.coverage);
       expect(await skippedOpen(store)).toEqual({ ttfb: 3, meta: 3 });
     }
@@ -1137,10 +1500,23 @@ describe("a capped report published chunked scores as published in one POST (rep
     }));
     const report = fullReport(shapes, { robotsMissing: true });
     const now = 1_780_000_000_000;
-    const single = await publish(new MemStore(), "audit_1", await cappedBody(report), now);
+    const single = await publish(
+      new MemStore(),
+      "audit_1",
+      await cappedBody(report),
+      now
+    );
     for (const driver of DRIVERS) {
-      const chunked = await publishChunked(new MemStore(), "audit_1", report, now, { driver });
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      const chunked = await publishChunked(
+        new MemStore(),
+        "audit_1",
+        report,
+        now,
+        { driver }
+      );
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
       expect(chunked.coverage).toEqual(single.coverage);
     }
   });
@@ -1149,10 +1525,23 @@ describe("a capped report published chunked scores as published in one POST (rep
     const seed = await seeded(fullReport(busyShapes(range(0, 200))));
     const report = fullReport(busyShapes(range(0, 15)));
     const now = 1_780_000_000_000;
-    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    const single = await publish(
+      seed.clone(),
+      "audit_2",
+      await cappedBody(report),
+      now
+    );
     for (const driver of DRIVERS) {
-      const chunked = await publishChunked(seed.clone(), "audit_2", report, now, { driver });
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      const chunked = await publishChunked(
+        seed.clone(),
+        "audit_2",
+        report,
+        now,
+        { driver }
+      );
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
       expect(chunked.coverage).toEqual(single.coverage);
     }
   });
@@ -1162,19 +1551,37 @@ describe("(pub#2099) a carried page earns no pass for a check its last crawl did
   // busyShapes: perf/ttfb has no timing data on 11, 22, 33, 44 and 55, slow on
   // every sixth page, fine elsewhere.
   const skippedTtfb = range(0, 60).filter((i) => i % 6 !== 0 && i % 11 === 0);
-  const passingTtfb = range(0, 60).filter((i) => i % 6 !== 0 && i % 11 !== 0).length;
+  const passingTtfb = range(0, 60).filter(
+    (i) => i % 6 !== 0 && i % 11 !== 0
+  ).length;
   const t1 = 1_779_000_000_000;
   const now = 1_780_000_000_000;
 
   test("a 3-page re-run tallies perf/ttfb exactly as the full audit, as one POST and chunked", async () => {
     const seed = new MemStore();
-    const first = await publishChunked(seed, "audit_1", fullReport(busyShapes(range(0, 60))), t1);
+    const first = await publishChunked(
+      seed,
+      "audit_1",
+      fullReport(busyShapes(range(0, 60))),
+      t1
+    );
     expect(ttfbTally(first)?.passed).toBe(passingTtfb);
     const report = fullReport(busyShapes(range(0, 3)));
-    const single = await publish(seed.clone(), "audit_2", await cappedBody(report), now);
+    const single = await publish(
+      seed.clone(),
+      "audit_2",
+      await cappedBody(report),
+      now
+    );
     expect(ttfbTally(single)).toEqual(ttfbTally(first));
     for (const driver of DRIVERS) {
-      const chunked = await publishChunked(seed.clone(), "audit_2", report, now, { driver });
+      const chunked = await publishChunked(
+        seed.clone(),
+        "audit_2",
+        report,
+        now,
+        { driver }
+      );
       expect(chunked.completeStore).toBe(true);
       expect(ttfbTally(chunked)).toEqual(ttfbTally(first));
     }
@@ -1195,19 +1602,36 @@ describe("(pub#2099) a carried page earns no pass for a check its last crawl did
       ttfb: [12, 18, 24].includes(s.i) ? ("skipped" as const) : s.ttfb,
     }));
     const singleStore = seed.clone();
-    await publish(singleStore, "audit_2", await cappedBody(fullReport(shapes)), now);
+    await publish(
+      singleStore,
+      "audit_2",
+      await cappedBody(fullReport(shapes)),
+      now
+    );
     const chunkedStore = seed.clone();
     await publishChunked(chunkedStore, "audit_2", fullReport(shapes), now);
     for (const store of [singleStore, chunkedStore]) {
       expect(await openUrls(store, "perf/ttfb", "ttfb")).toEqual(
-        new Set([...range(0, 60).filter((i) => i % 6 === 0), 12, 18, 24].map(url)),
+        new Set(
+          [...range(0, 60).filter((i) => i % 6 === 0), 12, 18, 24].map(url)
+        )
       );
       expect(recorded(store)).toEqual(skippedTtfb.map(url).sort());
     }
     // A run 3 that carries them counts each once: its open row, no pass.
     const rerun = fullReport(busyShapes(range(0, 3)));
-    const single = await publish(singleStore.clone(), "audit_3", await cappedBody(rerun), now + 1);
-    const chunked = await publishChunked(chunkedStore.clone(), "audit_3", rerun, now + 1);
+    const single = await publish(
+      singleStore.clone(),
+      "audit_3",
+      await cappedBody(rerun),
+      now + 1
+    );
+    const chunked = await publishChunked(
+      chunkedStore.clone(),
+      "audit_3",
+      rerun,
+      now + 1
+    );
     expect(ttfbTally(chunked)).toEqual(ttfbTally(single));
     expect(ttfbTally(single)?.passed).toBe(passingTtfb);
   });
@@ -1217,12 +1641,25 @@ describe("(pub#2099) a carried page earns no pass for a check its last crawl did
     const legacy = seed.clone();
     for (const p of legacy.pages.values()) delete p.notEvaluated;
     const report = fullReport(busyShapes(range(0, 3)));
-    const single = await publish(legacy.clone(), "audit_2", await cappedBody(report), now);
+    const single = await publish(
+      legacy.clone(),
+      "audit_2",
+      await cappedBody(report),
+      now
+    );
     // Every carried page without a ttfb row earns its pass, as before pub#2099.
     expect(ttfbTally(single)?.passed).toBe(passingTtfb + skippedTtfb.length);
     for (const driver of DRIVERS) {
-      const chunked = await publishChunked(legacy.clone(), "audit_2", report, now, { driver });
-      expect(comparable(rescored(chunked))).toEqual(comparable(rescored(single)));
+      const chunked = await publishChunked(
+        legacy.clone(),
+        "audit_2",
+        report,
+        now,
+        { driver }
+      );
+      expect(comparable(rescored(chunked))).toEqual(
+        comparable(rescored(single))
+      );
     }
   });
 });
@@ -1230,13 +1667,19 @@ describe("(pub#2099) a carried page earns no pass for a check its last crawl did
 describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)", () => {
   test("checks on a 404/410 page are not counted", () => {
     const report = fullReport(
-      range(0, 12).map((i) => ({ i, metaMissing: true, status: i === 3 ? 404 : i === 4 ? 410 : undefined })),
+      range(0, 12).map((i) => ({
+        i,
+        metaMissing: true,
+        status: i === 3 ? 404 : i === 4 ? 410 : undefined,
+      }))
     );
     const capped = capReportForPublish(report);
     expect(capped.checkTallies["core/meta-description"]).toEqual({
       "has-meta-description": { failed: 10, failUnits: 10 },
     });
-    expect(buildCheckTallies(report.ruleResults)["core/meta-description"]).toEqual({
+    expect(
+      buildCheckTallies(report.ruleResults)["core/meta-description"]
+    ).toEqual({
       "has-meta-description": { failed: 12, failUnits: 12 },
     });
     // Nor shown: the class names 10 live pages and counts no more.
@@ -1248,7 +1691,13 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
 
   test("removed pages are read from the producer's pageStatuses when it sent them, as the server reads them", () => {
     const report = {
-      ...fullReport(range(0, 12).map((i) => ({ i, metaMissing: true, status: i === 3 ? 404 : undefined }))),
+      ...fullReport(
+        range(0, 12).map((i) => ({
+          i,
+          metaMissing: true,
+          status: i === 3 ? 404 : undefined,
+        }))
+      ),
       // The statuses the server will see: page 4 gone, page 3 not listed.
       pageStatuses: [{ url: url(4), status: 410 }],
     };
@@ -1257,7 +1706,9 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
     expect(capped.checkTallies["core/meta-description"]).toEqual({
       "has-meta-description": { failed: 11, failUnits: 11 },
     });
-    expect(capped.ruleResults["core/meta-description"]!.checks[0]!.pages).not.toContain(url(4));
+    expect(
+      capped.ruleResults["core/meta-description"]!.checks[0]!.pages
+    ).not.toContain(url(4));
   });
 
   test("a producer's page replays are not counted; a site check tagged carried is", () => {
@@ -1266,8 +1717,20 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
         meta: { severity: "warning" },
         checks: [
           { name: "m", status: "fail", message: "x", pageUrl: url(1) },
-          { name: "m", status: "fail", message: "x", pageUrl: url(2), provenance: "carried" },
-          { name: "m", status: "fail", message: "x", pageUrl: url(3), provenance: "unrendered" },
+          {
+            name: "m",
+            status: "fail",
+            message: "x",
+            pageUrl: url(2),
+            provenance: "carried",
+          },
+          {
+            name: "m",
+            status: "fail",
+            message: "x",
+            pageUrl: url(3),
+            provenance: "unrendered",
+          },
           { name: "site", status: "warn", message: "y", provenance: "carried" },
         ],
       },
@@ -1279,4 +1742,7 @@ describe("buildCheckTallies leaves out what the rescore leaves out (repo#2657)",
   });
 });
 
-describeSitePagesContract("capped-rescore.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "capped-rescore.test.ts MemStore",
+  () => new MemStore()
+);

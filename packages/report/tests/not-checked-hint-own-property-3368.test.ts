@@ -12,13 +12,20 @@ describe("not-checked hints use own-property lookups (#3368)", () => {
     expect(typeof unknownHint).toBe("string");
   });
 
-  for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+  for (const name of [
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+  ]) {
     test(`${name} gets the same hint as an unknown reason`, () => {
       expect(hintFor({ skipReason: name })).toBe(unknownHint);
     });
   }
 
   test("a known reason keeps its own hint", () => {
-    expect(hintFor({ skipReason: "discovery-probe-no-answer" })).toContain("nothing answered");
+    expect(hintFor({ skipReason: "discovery-probe-no-answer" })).toContain(
+      "nothing answered"
+    );
   });
 });

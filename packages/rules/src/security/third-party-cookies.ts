@@ -1,8 +1,11 @@
 // security/third-party-cookies - Detect third-party cookie usage
 
-import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
+import {
+  getHostname,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
 
-import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
+import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 // Known third-party tracking domains
 const trackingDomains = new Set([

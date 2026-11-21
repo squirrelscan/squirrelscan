@@ -15,12 +15,21 @@
 // and ONE check builder, and both read the SAME extractor (`extractNapSignal`), so
 // the two paths are byte-identical by construction.
 
-import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
-import type { CheckItem, PageFeatureRow, SiteQuery } from "@squirrelscan/core-contracts";
+import type {
+  CheckItem,
+  PageFeatureRow,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 import type { NapSignal } from "@squirrelscan/utils";
 
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
-import { extractNapSignal, getPathname, NAP_BUSINESS_SCHEMA_TYPES } from "@squirrelscan/utils";
+import {
+  extractNapSignal,
+  getPathname,
+  NAP_BUSINESS_SCHEMA_TYPES,
+} from "@squirrelscan/utils";
+
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
 
@@ -168,11 +177,18 @@ function accumulatePage(rollup: NapRollup, record: NapPageRecord): void {
     record.nap.phoneFormats[0] ?? null,
     record.url
   );
-  accumulateSignal(rollup.address, record.nap.address, record.nap.addressFormat, record.url);
+  accumulateSignal(
+    rollup.address,
+    record.nap.address,
+    record.nap.addressFormat,
+    record.url
+  );
 }
 
 /** Highest count wins; ties break on the key, so the pick never depends on order. */
-function modalEntry(byKey: Map<string, NapKeyBucket>): { key: string; bucket: NapKeyBucket } | null {
+function modalEntry(
+  byKey: Map<string, NapKeyBucket>
+): { key: string; bucket: NapKeyBucket } | null {
   let best: { key: string; bucket: NapKeyBucket } | null = null;
   for (const [key, bucket] of byKey) {
     if (
@@ -190,7 +206,11 @@ function modalEntry(byKey: Map<string, NapKeyBucket>): { key: string; bucket: Na
 function modalFormat(bucket: NapKeyBucket): string {
   let best: { text: string; count: number } | null = null;
   for (const [text, format] of bucket.formats) {
-    if (!best || format.count > best.count || (format.count === best.count && text < best.text)) {
+    if (
+      !best ||
+      format.count > best.count ||
+      (format.count === best.count && text < best.text)
+    ) {
       best = { text, count: format.count };
     }
   }
@@ -202,7 +222,11 @@ function skip(name: string, message: string): CheckResult {
 }
 
 /** Turn one signal's rollup into its check. `label` names the thing in prose. */
-function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup): CheckResult {
+function buildSignalCheck(
+  name: string,
+  label: string,
+  rollup: NapSignalRollup
+): CheckResult {
   if (rollup.sampleCount === 0) {
     return skip(name, `No ${label} declared on any page`);
   }
@@ -232,13 +256,18 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
     .filter(([key]) => key !== modal.key)
     .sort((a, b) => b[1].count - a[1].count || (a[0] < b[0] ? -1 : 1));
   if (deviants.length > 0) {
-    const deviantPages = deviants.reduce((sum, [, bucket]) => sum + bucket.count, 0);
-    const items: CheckItem[] = deviants.slice(0, NAP_MAX_ITEMS).map(([key, bucket]) => ({
-      id: key,
-      label: `"${modalFormat(bucket)}" on ${bucket.count} page(s)`,
-      sourcePages: bucket.urls,
-      meta: { pageCount: bucket.count },
-    }));
+    const deviantPages = deviants.reduce(
+      (sum, [, bucket]) => sum + bucket.count,
+      0
+    );
+    const items: CheckItem[] = deviants
+      .slice(0, NAP_MAX_ITEMS)
+      .map(([key, bucket]) => ({
+        id: key,
+        label: `"${modalFormat(bucket)}" on ${bucket.count} page(s)`,
+        sourcePages: bucket.urls,
+        meta: { pageCount: bucket.count },
+      }));
     return {
       name,
       status: "fail",
@@ -260,12 +289,14 @@ function buildSignalCheck(name: string, label: string, rollup: NapSignalRollup):
     const variants = [...modal.bucket.formats.entries()].sort(
       (a, b) => b[1].count - a[1].count || (a[0] < b[0] ? -1 : 1)
     );
-    const items: CheckItem[] = variants.slice(0, NAP_MAX_ITEMS).map(([text, format]) => ({
-      id: text,
-      label: `"${text}" on ${format.count} page(s)`,
-      sourcePages: format.urls,
-      meta: { pageCount: format.count },
-    }));
+    const items: CheckItem[] = variants
+      .slice(0, NAP_MAX_ITEMS)
+      .map(([text, format]) => ({
+        id: text,
+        label: `"${text}" on ${format.count} page(s)`,
+        sourcePages: format.urls,
+        meta: { pageCount: format.count },
+      }));
     return {
       name,
       status: "warn",
@@ -333,8 +364,12 @@ function buildChecks(rollup: NapRollup): CheckResult[] {
     });
   }
 
-  checks.push(buildSignalCheck("phone-consistency", "phone number", rollup.phone));
-  checks.push(buildSignalCheck("address-consistency", "postal address", rollup.address));
+  checks.push(
+    buildSignalCheck("phone-consistency", "phone number", rollup.phone)
+  );
+  checks.push(
+    buildSignalCheck("address-consistency", "postal address", rollup.address)
+  );
 
   return checks;
 }
@@ -370,7 +405,10 @@ function napFromRow(row: PageFeatureRow): NapSignal {
  * on this seam (see content/duplicate-title), not something specific to NAP, and
  * such a crawl cannot resolve the local-business metadata this rule is gated on.
  */
-async function runViaSiteQuery(siteQuery: SiteQuery, skipNoindex: boolean): Promise<RuleResult> {
+async function runViaSiteQuery(
+  siteQuery: SiteQuery,
+  skipNoindex: boolean
+): Promise<RuleResult> {
   const rollup = emptyRollup();
   for await (const row of siteQuery.pagesMatching(() => true)) {
     accumulatePage(rollup, {

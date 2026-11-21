@@ -1,7 +1,3 @@
-import type { DocumentFetcher } from "@squirrelscan/fetchers";
-
-import { Effect, Duration, Schedule, pipe } from "effect";
-
 import type {
   AuditFailureDetail,
   AuditFailureSource,
@@ -11,6 +7,8 @@ import type {
   ResponseHeaders,
   SecurityHeaders,
 } from "@squirrelscan/core-contracts";
+import type { DocumentFetcher } from "@squirrelscan/fetchers";
+
 import {
   auditFailureDetail,
   classifyAuditFailureReasonText,
@@ -23,30 +21,35 @@ import {
   TECH_DETECT_HEADER_NAMES,
   TECH_DETECT_PRESENCE_HEADERS,
 } from "@squirrelscan/utils/constants";
-import { headersForRedirect, mergeHeaderRecords, techCookieNames } from "@squirrelscan/utils/headers";
+import {
+  headersForRedirect,
+  mergeHeaderRecords,
+  techCookieNames,
+} from "@squirrelscan/utils/headers";
 import {
   EgressRefusedError,
   egressGuardedSend,
   egressRefuses,
   type EgressPolicy,
 } from "@squirrelscan/utils/public-egress";
-import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
-import {
-  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
-  fetchUndecoded,
-  isDecompressionError,
-  readBodyCapped,
-} from "@squirrelscan/utils/response-body";
 import {
   isRateLimitedResponse,
   parseRetryAfterMs,
   rateLimitBackoffMs,
 } from "@squirrelscan/utils/rate-limit";
 import {
+  DEFAULT_MAX_DOCUMENT_BODY_BYTES,
+  fetchUndecoded,
+  isDecompressionError,
+  readBodyCapped,
+} from "@squirrelscan/utils/response-body";
+import { isHttpOrHttpsUrl } from "@squirrelscan/utils/safe-fetch";
+import {
   classifyWafResponse,
   inspectWafChallengePage,
   type WafChallengeDetail,
 } from "@squirrelscan/utils/waf";
+import { Effect, Duration, Schedule, pipe } from "effect";
 
 export type CrawlErrorType =
   | "timeout"
@@ -113,7 +116,7 @@ export class CrawlError extends Error {
      * A refusal-shaped page from a known provider with no block marker (#1258). Set on a
      * bare `blocked` 403 only; it does not change how the fetch fails.
      */
-    readonly wafSuspect?: WafBlockInfo,
+    readonly wafSuspect?: WafBlockInfo
   ) {
     super(message);
     this.name = "CrawlError";
@@ -132,9 +135,16 @@ export class CrawlError extends Error {
     url: string,
     message: string,
     status?: number,
-    errorCode?: string,
+    errorCode?: string
   ): CrawlError {
-    return new CrawlError(url, "network", message, undefined, status, errorCode);
+    return new CrawlError(
+      url,
+      "network",
+      message,
+      undefined,
+      status,
+      errorCode
+    );
   }
 
   static parse(url: string, message: string): CrawlError {
@@ -147,12 +157,16 @@ export class CrawlError extends Error {
    * Names the URL and the encoding because the runtime's own report of this is
    * the bare "Decompression error: ZlibError" and nothing else.
    */
-  static decode(url: string, contentEncoding: string | null, cause: string): CrawlError {
+  static decode(
+    url: string,
+    contentEncoding: string | null,
+    cause: string
+  ): CrawlError {
     const encoding = contentEncoding?.trim() || "none declared";
     return new CrawlError(
       url,
       "decode",
-      `Could not decode response body from ${url} (content-encoding: ${encoding}): ${cause}`,
+      `Could not decode response body from ${url} (content-encoding: ${encoding}): ${cause}`
     );
   }
 
@@ -161,15 +175,30 @@ export class CrawlError extends Error {
     message = "Request blocked by server",
     status = 403,
     wafBlock?: WafBlockInfo,
-    wafSuspect?: WafBlockInfo,
+    wafSuspect?: WafBlockInfo
   ): CrawlError {
-    return new CrawlError(url, "blocked", message, undefined, status, undefined, wafBlock, wafSuspect);
+    return new CrawlError(
+      url,
+      "blocked",
+      message,
+      undefined,
+      status,
+      undefined,
+      wafBlock,
+      wafSuspect
+    );
   }
 
-  static rateLimit(url: string, retryAfterMs?: number, status?: number): CrawlError {
+  static rateLimit(
+    url: string,
+    retryAfterMs?: number,
+    status?: number
+  ): CrawlError {
     const suffix = status ? ` (${status})` : "";
     const wait =
-      retryAfterMs === undefined ? "" : `, retry after ${Math.round(retryAfterMs / 1000)}s`;
+      retryAfterMs === undefined
+        ? ""
+        : `, retry after ${Math.round(retryAfterMs / 1000)}s`;
     // #1822: a throttle without an explicit status is still a 429-shaped
     // refusal, so it classifies with the other 4xx refusals.
     return new CrawlError(
@@ -177,7 +206,7 @@ export class CrawlError extends Error {
       "rate_limit",
       `Rate limited${suffix}${wait}`,
       retryAfterMs,
-      status ?? 429,
+      status ?? 429
     );
   }
 
@@ -224,7 +253,7 @@ function failureHost(url: string): string | undefined {
  */
 export function crawlErrorToFailureDetail(
   error: CrawlError,
-  source: AuditFailureSource = "entry",
+  source: AuditFailureSource = "entry"
 ): AuditFailureDetail {
   const host = failureHost(error.url);
   const message = error.message;
@@ -258,20 +287,30 @@ export function crawlErrorToFailureDetail(
       // Always reported as 429, the status a throttle MEANS, even when the
       // origin dressed it as a 503 with a Retry-After (#1829). The status it
       // actually sent is already in the message.
-      return auditFailureDetail({ ...base, code: "http_4xx", status: 429, detail: message });
+      return auditFailureDetail({
+        ...base,
+        code: "http_4xx",
+        status: 429,
+        detail: message,
+      });
     case "network": {
       if (error.status !== undefined && error.status >= 500) {
         return auditFailureDetail({ ...base, code: "http_5xx" });
       }
       if (error.status !== undefined && error.status >= 400) {
-        return auditFailureDetail({ ...base, code: "http_4xx", detail: message });
+        return auditFailureDetail({
+          ...base,
+          code: "http_4xx",
+          detail: message,
+        });
       }
       return auditFailureDetail({
         ...base,
         // The runtime code first, the message only when it names nothing we
         // recognize: the code is a stable contract, the prose is not.
         code:
-          classifyFetchErrorCode(error.errorCode) ?? classifyAuditFailureReasonText(message),
+          classifyFetchErrorCode(error.errorCode) ??
+          classifyAuditFailureReasonText(message),
         detail: message,
       });
     }
@@ -336,7 +375,7 @@ function egressRefusal(url: string, _error: EgressRefusedError): CrawlError {
     url,
     "Not requested: the host resolves to a link-local or cloud metadata address",
     undefined,
-    EGRESS_REFUSED,
+    EGRESS_REFUSED
   );
 }
 
@@ -357,7 +396,10 @@ export function isTlsError(error: unknown, status?: number): boolean {
   if (status === NEVER_CONNECTED_STATUS) return true;
 
   const parts: string[] = [];
-  let current = error as { message?: unknown; cause?: unknown; code?: unknown } | null | undefined;
+  let current = error as
+    | { message?: unknown; cause?: unknown; code?: unknown }
+    | null
+    | undefined;
   for (let depth = 0; current && depth < MAX_CAUSE_DEPTH; depth++) {
     if (typeof current.message === "string") parts.push(current.message);
     if (typeof current.code === "string") parts.push(current.code);
@@ -404,21 +446,26 @@ export { isDecompressionError };
 function isRetryable(error: CrawlError): boolean {
   // An egress refusal (repo#3430) is a decision, not a failure: a retry refuses again.
   if (error.errorCode === EGRESS_REFUSED) return false;
-  return error.type === "timeout" || error.type === "network" || error.type === "tls";
+  return (
+    error.type === "timeout" || error.type === "network" || error.type === "tls"
+  );
 }
 
 function withRetry<A, R>(
   effect: Effect.Effect<A, CrawlError, R>,
-  policy: RetryPolicy = defaultRetryPolicy,
+  policy: RetryPolicy = defaultRetryPolicy
 ): Effect.Effect<A, CrawlError, R> {
   let schedule = pipe(
-    Schedule.exponential(Duration.millis(policy.baseDelayMs), policy.backoffMultiplier),
-    Schedule.compose(Schedule.recurs(Math.max(0, policy.maxAttempts - 1))),
+    Schedule.exponential(
+      Duration.millis(policy.baseDelayMs),
+      policy.backoffMultiplier
+    ),
+    Schedule.compose(Schedule.recurs(Math.max(0, policy.maxAttempts - 1)))
   );
 
   if (policy.jitter) {
     schedule = Schedule.addDelay(schedule, () =>
-      Duration.millis(Math.random() * policy.baseDelayMs * 0.5),
+      Duration.millis(Math.random() * policy.baseDelayMs * 0.5)
     );
   }
 
@@ -441,7 +488,10 @@ export function applyBrowserHeaders(headers: Headers, userAgent: string): void {
     headers.set("User-Agent", userAgent);
   }
   if (!headers.has("Accept")) {
-    headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+    headers.set(
+      "Accept",
+      "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    );
   }
   // No default Accept-Language (#1355): a search-engine bot sends none, and sites
   // that redirect by it would send every locale path to one language. A value set
@@ -491,7 +541,7 @@ function requestWithTiming(
   options: RequestInit,
   timeoutMs: number,
   userAgent: string,
-  send: (url: string, init: RequestInit) => Promise<Response> = fetchUndecoded,
+  send: (url: string, init: RequestInit) => Promise<Response> = fetchUndecoded
 ): Effect.Effect<TimedResponse, CrawlError, never> {
   return Effect.tryPromise({
     // Forward the fiber-interrupt signal so a wedged socket is aborted and the host-slot release runs (#405).
@@ -540,15 +590,22 @@ function requestWithTiming(
     },
     catch: (error) => {
       const message = (error as Error).message?.toLowerCase() ?? "";
-      const isAbort = (error as Error).name === "AbortError" || message.includes("timed out");
+      const isAbort =
+        (error as Error).name === "AbortError" || message.includes("timed out");
       if (isAbort) return CrawlError.timeout(url);
       if (error instanceof EgressRefusedError) return egressRefusal(url, error);
-      if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
+      if (isTlsError(error))
+        return CrawlError.tls(url, (error as Error).message);
       // #1822: the runtime code is captured HERE because this is the last place
       // the original error object exists; everything downstream sees only the
       // CrawlError. Bun 1.4 reports a DNS failure as ENOTFOUND, which no amount
       // of reading the message reliably recovers on older runtimes.
-      return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
+      return CrawlError.network(
+        url,
+        (error as Error).message,
+        undefined,
+        fetchErrorCode(error)
+      );
     },
   });
 }
@@ -729,13 +786,18 @@ function extractResponseHeaders(headers: Headers): ResponseHeaders {
  * only tests for presence keeps "1", and Set-Cookie keeps its cookie names
  * (`name=`, one per line), so no token or session value is kept here.
  */
-function extractTechHeaders(headers: Headers, setCookies: string[]): Record<string, string> | null {
+function extractTechHeaders(
+  headers: Headers,
+  setCookies: string[]
+): Record<string, string> | null {
   const out: Record<string, string> = {};
   let any = false;
   for (const name of TECH_DETECT_HEADER_NAMES) {
     const value = headers.get(name);
     if (value === null) continue;
-    out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name) ? "1" : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
+    out[name] = TECH_DETECT_PRESENCE_HEADERS.has(name)
+      ? "1"
+      : value.slice(0, TECH_DETECT_HEADER_MAX_CHARS);
     any = true;
   }
   const cookieNames = techCookieNames(setCookies);
@@ -769,7 +831,9 @@ function normalizeContentType(value: string | null): string | null {
  * quoted strings, and a quoted value drops its escapes (RFC 9110 5.6.4). Only a
  * token (RFC 9110 5.6.2) of at most 40 characters counts as a label.
  */
-export function contentTypeCharset(value: string | null | undefined): string | null {
+export function contentTypeCharset(
+  value: string | null | undefined
+): string | null {
   if (!value) return null;
   const params: string[] = [];
   let current = "";
@@ -791,7 +855,8 @@ export function contentTypeCharset(value: string | null | undefined): string | n
   params.push(current);
   for (const param of params.slice(1)) {
     const eq = param.indexOf("=");
-    if (eq === -1 || param.slice(0, eq).trim().toLowerCase() !== "charset") continue;
+    if (eq === -1 || param.slice(0, eq).trim().toLowerCase() !== "charset")
+      continue;
     let label = param.slice(eq + 1).trim();
     const quotedLabel = /^"((?:[^"\\]|\\.)*)"$/.exec(label);
     if (quotedLabel) label = quotedLabel[1]!.replace(/\\(.)/g, "$1");
@@ -853,7 +918,9 @@ function headersFromRecord(record: Record<string, string>): Headers {
 
 function parseContentLength(headers: Headers, body: string): number {
   const sizeHeader = headers.get("content-length");
-  const sizeBytes = sizeHeader ? Number.parseInt(sizeHeader, 10) : new Blob([body]).size;
+  const sizeBytes = sizeHeader
+    ? Number.parseInt(sizeHeader, 10)
+    : new Blob([body]).size;
   return Number.isNaN(sizeBytes) ? new Blob([body]).size : sizeBytes;
 }
 
@@ -869,14 +936,18 @@ export function applyWafGuard(
   status: number,
   headers: Headers,
   body?: string,
-  servedAt?: string,
+  servedAt?: string
 ): Effect.Effect<void, CrawlError, never> {
   const challenge = inspectWafBlock(status, headers, body);
   if (!challenge) return Effect.void;
   return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
 }
 
-function inspectWafBlock(status: number, headers: Headers, body?: string): WafChallengeDetail | null {
+function inspectWafBlock(
+  status: number,
+  headers: Headers,
+  body?: string
+): WafChallengeDetail | null {
   // A 5xx other than 503 is the origin failing, not a perimeter provider
   // answering (a Cloudflare 502 page carries its ray id like a block page does).
   if (status >= 500 && status !== 503) return null;
@@ -901,7 +972,7 @@ function inspectWafBlock(status: number, headers: Headers, body?: string): WafCh
 export function suspectWafBlock(
   status: number,
   headers: Headers,
-  body?: string,
+  body?: string
 ): WafBlockInfo | null {
   const result = classifyWafResponse({
     status,
@@ -925,7 +996,7 @@ function wafBlockedError(
   url: string,
   status: number,
   challenge: WafChallengeDetail,
-  servedAt?: string,
+  servedAt?: string
 ): CrawlError {
   return CrawlError.blocked(
     url,
@@ -936,7 +1007,7 @@ function wafBlockedError(
       providerId: challenge.providerId,
       signal: challenge.signal ?? "challenge page",
       ...(servedAt && servedAt !== url ? { finalUrl: servedAt } : {}),
-    },
+    }
   );
 }
 
@@ -949,7 +1020,7 @@ export function applyStatusGuards(
   status: number,
   headers: Headers,
   body?: string,
-  servedAt?: string,
+  servedAt?: string
 ): Effect.Effect<void, CrawlError, never> {
   // A provider's challenge beats every status reading below, 429 included: a
   // Kasada challenge is a 429 and is not throttling, so it must not be retried
@@ -957,20 +1028,31 @@ export function applyStatusGuards(
   // cloudflare alone is not enough, because ordinary auth/geo blocks carry it
   // too (#446).
   const challenge = inspectWafBlock(status, headers, body);
-  if (challenge) return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
+  if (challenge)
+    return Effect.fail(wafBlockedError(url, status, challenge, servedAt));
 
   // 429 and Shopify's 430 are unconditional throttling (#1829). A 503 is
   // ambiguous — checked further down, AFTER the bot-challenge detection, since
   // a challenge interstitial is a refusal we must not keep retrying.
   if (isRateLimitedResponse(status)) {
     return Effect.fail(
-      CrawlError.rateLimit(url, parseRetryAfterMs(headers.get("retry-after")), status),
+      CrawlError.rateLimit(
+        url,
+        parseRetryAfterMs(headers.get("retry-after")),
+        status
+      )
     );
   }
 
   if (status === 403) {
     return Effect.fail(
-      CrawlError.blocked(url, undefined, 403, undefined, suspectWafBlock(status, headers, body) ?? undefined),
+      CrawlError.blocked(
+        url,
+        undefined,
+        403,
+        undefined,
+        suspectWafBlock(status, headers, body) ?? undefined
+      )
     );
   }
 
@@ -990,7 +1072,9 @@ export function applyStatusGuards(
         return Effect.fail(CrawlError.rateLimit(url, retryAfterMs, status));
       }
     }
-    return Effect.fail(CrawlError.network(url, `Server error: ${status}`, status));
+    return Effect.fail(
+      CrawlError.network(url, `Server error: ${status}`, status)
+    );
   }
 
   return Effect.void;
@@ -999,7 +1083,7 @@ export function applyStatusGuards(
 function fetchWithDocumentFetcher(
   url: string,
   headers: Record<string, string>,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult, CrawlError, never> {
   if (!options.fetcher) {
     return Effect.fail(CrawlError.network(url, "No custom fetcher configured"));
@@ -1024,7 +1108,8 @@ function fetchWithDocumentFetcher(
           ...(options.egress ? { egress: options.egress } : {}),
         }),
       catch: (error) => {
-        if (isTlsError(error)) return CrawlError.tls(url, (error as Error).message);
+        if (isTlsError(error))
+          return CrawlError.tls(url, (error as Error).message);
         // #1699: an abort is the fetcher's deadline (or ours) firing — the
         // same class the standard path reports. Mapping it to `network` with
         // the raw runtime text made a zero-page cloud audit say "No pages were
@@ -1035,11 +1120,17 @@ function fetchWithDocumentFetcher(
         if (isAbortError(error)) {
           return CrawlError.timeout(
             url,
-            `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`,
+            `page fetch via ${options.fetcher!.id} was aborted (deadline ${options.timeoutMs}ms)`
           );
         }
-        if (error instanceof EgressRefusedError) return egressRefusal(url, error);
-        return CrawlError.network(url, (error as Error).message, undefined, fetchErrorCode(error));
+        if (error instanceof EgressRefusedError)
+          return egressRefusal(url, error);
+        return CrawlError.network(
+          url,
+          (error as Error).message,
+          undefined,
+          fetchErrorCode(error)
+        );
       },
     });
 
@@ -1049,21 +1140,34 @@ function fetchWithDocumentFetcher(
     // of treating a never-connected page as a real (network) failure.
     if (isTlsError(undefined, response.status)) {
       return yield* Effect.fail(
-        CrawlError.tls(url, `impersonation fetch returned status ${response.status}`),
+        CrawlError.tls(
+          url,
+          `impersonation fetch returned status ${response.status}`
+        )
       );
     }
 
     const responseHeaders = headersFromRecord(response.headers);
-    yield* applyStatusGuards(url, response.status, responseHeaders, response.body);
+    yield* applyStatusGuards(
+      url,
+      response.status,
+      responseHeaders,
+      response.body
+    );
 
     // Cloud-rendered fetches measure submit + queue + browser render, not
     // server response time — leaving ttfb/downloadTime unset makes the perf
     // rules skip instead of reporting a false "very slow server" signal.
     const isCloudRender = response.fetcherMethod === "cloud-render";
     const ttfb = response.timing.responseAt - response.timing.startedAt;
-    const loadTime = Math.max(0, response.timing.finishedAt - response.timing.startedAt);
+    const loadTime = Math.max(
+      0,
+      response.timing.finishedAt - response.timing.startedAt
+    );
     const downloadTime = Math.max(0, loadTime - ttfb);
-    const contentType = normalizeContentType(responseHeaders.get("content-type"));
+    const contentType = normalizeContentType(
+      responseHeaders.get("content-type")
+    );
     const sizeBytes = parseContentLength(responseHeaders, response.body);
 
     return {
@@ -1105,7 +1209,7 @@ function fetchWithDocumentFetcher(
  */
 function fetchPageStandard(
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult, CrawlError, never> {
   // Suspended so the armed-deadline state below is built per RUN, not per call:
   // callers retry this same Effect value (see `withRetry` on the fallback path),
@@ -1115,7 +1219,7 @@ function fetchPageStandard(
 
 function fetchPageStandardOnce(
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult, CrawlError, never> {
   // #1729: the response whose deadline is still armed. Held across the redirect
   // loop and the body read, and released by the `Effect.ensuring` below on EVERY
@@ -1144,18 +1248,21 @@ function fetchPageStandardOnce(
       mergeHeaderRecords(
         {
           "User-Agent": options.userAgent,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "Upgrade-Insecure-Requests": "1",
         },
-        options.headers,
-      ),
+        options.headers
+      )
     );
 
     const MAX_REDIRECTS = 10;
     const hops: RedirectHop[] = [];
     const visited = new Set<string>();
     const egress = options.egress;
-    const guardedSend = egress ? egressGuardedSend(fetchUndecoded, egress) : fetchUndecoded;
+    const guardedSend = egress
+      ? egressGuardedSend(fetchUndecoded, egress)
+      : fetchUndecoded;
     let currentUrl = url;
     let isLoop = false;
     let endsInError = false;
@@ -1184,7 +1291,7 @@ function fetchPageStandardOnce(
         // vetted (and pinned, outside the hosted proxy) by the same policy that
         // let it through above, and the page itself, which the policy trusts
         // by name unless the crawl pins its own hosts (repo#3430).
-        egress ? guardedSend : fetchUndecoded,
+        egress ? guardedSend : fetchUndecoded
       );
       const { response, timing } = timed;
 
@@ -1204,7 +1311,11 @@ function fetchPageStandardOnce(
         type: "http",
       });
 
-      if (options.followRedirects && response.status >= 300 && response.status < 400) {
+      if (
+        options.followRedirects &&
+        response.status >= 300 &&
+        response.status < 400
+      ) {
         const location = response.headers.get("location");
         if (!location) {
           endsInError = true;
@@ -1246,9 +1357,11 @@ function fetchPageStandardOnce(
         const refused =
           egress &&
           (yield* Effect.promise(() =>
-            egressRefuses(nextUrl, egress, AbortSignal.timeout(options.timeoutMs)).catch(
-              () => false,
-            ),
+            egressRefuses(
+              nextUrl,
+              egress,
+              AbortSignal.timeout(options.timeoutMs)
+            ).catch(() => false)
           ));
         if (refused) {
           endsInError = true;
@@ -1277,54 +1390,61 @@ function fetchPageStandardOnce(
     }
 
     if (!finalResponse || !finalTiming) {
-      return yield* Effect.fail(CrawlError.network(url, "Failed to fetch final response"));
+      return yield* Effect.fail(
+        CrawlError.network(url, "Failed to fetch final response")
+      );
     }
 
     const ttfb = finalTiming.responseTime - finalTiming.fetchStart;
 
-    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) => Effect.tryPromise({
-      // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
-      try: async (signal) => {
-        let onAbort: (() => void) | undefined;
-        try {
-          return await Promise.race([
-            readBodyCapped(finalResponse, maxBytes),
-            new Promise<never>((_, reject) => {
-              // #1729: aborting the request as well as losing the race is what
-              // actually cancels the read. Rejecting alone only frees the FIBER
-              // — `readBodyCapped` would stay parked on `reader.read()` for the
-              // life of the process, holding the socket and its buffered chunks.
-              const giveUp = (): void => {
-                held?.abort();
-                reject(new Error("aborted"));
-              };
-              if (signal.aborted) return giveUp();
-              onAbort = giveUp;
-              signal.addEventListener("abort", onAbort, { once: true });
-            }),
-          ]);
-        } finally {
-          if (onAbort) signal.removeEventListener("abort", onAbort);
-        }
-      },
-      catch: (error) => {
-        // #1729: the deadline firing mid-body is a timeout, not a malformed
-        // response — report it as the same class as a headers-phase timeout so
-        // it is not miscounted as a parse failure.
-        if ((error as Error).name === "AbortError") return CrawlError.timeout(url);
-        // A body the runtime could not decompress is not a malformed response
-        // we can say nothing about: it is attributable to the declared
-        // encoding, and the crawl counts it so the report can say so.
-        if (isDecompressionError(error)) {
-          return CrawlError.decode(
+    const readBody = (maxBytes = DEFAULT_MAX_DOCUMENT_BODY_BYTES) =>
+      Effect.tryPromise({
+        // Race the body read against the interrupt signal so a stalled stream doesn't leak the host slot (#405).
+        try: async (signal) => {
+          let onAbort: (() => void) | undefined;
+          try {
+            return await Promise.race([
+              readBodyCapped(finalResponse, maxBytes),
+              new Promise<never>((_, reject) => {
+                // #1729: aborting the request as well as losing the race is what
+                // actually cancels the read. Rejecting alone only frees the FIBER
+                // — `readBodyCapped` would stay parked on `reader.read()` for the
+                // life of the process, holding the socket and its buffered chunks.
+                const giveUp = (): void => {
+                  held?.abort();
+                  reject(new Error("aborted"));
+                };
+                if (signal.aborted) return giveUp();
+                onAbort = giveUp;
+                signal.addEventListener("abort", onAbort, { once: true });
+              }),
+            ]);
+          } finally {
+            if (onAbort) signal.removeEventListener("abort", onAbort);
+          }
+        },
+        catch: (error) => {
+          // #1729: the deadline firing mid-body is a timeout, not a malformed
+          // response — report it as the same class as a headers-phase timeout so
+          // it is not miscounted as a parse failure.
+          if ((error as Error).name === "AbortError")
+            return CrawlError.timeout(url);
+          // A body the runtime could not decompress is not a malformed response
+          // we can say nothing about: it is attributable to the declared
+          // encoding, and the crawl counts it so the report can say so.
+          if (isDecompressionError(error)) {
+            return CrawlError.decode(
+              url,
+              finalResponse.headers.get("content-encoding"),
+              (error as Error).message
+            );
+          }
+          return CrawlError.parse(
             url,
-            finalResponse.headers.get("content-encoding"),
-            (error as Error).message,
+            `Failed to read response: ${(error as Error).message}`
           );
-        }
-        return CrawlError.parse(url, `Failed to read response: ${(error as Error).message}`);
-      },
-    });
+        },
+      });
 
     // A 403/503/429 needs a bounded body prefix to tell a bot-challenge
     // interstitial from an ordinary refusal/outage/throttle (#446/#802/#1253).
@@ -1333,16 +1453,22 @@ function fetchPageStandardOnce(
     // the read. A 200, 202 or 405 challenge is judged on the full body after
     // it is read, below.
     const statusMayBeChallenge =
-      finalResponse.status === 403 || finalResponse.status === 503 || finalResponse.status === 429;
+      finalResponse.status === 403 ||
+      finalResponse.status === 503 ||
+      finalResponse.status === 429;
     const challengeBody =
-      statusMayBeChallenge && finalResponse.headers.get("cf-mitigated") !== "challenge"
+      statusMayBeChallenge &&
+      finalResponse.headers.get("cf-mitigated") !== "challenge"
         ? yield* readBody(WAF_CHALLENGE_BODY_BYTES).pipe(
             Effect.catchAll((error) => {
               // A 403 or 429 already proves the request was refused. The body is
               // only sampled to name the challenge provider, so an unreadable
               // or stalled sample degrades to the generic blocked or throttled
               // result.
-              if (finalResponse.status === 403 || finalResponse.status === 429) {
+              if (
+                finalResponse.status === 403 ||
+                finalResponse.status === 429
+              ) {
                 return Effect.succeed(undefined);
               }
 
@@ -1353,23 +1479,37 @@ function fetchPageStandardOnce(
               return error.type === "timeout"
                 ? Effect.fail(error)
                 : Effect.succeed(undefined);
-            }),
+            })
           )
         : undefined;
 
     // Where the chain ended, so a challenge served after a redirect says so (#1258).
     const servedAt = hops.length > 0 ? hops[hops.length - 1]!.url : url;
-    yield* applyStatusGuards(url, finalResponse.status, finalResponse.headers, challengeBody, servedAt);
+    yield* applyStatusGuards(
+      url,
+      finalResponse.status,
+      finalResponse.headers,
+      challengeBody,
+      servedAt
+    );
 
     const body = yield* readBody();
     // A challenge served as 200, 202 or 405 passes the status guards, so it is
     // judged here, on the body, before it is stored as the site (#1253).
-    yield* applyWafGuard(url, finalResponse.status, finalResponse.headers, body, servedAt);
+    yield* applyWafGuard(
+      url,
+      finalResponse.status,
+      finalResponse.headers,
+      body,
+      servedAt
+    );
 
     const loadTime = Date.now() - finalTiming.fetchStart;
     const downloadTime = loadTime - ttfb;
 
-    const contentType = normalizeContentType(finalResponse.headers.get("content-type"));
+    const contentType = normalizeContentType(
+      finalResponse.headers.get("content-type")
+    );
     const sizeBytes = parseContentLength(finalResponse.headers, body);
 
     const finalUrl = hops.length > 0 ? hops[hops.length - 1]!.url : url;
@@ -1419,7 +1559,7 @@ function fetchPageStandardOnce(
 
 export function fetchPage(
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult, CrawlError, never> {
   const emit = (event: TlsEvent): void => {
     try {
@@ -1439,10 +1579,15 @@ export function fetchPage(
       Effect.tapError((error) =>
         Effect.sync(() => {
           if (error.type === "tls") {
-            emit({ kind: "error", url, wasNeverConnected: true, message: error.message });
+            emit({
+              kind: "error",
+              url,
+              wasNeverConnected: true,
+              message: error.message,
+            });
           }
-        }),
-      ),
+        })
+      )
     );
   }
 
@@ -1455,7 +1600,7 @@ export function fetchPage(
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Upgrade-Insecure-Requests": "1",
     },
-    options.headers,
+    options.headers
   );
 
   // Impersonation/custom fetcher path. On a TLS/status-0 failure, fall back to a
@@ -1486,7 +1631,7 @@ export function fetchPage(
             withRetry(fetchPageStandard(url, fallbackOptions), {
               ...defaultRetryPolicy,
               maxAttempts: 2,
-            }),
+            })
           );
 
           if (result._tag === "Left") {
@@ -1509,15 +1654,15 @@ export function fetchPage(
             message: `standard fetch recovered ${url} (status ${result.right.status})`,
           });
           return result.right;
-        }),
-    ),
+        })
+    )
   );
 }
 
 /** Crawl-loop fetch seam — defaults to fetchPageWithRetry, injectable for deterministic tests (#315). */
 export type CrawlFetcher = (
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ) => Effect.Effect<FetchResult, CrawlError, never>;
 
 /**
@@ -1537,7 +1682,7 @@ export const RATE_LIMIT_DEFAULT_MAX_BACKOFF_MS = 300_000;
 
 export function fetchPageWithRetry(
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult, CrawlError, never> {
   // INVARIANT: the custom-fetcher path runs exactly ONE outer attempt. fetchPage
   // already owns the impersonation→standard-fetch fallback and its own retry
@@ -1568,7 +1713,10 @@ export function fetchPageWithRetry(
   });
 
   const control = options.rateLimit;
-  const maxBackoffMs = Math.max(0, control?.maxBackoffMs ?? RATE_LIMIT_DEFAULT_MAX_BACKOFF_MS);
+  const maxBackoffMs = Math.max(
+    0,
+    control?.maxBackoffMs ?? RATE_LIMIT_DEFAULT_MAX_BACKOFF_MS
+  );
 
   return Effect.gen(function* () {
     // Rate-limit responses seen for THIS url, and what they have cost so far.
@@ -1607,7 +1755,9 @@ export function fetchPageWithRetry(
       // refused six times looking like it had refused five, so its strike count
       // and backoff budget under-counted on the very URLs that proved it was
       // throttling hardest.
-      const decision: RateLimitDecision = control?.onRateLimited?.(encounter) ?? {
+      const decision: RateLimitDecision = control?.onRateLimited?.(
+        encounter
+      ) ?? {
         waitMs: rateLimitBackoffMs({
           attempt: encountered,
           baseDelayMs: RATE_LIMIT_BASE_DELAY_MS,
@@ -1656,10 +1806,10 @@ export function fetchPageWithRetry(
 
 export function fetchPageSafe(
   url: string,
-  options: FetchOptions,
+  options: FetchOptions
 ): Effect.Effect<FetchResult | null, never, never> {
   return pipe(
     fetchPageWithRetry(url, options),
-    Effect.catchAll(() => Effect.succeed(null)),
+    Effect.catchAll(() => Effect.succeed(null))
   );
 }

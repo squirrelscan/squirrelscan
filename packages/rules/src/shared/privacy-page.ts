@@ -4,8 +4,8 @@
 // existed). Slug matching alone is brittle — redirects, unusual slugs and
 // localized paths slip past it — so title/h1 acts as a slug-independent fallback.
 
-import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 import { getPathname, resolveUrl } from "@squirrelscan/utils";
+import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
 import type { ParsedPage } from "../types";
 
@@ -28,7 +28,9 @@ const PRIVACY_HEADING_RE =
 const TITLE_SEPARATORS = /[|–\u2014\-:·•]+/;
 
 function isPrivacyHeading(text: string): boolean {
-  return text.split(TITLE_SEPARATORS).some((seg) => PRIVACY_HEADING_RE.test(seg.trim()));
+  return text
+    .split(TITLE_SEPARATORS)
+    .some((seg) => PRIVACY_HEADING_RE.test(seg.trim()));
 }
 
 // Anchor-text tokens that identify a link as pointing at a privacy policy.
@@ -73,7 +75,8 @@ export function isPrivacyPage(
   page: PrivacyCandidatePage,
   paths: readonly string[] = []
 ): boolean {
-  if (matchesConfiguredPaths(page.url, paths) || isPrivacyPath(page.url)) return true;
+  if (matchesConfiguredPaths(page.url, paths) || isPrivacyPath(page.url))
+    return true;
   const title = page.parsed?.meta?.title ?? "";
   if (isPrivacyHeading(title)) return true;
   const h1s = page.parsed?.h1?.texts ?? [];
@@ -101,7 +104,9 @@ export function pageLinksToPrivacyHref(
   const links = page.parsed?.links ?? [];
   return links.some((l) => {
     const resolved = resolveUrl(l.url, page.url);
-    return resolved ? matchesConfiguredPaths(resolved, paths) || isPrivacyPath(resolved) : false;
+    return resolved
+      ? matchesConfiguredPaths(resolved, paths) || isPrivacyPath(resolved)
+      : false;
   });
 }
 

@@ -3,21 +3,25 @@
 // or strong; what removed it was the edge, which drops the ETag for requests
 // that ask for HTML, and squirrel asks for HTML the way a browser does.
 
-import { brotliCompressSync } from "node:zlib";
-
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
+import { brotliCompressSync } from "node:zlib";
 
 import { fetchPage } from "../src/fetcher";
 
-const FETCH_OPTIONS = { userAgent: "squirrel-test", timeoutMs: 5_000, followRedirects: false };
+const FETCH_OPTIONS = {
+  userAgent: "squirrel-test",
+  timeoutMs: 5_000,
+  followRedirects: false,
+};
 
 const servers: Array<{ stop: (closeActive?: boolean) => void }> = [];
 afterEach(() => {
   for (const s of servers.splice(0)) s.stop(true);
 });
 
-const PAGE = "<!doctype html><html><head><title>t</title></head><body>hello</body></html>";
+const PAGE =
+  "<!doctype html><html><head><title>t</title></head><body>hello</body></html>";
 const LAST_MODIFIED = "Wed, 16 Sep 2026 08:01:44 GMT";
 
 const ENCODERS: Record<string, ((body: string) => Uint8Array) | null> = {
@@ -40,15 +44,18 @@ describe("validators survive every content-encoding", () => {
       test(`${kind} ETag and Last-Modified on a ${encoding} response are stored verbatim`, async () => {
         const url = serve(
           () =>
-            new Response(encode ? (encode(PAGE) as Uint8Array<ArrayBuffer>) : PAGE, {
-              headers: {
-                "content-type": "text/html; charset=utf-8",
-                "cache-control": "public, max-age=0, must-revalidate",
-                etag,
-                "last-modified": LAST_MODIFIED,
-                ...(encode ? { "content-encoding": encoding } : {}),
-              },
-            }),
+            new Response(
+              encode ? (encode(PAGE) as Uint8Array<ArrayBuffer>) : PAGE,
+              {
+                headers: {
+                  "content-type": "text/html; charset=utf-8",
+                  "cache-control": "public, max-age=0, must-revalidate",
+                  etag,
+                  "last-modified": LAST_MODIFIED,
+                  ...(encode ? { "content-encoding": encoding } : {}),
+                },
+              }
+            )
         );
 
         const result = await Effect.runPromise(fetchPage(url, FETCH_OPTIONS));
@@ -73,7 +80,10 @@ describe("page requests ask for HTML", () => {
       accept = req.headers.get("accept");
       const html = (accept ?? "").includes("text/html");
       return new Response(PAGE, {
-        headers: { "content-type": "text/html", ...(html ? {} : { etag: 'W/"abc"' }) },
+        headers: {
+          "content-type": "text/html",
+          ...(html ? {} : { etag: 'W/"abc"' }),
+        },
       });
     });
 

@@ -3,7 +3,10 @@ import type { CheckResult } from "@squirrelscan/core-contracts";
 
 export type FixtureRules = Record<
   string,
-  { meta: { id: string; severity: string; [k: string]: unknown }; checks: CheckResult[] }
+  {
+    meta: { id: string; severity: string; [k: string]: unknown };
+    checks: CheckResult[];
+  }
 >;
 
 const meta = (id: string, severity = "warning") => ({
@@ -50,7 +53,10 @@ export function buildDrschollsFixture(pages = 401): FixtureRules {
       status: "fail",
       message: "nav links lack discernible text",
       pageUrl: u,
-      items: Array.from({ length: 42 }, (_, k) => ({ id: `nav > a:nth-child(${k})`, label: "a" })),
+      items: Array.from({ length: 42 }, (_, k) => ({
+        id: `nav > a:nth-child(${k})`,
+        label: "a",
+      })),
     });
     if (i % 3 !== 0) {
       title.push({
@@ -67,7 +73,10 @@ export function buildDrschollsFixture(pages = 401): FixtureRules {
       status: "fail",
       message: "images fail to load",
       pageUrl: u,
-      items: Array.from({ length: 6 }, (_, k) => ({ id: `${u}/img-${k}.png`, label: "img" })),
+      items: Array.from({ length: 6 }, (_, k) => ({
+        id: `${u}/img-${k}.png`,
+        label: "img",
+      })),
     });
     img.push({ name: "alt", status: "pass", message: "ok", pageUrl: u });
   }

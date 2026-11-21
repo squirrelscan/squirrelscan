@@ -5,10 +5,10 @@
 // rebuilds an equivalent DOM, and ensure is an idempotent no-op on entries
 // that still hold their document.
 
+import type { PageRecord } from "@squirrelscan/core-contracts/storage";
+
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-
-import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 
 import {
   buildSiteContext,
@@ -67,7 +67,9 @@ const HTML =
 
 describe("site-context DOM release/ensure (#858)", () => {
   test("release nulls every document but keeps extracted data", async () => {
-    const ctx = await Effect.runPromise(buildSiteContext([page("https://example.com/", HTML)]));
+    const ctx = await Effect.runPromise(
+      buildSiteContext([page("https://example.com/", HTML)])
+    );
     expect(ctx[0]!.parsed?.document).not.toBeNull();
     const titleBefore = ctx[0]!.parsed!.meta.title;
 
@@ -79,7 +81,9 @@ describe("site-context DOM release/ensure (#858)", () => {
   });
 
   test("ensure re-materializes an equivalent DOM after release", async () => {
-    const ctx = await Effect.runPromise(buildSiteContext([page("https://example.com/", HTML)]));
+    const ctx = await Effect.runPromise(
+      buildSiteContext([page("https://example.com/", HTML)])
+    );
     const serializedBefore = String(ctx[0]!.parsed!.document);
 
     releaseSiteContextDocuments(ctx);
@@ -92,7 +96,9 @@ describe("site-context DOM release/ensure (#858)", () => {
   });
 
   test("ensure is a no-op when documents are still present", async () => {
-    const ctx = await Effect.runPromise(buildSiteContext([page("https://example.com/", HTML)]));
+    const ctx = await Effect.runPromise(
+      buildSiteContext([page("https://example.com/", HTML)])
+    );
     const instanceBefore = ctx[0]!.parsed!.document;
 
     ensureSiteContextDocuments(ctx);
@@ -104,9 +110,15 @@ describe("site-context DOM release/ensure (#858)", () => {
     const ctx = await Effect.runPromise(
       buildSiteContext([
         page("https://example.com/", HTML),
-        { ...page("https://example.com/broken", null), contentType: "text/html" },
-        { ...page("https://example.com/bin.pdf", null), contentType: "application/pdf" },
-      ]),
+        {
+          ...page("https://example.com/broken", null),
+          contentType: "text/html",
+        },
+        {
+          ...page("https://example.com/bin.pdf", null),
+          contentType: "application/pdf",
+        },
+      ])
     );
 
     releaseSiteContextDocuments(ctx);

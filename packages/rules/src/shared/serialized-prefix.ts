@@ -33,7 +33,10 @@ export interface SerializeOptions {
  * tests/serialized-prefix.test.ts holds this to `innerHTML` and `toString()`
  * over the rule fixtures.
  */
-export function serializeChildren(parent: Node, options: SerializeOptions = {}): string {
+export function serializeChildren(
+  parent: Node,
+  options: SerializeOptions = {}
+): string {
   const need = options.need ?? Number.POSITIVE_INFINITY;
   const replaceText = options.replaceText;
   // Without a length to stop at, only the elements holding a replaced one need
@@ -41,7 +44,12 @@ export function serializeChildren(parent: Node, options: SerializeOptions = {}):
   const holders = new Set<Node>();
   if (replaceText) {
     for (const el of replaceText.keys()) {
-      for (let up = el.parentNode; up && up !== parent && !holders.has(up); up = up.parentNode) holders.add(up);
+      for (
+        let up = el.parentNode;
+        up && up !== parent && !holders.has(up);
+        up = up.parentNode
+      )
+        holders.add(up);
     }
   }
   const bounded = need !== Number.POSITIVE_INFINITY;
@@ -75,7 +83,9 @@ export function serializeChildren(parent: Node, options: SerializeOptions = {}):
           if (text !== undefined) {
             // Exactly how the element serialises itself: its childless copy
             // with the text put in at the first `><`.
-            push(String(element.cloneNode(false)).replace("><", () => `>${text}<`));
+            push(
+              String(element.cloneNode(false)).replace("><", () => `>${text}<`)
+            );
             continue;
           }
         }

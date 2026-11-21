@@ -9,15 +9,15 @@
 // metadata (footer copyright, header owner link) on every page is NOT treated
 // as a per-article byline/date.
 
-import { describe, expect, test } from "bun:test";
-
 import type { CheckResult } from "@squirrelscan/core-contracts";
 
 import { parsePage } from "@squirrelscan/parser";
+import { describe, expect, test } from "bun:test";
+
+import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 import { authorBylineRule } from "../src/eeat/author-byline";
 import { contentDatesRule } from "../src/eeat/content-dates";
-import type { ParsedPage, Rule, RuleContext, SiteData } from "../src/types";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -112,7 +112,10 @@ function yoastPost(
 
 describe("parser — visible author/date extraction", () => {
   test("extracts hCard author + entry-meta dates", () => {
-    const p = parsePage(kadencePost("https://ex.com/blog/post").html, "https://ex.com/blog/post");
+    const p = parsePage(
+      kadencePost("https://ex.com/blog/post").html,
+      "https://ex.com/blog/post"
+    );
     expect(p.visibleAuthor).toBe("Jane Doe");
     expect(p.visibleDatePublished).toBe("2024-03-10T08:00:00+00:00");
     expect(p.visibleDateModified).toBe("2024-04-01T09:00:00+00:00");
@@ -198,7 +201,10 @@ describe("parser — visible author/date extraction", () => {
 
 describe("parser — Yoast @graph @id author resolution", () => {
   test("resolves author via @id reference", () => {
-    const p = parsePage(yoastPost("https://ex.com/post").html, "https://ex.com/post");
+    const p = parsePage(
+      yoastPost("https://ex.com/post").html,
+      "https://ex.com/post"
+    );
     expect(p.author?.name).toBe("Jane Doe");
   });
 
@@ -208,7 +214,11 @@ describe("parser — Yoast @graph @id author resolution", () => {
     const graph = {
       "@context": "https://schema.org",
       "@graph": [
-        { "@type": "Person", "@id": `${url}#/person/editor`, name: "Editor Ed" },
+        {
+          "@type": "Person",
+          "@id": `${url}#/person/editor`,
+          name: "Editor Ed",
+        },
         {
           "@type": "Article",
           author: { "@id": `${url}#/person/jane` },
@@ -252,7 +262,11 @@ describe("parser — Yoast @graph @id author resolution", () => {
           "@type": "Article",
           author: { "@id": `${url}#/person/x`, name: "Inline Name" },
         },
-        { "@type": "Person", "@id": `${url}#/person/x`, name: "Referenced Name" },
+        {
+          "@type": "Person",
+          "@id": `${url}#/person/x`,
+          name: "Referenced Name",
+        },
       ],
     };
     const html = `<html><head><script type="application/ld+json">${JSON.stringify(
@@ -267,12 +281,18 @@ describe("parser — Yoast @graph @id author resolution", () => {
 
 describe("eeat/author-byline — visible markup", () => {
   test("detects hCard byline on Kadence post (no JSON-LD)", async () => {
-    const checks = (await run(authorBylineRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
+    const checks = await run(
+      authorBylineRule,
+      siteCtx([kadencePost("https://ex.com/blog/post")])
+    );
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
   test("detects author via Yoast @graph @id ref", async () => {
-    const checks = (await run(authorBylineRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
+    const checks = await run(
+      authorBylineRule,
+      siteCtx([yoastPost("https://ex.com/blog/post")])
+    );
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
 
@@ -287,7 +307,7 @@ describe("eeat/author-byline — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = (await run(authorBylineRule, siteCtx(pages)));
+    const checks = await run(authorBylineRule, siteCtx(pages));
     // Exactly one content page (the byline post) with an author → 100%.
     expect(check(checks, "author-byline")?.status).toBe("pass");
   });
@@ -303,7 +323,7 @@ describe("eeat/author-byline — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = (await run(authorBylineRule, siteCtx(orgPages)));
+    const checks = await run(authorBylineRule, siteCtx(orgPages));
     expect(check(checks, "author-byline")?.status).toBe("warn");
   });
 });
@@ -312,13 +332,19 @@ describe("eeat/author-byline — visible markup", () => {
 
 describe("eeat/content-dates — visible markup", () => {
   test("detects entry-meta <time> dates on Kadence post (no JSON-LD)", async () => {
-    const checks = (await run(contentDatesRule, siteCtx([kadencePost("https://ex.com/blog/post")])));
+    const checks = await run(
+      contentDatesRule,
+      siteCtx([kadencePost("https://ex.com/blog/post")])
+    );
     expect(check(checks, "date-published")?.status).toBe("pass");
     expect(check(checks, "date-modified")?.status).toBe("pass");
   });
 
   test("detects dates via Yoast @graph Article schema", async () => {
-    const checks = (await run(contentDatesRule, siteCtx([yoastPost("https://ex.com/blog/post")])));
+    const checks = await run(
+      contentDatesRule,
+      siteCtx([yoastPost("https://ex.com/blog/post")])
+    );
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
@@ -332,7 +358,7 @@ describe("eeat/content-dates — visible markup", () => {
       { url: "https://ex.com/e", html: "<html><body><p>e</p></body></html>" },
       kadencePost("https://ex.com/the-post"),
     ];
-    const checks = (await run(contentDatesRule, siteCtx(pages)));
+    const checks = await run(contentDatesRule, siteCtx(pages));
     expect(check(checks, "date-published")?.status).toBe("pass");
   });
 
@@ -346,7 +372,7 @@ describe("eeat/content-dates — visible markup", () => {
         </body></html>`,
       },
     ];
-    const checks = (await run(contentDatesRule, siteCtx(pages)));
+    const checks = await run(contentDatesRule, siteCtx(pages));
     expect(check(checks, "date-published")?.status).toBe("warn");
   });
 });
@@ -362,7 +388,10 @@ describe("Kadence/Yoast site — issue #122 repro", () => {
     html: "<html><body><p>page</p></body></html>",
   });
   const site = siteCtx([
-    { url: "https://helder-ai.nl/", html: "<html><body><p>home</p></body></html>" },
+    {
+      url: "https://helder-ai.nl/",
+      html: "<html><body><p>home</p></body></html>",
+    },
     nonContent(1),
     nonContent(2),
     nonContent(3),
@@ -379,6 +408,8 @@ describe("Kadence/Yoast site — issue #122 repro", () => {
   });
 
   test("dates detected across visible and @graph posts", async () => {
-    expect(check(await run(contentDatesRule, site), "date-published")?.status).toBe("pass");
+    expect(
+      check(await run(contentDatesRule, site), "date-published")?.status
+    ).toBe("pass");
   });
 });

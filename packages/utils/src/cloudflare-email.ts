@@ -17,7 +17,10 @@ export function isCloudflareEmailProtectionUrl(url: string): boolean {
   } catch {
     return false;
   }
-  return pathname === EMAIL_PROTECTION_PATH || pathname === `${EMAIL_PROTECTION_PATH}/`;
+  return (
+    pathname === EMAIL_PROTECTION_PATH ||
+    pathname === `${EMAIL_PROTECTION_PATH}/`
+  );
 }
 
 /**
@@ -34,7 +37,8 @@ const MAX_PAYLOAD_HEX = 1024;
  * decode as UTF-8, or decodes to a control character.
  */
 export function decodeCloudflareEmail(hex: string): string | null {
-  if (hex.length < 4 || hex.length > MAX_PAYLOAD_HEX || hex.length % 2 !== 0) return null;
+  if (hex.length < 4 || hex.length > MAX_PAYLOAD_HEX || hex.length % 2 !== 0)
+    return null;
   if (!/^[0-9a-f]+$/i.test(hex)) return null;
   const key = Number.parseInt(hex.slice(0, 2), 16);
   const bytes = new Uint8Array(hex.length / 2 - 1);

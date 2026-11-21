@@ -28,14 +28,16 @@ const PREVALENCE = data as RulePrevalenceData;
 /** Share (0..1) of corpus sites where the rule fires, or undefined when unknown. */
 export function rulePrevalence(
   ruleId: string,
-  source: RulePrevalenceData = PREVALENCE,
+  source: RulePrevalenceData = PREVALENCE
 ): number | undefined {
-  return Object.hasOwn(source.prevalence, ruleId) ? source.prevalence[ruleId] : undefined;
+  return Object.hasOwn(source.prevalence, ruleId)
+    ? source.prevalence[ruleId]
+    : undefined;
 }
 
 export function isNearUniversal(
   ruleId: string,
-  source: RulePrevalenceData = PREVALENCE,
+  source: RulePrevalenceData = PREVALENCE
 ): boolean {
   const p = rulePrevalence(ruleId, source);
   return p !== undefined && p > NEAR_UNIVERSAL_PREVALENCE;
@@ -44,7 +46,7 @@ export function isNearUniversal(
 /** The "why this ranks lower" line shown under a near-universal rule. */
 export function prevalenceNote(
   ruleId: string,
-  source: RulePrevalenceData = PREVALENCE,
+  source: RulePrevalenceData = PREVALENCE
 ): string | undefined {
   const p = rulePrevalence(ruleId, source);
   if (p === undefined || p <= NEAR_UNIVERSAL_PREVALENCE) return undefined;

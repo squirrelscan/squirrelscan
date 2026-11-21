@@ -14,8 +14,8 @@
 // unions all three sources so the count is correct without double-counting a
 // resource URL as a page (case 2 vs case 3 are mutually exclusive per item).
 
-import type { CheckItem, CheckResult } from "./types";
 import type { GroupedCheck } from "./grouping";
+import type { CheckItem, CheckResult } from "./types";
 
 /** True when `id` looks like a page URL (vs. a resource identifier / label). */
 export function isPageUrl(id: string): boolean {
@@ -56,7 +56,9 @@ export function isRedundantPageItem(item: {
   label?: string;
 }): boolean {
   if (!isPageUrl(item.id) || item.sourcePages !== undefined) return false;
-  return item.label === undefined || item.label === "" || item.label === item.id;
+  return (
+    item.label === undefined || item.label === "" || item.label === item.id
+  );
 }
 
 /**
@@ -66,7 +68,9 @@ export function isRedundantPageItem(item: {
  * API's Zod-inferred check shape) can pass a plain `{pages, items}` literal
  * with no unsafe cast, since it structurally satisfies this narrower type.
  */
-export function checkAffectedPages(check: Pick<CheckResult, "pages" | "items">): Set<string> {
+export function checkAffectedPages(
+  check: Pick<CheckResult, "pages" | "items">
+): Set<string> {
   const acc = new Set<string>();
   for (const page of check.pages ?? []) acc.add(page);
   for (const item of check.items ?? []) collectItemPages(item, acc);
@@ -104,12 +108,14 @@ export interface AffectedPages {
  * would overstate a PAGES display.
  */
 export function affectedPages(
-  check: Pick<CheckResult, "pages" | "items" | "details">,
+  check: Pick<CheckResult, "pages" | "items" | "details">
 ): AffectedPages {
   const sample = Array.from(checkAffectedPages(check));
   const truncated = check.details?.pagesTruncated;
   const count =
-    typeof truncated === "number" && truncated > sample.length ? Math.floor(truncated) : sample.length;
+    typeof truncated === "number" && truncated > sample.length
+      ? Math.floor(truncated)
+      : sample.length;
   return { sample, count, hasMore: count > sample.length };
 }
 
@@ -155,7 +161,7 @@ export interface RuleAffectedRollup {
  * number as exact.
  */
 export function ruleAffectedRollup(
-  checks: Pick<CheckResult, "pages" | "items" | "details">[],
+  checks: Pick<CheckResult, "pages" | "items" | "details">[]
 ): RuleAffectedRollup {
   const union = new Set<string>();
   let maxCount = 0;
@@ -168,7 +174,10 @@ export function ruleAffectedRollup(
     if (ap.hasMore) anyTruncated = true;
     for (const page of ap.sample) union.add(page);
   }
-  return { count: Math.max(maxCount, union.size), hasMore: contributing >= 2 && anyTruncated };
+  return {
+    count: Math.max(maxCount, union.size),
+    hasMore: contributing >= 2 && anyTruncated,
+  };
 }
 
 /**
@@ -178,7 +187,8 @@ export function ruleAffectedRollup(
  */
 export function ruleCarriedPageCount(checks: GroupedCheck[]): number {
   const acc = new Set<string>();
-  for (const check of checks) for (const page of check.carriedPages ?? []) acc.add(page);
+  for (const check of checks)
+    for (const page of check.carriedPages ?? []) acc.add(page);
   return acc.size;
 }
 
@@ -190,8 +200,11 @@ export function ruleCarriedPageCount(checks: GroupedCheck[]): number {
  * read "5 items" for a class that has 1,147. 0 when the check left none out.
  */
 export function itemsNotListed(check: Pick<CheckResult, "details">): number {
-  const additional = (check.details as { additional?: unknown } | undefined)?.additional;
-  return typeof additional === "number" && Number.isFinite(additional) && additional > 0
+  const additional = (check.details as { additional?: unknown } | undefined)
+    ?.additional;
+  return typeof additional === "number" &&
+    Number.isFinite(additional) &&
+    additional > 0
     ? Math.floor(additional)
     : 0;
 }

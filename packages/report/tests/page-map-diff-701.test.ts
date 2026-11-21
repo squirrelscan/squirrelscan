@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { pageMapMeta, type PageMapRow } from "../src/page-map";
 import {
   PAGE_MAP_DIFF_FIELDS,
   diffPageMaps,
@@ -11,7 +12,6 @@ import {
   renderPageMapDiffMarkdown,
 } from "../src/page-map-diff";
 import { PAGE_MAP_HTML_ROW_CAP, renderPageMapHtml } from "../src/page-map-html";
-import { pageMapMeta, type PageMapRow } from "../src/page-map";
 
 function row(url: string, over: Partial<PageMapRow> = {}): PageMapRow {
   return {
@@ -75,7 +75,9 @@ describe("diffPageMaps", () => {
     const b = diff.changed.find((c) => c.url === `${E}/b`)!;
     expect(b.changes.map((c) => c.field)).toEqual(["status", "flags"]);
     // A list compares as a set, so a reorder is no change.
-    expect(b.changes.find((c) => c.field === "flags")).toMatchObject({ after: "h1, title" });
+    expect(b.changes.find((c) => c.field === "flags")).toMatchObject({
+      after: "h1, title",
+    });
   });
 
   test("counts that move with every crawl are not compared", () => {
@@ -94,7 +96,7 @@ describe("diffPageMaps", () => {
   test("a list reordered is not a change", () => {
     const d = diffPageMaps(
       [row(`${E}/x`, { flags: ["a", "b"], schemaTypes: ["X", "Y"] })],
-      [row(`${E}/x`, { flags: ["b", "a"], schemaTypes: ["Y", "X"] })],
+      [row(`${E}/x`, { flags: ["b", "a"], schemaTypes: ["Y", "X"] })]
     );
     expect(d.changed).toHaveLength(0);
     expect(d.unchanged).toBe(1);
@@ -102,7 +104,12 @@ describe("diffPageMaps", () => {
 
   test("identical maps: nothing added, removed or changed", () => {
     const d = diffPageMaps(older, older);
-    expect([d.added.length, d.removed.length, d.changed.length, d.unchanged]).toEqual([0, 0, 0, 4]);
+    expect([
+      d.added.length,
+      d.removed.length,
+      d.changed.length,
+      d.unchanged,
+    ]).toEqual([0, 0, 0, 4]);
   });
 });
 
@@ -115,12 +122,17 @@ describe("page map diff renderers", () => {
   };
 
   test("json carries both audits, the counts and the three lists", () => {
-    const json = JSON.parse(renderPageMapDiffJson(diff, meta)) as Record<string, unknown>;
+    const json = JSON.parse(renderPageMapDiffJson(diff, meta)) as Record<
+      string,
+      unknown
+    >;
     expect(json).toMatchObject({
       site: E,
       counts: { added: 1, removed: 1, changed: 2, unchanged: 1 },
     });
-    expect((json.older as { startedAt: string }).startedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect((json.older as { startedAt: string }).startedAt).toBe(
+      "2026-10-01T00:00:00.000Z"
+    );
   });
 
   test("markdown names the audits and lists changes, additions and removals", () => {
@@ -134,12 +146,12 @@ describe("page map diff renderers", () => {
   });
 
   test("markdown for no differences says so; a value from a page cannot break the table", () => {
-    expect(renderPageMapDiffMarkdown(diffPageMaps(older, older), meta)).toContain(
-      "No page was added, removed or changed.",
-    );
+    expect(
+      renderPageMapDiffMarkdown(diffPageMaps(older, older), meta)
+    ).toContain("No page was added, removed or changed.");
     const evil = diffPageMaps(
       [row(`${E}/x`, { title: "a" })],
-      [row(`${E}/x`, { title: "x | y\n<script>z</script>" })],
+      [row(`${E}/x`, { title: "x | y\n<script>z</script>" })]
     );
     const md = renderPageMapDiffMarkdown(evil, meta);
     const line = md.split("\n").find((l) => l.includes("| title |"))!;
@@ -151,8 +163,8 @@ describe("page map diff renderers", () => {
     const csv = renderPageMapDiffCsv(
       diffPageMaps(
         [row(`${E}/x`, { title: "a" })],
-        [row(`${E}/x`, { title: "=SUM(1)" }), row(`${E}/y`)],
-      ),
+        [row(`${E}/x`, { title: "=SUM(1)" }), row(`${E}/y`)]
+      )
     )
       .trim()
       .split("\n");
@@ -163,7 +175,10 @@ describe("page map diff renderers", () => {
 });
 
 describe("renderPageMapHtml", () => {
-  const meta = pageMapMeta({ id: "0123456789abcdef", baseUrl: E, startedAt: 1_000 }, 4);
+  const meta = pageMapMeta(
+    { id: "0123456789abcdef", baseUrl: E, startedAt: 1_000 },
+    4
+  );
 
   test("a complete offline document with the data as escaped JSON", () => {
     const html = renderPageMapHtml(older, meta);
@@ -182,42 +197,53 @@ describe("renderPageMapHtml", () => {
           description: "<!-- x -->",
         }),
       ],
-      meta,
+      meta
     );
     const data = html.slice(
       html.indexOf('id="pm-data">') + 13,
-      html.indexOf("</script>", html.indexOf('id="pm-data">')),
+      html.indexOf("</script>", html.indexOf('id="pm-data">'))
     );
     expect(data).not.toContain("<");
     expect(data).not.toContain(">");
     expect(html.match(/<script/g)?.length).toBe(2);
     expect(html).not.toContain("<img src=x");
-    expect(JSON.parse(data).rows[0].title).toBe("</script><img src=x onerror=alert(1)>");
+    expect(JSON.parse(data).rows[0].title).toBe(
+      "</script><img src=x onerror=alert(1)>"
+    );
   });
 
   test("the site name is escaped in the title and heading", () => {
     const html = renderPageMapHtml(
       [],
-      pageMapMeta({ id: "abc", baseUrl: 'https://e.test/"><script>x</script>', startedAt: 1 }, 0),
+      pageMapMeta(
+        {
+          id: "abc",
+          baseUrl: 'https://e.test/"><script>x</script>',
+          startedAt: 1,
+        },
+        0
+      )
     );
     expect(html).not.toContain('"><script>x');
     expect(html).toContain("&lt;script&gt;x&lt;/script&gt;");
   });
 
   test("rows past the cap are cut and the page says so", () => {
-    const many = Array.from({ length: PAGE_MAP_HTML_ROW_CAP + 5 }, (_, i) => row(`${E}/p${i}`));
+    const many = Array.from({ length: PAGE_MAP_HTML_ROW_CAP + 5 }, (_, i) =>
+      row(`${E}/p${i}`)
+    );
     const html = renderPageMapHtml(
       many,
-      pageMapMeta({ id: "abc", baseUrl: E, startedAt: 1 }, many.length),
+      pageMapMeta({ id: "abc", baseUrl: E, startedAt: 1 }, many.length)
     );
     expect(html).toContain(
-      `Showing the first ${PAGE_MAP_HTML_ROW_CAP} of ${many.length} matching pages`,
+      `Showing the first ${PAGE_MAP_HTML_ROW_CAP} of ${many.length} matching pages`
     );
     const data = JSON.parse(
       html.slice(
         html.indexOf('id="pm-data">') + 13,
-        html.indexOf("</script>", html.indexOf('id="pm-data">')),
-      ),
+        html.indexOf("</script>", html.indexOf('id="pm-data">'))
+      )
     );
     expect(data.rows).toHaveLength(PAGE_MAP_HTML_ROW_CAP);
     expect(data.total).toBe(many.length);
@@ -264,21 +290,25 @@ describe("hostile page values in the diff and the HTML table", () => {
     expect(unsafe(csv)).toEqual([]);
     expect(csv).toContain("'=cmd|' /C calc'!A0");
     expect(csv.trim().split("\n").length).toBe(
-      1 + diff.changed.flatMap((c) => c.changes).length + diff.added.length,
+      1 + diff.changed.flatMap((c) => c.changes).length + diff.added.length
     );
   });
 
   test("the diff JSON keeps the bytes and is valid", () => {
-    const json = JSON.parse(renderPageMapDiffJson(diffPageMaps(before, after), meta)) as {
+    const json = JSON.parse(
+      renderPageMapDiffJson(diffPageMaps(before, after), meta)
+    ) as {
       changed: Array<{ changes: Array<{ after: string }> }>;
     };
-    expect(json.changed[0]!.changes.find((c) => c.after.includes("evil.example"))).toBeDefined();
+    expect(
+      json.changed[0]!.changes.find((c) => c.after.includes("evil.example"))
+    ).toBeDefined();
   });
 
   test("the HTML table carries no control or bidi character in its data or its heading", () => {
     const html = renderPageMapHtml(
       after,
-      pageMapMeta({ id: "abc", baseUrl: meta.site, startedAt: 1 }, 2),
+      pageMapMeta({ id: "abc", baseUrl: meta.site, startedAt: 1 }, 2)
     );
     expect(unsafe(html)).toEqual([]);
     // The text survives, only its control and bidi characters are gone.
@@ -298,33 +328,43 @@ describe("review fixes (#701)", () => {
     const evil = `${E2}/p|pipe|x`;
     const diff = diffPageMaps(
       [row(evil, { title: "a" }), row(`${E2}/old`)],
-      [row(evil, { title: "b" }), row(`${E2}/new|x`)],
+      [row(evil, { title: "b" }), row(`${E2}/new|x`)]
     );
     const md = renderPageMapDiffMarkdown(diff, meta);
     const rows = md.split("\n").filter((l) => l.startsWith("| `https://"));
     const pipes = (l: string) => l.match(/(?<!\\)\|/g)?.length;
     // Changed rows have 4 cells (5 pipes), added and removed rows 3 cells (4 pipes).
-    for (const line of rows) expect([4, 5] as Array<number | undefined>).toContain(pipes(line));
+    for (const line of rows)
+      expect([4, 5] as Array<number | undefined>).toContain(pipes(line));
     expect(rows.some((l) => l.includes("p\\|pipe\\|x"))).toBe(true);
   });
 
   test("the diff JSON writes C1 controls, bidi and invisible characters as escapes and keeps the value", () => {
     const title = "a\u009bb\u202ec\u2028d\u200be";
     const out = renderPageMapDiffJson(
-      diffPageMaps([row(`${E2}/x`, { title: "a" })], [row(`${E2}/x`, { title })]),
-      meta,
+      diffPageMaps(
+        [row(`${E2}/x`, { title: "a" })],
+        [row(`${E2}/x`, { title })]
+      ),
+      meta
     );
-    for (const ch of ["\u009b", "\u202e", "\u2028", "\u200b"]) expect(out).not.toContain(ch);
-    const parsed = JSON.parse(out) as { changed: Array<{ changes: Array<{ after: string }> }> };
+    for (const ch of ["\u009b", "\u202e", "\u2028", "\u200b"])
+      expect(out).not.toContain(ch);
+    const parsed = JSON.parse(out) as {
+      changed: Array<{ changes: Array<{ after: string }> }>;
+    };
     expect(parsed.changed[0]!.changes[0]!.after).toBe(title);
   });
 
   test("h1 and schema ids are compared", () => {
     const d = diffPageMaps(
       [row(`${E2}/x`, { h1: "Old", schemaIds: ["#a"] })],
-      [row(`${E2}/x`, { h1: "New", schemaIds: ["#a", "#b"] })],
+      [row(`${E2}/x`, { h1: "New", schemaIds: ["#a", "#b"] })]
     );
-    expect(d.changed[0]!.changes.map((c) => c.field)).toEqual(["h1", "schemaIds"]);
+    expect(d.changed[0]!.changes.map((c) => c.field)).toEqual([
+      "h1",
+      "schemaIds",
+    ]);
   });
 
   test("a scope note appears only when the audits crawled clearly different numbers of pages", () => {
@@ -340,18 +380,27 @@ describe("review fixes (#701)", () => {
     expect(note(100, 79)).not.toBeNull();
     expect(note(undefined, 5)).toBeNull();
     expect(note(0, 0)).toBeNull();
-    const diff = diffPageMaps([row(`${E2}/a`)], [row(`${E2}/a`), row(`${E2}/b`)]);
+    const diff = diffPageMaps(
+      [row(`${E2}/a`)],
+      [row(`${E2}/a`), row(`${E2}/b`)]
+    );
     const withPages = {
       ...meta,
       older: { ...meta.older, pages: 25 },
       newer: { ...meta.newer, pages: 500 },
     };
     expect(renderPageMapDiffMarkdown(diff, withPages)).toContain(
-      "> The audits crawled different numbers of pages",
+      "> The audits crawled different numbers of pages"
     );
     expect(
-      (JSON.parse(renderPageMapDiffJson(diff, withPages)) as { scopeNote?: string }).scopeNote,
+      (
+        JSON.parse(renderPageMapDiffJson(diff, withPages)) as {
+          scopeNote?: string;
+        }
+      ).scopeNote
     ).toContain("25 and 500");
-    expect(renderPageMapDiffMarkdown(diff, meta)).not.toContain("different numbers");
+    expect(renderPageMapDiffMarkdown(diff, meta)).not.toContain(
+      "different numbers"
+    );
   });
 });

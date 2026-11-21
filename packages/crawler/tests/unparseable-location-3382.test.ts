@@ -4,13 +4,13 @@
 // terminal error hop now, like a redirect with no Location at all, on both
 // fetchers, and the crawl goes on to the next URL.
 
+import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Fiber, Stream } from "effect";
 
-import { createFetchDocumentFetcher } from "@squirrelscan/fetchers";
+import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 
 import { createCrawler } from "../src/core/crawler";
-import type { CrawlerConfig, CrawlerEvent } from "../src/core/types";
 import { fetchPage } from "../src/fetcher";
 
 const BAD_LOCATION = "http://[";
@@ -30,7 +30,10 @@ function site() {
       const path = new URL(req.url).pathname;
       if (path === "/robots.txt") return new Response("", { status: 404 });
       if (path === "/bad") {
-        return new Response(null, { status: 302, headers: { location: BAD_LOCATION } });
+        return new Response(null, {
+          status: 302,
+          headers: { location: BAD_LOCATION },
+        });
       }
       if (path === "/next") {
         return new Response("<!doctype html><title>next</title><p>next</p>", {
@@ -52,14 +55,16 @@ describe("a redirect with an unparseable Location", () => {
         userAgent: "squirrel-test",
         timeoutMs: 5_000,
         followRedirects: true,
-      }),
+      })
     );
 
     expect(Exit.isSuccess(exit)).toBe(true);
     if (!Exit.isSuccess(exit)) return;
     expect(exit.value.status).toBe(302);
     expect(exit.value.redirectChain.endsInError).toBe(true);
-    expect(exit.value.redirectChain.hops.map((h) => h.statusCode)).toEqual([302]);
+    expect(exit.value.redirectChain.hops.map((h) => h.statusCode)).toEqual([
+      302,
+    ]);
   });
 
   test("the crawl records the page and goes on to the next URL", async () => {
@@ -83,9 +88,10 @@ describe("a redirect with an unparseable Location", () => {
     const events = Effect.runFork(
       Stream.runForEach(crawler.events, (event: CrawlerEvent) =>
         Effect.sync(() => {
-          if (event.type === "page:fetched" || event.type === "page:failed") seen.push(event.url);
-        }),
-      ),
+          if (event.type === "page:fetched" || event.type === "page:failed")
+            seen.push(event.url);
+        })
+      )
     );
     try {
       const crawlId = await Effect.runPromise(crawler.start(origin, origin));
@@ -103,7 +109,10 @@ describe("a redirect with an unparseable Location", () => {
   test("the plain fetcher records the same terminal error hop", async () => {
     const origin = site();
     const fetcher = createFetchDocumentFetcher();
-    const result = await fetcher.fetch({ url: `${origin}bad`, timeoutMs: 5_000 });
+    const result = await fetcher.fetch({
+      url: `${origin}bad`,
+      timeoutMs: 5_000,
+    });
     expect(result.status).toBe(302);
     expect(result.redirectChain?.endsInError).toBe(true);
   });

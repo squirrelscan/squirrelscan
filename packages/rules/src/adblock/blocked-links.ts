@@ -1,15 +1,25 @@
 // adblock/blocked-links - links/resources blocked by EasyList network rules
 // (cloud-backed, site-scope — server matches against the full EasyList)
 
+import type {
+  BlocklistCheckResponse,
+  BlocklistMatch,
+} from "@squirrelscan/core-contracts";
+
+import {
+  getHostname,
+  querySelectorAllOutsideNoscript,
+} from "@squirrelscan/utils";
+import { getDomain } from "tldts";
 import { z } from "zod";
 
-import { getDomain } from "tldts";
-
-import type { BlocklistCheckResponse, BlocklistMatch } from "@squirrelscan/core-contracts";
-
-import { getHostname, querySelectorAllOutsideNoscript } from "@squirrelscan/utils";
-
-import type { CheckResult, ParsedPage, Rule, RuleContext, RuleResult } from "../types";
+import type {
+  CheckResult,
+  ParsedPage,
+  Rule,
+  RuleContext,
+  RuleResult,
+} from "../types";
 
 import { humanizeCloudSkip, readCloudResult } from "../cloud";
 
@@ -145,7 +155,9 @@ export function findSourcePages(ctx: RuleContext, url: string): string[] {
   // Pre-attributed script resources: the crawler records which pages loaded
   // each external script. This is the most reliable source — when the resource
   // is a known fetched script, its recorded sourcePages are authoritative.
-  const scriptSources = ctx.site?.scripts?.find((s) => s.url === url)?.sourcePages;
+  const scriptSources = ctx.site?.scripts?.find(
+    (s) => s.url === url
+  )?.sourcePages;
   if (scriptSources && scriptSources.length > 0) {
     return scriptSources.slice(0, MAX_SOURCE_PAGES);
   }
@@ -170,7 +182,9 @@ export function findSourcePages(ctx: RuleContext, url: string): string[] {
 /** Raw `<script src>` attribute values on ONE page's live DOM — shared by the
  *  page-time collector (#1021 E-E2) and the legacy `documentReferencesScript`.
  *  A `<script>` inside `<noscript>` never loads, so it is not one (#434). */
-export function pageScriptSrcs(doc: NonNullable<ParsedPage["document"]>): string[] {
+export function pageScriptSrcs(
+  doc: NonNullable<ParsedPage["document"]>
+): string[] {
   const srcs: string[] = [];
   try {
     for (const script of querySelectorAllOutsideNoscript(doc, "script[src]")) {
@@ -199,10 +213,15 @@ function scriptSrcsByUrl(ctx: RuleContext): Map<string, string[]> | null {
 
 /** Whether a parsed document loads `<script src="url">` (absolute match). */
 function documentReferencesScript(doc: unknown, url: string): boolean {
-  const document = doc as { querySelectorAll(sel: string): Iterable<Element> } | null;
+  const document = doc as {
+    querySelectorAll(sel: string): Iterable<Element>;
+  } | null;
   if (typeof document?.querySelectorAll !== "function") return false;
   try {
-    for (const script of querySelectorAllOutsideNoscript(document, "script[src]")) {
+    for (const script of querySelectorAllOutsideNoscript(
+      document,
+      "script[src]"
+    )) {
       if (script.getAttribute("src") === url) return true;
     }
   } catch {
@@ -220,7 +239,7 @@ function buildPerResourceChecks(
   ctx: RuleContext,
   matches: BlocklistMatch[],
   maxToReport: number,
-  listsVersion: string,
+  listsVersion: string
 ): CheckResult[] {
   // Always surface at least one warning when matches exist (a misconfigured
   // maxMatchesToReport of 0 must not silently drop the finding from the report
@@ -239,7 +258,7 @@ function buildPerResourceChecks(
   entries.sort(
     (a, b) =>
       b.sourcePages.length - a.sourcePages.length ||
-      a.match.value.localeCompare(b.match.value),
+      a.match.value.localeCompare(b.match.value)
   );
 
   return entries.slice(0, limit).map(({ match, sourcePages }) => {
@@ -292,17 +311,26 @@ export const blockedLinksRule: Rule = {
     severity: "warning",
     weight: 2,
     optionsSchema,
-    cloud: { service: "blocklist-check", unit: "site", creditFeature: "adblock_detect" },
+    cloud: {
+      service: "blocklist-check",
+      unit: "site",
+      creditFeature: "adblock_detect",
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
     const opts = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
 
-    const envelope = readCloudResult<BlocklistCheckResponse>(ctx.cloudResults, "blocklist-check");
+    const envelope = readCloudResult<BlocklistCheckResponse>(
+      ctx.cloudResults,
+      "blocklist-check"
+    );
     if (!envelope || envelope.status === "skipped" || !envelope.data) {
       const reason =
-        envelope?.status === "skipped" ? (envelope.skipReason ?? "not-prefetched") : "not-prefetched";
+        envelope?.status === "skipped"
+          ? (envelope.skipReason ?? "not-prefetched")
+          : "not-prefetched";
       checks.push({
         name: "blocked-links",
         status: "skipped",
@@ -314,7 +342,7 @@ export const blockedLinksRule: Rule = {
 
     // EasyPrivacy url matches are reported by adblock/privacy-blocked.
     const matches = envelope.data.matches.filter(
-      (m) => m.kind === "url" && m.list === "easylist",
+      (m) => m.kind === "url" && m.list === "easylist"
     );
 
     if (matches.length === 0) {
@@ -331,8 +359,8 @@ export const blockedLinksRule: Rule = {
           ctx,
           matches,
           opts.maxMatchesToReport,
-          envelope.data.listsVersion,
-        ),
+          envelope.data.listsVersion
+        )
       );
     }
 

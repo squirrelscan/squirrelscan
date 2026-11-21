@@ -10,7 +10,8 @@ import { redactSecretText } from "../src/secret-url-redaction";
 const HEX = "3f2a9c1b8e7d6a5f4e3d";
 const B64 = "Zm9vYmFyQmF6UXV4MTIzNDU2Nzg";
 const ALNUM = "lit3py55t21z5v55vlm25s55";
-const JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEyMyJ9.c2lnbmF0dXJlLXZhbHVl";
+const JWT =
+  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEyMyJ9.c2lnbmF0dXJlLXZhbHVl";
 const SITE = new Set(["example.com", "shop.example.com"]);
 const redact = (text: string) => redactSecretText(text, SITE);
 
@@ -24,10 +25,15 @@ describe("key and token names the lists missed (#3347)", () => {
     [name("subscription", "key"), HEX],
     ["Ocp-Apim-Subscription-Key", HEX],
     ["csrfmiddlewaretoken", B64],
-  ])("%s with a token-shaped value is redacted in an off-site URL too", (param, value) => {
-    const url = `https://partner.example.org/p?${param}=${value}&page=2`;
-    expect(redact(url)).toBe(`https://partner.example.org/p?${param}=REDACTED&page=2`);
-  });
+  ])(
+    "%s with a token-shaped value is redacted in an off-site URL too",
+    (param, value) => {
+      const url = `https://partner.example.org/p?${param}=${value}&page=2`;
+      expect(redact(url)).toBe(
+        `https://partner.example.org/p?${param}=REDACTED&page=2`
+      );
+    }
+  );
 
   // Names that only ever carry a secret: redacted whatever the value looks like.
   test.each([
@@ -39,7 +45,9 @@ describe("key and token names the lists missed (#3347)", () => {
     ["__token__", `exp=1700000000~acl=/*~hmac=${HEX}`],
   ])("%s is redacted whatever its value", (param, value) => {
     const url = `https://partner.example.org/p?${param}=${value}&page=2`;
-    expect(redact(url)).toBe(`https://partner.example.org/p?${param}=REDACTED&page=2`);
+    expect(redact(url)).toBe(
+      `https://partner.example.org/p?${param}=REDACTED&page=2`
+    );
   });
 
   test("names that can mean content keep a short, ordinary value", () => {
@@ -51,18 +59,18 @@ describe("key and token names the lists missed (#3347)", () => {
     ]) {
       for (const value of ["home", "premium-plan-annual-2026", "42"]) {
         expect(redact(`https://example.com/p?${param}=${value}&page=2`)).toBe(
-          `https://example.com/p?${param}=${value}&page=2`,
+          `https://example.com/p?${param}=${value}&page=2`
         );
       }
     }
     // The pre-existing content names are untouched.
     expect(redact("https://example.com/token?token=USDC")).toBe(
-      "https://example.com/token?token=USDC",
+      "https://example.com/token?token=USDC"
     );
     // `__token__` does not reach plain `token`, `_token` or `token_`.
     for (const param of ["token", "_token", "token_"]) {
       expect(redact(`https://example.com/p?${param}=home`)).toBe(
-        `https://example.com/p?${param}=home`,
+        `https://example.com/p?${param}=home`
       );
     }
   });
@@ -79,10 +87,19 @@ describe("path-token forms left after #3339 (#3433)", () => {
   test.each([
     // Django's reset view: the token is two segments after the word.
     [`/reset/MQ/${DJANGO_TOKEN}/`, "/reset/MQ/REDACTED/"],
-    [`/password/reset/confirm/Mg/${DJANGO_TOKEN}/`, "/password/reset/confirm/Mg/REDACTED/"],
+    [
+      `/password/reset/confirm/Mg/${DJANGO_TOKEN}/`,
+      "/password/reset/confirm/Mg/REDACTED/",
+    ],
     // django-allauth's signed confirmation key, and its older hex key.
-    [`/accounts/confirm-email/${ALLAUTH_KEY}/`, "/accounts/confirm-email/REDACTED/"],
-    [`/accounts/confirm-email/${HEX}${HEX}/`, "/accounts/confirm-email/REDACTED/"],
+    [
+      `/accounts/confirm-email/${ALLAUTH_KEY}/`,
+      "/accounts/confirm-email/REDACTED/",
+    ],
+    [
+      `/accounts/confirm-email/${HEX}${HEX}/`,
+      "/accounts/confirm-email/REDACTED/",
+    ],
     // Hash routes.
     [`/#/reset/${HEX}`, "/#/reset/REDACTED"],
     [`/app#!/reset/${B64}`, "/app#!/reset/REDACTED"],
@@ -111,11 +128,16 @@ describe("path-token forms left after #3339 (#3433)", () => {
     [`/verify/email/${HEX}`, "/verify/email/REDACTED"],
     [`/activate/account/${HEX}`, "/activate/account/REDACTED"],
     // A token before a markdown link's `)` or a file extension.
-    [`[reset](https://example.com/reset/${HEX})`, "[reset](https://example.com/reset/REDACTED)"],
+    [
+      `[reset](https://example.com/reset/${HEX})`,
+      "[reset](https://example.com/reset/REDACTED)",
+    ],
     [`/reset/${HEX}.html`, "/reset/REDACTED.html"],
   ])("%s is redacted", (path, redacted) => {
     const url = path.startsWith("/") ? `https://example.com${path}` : path;
-    const want = redacted.startsWith("/") ? `https://example.com${redacted}` : redacted;
+    const want = redacted.startsWith("/")
+      ? `https://example.com${redacted}`
+      : redacted;
     expect(redact(url)).toBe(want);
     // Idempotent.
     expect(redact(want)).toBe(want);
@@ -160,31 +182,35 @@ describe("path-token forms left after #3339 (#3433)", () => {
     }
     // Nested in the site's own URL, an off-site path is the site's to redact.
     expect(
-      redact(`https://example.com/go?next=https%3A%2F%2Fpartner.example.org%2Freset%2F${HEX}`),
-    ).toBe("https://example.com/go?next=https%3A%2F%2Fpartner.example.org%2Freset%2FREDACTED");
+      redact(
+        `https://example.com/go?next=https%3A%2F%2Fpartner.example.org%2Freset%2F${HEX}`
+      )
+    ).toBe(
+      "https://example.com/go?next=https%3A%2F%2Fpartner.example.org%2Freset%2FREDACTED"
+    );
   });
 
   test("a segment of many `)` after a context word stays linear (CodeQL js/polynomial-redos)", () => {
     const parens = ")".repeat(50_000);
     const start = performance.now();
     expect(redact(`https://example.com/reset/${parens}x`)).toBe(
-      `https://example.com/reset/${parens}x`,
+      `https://example.com/reset/${parens}x`
     );
     expect(redact(`https://example.com/reset/${HEX}${parens}`)).toBe(
-      `https://example.com/reset/REDACTED${parens}`,
+      `https://example.com/reset/REDACTED${parens}`
     );
     expect(performance.now() - start).toBeLessThan(2_000);
   });
 
   test("`&#38;` and `;` separate parameters in the site's own URLs", () => {
     expect(redact(`https://example.com/p?a=1&#38;token=${HEX}`)).toBe(
-      "https://example.com/p?a=1&#38;token=REDACTED",
+      "https://example.com/p?a=1&#38;token=REDACTED"
     );
     expect(redact(`https://example.com/p?a=1;sid=${ALNUM};b=2`)).toBe(
-      "https://example.com/p?a=1;sid=REDACTED;b=2",
+      "https://example.com/p?a=1;sid=REDACTED;b=2"
     );
     expect(redact("https://example.com/p?a=1&#38;token=USDC;sid=42")).toBe(
-      "https://example.com/p?a=1&#38;token=USDC;sid=42",
+      "https://example.com/p?a=1&#38;token=USDC;sid=42"
     );
   });
 });
@@ -194,7 +220,10 @@ describe("short values and name forms left after #3339 (#3433)", () => {
     [`${name("activate", "token")}=abc`, `${name("activate", "token")}=***`],
     [`${name("sso", "token")}=x9z`, `${name("sso", "token")}=***`],
     [`${name("otp", "code")}=123456`, `${name("otp", "code")}=******`],
-    [`${name("verification", "code")}=AB12CD`, `${name("verification", "code")}=******`],
+    [
+      `${name("verification", "code")}=AB12CD`,
+      `${name("verification", "code")}=******`,
+    ],
     [`${name("activation", "key")}=k3y`, `${name("activation", "key")}=***`],
     [`${name("reset", "key")}=${HEX}`, `${name("reset", "key")}=REDACTED`],
     [`${name("user", "sid")}=${HEX}`, `${name("user", "sid")}=REDACTED`],
@@ -206,7 +235,7 @@ describe("short values and name forms left after #3339 (#3433)", () => {
     [`auth=Q7wE2rT9yU4iO1pA`, "auth=REDACTED"],
   ])("%s is redacted", (param, redacted) => {
     expect(redact(`https://example.com/p?${param}&page=2`)).toBe(
-      `https://example.com/p?${redacted}&page=2`,
+      `https://example.com/p?${redacted}&page=2`
     );
   });
 
@@ -218,15 +247,19 @@ describe("short values and name forms left after #3339 (#3433)", () => {
     "/login/oauth2/code/google",
   ])("the OAuth code on %s is redacted whatever its shape", (path) => {
     expect(redact(`https://example.com${path}?code=4%2F0Ab&state=x`)).toBe(
-      `https://example.com${path}?code=*******&state=x`,
+      `https://example.com${path}?code=*******&state=x`
     );
     expect(redact(`https://example.com${path}?state=x&code=${HEX}`)).toBe(
-      `https://example.com${path}?state=x&code=REDACTED`,
+      `https://example.com${path}?state=x&code=REDACTED`
     );
     // Nested in the site's `next`, encoded.
     expect(
-      redact(`https://example.com/login?next=${encodeURIComponent(`${path}?code=${HEX}`)}`),
-    ).toBe(`https://example.com/login?next=${encodeURIComponent(path)}%3Fcode%3DREDACTED`);
+      redact(
+        `https://example.com/login?next=${encodeURIComponent(`${path}?code=${HEX}`)}`
+      )
+    ).toBe(
+      `https://example.com/login?next=${encodeURIComponent(path)}%3Fcode%3DREDACTED`
+    );
   });
 
   test.each([
@@ -371,7 +404,11 @@ const PATH_SECRETS: Array<[string, string]> = [
   [`#!/confirm/${B64}`, B64],
 ];
 /** An OAuth callback path, whose `code` is per-visitor whatever its shape. */
-const CALLBACK_PATHS = ["auth/callback", "auth/google/callback", "api/auth/callback/github"];
+const CALLBACK_PATHS = [
+  "auth/callback",
+  "auth/google/callback",
+  "api/auth/callback/github",
+];
 
 function pick<T>(rand: () => number, items: readonly T[]): T {
   return items[Math.floor(rand() * items.length)]!;
@@ -391,11 +428,14 @@ interface Sample {
 function sample(rand: () => number): Sample {
   const offSite = rand() < 0.5;
   const host = pick(rand, offSite ? HOSTS.off : HOSTS.site);
-  let path = Array.from({ length: Math.floor(rand() * 3) }, () => pick(rand, SEGMENTS))
+  let path = Array.from({ length: Math.floor(rand() * 3) }, () =>
+    pick(rand, SEGMENTS)
+  )
     .filter(Boolean)
     .join("/");
   const params: string[] = [];
-  for (let i = Math.floor(rand() * 3); i > 0; i--) params.push(pick(rand, BENIGN));
+  for (let i = Math.floor(rand() * 3); i > 0; i--)
+    params.push(pick(rand, BENIGN));
   const secrets: string[] = [];
   const planted = rand();
   let kind: Sample["kind"] = "none";
@@ -432,7 +472,13 @@ function sample(rand: () => number): Sample {
     const outer = pick(rand, HOSTS.site);
     url = `https://${outer}/go?next=${encodeURIComponent(url)}`;
   }
-  return { url, secrets, kind, siteOwned: !offSite || nested, offSite: offSite && !nested };
+  return {
+    url,
+    secrets,
+    kind,
+    siteOwned: !offSite || nested,
+    offSite: offSite && !nested,
+  };
 }
 
 const SEEDS = [1, 7, 42, 2026, 31337];
@@ -455,12 +501,14 @@ describe("redaction contract, seeded fuzz (#3347)", () => {
       if (s.kind === "none") expect(once, where).toBe(s.url);
       // Credentials go everywhere; per-visitor values where the site owns them.
       if (s.kind === "credential" || (s.kind !== "none" && s.siteOwned)) {
-        for (const secret of s.secrets) expect(once, where).not.toContain(secret);
+        for (const secret of s.secrets)
+          expect(once, where).not.toContain(secret);
       }
       // An off-site URL reads the same with the report's hosts as with none, and
       // keeps its per-visitor parameters (the link checker keys on them, #3339).
       if (s.offSite) expect(redactSecretText(s.url, empty), where).toBe(once);
-      if (s.offSite && (s.kind === "session" || s.kind === "path")) expect(once, where).toBe(s.url);
+      if (s.offSite && (s.kind === "session" || s.kind === "path"))
+        expect(once, where).toBe(s.url);
     }
   });
 });
@@ -526,17 +574,25 @@ describe("redaction on hostile text, seeded (#3347)", () => {
     ALLAUTH_KEY,
   ];
 
-  test.each([3, 99, 4096])("seed %i: never throws, idempotent, never longer", (seed) => {
-    const rand = prng(seed);
-    for (let i = 0; i < 400; i++) {
-      const text = Array.from({ length: 1 + Math.floor(rand() * 40) }, () =>
-        pick(rand, ATOMS),
-      ).join("");
-      const once = redact(text);
-      expect(redact(once), `seed ${seed} #${i}: ${JSON.stringify(text)}`).toBe(once);
-      expect(once.length, `seed ${seed} #${i}`).toBeLessThanOrEqual(text.length);
+  test.each([3, 99, 4096])(
+    "seed %i: never throws, idempotent, never longer",
+    (seed) => {
+      const rand = prng(seed);
+      for (let i = 0; i < 400; i++) {
+        const text = Array.from({ length: 1 + Math.floor(rand() * 40) }, () =>
+          pick(rand, ATOMS)
+        ).join("");
+        const once = redact(text);
+        expect(
+          redact(once),
+          `seed ${seed} #${i}: ${JSON.stringify(text)}`
+        ).toBe(once);
+        expect(once.length, `seed ${seed} #${i}`).toBeLessThanOrEqual(
+          text.length
+        );
+      }
     }
-  });
+  );
 
   test("a long run of one atom stays linear", () => {
     for (const atom of [

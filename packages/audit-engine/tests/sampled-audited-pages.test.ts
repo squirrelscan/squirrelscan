@@ -9,20 +9,26 @@
 // over the unsampled results), so the clipping is the real one, not a hand-built
 // imitation of it.
 
-import { describe, expect, test } from "bun:test";
-
 import type {
   CheckResult,
   FindingState,
   PageFindingRecord,
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
+
 import { resolutionUrlHash } from "@squirrelscan/core-contracts/resolution";
-import { foldOverflowChecks, sampleChecksForPublish } from "@squirrelscan/rules/fold";
+import {
+  foldOverflowChecks,
+  sampleChecksForPublish,
+} from "@squirrelscan/rules/fold";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
+import { describe, expect, test } from "bun:test";
 
 import { findingKey } from "../src/merge-core";
-import { runCloudSmartAudits, type SmartAuditStore } from "../src/merge-promise";
+import {
+  runCloudSmartAudits,
+  type SmartAuditStore,
+} from "../src/merge-promise";
 import { calculateHealthScore } from "../src/scoring";
 import { describeSitePagesContract } from "./helpers/site-pages-contract";
 
@@ -30,7 +36,10 @@ class MemStore implements SmartAuditStore {
   findings = new Map<string, PageFindingRecord>();
   pages = new Map<string, SitePageRecord>();
 
-  async getFindings(_siteKey: string, states?: FindingState[]): Promise<PageFindingRecord[]> {
+  async getFindings(
+    _siteKey: string,
+    states?: FindingState[]
+  ): Promise<PageFindingRecord[]> {
     const all = [...this.findings.values()];
     return states ? all.filter((f) => states.includes(f.state)) : all;
   }
@@ -39,7 +48,10 @@ class MemStore implements SmartAuditStore {
   }
   async upsertFindings(findings: PageFindingRecord[]): Promise<void> {
     for (const f of findings) {
-      this.findings.set(findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator), { ...f });
+      this.findings.set(
+        findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator),
+        { ...f }
+      );
     }
   }
   async upsertSitePages(pages: SitePageRecord[]): Promise<void> {
@@ -49,7 +61,7 @@ class MemStore implements SmartAuditStore {
     siteKey: string,
     normalizedUrl: string,
     crawlId: string,
-    lastStatus: number,
+    lastStatus: number
   ): Promise<void> {
     this.pages.set(normalizedUrl, {
       siteKey,
@@ -63,10 +75,15 @@ class MemStore implements SmartAuditStore {
   async markPagesRemoved(
     siteKey: string,
     pages: Array<{ normalizedUrl: string; lastStatus: number }>,
-    crawlId: string,
+    crawlId: string
   ): Promise<void> {
     for (const p of pages) {
-      await this.markPageRemoved(siteKey, p.normalizedUrl, crawlId, p.lastStatus);
+      await this.markPageRemoved(
+        siteKey,
+        p.normalizedUrl,
+        crawlId,
+        p.lastStatus
+      );
     }
   }
   async compactFindings(): Promise<number> {
@@ -92,8 +109,17 @@ const CRAWLED = Array.from({ length: 600 }, (_, i) => page(i));
 const GONE = page(599);
 const LIVE = CRAWLED.filter((u) => u !== GONE);
 
-function check(name: string, url: string, status: CheckResult["status"]): CheckResult {
-  return { name, status, message: status === "pass" ? "ok" : `${name} ${status}`, pageUrl: url };
+function check(
+  name: string,
+  url: string,
+  status: CheckResult["status"]
+): CheckResult {
+  return {
+    name,
+    status,
+    message: status === "pass" ? "ok" : `${name} ${status}`,
+    pageUrl: url,
+  };
 }
 
 /**
@@ -105,11 +131,15 @@ function fullResults(descFails: Set<string>, titleFails: Set<string>) {
   return {
     "meta-description": {
       meta: meta("meta-description"),
-      checks: LIVE.map((u) => check("has-description", u, descFails.has(u) ? "fail" : "pass")),
+      checks: LIVE.map((u) =>
+        check("has-description", u, descFails.has(u) ? "fail" : "pass")
+      ),
     },
     title: {
       meta: meta("title"),
-      checks: LIVE.map((u) => check("has-title", u, titleFails.has(u) ? "warn" : "pass")),
+      checks: LIVE.map((u) =>
+        check("has-title", u, titleFails.has(u) ? "warn" : "pass")
+      ),
     },
   };
 }
@@ -117,8 +147,10 @@ function fullResults(descFails: Set<string>, titleFails: Set<string>) {
 /** The publish transformation: fold over-cap rules, sample every check, build the signal first. */
 function samplePayload(full: ReturnType<typeof fullResults>) {
   const resolutionSignal = buildResolutionSignal(full, CRAWLED);
-  const ruleResults: Record<string, { meta: ReturnType<typeof meta>; checks: CheckResult[] }> =
-    {};
+  const ruleResults: Record<
+    string,
+    { meta: ReturnType<typeof meta>; checks: CheckResult[] }
+  > = {};
   for (const [ruleId, r] of Object.entries(full)) {
     ruleResults[ruleId] = {
       meta: r.meta,
@@ -133,7 +165,9 @@ function samplePayload(full: ReturnType<typeof fullResults>) {
 }
 
 /** Pages a sampled payload evidences: a check's pageUrl or an aggregate's retained pages. */
-function evidencedPages(payload: ReturnType<typeof samplePayload>): Set<string> {
+function evidencedPages(
+  payload: ReturnType<typeof samplePayload>
+): Set<string> {
   const out = new Set<string>();
   for (const r of Object.values(payload.ruleResults)) {
     for (const c of r.checks) {
@@ -148,7 +182,7 @@ async function publish(
   store: MemStore,
   crawlId: string,
   payload: ReturnType<typeof samplePayload>,
-  opts: { signal?: boolean } = {},
+  opts: { signal?: boolean } = {}
 ) {
   return runCloudSmartAudits({
     store,
@@ -156,7 +190,9 @@ async function publish(
     crawlId,
     ruleResults: payload.ruleResults,
     pageStatuses: payload.pageStatuses,
-    ...(opts.signal === false ? {} : { resolutionSignal: payload.resolutionSignal }),
+    ...(opts.signal === false
+      ? {}
+      : { resolutionSignal: payload.resolutionSignal }),
     now: 1_780_000_000_000,
   });
 }
@@ -179,7 +215,9 @@ describe("sampled publish counts every crawled page as audited (#2067)", () => {
   test("auditedPages = pagesCrawled − removed, knownPages ≥ auditedPages", async () => {
     const r = await publish(new MemStore(), "audit_1", payload);
     expect(r.coverage.auditedPages).toBe(CRAWLED.length - 1);
-    expect(r.coverage.knownPages).toBeGreaterThanOrEqual(r.coverage.auditedPages);
+    expect(r.coverage.knownPages).toBeGreaterThanOrEqual(
+      r.coverage.auditedPages
+    );
     expect(r.coverage.knownPages).toBe(LIVE.length);
     expect(r.removedPages).toBe(1);
   });
@@ -187,7 +225,9 @@ describe("sampled publish counts every crawled page as audited (#2067)", () => {
   test("before the fix the count was the evidenced pages only (the payload without its signal)", async () => {
     // A publish without the signal is what the merge counted from before: the
     // pages the payload names. That is the M of the bug.
-    const r = await publish(new MemStore(), "audit_1", payload, { signal: false });
+    const r = await publish(new MemStore(), "audit_1", payload, {
+      signal: false,
+    });
     expect(r.coverage.auditedPages).toBe(evidenced.size);
     expect(r.coverage.auditedPages).toBeLessThan(LIVE.length);
   });
@@ -206,12 +246,15 @@ describe("sampled publish counts every crawled page as audited (#2067)", () => {
 
   test("the health score is unchanged: identical to the same payload scored without the new rows", async () => {
     const fixed = await publish(new MemStore(), "audit_1", payload);
-    const before = await publish(new MemStore(), "audit_1", payload, { signal: false });
+    const before = await publish(new MemStore(), "audit_1", payload, {
+      signal: false,
+    });
     expect(calculateHealthScore({ results: fixed.unionRuleResults })).toEqual(
-      calculateHealthScore({ results: before.unionRuleResults }),
+      calculateHealthScore({ results: before.unionRuleResults })
     );
     // No clipped page slipped into the carried denominator on a first audit.
-    for (const r of fixed.unionRuleResults.values()) expect(r.syntheticPassCount).toBeUndefined();
+    for (const r of fixed.unionRuleResults.values())
+      expect(r.syntheticPassCount).toBeUndefined();
   });
 
   test("a re-audit whose clipped pages already had rows keeps their synthetic pass", async () => {
@@ -228,17 +271,21 @@ describe("sampled publish counts every crawled page as audited (#2067)", () => {
           state: "active" as const,
           lastSeenCrawlId: "audit_0",
           lastSeenAt: 1_770_000_000_000,
-        })),
+        }))
       );
       return store;
     };
     const fixed = await publish(await seed(), "audit_1", payload);
-    const before = await publish(await seed(), "audit_1", payload, { signal: false });
+    const before = await publish(await seed(), "audit_1", payload, {
+      signal: false,
+    });
     for (const ruleId of ["meta-description", "title"]) {
-      expect(fixed.unionRuleResults.get(ruleId)!.syntheticPassCount).toBe(clipped.length);
+      expect(fixed.unionRuleResults.get(ruleId)!.syntheticPassCount).toBe(
+        clipped.length
+      );
     }
     expect(calculateHealthScore({ results: fixed.unionRuleResults })).toEqual(
-      calculateHealthScore({ results: before.unionRuleResults }),
+      calculateHealthScore({ results: before.unionRuleResults })
     );
     expect(fixed.coverage.auditedPages).toBe(LIVE.length);
   });
@@ -263,7 +310,9 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
     const store = new MemStore();
     const first = await publish(store, "audit_1", payload);
     // First publish: no clipped page had a row, so none is a carried page.
-    expect(first.unionRuleResults.get("meta-description")!.syntheticPassCount).toBeUndefined();
+    expect(
+      first.unionRuleResults.get("meta-description")!.syntheticPassCount
+    ).toBeUndefined();
 
     // Every crawled page now has a row; the same crawl is published again. A
     // clipped failing page's fail is in no check, so crediting its title pass
@@ -271,7 +320,9 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
     const second = await publish(store, "audit_2", payload);
     expect(second.coverage.auditedPages).toBe(LIVE.length);
     for (const ruleId of ["meta-description", "title"]) {
-      expect(second.unionRuleResults.get(ruleId)!.syntheticPassCount).toBe(clippedClean.length);
+      expect(second.unionRuleResults.get(ruleId)!.syntheticPassCount).toBe(
+        clippedClean.length
+      );
     }
   });
 
@@ -283,19 +334,21 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
     await publish(store, "audit_1", warnPayload);
     const second = await publish(store, "audit_2", warnPayload);
     expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(
-      warnClipped.filter((u) => !titleWarns.has(u)).length,
+      warnClipped.filter((u) => !titleWarns.has(u)).length
     );
   });
 
   test("a site failing a check on every page scores the same on every publish", async () => {
     // The real-site shape: a template problem on every page, so every clipped
     // page fails something and none can be scored from the payload.
-    const everywhere = samplePayload(fullResults(new Set(LIVE.slice(0, 20)), new Set(LIVE)));
+    const everywhere = samplePayload(
+      fullResults(new Set(LIVE.slice(0, 20)), new Set(LIVE))
+    );
     const store = new MemStore();
     const first = await publish(store, "audit_1", everywhere);
     const second = await publish(store, "audit_2", everywhere);
     expect(calculateHealthScore({ results: second.unionRuleResults })).toEqual(
-      calculateHealthScore({ results: first.unionRuleResults }),
+      calculateHealthScore({ results: first.unionRuleResults })
     );
     expect(second.coverage.auditedPages).toBe(LIVE.length);
   });
@@ -312,15 +365,16 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
     const store = new MemStore();
     const first = await publish(store, "audit_1", silentPayload);
     expect(first.coverage.auditedPages).toBe(LIVE.length);
-    for (const url of silent) expect(store.pages.get(url)?.state).toBe("active");
+    for (const url of silent)
+      expect(store.pages.get(url)?.state).toBe("active");
 
     const second = await publish(store, "audit_2", silentPayload);
     const clippedEvaluated = LIVE.filter(
-      (u) => !silent.has(u) && !evidencedPages(silentPayload).has(u),
+      (u) => !silent.has(u) && !evidencedPages(silentPayload).has(u)
     );
     expect(clippedEvaluated.length).toBeGreaterThan(0);
     expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(
-      clippedEvaluated.length,
+      clippedEvaluated.length
     );
   });
 
@@ -350,10 +404,12 @@ describe("on the NEXT publish, a clipped page counts only with all of its eviden
     ]);
     const second = await publish(store, "audit_2", payload);
     expect(second.coverage.carriedFindings).toBe(1);
-    expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(clippedClean.length + 1);
-    expect(second.unionRuleResults.get("meta-description")!.syntheticPassCount).toBe(
-      clippedClean.length,
+    expect(second.unionRuleResults.get("title")!.syntheticPassCount).toBe(
+      clippedClean.length + 1
     );
+    expect(
+      second.unionRuleResults.get("meta-description")!.syntheticPassCount
+    ).toBe(clippedClean.length);
     const replayed = second.unionRuleResults
       .get("meta-description")!
       .checks.filter((c) => c.pageUrl === kept);
@@ -398,9 +454,14 @@ describe("query pages: a query-blind hash speaks only for an uncrawled spelling 
         },
       },
       pageStatuses: [],
-      resolutionSignal: { crawledUrls: [BASE, Q, OTHER], failing: { [KEY]: [hash(BASE)] } },
+      resolutionSignal: {
+        crawledUrls: [BASE, Q, OTHER],
+        failing: { [KEY]: [hash(BASE)] },
+      },
     });
-    expect(r.unionRuleResults.get("meta-description")!.syntheticPassCount).toBe(1);
+    expect(r.unionRuleResults.get("meta-description")!.syntheticPassCount).toBe(
+      1
+    );
   });
 
   test("an older publisher's query-blind hash still marks `/q?id=1` failing when `/q` was not crawled", async () => {
@@ -415,10 +476,18 @@ describe("query pages: a query-blind hash speaks only for an uncrawled spelling 
         },
       },
       pageStatuses: [],
-      resolutionSignal: { crawledUrls: [Q, OTHER], failing: { [KEY]: [hash(BASE)] } },
+      resolutionSignal: {
+        crawledUrls: [Q, OTHER],
+        failing: { [KEY]: [hash(BASE)] },
+      },
     });
-    expect(r.unionRuleResults.get("meta-description")!.syntheticPassCount).toBeUndefined();
+    expect(
+      r.unionRuleResults.get("meta-description")!.syntheticPassCount
+    ).toBeUndefined();
   });
 });
 
-describeSitePagesContract("sampled-audited-pages.test.ts MemStore", () => new MemStore());
+describeSitePagesContract(
+  "sampled-audited-pages.test.ts MemStore",
+  () => new MemStore()
+);

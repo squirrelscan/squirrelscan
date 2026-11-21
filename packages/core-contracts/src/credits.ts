@@ -107,7 +107,9 @@ export interface AuditCostInput {
 /** Credits each page of the page cap commits an audit to: the page itself plus its external-link reserve. */
 export const auditCreditsPerPage = (cloudExternalLinks = false): number =>
   computeCost("audit_page", 1) +
-  (cloudExternalLinks ? computeCost("external_link", EXTERNAL_LINK_BUDGET_PER_PAGE) : 0);
+  (cloudExternalLinks
+    ? computeCost("external_link", EXTERNAL_LINK_BUDGET_PER_PAGE)
+    : 0);
 
 /** External destinations a cloud audit of `maxPages` pages may be charged for. */
 export const externalLinkBudget = (maxPages: number): number =>
@@ -123,7 +125,10 @@ export const externalLinkBudget = (maxPages: number): number =>
  */
 export const estimateAuditCap = (input: AuditCostInput): number => {
   const pages = Math.max(1, Math.floor(input.maxPages));
-  return computeCost("audit_base", 1) + pages * auditCreditsPerPage(input.cloudExternalLinks);
+  return (
+    computeCost("audit_base", 1) +
+    pages * auditCreditsPerPage(input.cloudExternalLinks)
+  );
 };
 
 /**
@@ -131,7 +136,7 @@ export const estimateAuditCap = (input: AuditCostInput): number => {
  * links, `max` = the full cap. Reuses the same pricing as estimateAuditCap.
  */
 export const estimateAuditRange = (
-  input: AuditCostInput,
+  input: AuditCostInput
 ): {
   min: number;
   max: number;
@@ -182,14 +187,23 @@ export const clampAuditPages = (input: {
   const requested = Math.max(1, Math.floor(input.maxPages));
   const base = computeCost("audit_base", 1);
   const perPage = auditCreditsPerPage(input.cloudExternalLinks);
-  const pagesFor = (credits: number) => Math.max(0, Math.floor((credits - base) / perPage));
+  const pagesFor = (credits: number) =>
+    Math.max(0, Math.floor((credits - base) / perPage));
   const byBalance =
     input.unlimited || input.balance == null || !Number.isFinite(input.balance)
       ? Number.POSITIVE_INFINITY
       : pagesFor(input.balance);
-  const byCap = input.cap != null && input.cap > 0 ? pagesFor(input.cap) : Number.POSITIVE_INFINITY;
+  const byCap =
+    input.cap != null && input.cap > 0
+      ? pagesFor(input.cap)
+      : Number.POSITIVE_INFINITY;
   const maxPages = Math.min(requested, byBalance, byCap);
-  if (maxPages >= requested) return { maxPages: requested, requestedMaxPages: requested, clamped: false };
+  if (maxPages >= requested)
+    return {
+      maxPages: requested,
+      requestedMaxPages: requested,
+      clamped: false,
+    };
   return {
     maxPages,
     requestedMaxPages: requested,
@@ -226,7 +240,9 @@ export const TOPUP_BONUS_CURVE = {
 } as const;
 
 /** The amounts the published schedule lists (the dashboard chart, `GET /v1/billing`, the docs table). */
-export const TOPUP_SCHEDULE_USD = [50, 75, 100, 150, 250, 500, 750, 1_000, 2_500, 5_000] as const;
+export const TOPUP_SCHEDULE_USD = [
+  50, 75, 100, 150, 250, 500, 750, 1_000, 2_500, 5_000,
+] as const;
 
 /** One top-up priced: the base credits at the flat rate, the bonus on top, and their sum. */
 export interface TopupQuote {
@@ -257,19 +273,34 @@ export const topupQuote = (usd: number): TopupQuote => {
   const amount = Math.floor(usd);
   // NaN, Infinity and zero or negative amounts are not purchasable: a zero quote, never NaN or negative.
   if (!Number.isFinite(amount) || amount <= 0) {
-    return { usd: 0, baseCredits: 0, bonusCredits: 0, totalCredits: 0, bonusPercent: 0 };
+    return {
+      usd: 0,
+      baseCredits: 0,
+      bonusCredits: 0,
+      totalCredits: 0,
+      bonusPercent: 0,
+    };
   }
   const baseCredits = amount * CREDIT_TOPUP.creditsPerUsd;
   const bonusPercent = topupBonusPercent(amount);
   // Round away float noise before flooring, so an exact 20% of $1,000 is 20,000 and not 19,999. `**` (Math.pow)
   // may differ in the last bits across engines (browser, workerd, Bun); the toFixed(6) step keeps the floored
   // credits identical, and tests/fixtures/topup-total-credits.json pins every whole dollar so a drift shows as a diff.
-  const bonusCredits = Math.floor(Number(((baseCredits * bonusPercent) / 100).toFixed(6)));
-  return { usd: amount, baseCredits, bonusCredits, totalCredits: baseCredits + bonusCredits, bonusPercent };
+  const bonusCredits = Math.floor(
+    Number(((baseCredits * bonusPercent) / 100).toFixed(6))
+  );
+  return {
+    usd: amount,
+    baseCredits,
+    bonusCredits,
+    totalCredits: baseCredits + bonusCredits,
+    bonusPercent,
+  };
 };
 
 /** Credits granted for a whole-dollar top-up amount (base plus bonus). */
-export const topupCreditsForUsd = (usd: number): number => topupQuote(usd).totalCredits;
+export const topupCreditsForUsd = (usd: number): number =>
+  topupQuote(usd).totalCredits;
 
 /** One row of the published bonus schedule. */
 export interface TopupScheduleRow extends TopupQuote {
@@ -281,14 +312,17 @@ export interface TopupScheduleRow extends TopupQuote {
 
 /** The bonus schedule for the dashboard chart and `GET /v1/billing`; default amounts are `TOPUP_SCHEDULE_USD`. */
 export const topupBonusSchedule = (
-  amounts: readonly number[] = TOPUP_SCHEDULE_USD,
+  amounts: readonly number[] = TOPUP_SCHEDULE_USD
 ): TopupScheduleRow[] =>
   amounts.map((usd) => {
     const quote = topupQuote(usd);
     return {
       ...quote,
       bonusPercentRounded: Math.round(quote.bonusPercent * 10) / 10,
-      creditsPerUsd: quote.usd > 0 ? Math.round((quote.totalCredits / quote.usd) * 10) / 10 : 0,
+      creditsPerUsd:
+        quote.usd > 0
+          ? Math.round((quote.totalCredits / quote.usd) * 10) / 10
+          : 0,
     };
   });
 
@@ -298,7 +332,10 @@ export const topupBonusSchedule = (
 
 export type CreditPackId = "pack_1000" | "pack_5000";
 
-export const CREDIT_PACKS: Record<CreditPackId, { credits: number; priceUsd: number }> = {
+export const CREDIT_PACKS: Record<
+  CreditPackId,
+  { credits: number; priceUsd: number }
+> = {
   pack_1000: { credits: 1000, priceUsd: 9 },
   pack_5000: { credits: 5000, priceUsd: 39 },
 } as const;

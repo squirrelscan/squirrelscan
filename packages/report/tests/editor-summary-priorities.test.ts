@@ -3,12 +3,18 @@
 // the request digest carries the detected stack and every failing rule, and a
 // summary without priorities (older servers, stored reports) renders as before.
 
+import type { EditorSummary } from "@squirrelscan/core-contracts";
+
 import { describe, expect, test } from "bun:test";
 
-import type { EditorSummary } from "@squirrelscan/core-contracts";
 import type { AuditReport } from "../src/types";
+
 import { REPORT_HTML_VERSION } from "../src/constants";
-import { buildEditorSummaryRequest, editorSummaryView, toEditorSummary } from "../src/editor-summary";
+import {
+  buildEditorSummaryRequest,
+  editorSummaryView,
+  toEditorSummary,
+} from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -62,21 +68,43 @@ describe("buildEditorSummaryRequest", () => {
       report({
         technologies: {
           items: [
-            { id: "wordpress", name: "WordPress", category: "cms", version: "6.7", confidence: "high", detectedBy: "html:wp-content" },
+            {
+              id: "wordpress",
+              name: "WordPress",
+              category: "cms",
+              version: "6.7",
+              confidence: "high",
+              detectedBy: "html:wp-content",
+            },
           ],
           added: [],
           removed: [],
           firstScan: true,
         },
         ruleResults: {
-          "perf/ttfb": { meta: { name: "TTFB", category: "perf", weight: 5 }, checks: [{ status: "fail" }] },
-          "core/h1": { meta: { name: "H1", category: "core", weight: 3 }, checks: [{ status: "warn" }] },
-          "core/title": { meta: { name: "Title", category: "core", weight: 3 }, checks: [{ status: "pass" }] },
+          "perf/ttfb": {
+            meta: { name: "TTFB", category: "perf", weight: 5 },
+            checks: [{ status: "fail" }],
+          },
+          "core/h1": {
+            meta: { name: "H1", category: "core", weight: 3 },
+            checks: [{ status: "warn" }],
+          },
+          "core/title": {
+            meta: { name: "Title", category: "core", weight: 3 },
+            checks: [{ status: "pass" }],
+          },
         } as unknown as AuditReport["ruleResults"],
-      }),
+      })
     );
     expect(req.technologies).toEqual([
-      { id: "wordpress", name: "WordPress", category: "cms", version: "6.7", detectedBy: "html:wp-content" },
+      {
+        id: "wordpress",
+        name: "WordPress",
+        category: "cms",
+        version: "6.7",
+        detectedBy: "html:wp-content",
+      },
     ]);
     expect(req.failingRuleIds?.sort()).toEqual(["core/h1", "perf/ttfb"]);
   });
@@ -90,10 +118,15 @@ describe("buildEditorSummaryRequest", () => {
   test("sends coverage copied from a capped crawl's scan scope, coverage and rate-limit counts", () => {
     const req = buildEditorSummaryRequest(
       report({
-        scanScope: { origin: "cloud", maxPages: 10, pagesCrawled: 10, capped: true },
+        scanScope: {
+          origin: "cloud",
+          maxPages: 10,
+          pagesCrawled: 10,
+          capped: true,
+        },
         coverage: { auditedPages: 10, knownPages: 90, carriedFindings: 0 },
         rateLimited: { pages: 0, hosts: [], unfetched: 4 },
-      }),
+      })
     );
     expect(req.coverage).toEqual({
       scannedPages: 10,
@@ -117,7 +150,7 @@ describe("buildEditorSummaryRequest", () => {
     const req = buildEditorSummaryRequest(
       report({
         scanScope: CAPPED_QUEUED,
-      }),
+      })
     );
     expect(req.coverage?.unfetchedPages).toBe(531);
     // A rate-limited run's own count already includes them, so it wins.
@@ -125,33 +158,55 @@ describe("buildEditorSummaryRequest", () => {
       report({
         scanScope: CAPPED_QUEUED,
         rateLimited: { pages: 5, hosts: [], unfetched: 536 },
-      }),
+      })
     );
     expect(throttled.coverage?.unfetchedPages).toBe(536);
   });
 
   test("marks a time-stopped crawl and leaves unknown counts out", () => {
     const req = buildEditorSummaryRequest(
-      report({ scanScope: { origin: "cli", pagesCrawled: 34, capped: false, stopReason: "time" } }),
+      report({
+        scanScope: {
+          origin: "cli",
+          pagesCrawled: 34,
+          capped: false,
+          stopReason: "time",
+        },
+      })
     );
-    expect(req.coverage).toEqual({ scannedPages: 34, capped: false, timeStopped: true });
+    expect(req.coverage).toEqual({
+      scannedPages: 34,
+      capped: false,
+      timeStopped: true,
+    });
   });
 
   test("sends no coverage without a scan scope, and drops counts that are not whole numbers", () => {
     expect(buildEditorSummaryRequest(report()).coverage).toBeUndefined();
     const req = buildEditorSummaryRequest(
       report({
-        scanScope: { origin: "cli", maxPages: Number.NaN, pagesCrawled: 5, capped: false },
+        scanScope: {
+          origin: "cli",
+          maxPages: Number.NaN,
+          pagesCrawled: 5,
+          capped: false,
+        },
         coverage: { auditedPages: 5, knownPages: -1, carriedFindings: 0 },
-      }),
+      })
     );
-    expect(req.coverage).toEqual({ scannedPages: 5, capped: false, timeStopped: false });
+    expect(req.coverage).toEqual({
+      scannedPages: 5,
+      capped: false,
+      timeStopped: false,
+    });
   });
 });
 
 describe("toEditorSummary priorities", () => {
   test("keeps well-formed priorities", () => {
-    expect(toEditorSummary(WITH_PRIORITIES)?.priorities).toEqual(WITH_PRIORITIES.priorities);
+    expect(toEditorSummary(WITH_PRIORITIES)?.priorities).toEqual(
+      WITH_PRIORITIES.priorities
+    );
   });
 
   test("drops malformed entries, defaults effort, clamps and caps", () => {
@@ -160,8 +215,17 @@ describe("toEditorSummary priorities", () => {
       priorities: [
         { title: "No action" },
         "not an object",
-        { title: "  Spaced\n title ", action: "Do it", effort: "huge", ruleIds: [1, "a/b"], technologies: "x" },
-        ...Array.from({ length: 20 }, (_, i) => ({ title: `T${i}`, action: "A" })),
+        {
+          title: "  Spaced\n title ",
+          action: "Do it",
+          effort: "huge",
+          ruleIds: [1, "a/b"],
+          technologies: "x",
+        },
+        ...Array.from({ length: 20 }, (_, i) => ({
+          title: `T${i}`,
+          action: "A",
+        })),
       ],
     });
     const priorities = out!.priorities!;
@@ -209,10 +273,14 @@ describe("renderers with priorities", () => {
             },
           ],
         },
-      }),
+      })
     );
-    expect(out).toContain("1. **Fix \\[the\\]\\(javascript:x\\) \\*titles\\*** (Moderate)");
-    expect(out).toContain("   Line one line two  \n   Edit \\<b\\>theme\\</b\\>");
+    expect(out).toContain(
+      "1. **Fix \\[the\\]\\(javascript:x\\) \\*titles\\*** (Moderate)"
+    );
+    expect(out).toContain(
+      "   Line one line two  \n   Edit \\<b\\>theme\\</b\\>"
+    );
   });
 
   test("text shows a PRIORITIES section", () => {
@@ -224,7 +292,9 @@ describe("renderers with priorities", () => {
 
   test("llm and xml emit ranked priority elements", () => {
     const llm = renderLlm(r);
-    expect(llm).toContain('<priority rank="1" effort="quick-win" rules="perf/ttfb" tech="wordpress">');
+    expect(llm).toContain(
+      '<priority rank="1" effort="quick-win" rules="perf/ttfb" tech="wordpress">'
+    );
     expect(llm).not.toContain("<big-ticket>");
     const xml = renderXml(r);
     expect(xml).toContain('<priority rank="2" effort="moderate">');
@@ -235,7 +305,7 @@ describe("renderers with priorities", () => {
     const out = renderHtml(r);
     expect(out).toContain('data-issues="ranked"');
     expect(out).toContain("Cache pages with WP Rocket");
-    expect(out).not.toContain('data-big-ticket');
+    expect(out).not.toContain("data-big-ticket");
   });
 
   test("html renders one technology badge per id in first-occurrence order", () => {
@@ -273,24 +343,30 @@ describe("renderers with priorities", () => {
             },
           ],
         },
-      }),
+      })
     );
     const start = out.indexOf('data-issues="ranked"');
     const issues = out.slice(start, out.indexOf("</section>", start));
     expect(issues.match(/>Cloudflare<\/span>/g)).toHaveLength(1);
     expect(issues.match(/>WordPress<\/span>/g)).toHaveLength(1);
-    expect(issues.indexOf("Cloudflare")).toBeLessThan(issues.indexOf("WordPress"));
+    expect(issues.indexOf("Cloudflare")).toBeLessThan(
+      issues.indexOf("WordPress")
+    );
     expect(REPORT_HTML_VERSION).toBeGreaterThanOrEqual(22);
   });
 
   test("json carries the priorities in the summary", () => {
-    const parsed = JSON.parse(renderJson(r)) as { editorSummary: EditorSummary };
+    const parsed = JSON.parse(renderJson(r)) as {
+      editorSummary: EditorSummary;
+    };
     expect(parsed.editorSummary.priorities).toEqual(WITH_PRIORITIES.priorities);
   });
 });
 
 describe("renderers without priorities keep the big-ticket list", () => {
-  const r = report({ editorSummary: { ...WITH_PRIORITIES, priorities: undefined } });
+  const r = report({
+    editorSummary: { ...WITH_PRIORITIES, priorities: undefined },
+  });
 
   test("every format falls back", () => {
     expect(renderMarkdown(r)).toContain("Big-ticket items");
@@ -298,7 +374,7 @@ describe("renderers without priorities keep the big-ticket list", () => {
     expect(renderText(r)).not.toContain("PRIORITIES");
     expect(renderLlm(r)).toContain("<big-ticket>");
     expect(renderXml(r)).toContain("<big-ticket>");
-    expect(renderHtml(r)).toContain('data-big-ticket');
+    expect(renderHtml(r)).toContain("data-big-ticket");
     expect(renderHtml(r)).not.toContain('data-issues="ranked"');
   });
 });
