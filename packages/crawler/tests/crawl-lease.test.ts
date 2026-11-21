@@ -531,7 +531,10 @@ describe("startCrawlLease", () => {
     expect(lease.beat()).toBe(true);
     lease.release();
     await run(store.close());
-  });
+    // 30 s, not bun's 5 s default: the beat waits out the 1 s busy timeout on top of opening
+    // and migrating a store, which a loaded host has stretched past 5 s (#2198). The 5 s bound
+    // on the wait above still separates "about 1 s" from "15 s".
+  }, 30_000);
 
   test("a non-file store is a no-op; a missing database cannot be claimed", () => {
     const memory = startCrawlLease({

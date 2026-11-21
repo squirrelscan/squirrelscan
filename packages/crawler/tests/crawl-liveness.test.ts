@@ -258,6 +258,11 @@ function setLease(
 
 const HOUR = 3_600_000;
 
+// Every test from here opens and migrates a store file. Bun 1.4 ignores a describe-level
+// timeout, so each passes this one: 30 s, not the 5 s default a loaded host has run past
+// with nothing wrong (#2198). No assertion below measures elapsed time.
+const STORE_TEST_TIMEOUT_MS = 30_000;
+
 describe("retirement reads the lease", () => {
   test("overlapping audits: the later one finishes first, the earlier running crawl survives", async () => {
     const clock = { t: NOW };
@@ -278,7 +283,7 @@ describe("retirement reads the lease", () => {
     expect((await run(s.getCrawl(a)))?.retiredAt).toBeUndefined();
     expect(b).toBeTruthy();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("a killed newest crawl is retired with no newer finished audit; a live one never", async () => {
     const clock = { t: NOW };
@@ -293,7 +298,7 @@ describe("retirement reads the lease", () => {
     expect((await run(s.getCrawl(killed)))?.retiredAt).toBe(NOW);
     expect((await run(s.getCrawl(old)))?.retiredAt).toBeUndefined();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("a killed RUNNING newest crawl waits 24 h of silence", async () => {
     const clock = { t: NOW };
@@ -304,7 +309,7 @@ describe("retirement reads the lease", () => {
     clock.t = NOW + 2 * HOUR; // 25 h since the last beat
     expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([id]);
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("re-checked inside the transaction: a beat that lands after the listing saves the crawl", async () => {
     const clock = { t: NOW };
@@ -319,7 +324,7 @@ describe("retirement reads the lease", () => {
     expect(out).toMatchObject({ retired: [], skipped: [id] });
     expect((await run(s.getCrawl(id)))?.retiredAt).toBeUndefined();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("a resumed crawl that re-took the lease is no longer abandoned", async () => {
     const clock = { t: NOW };
@@ -330,7 +335,7 @@ describe("retirement reads the lease", () => {
     setLease(path, id, 777, "me", NOW); // --resume took it over
     expect(await run(s.listAbandonedCrawls())).toEqual([]);
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("another host's crawl, and one with an unreadable owner, are kept until the stale window", async () => {
     const clock = { t: NOW };
@@ -347,7 +352,7 @@ describe("retirement reads the lease", () => {
     );
     expect(done).toBeTruthy();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("NULL-lease crawls keep the #945 rule exactly", async () => {
     const clock = { t: NOW };
@@ -358,7 +363,7 @@ describe("retirement reads the lease", () => {
     expect((await run(s.listAbandonedCrawls())).map((c) => c.id)).toEqual([old]);
     expect((await run(s.listPossiblyLiveCrawls())).map((c) => c.id)).toEqual([newest]);
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("a clock step backwards never makes a lease look dead", async () => {
     const clock = { t: NOW };
@@ -369,7 +374,7 @@ describe("retirement reads the lease", () => {
     clock.t = NOW - 6 * HOUR;
     expect(await run(s.listAbandonedCrawls())).toEqual([]);
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 });
 
 describe("retire transaction", () => {
@@ -403,7 +408,7 @@ describe("retire transaction", () => {
     expect(beatBlocked).toBe(true);
     expect(out.retired).toEqual([id]);
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 });
 
 describe("a resume takes over a killed owner's lease at once", () => {
@@ -426,7 +431,7 @@ describe("a resume takes over a killed owner's lease at once", () => {
     expect(owner.owner_pid).toBe(process.pid);
     lease.release();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 
   test("a live foreign pid is not taken over", async () => {
     const path = tempDbPath();
@@ -439,5 +444,5 @@ describe("a resume takes over a killed owner's lease at once", () => {
     expect(lease.beat()).toBe(false);
     lease.release();
     await run(s.close());
-  });
+  }, STORE_TEST_TIMEOUT_MS);
 });
