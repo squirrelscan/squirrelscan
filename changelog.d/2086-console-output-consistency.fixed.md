@@ -1,0 +1,1 @@
+- Console output: correct singular counts ("1 error", "1 warning"), the `analyze` Config line printed above the spinner instead of onto it, `squirrel entities` listing every entity the "no @id" count includes with unnamed entities printed once, and the `--probe aggressive` hint shown once in the exposed files note (#2086).

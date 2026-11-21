@@ -123,7 +123,7 @@ async function runStatusCommand(jsonOutput: boolean): Promise<void> {
         console.log(
           stale
             ? `Not signed in: ${state === "expired" ? "your login has expired" : "the server rejected your login"}. Run ${fmt.bold("squirrel auth login")} to sign in again.`
-            : `Not signed in — run ${fmt.bold("squirrel auth login")} to unlock cloud features.`
+            : `Not signed in: run ${fmt.bold("squirrel auth login")} to unlock cloud features.`
         );
         console.log(
           `${fmt.dim(`Or set ${API_TOKEN_ENV_VAR} with an org API key for headless / CI use.`)}`

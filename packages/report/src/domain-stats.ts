@@ -1,12 +1,12 @@
 // Shared helpers for the report-only "Domain stats" section (#111): formatting
 // the backlink-summary + traffic + keyword headline numbers and building the
 // one-line summary surfaced in every output format. Domain stats are
-// informational — they NEVER affect the score.
+// informational: they NEVER affect the score.
 
 import type { DomainStats, DomainStatsMetrics, DomainStatsPositions } from "./types";
 
 /** Note rendered with the section so it reads as informational, not scored. */
-export const DOMAIN_STATS_NOTE = "Domain SEO stats — informational, not scored.";
+export const DOMAIN_STATS_NOTE = "Domain SEO stats: informational, not scored.";
 
 /**
  * Compact a count for display: 1234 → "1.2k", 1_500_000 → "1.5M". Whole numbers
@@ -103,7 +103,7 @@ export function positionBands(
   return out;
 }
 
-/** All position bands as {label, count} incl. zeros — fills out the distribution graph. */
+/** All position bands as {label, count} incl. zeros: fills out the distribution graph. */
 export function allPositionBands(
   positions: DomainStatsPositions | null,
 ): { label: string; count: number }[] {

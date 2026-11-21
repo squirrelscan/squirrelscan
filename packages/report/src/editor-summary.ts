@@ -2,8 +2,8 @@
 // pre-aggregated request digest the cloud editor-summary service consumes, and
 // the presentation note rendered above the summary in every output format.
 //
-// The digest is intentionally slim — category scores + a ranked, capped set of
-// the highest-impact issues — so the request stays small and the model gets a
+// The digest is intentionally slim (category scores + a ranked, capped set of
+// the highest-impact issues), so the request stays small and the model gets a
 // focused view of THIS audit (never the full report). Mirrors how the CLI builds
 // other cloud-service payloads.
 
@@ -29,7 +29,7 @@ import { scanScopeUnfetched } from "./coverage";
 import { guardSummaryText, stripOutOf100 } from "./summary-text";
 
 /** Note rendered above the summary so it reads as informational, not scored. */
-export const EDITOR_SUMMARY_NOTE = "Auto-generated editor's summary — informational, not scored.";
+export const EDITOR_SUMMARY_NOTE = "Auto-generated editor's summary: informational, not scored.";
 
 /** Map the resolved site-metadata profile to the slim summary-framing slice. */
 function toSiteProfile(meta: SiteMetadata): EditorSummarySiteProfile {
@@ -47,7 +47,7 @@ function toSiteProfile(meta: SiteMetadata): EditorSummarySiteProfile {
 /**
  * Severity rank for issue ordering (errors before warnings). Mirrors the
  * error(0)/info(1)/warning(2) ranking in grouping.ts's RULE_SEVERITY_RANK for
- * consistency, though `info` never appears here — buildTopIssues only ever
+ * consistency, though `info` never appears here: buildTopIssues only ever
  * produces "error" or "warning" (see EditorSummaryIssueInput).
  */
 const SEVERITY_RANK = { error: 0, info: 1, warning: 2 } as const;
@@ -287,7 +287,7 @@ export interface BuildEditorSummaryRequestOptions {
 
 /**
  * Build the editor-summary cloud-service request from a completed audit report.
- * Pure + deterministic — no I/O. The site profile is included only when the
+ * Pure + deterministic: no I/O. The site profile is included only when the
  * report carries resolved site-metadata.
  */
 export function buildEditorSummaryRequest(

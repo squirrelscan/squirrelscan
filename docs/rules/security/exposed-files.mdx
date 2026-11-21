@@ -9,7 +9,7 @@ Some files should never be served by a web server: the `.git` directory from a d
 
 ## What squirrel checks
 
-This is a loud probing rule. It requests paths that should not exist, which leaves a trail of 404s in your logs and can trip a WAF, so it runs only when [probing intensity](/configuration/security) is `aggressive` (`--probe aggressive` or `--pentest`). Below that it sends nothing and the report lists it as not checked, with how to turn it on. Run it on a site you own or have permission to test.
+This is a loud probing rule. It requests paths that should not exist, which leaves a trail of 404s in your logs and can trip a WAF, so it runs only when [probing intensity](/configuration/security) is `aggressive` (`--probe aggressive` or `--pentest`). Below that it sends nothing and the report lists it as not checked and prints the note "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test." once. Run it on a site you own or have permission to test.
 
 ### What is requested
 

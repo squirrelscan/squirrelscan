@@ -535,7 +535,7 @@ export function renderMarkdown(report: AuditReport, options?: MarkdownRenderOpti
     lines.push("");
     const summary = techChangeSummary(tech);
     lines.push(
-      `_Detected tech stack — informational, not part of the score.${summary ? ` ${summary}.` : ""}_`,
+      `_Detected tech stack: informational, not part of the score.${summary ? ` ${summary}.` : ""}_`,
     );
     lines.push("");
     for (const group of groupTechnologies(tech.items)) {

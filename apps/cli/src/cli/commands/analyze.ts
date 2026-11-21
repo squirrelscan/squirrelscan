@@ -6,6 +6,7 @@ import {
   formatRetentionNotice,
   type RetentionOutcome,
 } from "@/audit/retention";
+import { configSourceLine } from "@/config";
 import { runAnalyze } from "@/controllers/analyze";
 import { warnIfSessionUnreadable } from "@/self/credentials";
 import { loadUserSettings, updateSettings } from "@/self/settings";
@@ -56,6 +57,7 @@ export const analyze = defineCommand({
     } else {
       console.log("Analyzing latest crawl...");
     }
+    console.log(configSourceLine());
     console.log("");
 
     const startTime = Date.now();
@@ -67,6 +69,7 @@ export const analyze = defineCommand({
     let retention: RetentionOutcome | undefined;
     const result = await runAnalyze({
       crawlId: args.id,
+      silentConfig: true,
       onRetention: (outcome) => {
         retention = outcome;
       },

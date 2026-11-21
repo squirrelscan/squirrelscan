@@ -35,10 +35,22 @@ describe("console report warning totals (repo#2395)", () => {
     if (report.healthScore) report.healthScore.warningCount = 1;
 
     const output = capture(report);
-    const footer = output.match(/(\d+) warnings • /);
-    const total = output.match(/Total: .*?, (\d+) warnings/);
+    const footer = output.match(/(\d+) warnings? • /);
+    const total = output.match(/Total: .*?, (\d+) warnings?/);
     expect(footer?.[1]).toBeDefined();
     expect(total?.[1]).toBeDefined();
     expect(footer?.[1]).toBe(total?.[1]);
+  });
+  test("the Total line pluralises one error and one warning (pub#2086)", () => {
+    const report = createMinimalReport();
+    if (report.healthScore) {
+      report.healthScore.warningCount = 1;
+      report.healthScore.errorCount = 1;
+    }
+    const output = capture(report);
+    expect(output).toMatch(/Total: .*, 1 warning[^s]/);
+    expect(output).toMatch(/, 1 error(?!s)/);
+    expect(output).not.toContain("1 errors");
+    expect(output).not.toContain("1 warnings");
   });
 });

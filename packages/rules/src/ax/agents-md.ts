@@ -25,9 +25,9 @@ export const agentsMdRule: Rule = {
     id: "ax/agents-md",
     name: "AGENTS.md",
     description:
-      "Detects /AGENTS.md (and variants) — plain-Markdown instructions for coding agents working against the site's repository",
+      "Detects /AGENTS.md (and variants): plain-Markdown instructions for coding agents working against the site's repository",
     solution:
-      "If the site has an associated codebase, publish an AGENTS.md at the repository root covering setup, testing, and conventions a coding agent needs to be productive. This is a recommendation only — it never affects your score.",
+      "If the site has an associated codebase, publish an AGENTS.md at the repository root covering setup, testing, and conventions a coding agent needs to be productive. This is a recommendation only: it never affects your score.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -67,7 +67,7 @@ export const agentsMdRule: Rule = {
       checks.push({
         name: "agents-md-present",
         status: "info",
-        message: `${spaFallback.path} responded 200 but returned an HTML page (SPA fallback) — not a real AGENTS.md`,
+        message: `${spaFallback.path} responded 200 but returned an HTML page (SPA fallback): not a real AGENTS.md`,
         value: "spa-fallback",
         details: { path: spaFallback.path },
       });
@@ -96,8 +96,8 @@ export const agentsMdRule: Rule = {
       name: "agents-md-present",
       status: publishesLlmsTxt ? "warn" : "info",
       message: publishesLlmsTxt
-        ? "No AGENTS.md found — this site publishes llms.txt, so consider an AGENTS.md for coding agents too"
-        : "No AGENTS.md found — consider adding one if this site has an associated codebase",
+        ? "No AGENTS.md found: this site publishes llms.txt, so consider an AGENTS.md for coding agents too"
+        : "No AGENTS.md found: consider adding one if this site has an associated codebase",
       value: "absent",
       ...(unchecked.length > 0 ? { details: { notChecked: unchecked } } : {}),
     });

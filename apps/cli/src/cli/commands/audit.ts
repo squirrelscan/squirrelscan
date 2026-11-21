@@ -2135,7 +2135,7 @@ export const audit = defineCommand({
       } else {
         kv(
           "Account",
-          `not signed in — run ${fmt.bold("squirrel auth login")} to unlock cloud features`
+          `not signed in: run ${fmt.bold("squirrel auth login")} to unlock cloud features`
         );
         kv("Dashboard", fmt.cyan(DASHBOARD_URL));
       }
