@@ -322,15 +322,15 @@ export async function runAnalyze(
       analyzeStoredCrawl(sqlite, crawl, config, {
         pageSink: {
           writePage(pageUrl, entries) {
-            for (const [, checks] of entries) tally.add(checks);
+            for (const [ruleId, checks] of entries) tally.add(checks, ruleId);
             return writer.writePage(pageUrl, entries);
           },
           flush: () => writer.flush(),
         },
       })
     );
-    for (const checks of ruleResults.siteRuleResults.values()) {
-      tally.add(checks);
+    for (const [ruleId, checks] of ruleResults.siteRuleResults) {
+      tally.add(checks, ruleId);
     }
     await writer.writeSite(ruleResults.siteRuleResults);
 
@@ -367,7 +367,11 @@ export async function runAnalyze(
       onRetention: options.onRetention,
     });
 
-    const { checksTotal, passed, warnings, failed } = tally.totals();
+    // Advisory rules (severity "info") are excluded from the warning total, as
+    // the audit report does (#2213).
+    const { checksTotal, passed, warnings, failed } = tally.totals(
+      (ruleId) => ruleResults.tallies.get(ruleId)?.meta.severity === "info"
+    );
     const rulesRun = ruleResults.tallies.size;
 
     logger.debug("analysis complete", `rules=${rulesRun}`);
@@ -541,22 +545,43 @@ export function createReplacingRuleResultsWriter(
   };
 }
 
-/** Counts checks the way the analyze summary reports them, without keeping any. */
+/**
+ * Counts checks the way the audit report's totals do, without keeping any.
+ * A warning from an advisory rule (severity "info") is a recommendation, so it
+ * is left out of the warning total (#2213), exactly as the audit's totals do.
+ */
 export function createCheckTally() {
-  let checksTotal = 0;
-  let passed = 0;
-  let warnings = 0;
-  let failed = 0;
+  const perRule = new Map<
+    string,
+    { total: number; passed: number; warnings: number; failed: number }
+  >();
   return {
-    add(checks: ReadonlyArray<unknown>) {
+    add(checks: ReadonlyArray<unknown>, ruleId = "") {
+      let c = perRule.get(ruleId);
+      if (!c) {
+        c = { total: 0, passed: 0, warnings: 0, failed: 0 };
+        perRule.set(ruleId, c);
+      }
       for (const check of checks as CheckResult[]) {
-        checksTotal++;
-        if (check.status === "pass") passed++;
-        else if (check.status === "warn") warnings++;
-        else if (check.status === "fail") failed++;
+        c.total++;
+        if (check.status === "pass") c.passed++;
+        else if (check.status === "warn") c.warnings++;
+        else if (check.status === "fail") c.failed++;
       }
     },
-    totals: () => ({ checksTotal, passed, warnings, failed }),
+    totals(isAdvisory: (ruleId: string) => boolean = () => false) {
+      let checksTotal = 0;
+      let passed = 0;
+      let warnings = 0;
+      let failed = 0;
+      for (const [ruleId, c] of perRule) {
+        checksTotal += c.total;
+        passed += c.passed;
+        failed += c.failed;
+        if (!isAdvisory(ruleId)) warnings += c.warnings;
+      }
+      return { checksTotal, passed, warnings, failed };
+    },
   };
 }
 

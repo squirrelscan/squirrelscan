@@ -208,6 +208,28 @@ describe("squirrel analyze streams the crawl (repo#1021)", () => {
       residentTally.add(residentChecks);
       const streamedTally = createCheckTally();
       for (const checks of streamedChecks) streamedTally.add(checks);
+      // #2213: with each check's rule known, analyze's totals are the audit's
+      // (report-stream tallies the resident rule map this way).
+      const auditTotals = { passed: 0, warnings: 0, failed: 0 };
+      for (const { meta, checks } of resident.ruleResultsMap.values()) {
+        for (const c of checks) {
+          if (c.status === "pass") auditTotals.passed++;
+          else if (c.status === "warn" && meta.severity !== "info")
+            auditTotals.warnings++;
+          else if (c.status === "fail") auditTotals.failed++;
+        }
+      }
+      const analyzeTally = createCheckTally();
+      for (const rules of resident.pageRuleResults.values()) {
+        for (const [ruleId, checks] of rules) analyzeTally.add(checks, ruleId);
+      }
+      for (const [ruleId, checks] of resident.siteRuleResults) {
+        analyzeTally.add(checks as never, ruleId);
+      }
+      const { passed, warnings, failed } = analyzeTally.totals(
+        (id) => resident.ruleResultsMap.get(id)?.meta.severity === "info"
+      );
+      expect({ passed, warnings, failed }).toEqual(auditTotals);
       // Skipped and info checks are not scorable, so they are left out of both.
       expect(streamedTally.totals().passed).toBe(residentTally.totals().passed);
       expect(streamedTally.totals().warnings).toBe(

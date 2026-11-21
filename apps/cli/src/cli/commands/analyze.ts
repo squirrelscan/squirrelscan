@@ -102,6 +102,9 @@ export const analyze = defineCommand({
     console.log(
       `  Passed: ${result.data.passed} | Warnings: ${result.data.warnings} | Failed: ${result.data.failed}`
     );
+    console.log(
+      "  Totals can differ slightly from the audit run: live-request rules are not checked here and the TLS check reads the certificate served now."
+    );
     console.log("");
     console.log("Run 'squirrel report' to view results.");
 

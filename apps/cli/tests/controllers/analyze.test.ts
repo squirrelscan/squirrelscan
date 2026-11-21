@@ -16,6 +16,7 @@ import {
   runAnalyze,
   type AnalyzeResult,
   pickLatestAnalyzeReadyCrawl,
+  createCheckTally,
 } from "../../src/controllers/analyze";
 import { isolateSquirrelHome } from "../helpers/scratch-squirrel-home";
 
@@ -188,5 +189,22 @@ describe("pickLatestAnalyzeReadyCrawl", () => {
     ]);
 
     expect(selected?.id).toBe("stopped-partial");
+  });
+});
+
+describe("createCheckTally advisory warnings (#2213)", () => {
+  test("a warning from an advisory rule is left out of the warning total, like the audit's totals", () => {
+    const tally = createCheckTally();
+    const check = (status: string) => ({ status }) as never;
+    tally.add([check("pass"), check("warn")], "core/title");
+    tally.add([check("warn"), check("warn"), check("fail")], "core/advice");
+    const totals = tally.totals((id) => id === "core/advice");
+    expect(totals).toEqual({
+      checksTotal: 5,
+      passed: 1,
+      warnings: 1,
+      failed: 1,
+    });
+    expect(tally.totals().warnings).toBe(3);
   });
 });
