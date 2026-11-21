@@ -1,0 +1,1 @@
+- The `squirrel report` help says issues are available in squirrelscan cloud, and the MCP docs state that the old issue fields `rule_id`, `occurrences` and `affected_pages` are kept with no removal planned, with `covered_findings` as their replacement (#2031)

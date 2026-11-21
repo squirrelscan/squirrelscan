@@ -241,7 +241,8 @@ export function wcagChecklistKind(value: unknown): "markdown" | "csv" | null {
 export const report = defineCommand({
   meta: {
     name: "report",
-    description: "Query and view stored audit reports",
+    description:
+      "Query and view stored audit reports (findings; issues are available in squirrelscan cloud: https://docs.squirrelscan.com/cli/report)",
   },
   args: {
     id: {
