@@ -1237,7 +1237,7 @@
           "type": { "type": "string", "const": "page_limit_clamped" },
           "requested": { "type": "integer", "description": "Pages that were actually asked for (stored crawl config or an explicit request override)." },
           "applied": { "type": "integer", "description": "Pages the run actually dispatched with — equal to `planCap`." },
-          "planId": { "type": "string", "enum": ["free", "starter", "team"] },
+          "planId": { "type": "string", "enum": ["free", "starter", "team", "team_legacy", "business", "enterprise"] },
           "planCap": { "type": "integer", "description": "The org's plan's effective max-pages-per-audit ceiling at dispatch time." },
           "upgradeHint": { "type": "string", "description": "Human-readable upgrade suggestion, always including a pricing URL." }
         }
