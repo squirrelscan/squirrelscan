@@ -116,6 +116,51 @@ describe("content/conversion-path", () => {
   });
 });
 
+describe("input not fully read (#2134)", () => {
+  const SCAN_TRUNCATED = "scan-truncated";
+
+  test("a call to action past the link cap is a gap, not a pass", async () => {
+    const nav = Array.from({ length: 2001 }, (_, i) => `<a href="/p/${i}">p${i}</a>`).join("");
+    const check = await run(`<main><h1>Pricing</h1>${nav}${linkedin}</main>`);
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe(SCAN_TRUNCATED);
+  });
+
+  test("a page under the link cap with no call to action still passes", async () => {
+    const check = await run(`<main><h1>Pricing</h1><a href="/p/1">p</a></main>`);
+    expect(check.status).toBe("pass");
+  });
+
+  test("a cut page whose money status could come from later JSON-LD is a gap", async () => {
+    const cut = `<html><head><title>t</title></head><body><main><h1>Widget</h1>`;
+    const { document } = parseHTML(cut);
+    const ctx = {
+      page: {
+        url: "https://shop.example.com/widget",
+        html: cut,
+        statusCode: 200,
+        loadTime: 0,
+        headers: {},
+      },
+      parsed: { document, schemas: { types: [] } } as unknown as ParsedPage,
+      options: {},
+    } as RuleContext;
+    const check = (await conversionPathRule.run(ctx)).checks[0]!;
+    expect(check.status).toBe("skipped");
+    expect(check.skipReason).toBe(SCAN_TRUNCATED);
+    const signal = buildResolutionSignal(
+      { "content/conversion-path": { checks: [{ ...check, pageUrl: ctx.page.url }] } },
+      [ctx.page.url],
+    )!;
+    expect(signal.notEvaluated?.["content/conversion-path|conversion-path"]).toHaveLength(1);
+  });
+
+  test("a page read whole that is not a money page stays a not-applicable verdict", async () => {
+    const check = await run(linkedin, "https://shop.example.com/widget-3000");
+    expect(check.skipReason).toBe("not-applicable");
+  });
+});
+
 describe("isMoneyPage", () => {
   test.each([
     "https://a.example.com/pricing",
@@ -146,11 +191,16 @@ describe("content/conversion-path never clears a finding it could not judge", ()
       options: {},
     };
     const check = { ...(await conversionPathRule.run(ctx)).checks[0]!, pageUrl: URL_ };
-    return { check, signal: buildResolutionSignal({ "content/conversion-path": { checks: [check] } }, [URL_])! };
+    return {
+      check,
+      signal: buildResolutionSignal({ "content/conversion-path": { checks: [check] } }, [URL_])!,
+    };
   }
 
   test("a truncated page with no call to action found keeps the stored finding open", async () => {
-    const { check, signal } = await runHtml(`<html><head><title>t</title></head><body><main><h1>Pricing</h1><p>Plans from`);
+    const { check, signal } = await runHtml(
+      `<html><head><title>t</title></head><body><main><h1>Pricing</h1><p>Plans from`,
+    );
     expect(check.status).toBe("info");
     expect(check.details?.inconclusive).toBe(true);
     expect(signal.failing[KEY]).toEqual([]);
@@ -158,7 +208,9 @@ describe("content/conversion-path never clears a finding it could not judge", ()
   });
 
   test("a page read whole with no call to action is still a pass that resolves", async () => {
-    const { check, signal } = await runHtml(`<html><head><title>t</title></head><body><main><h1>Pricing</h1></main></body></html>`);
+    const { check, signal } = await runHtml(
+      `<html><head><title>t</title></head><body><main><h1>Pricing</h1></main></body></html>`,
+    );
     expect(check.status).toBe("pass");
     expect(signal.failing[KEY]).toEqual([]);
     expect(signal.notEvaluated?.[KEY] ?? []).toHaveLength(0);

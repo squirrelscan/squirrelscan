@@ -13,6 +13,7 @@
 // The pair loop and the legacy hashing loop yield to the event loop on a time budget, so a large
 // crawl cannot starve the timer-based rule deadline.
 
+import { SCAN_TRUNCATED_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import type {
   CheckItem,
   CheckResult,
@@ -214,8 +215,19 @@ function cmp(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function skip(message: string): CheckResult {
-  return { name: CHECK_NAME, status: "skipped", message };
+/**
+ * A coded gap skip, never a pass: the rule did not compare every page, so the resolution signal
+ * lists the pages as not evaluated and a stored finding carries instead of resolving. A free-text
+ * skip would read as "does not apply" and let an absent key resolve priors.
+ */
+function skip(message: string, details?: Record<string, unknown>): CheckResult {
+  return {
+    name: CHECK_NAME,
+    status: "skipped",
+    message,
+    skipReason: SCAN_TRUNCATED_SKIP_REASON,
+    ...(details ? { details } : {}),
+  };
 }
 
 interface Node {
@@ -357,6 +369,14 @@ export async function buildNearDuplicate(
     minWords: NEAR_DUP_MIN_WORDS,
     maxDistance: NEAR_DUP_MAX_DISTANCE,
   };
+
+  if (found.length === 0 && unjudgedPages > 0) {
+    // Pages past the compare cap were never compared, so "no clusters" is not a verdict on them.
+    return skip(
+      `${unjudgedPages} page(s) past the ${NEAR_DUP_MAX_NODES} distinct texts compared were not checked for near-duplicates`,
+      common,
+    );
+  }
 
   if (found.length === 0) {
     return {

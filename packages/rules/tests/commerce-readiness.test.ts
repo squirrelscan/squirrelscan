@@ -207,7 +207,10 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
 
   async function signalFor(html: string) {
     const checks = (await run(html)).map((c) => ({ ...c, pageUrl: URL_ }));
-    return { checks, signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [URL_])! };
+    return {
+      checks,
+      signal: buildResolutionSignal({ "ax/commerce-readiness": { checks } }, [URL_])!,
+    };
   }
 
   test("a truncated read with fields not found keeps the stored finding open", async () => {
@@ -229,9 +232,31 @@ describe("ax/commerce-readiness never clears a finding it could not judge", () =
   test("a complete offer and a page read whole with no Product markup are verdicts", async () => {
     for (const html of [page(ld(fullProduct)), page("")]) {
       const { checks, signal } = await signalFor(html);
-      expect(checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive).toBeUndefined();
+      expect(
+        checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive,
+      ).toBeUndefined();
       expect(signal.failing[KEY]).toEqual([]);
       expect(signal.notEvaluated?.[KEY] ?? []).toHaveLength(0);
     }
+  });
+
+  test("JSON-LD that stops parsing keeps the stored finding open", async () => {
+    const broken = page(
+      `<script type="application/ld+json">{"@type": "Product", "name": </script>`,
+    );
+    const { checks, signal } = await signalFor(broken);
+    expect(checks.find((x) => x.name === "offer-completeness")?.details?.inconclusive).toBe(true);
+    expect(signal.notEvaluated?.[KEY]).toHaveLength(1);
+  });
+
+  test("an empty MerchantReturnPolicy node elsewhere on the page does not count as returns", async () => {
+    const { hasMerchantReturnPolicy: _unused, ...offer } = fullProduct.offers;
+    const graph = {
+      "@context": "https://schema.org",
+      "@graph": [{ "@type": "MerchantReturnPolicy" }, { ...fullProduct, offers: offer }],
+    };
+    const c = (await run(page(ld(graph)))).find((x) => x.name === "offer-completeness");
+    expect(c?.status).toBe("warn");
+    expect(c?.items?.map((i) => i.id)).toEqual(["returns"]);
   });
 });

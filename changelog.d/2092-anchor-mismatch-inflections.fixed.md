@@ -1,0 +1,1 @@
+- links/anchor-mismatch no longer flags links on translated stores: inflected anchor words ("Sadler" for "cykelsadel"), trailing counts ("Shoes (15)") and locale prefixes in the target path ("/da-dk/") are matched correctly (#2092).

@@ -836,9 +836,10 @@ describe("SiteQuery dual-path: links/anchor-mismatch (#110)", () => {
       textGlued: true,
       textParts: [gluedText.slice(0, 200), "See details"],
     };
+    // The varying letters lead: words sharing a 5+ character prefix would now match as inflections (#2092).
     const words = Array.from(
       { length: 70 },
-      (_, i) => `topic${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
+      (_, i) => `${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}topic`,
     );
     const pdf = titled("https://example.com/guide.pdf", "Totally unrelated", []);
     pdf.contentType = "application/pdf";
