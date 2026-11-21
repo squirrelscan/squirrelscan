@@ -32,6 +32,7 @@ export class LateCloudResults {
   /** Pages let start while the prefetch was still running. */
   earlyPages = 0;
   private final: CloudPrefetchResult | null | undefined = undefined;
+  private rejected = false;
   private readonly settling: Promise<CloudPrefetchResult | null>;
 
   /**
@@ -48,8 +49,20 @@ export class LateCloudResults {
   ) {
     this.settling = result.then(
       (r) => this.bindFinal(r),
-      () => this.bindFinal(null),
+      () => {
+        this.rejected = true;
+        return this.bindFinal(null);
+      },
     );
+  }
+
+  /**
+   * True once the prefetch promise rejected. Pages may already have run on its
+   * early results, so no store or site profile describes this run's inputs: a
+   * caller must not key a cache on it (`runStreamingRules` never binds one).
+   */
+  get failed(): boolean {
+    return this.rejected;
   }
 
   /** True once the prefetch settled and {@link store} is the result's exact copy. */
@@ -84,12 +97,13 @@ export class LateCloudResults {
   /**
    * Make page `url`'s cloud results readable through {@link store}. Returns null
    * when they already are (no await needed), else a promise that resolves once
-   * they are final and copied in.
+   * they are final and copied in. Aborting `signal` (the caller's deadline won)
+   * resolves it without copying anything and leaves no waiter parked.
    */
-  pageReady(url: string): Promise<void> | null {
+  pageReady(url: string, signal?: AbortSignal): Promise<void> | null {
     if (this.tryExpose(url)) return null;
     return (async () => {
-      while (!this.tryExpose(url)) await this.nextChange();
+      while (!signal?.aborted && !this.tryExpose(url)) await this.nextChange(signal);
     })();
   }
 
@@ -112,8 +126,8 @@ export class LateCloudResults {
     byKey.set(key, env);
   }
 
-  private nextChange(): Promise<unknown> {
-    return Promise.race([this.accumulator.changed(), this.settling]);
+  private nextChange(signal?: AbortSignal): Promise<unknown> {
+    return Promise.race([this.accumulator.changed(signal), this.settling]);
   }
 
   private bindFinal(result: CloudPrefetchResult | null): CloudPrefetchResult | null {
@@ -125,6 +139,8 @@ export class LateCloudResults {
       for (const [service, byKey] of result.store) this.store.set(service, new Map(byKey));
     }
     this.final = result;
+    // A rejected prefetch never settles its accumulator: release whoever is parked on it.
+    this.accumulator.notifyChanged();
     return result;
   }
 }

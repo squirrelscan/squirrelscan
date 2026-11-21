@@ -4173,6 +4173,9 @@ export function runStreamingRules(
           ruleCache = lateBoundRuleCache(
             () => lateCloud.settled,
             async () => {
+              // A rejected prefetch: pages already ran on its early results, and no
+              // store or site profile describes them, so this run never binds a key.
+              if (lateCloud.failed) return null;
               const ctxHash = await runContextHash(
                 lateCloud.result
                   ? {
@@ -4271,7 +4274,10 @@ export function runStreamingRules(
         pageSink: opts?.pageSink,
         retainPageResults: opts?.retainPageResults,
         ...(lateCloud
-          ? { cloudReady: (url: string) => lateCloud.pageReady(url) }
+          ? {
+              cloudReady: (url: string, signal: AbortSignal) =>
+                lateCloud.pageReady(url, signal),
+            }
           : {}),
       })
     );
