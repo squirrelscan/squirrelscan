@@ -1432,6 +1432,11 @@ export const audit = defineCommand({
       description:
         "Audit exactly this URL and nothing else (repeatable), absolute or a path on the site, e.g. /pricing. No sitemap, probes or link following; site-wide rules skip with the reason targeted-run, and the report lists every URL not audited and why. maxPages caps the list",
     },
+    "compare-url": {
+      type: "string",
+      description:
+        "With --target-url: also fetch this URL (repeatable), absolute or a path on the site, as the comparison set. Site rules that judge only the pages fetched (content/duplicate-description, crawl/schema-noindex-conflict) then run over the targets plus this set; every other site rule is reported as not checked. Counts against maxPages",
+    },
     "rule-include": {
       type: "string",
       description:
@@ -1676,6 +1681,20 @@ export const audit = defineCommand({
       const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
       return list.map((v) => String(v).trim()).filter((v) => v.length > 0);
     })();
+
+    // --compare-url (#2096): the comparison set of a targeted run, same shape as --target-url.
+    const compareUrls = (() => {
+      const raw = args["compare-url"] as string | string[] | undefined;
+      const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+      return list.map((v) => String(v).trim()).filter((v) => v.length > 0);
+    })();
+    if (compareUrls.length > 0 && targetUrls.length === 0) {
+      console.error(
+        "--compare-url needs --target-url: it adds a comparison set to a targeted audit. Pass the URLs under test with --target-url."
+      );
+      exitWith({ early: "validation" });
+      return;
+    }
 
     // A targeted run checks no links, so a request to turn external link checks ON has no effect (#1777).
     if (targetUrls.length > 0 && externalLinksOn) {
@@ -2450,6 +2469,9 @@ export const audit = defineCommand({
           : {}),
         ...(headerHosts.length > 0 ? { headerHosts } : {}),
         ...(targetUrls.length > 0 ? { targetUrls } : {}),
+        ...(targetUrls.length > 0 && compareUrls.length > 0
+          ? { compareUrls }
+          : {}),
         ...(ruleFilter.enable.length > 0
           ? { ruleInclude: ruleFilter.enable }
           : {}),

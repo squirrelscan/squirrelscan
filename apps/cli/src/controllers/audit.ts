@@ -244,6 +244,24 @@ export interface AuditProgress {
 
 export type ProgressCallback = (progress: AuditProgress) => void;
 
+/**
+ * Crawler options for a targeted run: `--url` pages (#1777) and the bounded
+ * `--compare-url` comparison set for site rules (#2096). Empty lists are
+ * omitted so a normal crawl is unchanged.
+ */
+export function targetedCrawlerOptions(
+  options: Pick<AuditOptions, "targetUrls" | "compareUrls">
+): { targetUrls?: string[]; compareUrls?: string[] } {
+  return {
+    ...(options.targetUrls && options.targetUrls.length > 0
+      ? { targetUrls: options.targetUrls }
+      : {}),
+    ...(options.compareUrls && options.compareUrls.length > 0
+      ? { compareUrls: options.compareUrls }
+      : {}),
+  };
+}
+
 export type CrawlerEventCallback = (event: CrawlerEvent) => void;
 
 export interface RunAuditOptions extends AuditOptions {
@@ -1537,9 +1555,7 @@ export async function runAudit(
         coverageMode,
         disableLinkDiscovery: isQuickMode,
         // #1777: audit exactly these URLs; no sitemap, probes or link following.
-        ...(options.targetUrls && options.targetUrls.length > 0
-          ? { targetUrls: options.targetUrls }
-          : {}),
+        ...targetedCrawlerOptions(options),
         documentFetcher,
         onTlsEvent: (event: TlsEvent) => {
           // Surface TLS/status-0 failures + standard-fetch fallbacks so they

@@ -29,6 +29,7 @@ const DIRTY_CONFIG_FIELDS = [
   "dropQueryPrefixes",
   // #1777: a targeted run and a normal one (or two different lists) are different scopes either way.
   "targetUrls",
+  "compareUrls",
 ] as const satisfies ReadonlyArray<keyof CrawlerConfigSnapshot>;
 
 /** Whether config changes require a fresh crawl (a scope-affecting field changed). */
