@@ -400,6 +400,7 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       findingScope: "page",
       severity: "error",
       weight: 8,
+      messageCountsItems: true,
       checks: [
         { name: CHECK, outcome: "problem" },
         { name: CHECK, outcome: "clean", clears: [CHECK] },
@@ -556,16 +557,21 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         if (r.exposed.length === 0) continue;
         const { host, keyKind } = r.project;
         const keySource = sanitizeKeySource(r.project.keySource);
+        // The label is the bare table name, so `[[ignore]] items = ["posts"]`
+        // waives that table in every project (#2103); the row count is the
+        // snippet. The message names no table and starts with the count
+        // (`messageCountsItems`), so after a waiver it neither names a waived
+        // table nor counts one: the items list the tables.
         const items: CheckItem[] = r.exposed.map(({ table, rows }) => ({
           id: `${host}/rest/v1/${table}`,
-          label: `${table} (${rows} row(s) visible to the anon key)`,
+          label: table,
+          snippet: `${rows} row(s) visible to the anon key`,
           meta: { project: host, table, rows, keyKind, keySource },
         }));
-        const names = r.exposed.map((e) => e.table).join(", ");
         checks.push({
           name: CHECK,
           status: "fail",
-          message: `${r.exposed.length} Supabase table(s) in ${host} report rows to the site's public anon key: ${names}. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`,
+          message: `${r.exposed.length} Supabase table(s) in ${host} report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`,
           items,
           details: {
             project: host,
