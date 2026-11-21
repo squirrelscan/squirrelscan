@@ -12,6 +12,8 @@ import type { ArgsDef, CommandDef } from "citty";
 
 import { runCommand } from "citty";
 
+import { handleFatalError } from "@/self/crash-reporter";
+
 import {
   renderCommandHelp,
   renderHome,
@@ -152,9 +154,8 @@ export async function runCli<T extends ArgsDef>(
     await runCommand(main, { rawArgs });
   } catch (error) {
     if (!isCliError(error)) {
-      // Same as citty's runMain: an unexpected error is printed whole and exits 1.
-      console.error(error);
-      process.exit(1);
+      // An unexpected error is a crash: friendly message, reference, report, exit 1.
+      return handleFatalError(error, "command");
     }
     await explainCliError(main, rawArgs, error);
   }

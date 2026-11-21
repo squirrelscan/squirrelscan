@@ -4,6 +4,7 @@ import { TELEMETRY_TIMEOUT_MS } from "@/constants";
 import { cliApi } from "@/lib/api-client";
 import { DEFAULT_API_URL, getApiUrl } from "@/self/api";
 
+import type { CrashReport } from "./crash-reporter";
 import type { UserSettings } from "./types";
 
 import { version } from "../../package.json";
@@ -43,6 +44,12 @@ interface TelemetryPayload {
   install_id?: string;
   version: string;
   error_type?: string;
+  // Crash events only (repo#705): see CrashReport.
+  reference?: string;
+  stack?: string;
+  command?: string;
+  platform?: string;
+  source?: string;
 }
 
 /** DO_NOT_TRACK (consoledonottrack.com): "1" or "true" turns telemetry off. */
@@ -75,7 +82,12 @@ export function isTelemetryDisabled(settings?: UserSettings): boolean {
 }
 
 // v2: telemetry carries the user ID once signed in.
-const TELEMETRY_NOTICE_VERSION = 2;
+// v3: a crash also sends its code locations (repo#705).
+const TELEMETRY_NOTICE_VERSION = 3;
+/** The login session rides along only once the v2 wording has been seen. */
+const SESSION_NOTICE_MIN_VERSION = 2;
+/** A crash's stack frames ride along only once the v3 wording has been seen. */
+const CRASH_STACK_NOTICE_MIN_VERSION = 3;
 
 export function showTelemetryNotice(settings: UserSettings): void {
   if (isTelemetryDisabled(settings)) return;
@@ -94,9 +106,11 @@ export function showTelemetryNotice(settings: UserSettings): void {
   console.error(
     [
       "squirrelscan collects minimal telemetry: event name, CLI version, a random",
-      "install ID, and bounded error categories. Once you sign in, it also sends",
-      "your login session so events are tied to your account (never an API key).",
-      "It never sends URLs, report contents, or raw error messages.",
+      "install ID, and bounded error categories. If the CLI crashes, it also sends",
+      "the crash's code locations (function, file name and line, no paths). Once",
+      "you sign in, it also sends your login session so events are tied to your",
+      "account (never an API key). It never sends URLs, report contents, or raw",
+      "error messages.",
       "Disable it with `squirrel self settings set telemetry false`, `NO_TELEMETRY=1`",
       "or `DO_NOT_TRACK=1`.",
       "",
@@ -190,7 +204,9 @@ function loginSessionToken(): string | null {
   const loaded = loadUserSettings();
   if (!loaded.ok || loaded.data.telemetry === false) return null;
   // Only once the user has seen the notice that says the session is sent.
-  if ((loaded.data.telemetry_notice_version ?? 0) < TELEMETRY_NOTICE_VERSION) {
+  if (
+    (loaded.data.telemetry_notice_version ?? 0) < SESSION_NOTICE_MIN_VERSION
+  ) {
     return null;
   }
   const auth = loaded.data.auth;
@@ -218,6 +234,36 @@ export function trackError(
     event: "error",
     version,
     error_type: errorType.slice(0, 128),
+  });
+}
+
+/**
+ * Send one crash event (repo#705) on the error event path. The API forwards it
+ * to error tracking server-side, so the binary carries no third-party DSN.
+ * Stack frames are included only once this install has seen the notice that
+ * says they are sent; before that the crash still reports its class and
+ * reference. Resolves once the request settles, so a crashing process can
+ * wait for it before exiting.
+ */
+export async function sendCrashReport(
+  report: CrashReport,
+  settings?: UserSettings
+): Promise<void> {
+  if (isTelemetryDisabled(settings)) return;
+  const loaded = loadUserSettings();
+  const stackDisclosed =
+    loaded.ok &&
+    (loaded.data.telemetry_notice_version ?? 0) >=
+      CRASH_STACK_NOTICE_MIN_VERSION;
+  await sendTelemetryEvent({
+    event: "error",
+    version,
+    error_type: report.error_type.slice(0, 128),
+    reference: report.reference,
+    ...(stackDisclosed && report.stack && { stack: report.stack }),
+    ...(report.command && { command: report.command }),
+    platform: report.platform,
+    source: report.source,
   });
 }
 
