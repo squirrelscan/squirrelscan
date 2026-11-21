@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Pinned release signing keys (squirrelscan/repo#5032). install.sh and `squirrel self update` accept a release",
+    "binary if EITHER its GitHub attestation OR an ECDSA P-256 signature from one of these keys verifies.",
+    "id = first 16 hex chars of SHA-256 over the key's DER SubjectPublicKeyInfo; pem = the PEM public key.",
+    "Two slots, current and next, so a rotation can pin the next key before releases switch to it.",
+    "A slot with an empty pem is unused. While BOTH are empty the signature path is off and both installers",
+    "behave exactly as before (attestation, else the sha256 checksum alone with a warning).",
+    "the maintainer adds squirrelscan-release.pub here; see #5032",
+    "After editing run: bun run scripts/sync-install-header.ts (install.sh carries a generated copy)."
+  ],
+  "keys": [
+    { "slot": "current", "id": "", "pem": "" },
+    { "slot": "next", "id": "", "pem": "" }
+  ],
+  "revoked_key_ids": []
+}

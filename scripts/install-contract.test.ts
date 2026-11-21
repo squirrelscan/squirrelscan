@@ -1292,10 +1292,11 @@ describe.concurrent("install.sh curl transport hardening", () => {
     const invocations = curlInvocations(shellInstaller);
     // The count is pinned only so a refactor that hides an EXISTING call site
     // from the scan fails instead of passing vacuously. It cannot notice a new
-    // call site the scan is blind to; only the scan itself can. Six today:
-    // the fetcher, both release-metadata fetches, the failure-report POST, the
-    // IP family probe, and the POSIX-sh re-exec.
-    expect(invocations.map((found) => found.line)).toHaveLength(6);
+    // call site the scan is blind to; only the scan itself can. Seven today:
+    // the fetcher, the release-signature fetch (repo#5032), both
+    // release-metadata fetches, the failure-report POST, the IP family probe,
+    // and the POSIX-sh re-exec.
+    expect(invocations.map((found) => found.line)).toHaveLength(7);
     for (const { line, text } of invocations) {
       expect([line, missingHardening(shellInstaller, text)]).toEqual([line, []]);
     }

@@ -53,6 +53,18 @@ umask "$(printf '%04o' "$((0$(umask) | 022))")"
 REPO="squirrelscan/squirrelscan"
 CERT_IDENTITY="https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main"
 
+# Pinned release signing keys (squirrelscan/repo#5032), rendered from
+# release-keys.json. A release is accepted when EITHER a pinned, non-revoked
+# key signed it OR its GitHub attestation verifies; see verify_release_signature.
+# Both slots empty means the signature path is off and nothing changes.
+# BEGIN GENERATED RELEASE KEYS (scripts/sync-install-header.ts, from release-keys.json; do not edit)
+RELEASE_KEY_CURRENT_ID=''
+RELEASE_KEY_CURRENT_PEM=''
+RELEASE_KEY_NEXT_ID=''
+RELEASE_KEY_NEXT_PEM=''
+RELEASE_KEYS_REVOKED=''
+# END GENERATED RELEASE KEYS
+
 # Transport hardening for every curl this script runs. curl's own defaults will
 # happily follow a redirect from https to plain http and will negotiate whatever
 # TLS version the local build still allows, so pin both: --proto bounds the
@@ -1711,9 +1723,128 @@ verify_attestation() {
     # printf, not error's detail: that goes through echo -e, which would
     # interpret backslashes in text this script did not write.
     printf '%s\n' "$attest_out" | tail -n 10 >&2
-    error "Attestation verification failed: this binary was not built by the ${REPO} release workflow.\n  Nothing was installed. Do not run it."
+    local no_sig=""
+    if release_keys_pinned; then no_sig="\n  The release carries no squirrelscan release-key signature either."; fi
+    error "Attestation verification failed: this binary was not built by the ${REPO} release workflow.${no_sig}\n  Nothing was installed. Do not run it."
   fi
   info "Attestation verified: built by ${REPO}"
+}
+
+# --- Release-key signature (squirrelscan/repo#5032) -----------------------
+# Releases built outside GitHub Actions carry no GitHub attestation. They are
+# signed instead: `<asset>.sig` and `manifest.json.sig` are DER ECDSA P-256
+# signatures over SHA-256 of the file (`openssl dgst -sha256 -sign`), and the
+# manifest names the key in `signing_key_id`. The keys are pinned above.
+
+release_keys_pinned() {
+  [ -n "${RELEASE_KEY_CURRENT_PEM:-}" ] || [ -n "${RELEASE_KEY_NEXT_PEM:-}" ]
+}
+
+# Prints the PEM of the pinned slot with this id; fails when none pins it.
+release_key_pem() {
+  local id="$1"
+  if [ -n "${RELEASE_KEY_CURRENT_PEM:-}" ] && [ "$id" = "${RELEASE_KEY_CURRENT_ID:-}" ]; then
+    printf '%s\n' "$RELEASE_KEY_CURRENT_PEM"
+    return 0
+  fi
+  if [ -n "${RELEASE_KEY_NEXT_PEM:-}" ] && [ "$id" = "${RELEASE_KEY_NEXT_ID:-}" ]; then
+    printf '%s\n' "$RELEASE_KEY_NEXT_PEM"
+    return 0
+  fi
+  return 1
+}
+
+release_key_revoked() {
+  case " ${RELEASE_KEYS_REVOKED:-} " in
+    *" $1 "*) return 0 ;;
+  esac
+  return 1
+}
+
+# The URL fetch_release_asset last downloaded from, so a .sig comes from the
+# same place as the file it signs.
+downloaded_url() {
+  if [ "$DOWNLOAD_SOURCE" = "github.com" ]; then
+    echo "$DOWNLOAD_URL_GITHUB"
+  else
+    echo "$DOWNLOAD_URL_MIRROR"
+  fi
+}
+
+# fetch_signature <url> <output>: one quiet fetch (curl retries transient
+# errors itself). An absent .sig is normal for an attested release, so a 404
+# warns nothing and costs no retry loop. Signatures are tiny: over 1 KiB is junk.
+fetch_signature() {
+  local url="$1" output="$2" rc=0 bytes
+  rm -f "$output"
+  curl "${CURL_TLS_ARGS[@]}" -fsSL --connect-timeout 10 --max-time 30 --retry 2 --retry-delay 1 "$url" -o "$output" 2> /dev/null &
+  CHILD_PID=$!
+  wait_child || rc=$?
+  CHILD_PID=""
+  [ "$rc" -eq 0 ] && [ -s "$output" ] || return 1
+  bytes=$(wc -c < "$output" | tr -d '[:space:]')
+  [ "$bytes" -le 1024 ]
+}
+
+signature_failed() {
+  error "Release signature verification failed: $1.\n  Nothing was installed. Do not run it."
+}
+
+# verify_release_signature <manifest> <binary> <filename> <version> <manifest_url> <binary_url>
+# Runs after the sha256 check, which compared the binary to this same manifest
+# file. Returns 0 when a pinned key signed both, 1 when the release carries no
+# signature (or the check cannot run), so the attestation decides. Anything
+# else is a hard failure, even if an attestation would pass:
+#   a signature from an unpinned or revoked key, a signature that does not
+#   verify, a signed manifest for another version, or one of the two .sig
+#   files without the other.
+verify_release_signature() {
+  local manifest_file="$1" binary="$2" filename="$3" version="$4" manifest_url="$5" binary_url="$6"
+  CURRENT_STEP="verify_signature"
+  release_keys_pinned || return 1
+  if ! command -v openssl > /dev/null 2>&1; then
+    warn "openssl not found: skipping the release-key signature check, falling back to the GitHub attestation."
+    return 1
+  fi
+
+  local dir have_manifest_sig=false have_binary_sig=false
+  dir=$(dirname "$manifest_file")
+  fetch_signature "${manifest_url}.sig" "$dir/manifest.json.sig" && have_manifest_sig=true
+  fetch_signature "${binary_url}.sig" "$dir/binary.sig" && have_binary_sig=true
+  if [ "$have_manifest_sig" = false ] && [ "$have_binary_sig" = false ]; then
+    return 1
+  fi
+  [ "$have_manifest_sig" = true ] || signature_failed "manifest.json.sig is missing"
+  [ "$have_binary_sig" = true ] || signature_failed "${filename}.sig is missing"
+
+  local manifest key_id signed_version
+  manifest=$(cat "$manifest_file")
+  if [ "${USE_JQ:-false}" = true ]; then
+    key_id=$(printf '%s' "$manifest" | jq -r '.signing_key_id // empty' 2> /dev/null || true)
+    signed_version=$(printf '%s' "$manifest" | jq -r '.version // empty' 2> /dev/null || true)
+  else
+    key_id=$(json_get "$manifest" "signing_key_id" || true)
+    signed_version=$(json_get "$manifest" "version" || true)
+  fi
+  [[ "$key_id" =~ ^[0-9a-f]{16}$ ]] || signature_failed "manifest.json names no signing key id"
+  if release_key_revoked "$key_id"; then
+    signature_failed "it is signed with revoked key ${key_id}"
+  fi
+  local pem_file="$dir/release-key.pem"
+  release_key_pem "$key_id" > "$pem_file" ||
+    signature_failed "it is signed with key ${key_id}, which this installer does not pin"
+
+  log "Verifying release signature..."
+  openssl dgst -sha256 -verify "$pem_file" -signature "$dir/manifest.json.sig" "$manifest_file" > /dev/null 2>&1 ||
+    signature_failed "manifest.json is not signed by key ${key_id}"
+  # A signed manifest replayed under another version's URL is a downgrade.
+  if [ "${signed_version#v}" != "${version#v}" ]; then
+    signature_failed "the signed manifest is for version '${signed_version}', not ${version}"
+  fi
+  openssl dgst -sha256 -verify "$pem_file" -signature "$dir/binary.sig" "$binary" > /dev/null 2>&1 ||
+    signature_failed "${filename} is not signed by key ${key_id}"
+  info "Release signature verified: signed by squirrelscan release key ${key_id}"
+  return 0
 }
 
 # Download binary and run self install
@@ -1735,6 +1866,8 @@ download_and_install() {
     LAST_ERROR_OUTPUT=$(download_failure_output)
     error "$(download_failure_report_line manifest)" "$(download_failure_guidance manifest.json manifest "$bin_dir")"
   fi
+  local manifest_url
+  manifest_url=$(downloaded_url)
 
   # Read manifest content
   local manifest
@@ -1774,6 +1907,8 @@ download_and_install() {
     LAST_ERROR_OUTPUT=$(download_failure_output)
     error "$(download_failure_report_line binary)" "$(download_failure_guidance "$filename" binary "$bin_dir")"
   fi
+  local binary_url
+  binary_url=$(downloaded_url)
   # Only when the mirror answered. The GitHub path is the one almost every
   # install takes, and its output stays byte-identical to before this change.
   if [ "$DOWNLOAD_SOURCE" != "github.com" ]; then
@@ -1806,7 +1941,10 @@ download_and_install() {
   fi
   info "Checksum verified: ${expected_sha256:0:16}..."
 
-  verify_attestation "$tmpdir/squirrel"
+  # Provenance (#169, repo#5032): a pinned-key signature, else the attestation.
+  if ! verify_release_signature "$tmpdir/manifest.json" "$tmpdir/squirrel" "$filename" "$version" "$manifest_url" "$binary_url"; then
+    verify_attestation "$tmpdir/squirrel"
+  fi
 
   # Make executable and run self install with bin dir
   chmod +x "$tmpdir/squirrel"
