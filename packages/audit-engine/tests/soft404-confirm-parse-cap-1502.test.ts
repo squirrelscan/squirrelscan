@@ -1,14 +1,16 @@
 // #1502: the soft-404 confirmation re-fetch parses the body it gets back. Under the `--max-duration` parse cap (#1332)
 // a body over the cap is not parsed: the candidate is `unconfirmed` (annotated, never dropped). Over an injected fetch.
 
+import { parsePage } from "@squirrelscan/parser";
+import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
-
-import { MAX_DURATION_MAX_PAGE_BYTES } from "@squirrelscan/utils/constants";
-
 import { DEFAULT_MAX_BODY_BYTES } from "../src/lib/capped-body-read";
-import { confirmSoft404Candidates, type ConfirmFetch, type Soft404ConfirmPage } from "../src/soft404-confirm";
+import {
+  confirmSoft404Candidates,
+  type ConfirmFetch,
+  type Soft404ConfirmPage,
+} from "../src/soft404-confirm";
 
 const SHELL = `<!doctype html>
 <html id="__next_error__">
@@ -16,18 +18,28 @@ const SHELL = `<!doctype html>
   <body><main><h1>Page Not Found</h1><p>The page does not exist.</p></main></body>
 </html>`;
 /** The same error shell, padded past any small cap by a comment. */
-const padded = (extra: number): string => SHELL.replace("</body>", `<!--${"x".repeat(extra)}--></body>`);
+const padded = (extra: number): string =>
+  SHELL.replace("</body>", `<!--${"x".repeat(extra)}--></body>`);
 
 const page = (): Soft404ConfirmPage => {
   const url = "https://example.com/gone";
   return { url, statusCode: 200, parsed: parsePage(SHELL, url) };
 };
 
-const bodyFetch = (body: string): ConfirmFetch => async () => ({ status: 200, body });
+const bodyFetch =
+  (body: string): ConfirmFetch =>
+  async () => ({ status: 200, body });
 
 async function verdict(body: string, maxParseBytes?: number) {
   const pages = [page()];
-  await confirmSoft404Candidates(pages, { userAgent: "t", ...(maxParseBytes !== undefined ? { maxParseBytes } : {}) }, bodyFetch(body));
+  await confirmSoft404Candidates(
+    pages,
+    {
+      userAgent: "t",
+      ...(maxParseBytes !== undefined ? { maxParseBytes } : {}),
+    },
+    bodyFetch(body)
+  );
   return pages[0]!.parsed.soft404Confirmation;
 }
 
@@ -54,17 +66,27 @@ describe("the soft-404 confirmation honours the parse cap (#1502)", () => {
   test("the cap does not touch a body under it, a non-2xx, or a disabled pass", async () => {
     expect(await verdict(SHELL, 1_000_000)).toBe("confirmed");
     const pages = [page()];
-    await confirmSoft404Candidates(pages, { userAgent: "t", maxParseBytes: 10 }, async () => ({ status: 500, body: "" }));
+    await confirmSoft404Candidates(
+      pages,
+      { userAgent: "t", maxParseBytes: 10 },
+      async () => ({ status: 500, body: "" })
+    );
     expect(pages[0]!.parsed.soft404Confirmation).toBe("unconfirmed");
   });
 });
 
 describe("the streaming audit hands the cap to the confirmation pass (source guard)", () => {
   test("adapter.ts threads maxPageBytes into confirmSoft404Candidates", async () => {
-    const source = await Bun.file(new URL("../src/adapter.ts", import.meta.url)).text();
+    // Layout-insensitive: collapse whitespace and trailing commas so a
+    // formatter rewrap cannot fail a guard about what the code passes.
+    const source = (
+      await Bun.file(new URL("../src/adapter.ts", import.meta.url)).text()
+    )
+      .replace(/,(\s*[}\])])/g, "$1")
+      .replace(/\s+/g, " ");
     // the cap enters the site-fetch phase with the other probe options, and the confirmation call reads it from there
     expect(source).toContain("maxParseBytes: opts?.maxPageBytes }");
-    expect(source).toContain("maxParseBytes: probes?.maxParseBytes,");
+    expect(source).toContain("maxParseBytes: probes?.maxParseBytes");
   });
 });
 
