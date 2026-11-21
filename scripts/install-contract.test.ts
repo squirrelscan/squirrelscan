@@ -25,6 +25,12 @@ const powershellContract = await Bun.file(
   new URL("../scripts/install-ps-contract.test.ps1", import.meta.url),
 ).text();
 
+// Tests that spawn a shell (and the installer inside it) get 30 s, not bun's
+// 5 s default: on a loaded host the spawn alone can eat the default and fail a
+// test whose code is fine (#2193). Bun 1.4 ignores a describe-level timeout, so
+// each spawning test passes this one.
+const SPAWN_TIMEOUT_MS = 30_000;
+
 // --- curl test double -----------------------------------------------------
 // install.sh pins every curl to HTTPS (#165), so a plaintext loopback server
 // can no longer stand in for an endpoint, and a TLS one would need a CA the
@@ -402,7 +408,7 @@ describe.concurrent("self install killed by a signal", () => {
       "127=self_install",
       "255=self_install",
     ]);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("the killed step is what report_error actually POSTs", async () => {
     const { calls } = await runWithCurlShim(
@@ -416,7 +422,7 @@ describe.concurrent("self install killed by a signal", () => {
     // OOM kills apart from real self-install failures.
     expect(report.step).toBe("self_install_killed");
     expect(report.exit_code).toBe(137);
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   test("only SIGKILL claims memory; SIGTERM stays non-committal", async () => {
     const { stdout } = await sourcePreamble(
@@ -431,7 +437,7 @@ describe.concurrent("self install killed by a signal", () => {
       "Self install was stopped by a signal before it finished (exit 143, SIGTERM)",
     );
     expect(sigterm).not.toContain("memory");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("SIGKILL guidance names the cause and the ways out of it", async () => {
     const { stdout } = await sourcePreamble("self_install_kill_guidance 137");
@@ -441,7 +447,7 @@ describe.concurrent("self install killed by a signal", () => {
     expect(stdout).toContain("https://github.com/squirrelscan/squirrelscan/releases");
     // No em-dashes in user-facing copy.
     expect(stdout).not.toContain("—");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("SIGTERM guidance does not send the user off to add swap", async () => {
     const { stdout } = await sourcePreamble("self_install_kill_guidance 143");
@@ -451,7 +457,7 @@ describe.concurrent("self install killed by a signal", () => {
     expect(stdout).toContain("timeout wrapper");
     expect(stdout).toContain("https://github.com/squirrelscan/squirrelscan/releases");
     expect(stdout).not.toContain("—");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("error() prints detail to the user but keeps it out of the report line", async () => {
     // error() exits, so it runs in a subshell here and the message is read back
@@ -463,7 +469,7 @@ describe.concurrent("self install killed by a signal", () => {
     expect(stderr).toContain("long detail block");
     // Only the short line rides along in the report.
     expect(stdout).toBe("short line");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   // Cap sizes are compared as digit strings because a cgroup limit routinely
   // exceeds what bash arithmetic can hold.
@@ -485,7 +491,7 @@ describe.concurrent("self install killed by a signal", () => {
           ["1099511627777", "1099511627776"],
         ]),
       ).toEqual(["true", "false", "false", "true"]);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("orders values too large for bash arithmetic", async () => {
       expect(
@@ -497,7 +503,7 @@ describe.concurrent("self install killed by a signal", () => {
           ["268435456", "1099511627776"],
         ]),
       ).toEqual(["true", "true", "true", "false"]);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("normalizes leading zeros instead of comparing them as length", async () => {
       expect(
@@ -507,7 +513,7 @@ describe.concurrent("self install killed by a signal", () => {
           ["000", "0"],
         ]),
       ).toEqual(["false", "true", "false"]);
-    });
+    }, SPAWN_TIMEOUT_MS);
   });
 
   describe("memory probe", () => {
@@ -540,7 +546,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("32");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("resolves a nested v2 cgroup rather than the hierarchy root", async () => {
       const { stdout } = await withFixture({
@@ -551,7 +557,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("64");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("reports zero, not a negative, when usage is at the cap", async () => {
       const { stdout } = await withFixture({
@@ -561,7 +567,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("0");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("reads a cgroup v1 memory controller", async () => {
       const { stdout } = await withFixture({
@@ -571,7 +577,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("128");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("honours a capped ancestor when the leaf itself is uncapped", async () => {
       // systemd sets MemoryMax on a slice and leaves the unit below it at
@@ -585,7 +591,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("32");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("takes the tightest cap when several ancestors are capped", async () => {
       const { stdout } = await withFixture({
@@ -598,7 +604,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("32");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a UINT64_MAX limit reads as uncapped, not an exabyte cap", async () => {
       // Bash compares signed, so this value wraps: without a string-wise guard
@@ -610,7 +616,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("8192");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("treats a v1 PAGE_COUNTER_MAX sentinel as uncapped", async () => {
       const { stdout } = await withFixture({
@@ -620,7 +626,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("8192"); // the host figure is the honest one here
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("stays silent when a cap exists but its usage cannot be read", async () => {
       const { stdout } = await withFixture({
@@ -630,7 +636,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("falls back to the host only when demonstrably uncapped", async () => {
       const { stdout } = await withFixture({
@@ -639,7 +645,7 @@ describe.concurrent("self install killed by a signal", () => {
         meminfo: HOST_MEMINFO,
       });
       expect(stdout).toBe("8192");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test.each([
       ["a", "relative, and never shortens under ${rel%/*}"],
@@ -659,7 +665,7 @@ describe.concurrent("self install killed by a signal", () => {
       });
       // Falls through to the host figure rather than following the path.
       expect(stdout).toBe("8192");
-    }, 10_000);
+    }, SPAWN_TIMEOUT_MS);
 
     // The cases above are refused by is_safe_cgroup_rel before they reach the
     // walk, so they would still pass with the loop guard removed. Drive the
@@ -673,19 +679,19 @@ describe.concurrent("self install killed by a signal", () => {
         expect(code).toBe(0);
         expect(stdout).toBe("");
       },
-      10_000,
+      SPAWN_TIMEOUT_MS,
     );
 
     test("emits nothing rather than a guess when no interface is readable", async () => {
       const { stdout } = await withFixture({ "self-cgroup": "" });
       expect(stdout).toBe("");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("never emits a non-numeric figure on the real machine", async () => {
       // Empty when it cannot tell (macOS has no /proc); digits only otherwise.
       const { stdout } = await sourcePreamble("available_memory_mib");
       expect(stdout).toMatch(/^\d*$/);
-    });
+    }, SPAWN_TIMEOUT_MS);
   });
 
   test("the self install branch routes the killed codes through both helpers", () => {
@@ -734,7 +740,7 @@ describe.concurrent("install.sh report_error payload", () => {
     // Tail kept: the failure is at the END of a command's output.
     expect(errorOutput).toEndWith("~/.local/bin/squirrel");
     if (home) expect(errorOutput).not.toContain(home);
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   // INSTALLER-WORKER-7: 82 events with step init, exit code 7 and no line. A bare
   // curl failure under set -e left nothing to say where it was going.
@@ -761,7 +767,7 @@ describe.concurrent("install.sh report_error payload", () => {
     // Before any request there is no host to name, and the report says so.
     const early = await run("( (exit 7) || report_on_exit ); sleep 1");
     expect(early.error_line).toBe("curl exit 7 reaching an unknown host (before the first request)");
-  }, 30_000);
+  }, SPAWN_TIMEOUT_MS);
 
   test("a failure with its own message, or a non-network code, keeps its report as before", async () => {
     const { calls } = await runWithCurlShim(
@@ -778,7 +784,7 @@ describe.concurrent("install.sh report_error payload", () => {
       settleMs: 5000,
     });
     expect((JSON.parse(curlDataArg(plain.calls[0])) as Record<string, unknown>).error_line).toBe("");
-  }, 30_000);
+  }, SPAWN_TIMEOUT_MS);
 
   // #1681: the report names the host and the IP family the connection was attempted on, for every
   // curl network failure code, and never carries a name from the user's own network.
@@ -809,7 +815,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.ip_family).toBe("v4");
       expect(report.step).toBe("startup");
       expect(JSON.stringify(report)).not.toMatch(/pw|token=abc|\/releases/);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     const families: Array<[string, string, string]> = [
       ["an IPv4 address", "*   Trying 104.21.1.2:443...", "v4"],
@@ -830,7 +836,7 @@ describe.concurrent("install.sh report_error payload", () => {
         expect(probes[0]).toContain("https://install.squirrelscan.com/");
         expect(probes[0]).toContain("--connect-timeout");
         expect(missingFromArgv(probes[0] as string[])).toEqual([]);
-      });
+      }, SPAWN_TIMEOUT_MS);
     }
 
     test("a host the script was pointed at is reported as custom, with no probe and no name", async () => {
@@ -843,7 +849,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.error_line).toBe("curl exit 7 reaching custom");
       expect(probes).toHaveLength(0);
       expect(JSON.stringify(report)).not.toMatch(/corp|internal|10\.0\.0\.9/);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("the GitHub hosts the assets live on are named", async () => {
       for (const host of ["api.github.com", "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "x.githubusercontent.com"]) {
@@ -852,7 +858,7 @@ describe.concurrent("install.sh report_error payload", () => {
         );
         expect(report.host).toBe(host);
       }
-    }, 30_000);
+    }, SPAWN_TIMEOUT_MS);
 
     test("a request made in a command substitution still names its host", async () => {
       // get_latest_version runs as version=$(...): the variable it sets dies with the subshell.
@@ -863,7 +869,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.host).toBe("install.squirrelscan.com");
       expect(report.error_line).toBe("curl exit 7 reaching install.squirrelscan.com");
       expect(report.ip_family).toBe("v6");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     // error() exits 1, so a download or release fetch that failed on the network reports exit code 1:
     // the host and family still ride along, from the curl code the failing request recorded.
@@ -876,7 +882,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.error_line).toBe("Failed to fetch releases");
       expect(report.host).toBe("install.squirrelscan.com");
       expect(report.ip_family).toBe("v6");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("an HTTP error, or a request made after the failure, does not carry the failure forward", async () => {
       const http = await post(
@@ -887,7 +893,7 @@ describe.concurrent("install.sh report_error payload", () => {
         `( ${request}; note_fetch_rc 7; note_fetch_host "https://github.com/x"; LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
       );
       expect("host" in later.report).toBe(false);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a failure recorded in a command substitution reaches the exit trap", async () => {
       const { report } = await post(
@@ -896,7 +902,7 @@ describe.concurrent("install.sh report_error payload", () => {
       );
       expect(report.host).toBe("install.squirrelscan.com");
       expect(report.ip_family).toBe("v4");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("every request site records the failure's curl code", () => {
       expect(shellInstaller).toContain('note_fetch_rc "$rc"');
@@ -914,7 +920,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect("host" in report).toBe(false);
       expect("ip_family" in report).toBe(false);
       expect(probes).toHaveLength(0);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a request that fails another way (an HTTP error) also forgets an earlier network failure", async () => {
       const { report, probes } = await post(
@@ -922,14 +928,14 @@ describe.concurrent("install.sh report_error payload", () => {
       );
       expect("host" in report).toBe(false);
       expect(probes).toHaveLength(0);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a cured failure inside a command substitution is forgotten by the exit trap too", async () => {
       const { report } = await post(
         `v=$( ${request}; note_fetch_rc 28; note_fetch_rc 0; true ); ( LAST_ERROR_MSG="Checksum mismatch"; (exit 1) || report_on_exit ); sleep 1`,
       );
       expect("host" in report).toBe(false);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     // A curl whose first call times out (28) and whose second succeeds. It runs in a background subshell
     // (fetch_with_retry waits on it), so its call count lives in a file.
@@ -945,7 +951,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(stdout).toContain("var=[]");
       expect(stdout).toContain("file=github.com|");
       expect(stdout).not.toContain("|28");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a download that timed out, then succeeded, leaves no host, family or probe for the next error", async () => {
       const { calls } = await runWithCurlShim(
@@ -959,7 +965,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect("host" in report).toBe(false);
       expect("ip_family" in report).toBe(false);
       expect(calls.filter((argv) => argv.includes("-v"))).toHaveLength(0);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a download that fails every attempt still names its host and family", async () => {
       const { calls } = await runWithCurlShim(
@@ -971,7 +977,7 @@ describe.concurrent("install.sh report_error payload", () => {
       const report = JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>;
       expect(report.host).toBe("github.com");
       expect(report.ip_family).toBe("v6");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     // The host is the authority of the URL, and a fragment ends it.
     test.each([
@@ -985,7 +991,7 @@ describe.concurrent("install.sh report_error payload", () => {
         `( note_fetch_host "${url}"; (exit 7) || report_on_exit ); sleep 1`,
       );
       expect(report.host).toBe(want);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     // The probe is a short, bounded request to our own host that ignores proxy settings, and a failing
     // or slow one never changes the report or delays the install.
@@ -1000,7 +1006,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(argv).toContain("--connect-timeout");
       expect(argv).toContain("--max-time");
       expect(argv.join(" ")).not.toContain("proxy.corp.example");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a probe that fails (curl exit 28) leaves ip_family unknown and the report still goes", async () => {
       const { report, probes } = await post(
@@ -1011,7 +1017,7 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.host).toBe("install.squirrelscan.com");
       expect(report.ip_family).toBe("unknown");
       expect(report.exit_code).toBe(7);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a slow probe does not delay the install: the exit trap returns at once and the report still lands", async () => {
       const { calls, stdout } = await runWithCurlShim(
@@ -1022,7 +1028,7 @@ describe.concurrent("install.sh report_error payload", () => {
       const posts = calls.filter((argv) => argv.includes("POST"));
       expect(posts).toHaveLength(1);
       expect((JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>).ip_family).toBe("v4");
-    }, 30_000);
+    }, SPAWN_TIMEOUT_MS);
 
     // The state file never outlives the run, on any exit path.
     describe("the state file", () => {
@@ -1040,19 +1046,19 @@ describe.concurrent("install.sh report_error payload", () => {
           { cut: "preamble", env: { NO_TELEMETRY: "1" } },
         );
         expect(stdout.trim()).toBe("present");
-      });
+      }, SPAWN_TIMEOUT_MS);
 
       test("a normal exit removes it", async () => {
         expect(await fileAfter(`( ${request}; (exit 0) || true; report_on_exit )`)).toBe("gone");
-      });
+      }, SPAWN_TIMEOUT_MS);
 
       test.each([1, 7, 129, 130, 143])("exit code %i removes it", async (code) => {
         expect(await fileAfter(`( ${request}; note_fetch_rc 7; (exit ${code}) || report_on_exit )`)).toBe("gone");
-      });
+      }, SPAWN_TIMEOUT_MS);
 
       test("a run that never made a request removes it too", async () => {
         expect(await fileAfter("( (exit 1) || report_on_exit )")).toBe("gone");
-      });
+      }, SPAWN_TIMEOUT_MS);
 
       test("when mktemp fails there is no file, nothing is written, and the host is still reported", async () => {
         const { calls, stdout, stderr } = await runWithCurlShim(
@@ -1072,7 +1078,7 @@ describe.concurrent("install.sh report_error payload", () => {
         // Same shell, so the variable carries it; only a subshell's request needs the file.
         expect(report.host).toBe("install.squirrelscan.com");
         expect(report.ip_family).toBe("v4");
-      });
+      }, SPAWN_TIMEOUT_MS);
 
       test("when mktemp fails a request in a command substitution is lost quietly, not fatally", async () => {
         const { calls, stderr } = await runWithCurlShim(
@@ -1083,7 +1089,7 @@ describe.concurrent("install.sh report_error payload", () => {
         const posts = calls.filter((argv) => argv.includes("POST"));
         expect(posts).toHaveLength(1);
         expect("host" in (JSON.parse(curlDataArg(posts[0] as string[])) as Record<string, unknown>)).toBe(false);
-      });
+      }, SPAWN_TIMEOUT_MS);
     });
 
     test("before any request, or for a code that is not a network failure, there is no host or family", async () => {
@@ -1094,7 +1100,7 @@ describe.concurrent("install.sh report_error payload", () => {
       const plain = await post(`( ${request}; (exit 1) || report_on_exit ); sleep 1`);
       expect("host" in plain.report).toBe(false);
       expect("ip_family" in plain.report).toBe(false);
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("the report is still one valid JSON object with the fields it always had", async () => {
       const { report } = await post(
@@ -1105,7 +1111,7 @@ describe.concurrent("install.sh report_error payload", () => {
         expect(key in report).toBe(true);
       }
       expect(report.script_version).toBe("4");
-    });
+    }, SPAWN_TIMEOUT_MS);
   });
 
   // #1681: a report is never sent with step `init`.
@@ -1123,16 +1129,16 @@ describe.concurrent("install.sh report_error payload", () => {
 
     test("the observed payload (exit 7 before any step) now reports `startup`, not `init`", async () => {
       expect(await stepOf("( (exit 7) || report_on_exit ); sleep 1")).toBe("startup");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("an empty step, or the old `init`, reads as `startup`", async () => {
       expect(await stepOf('report_error "" 1 "x" ""; sleep 1')).toBe("startup");
       expect(await stepOf('report_error init 1 "x" ""; sleep 1')).toBe("startup");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("a named step is sent as it is", async () => {
       expect(await stepOf('report_error fetch_releases 7 "x" ""; sleep 1')).toBe("fetch_releases");
-    });
+    }, SPAWN_TIMEOUT_MS);
 
     test("the script's default step is `startup`, and `init` is not a step anywhere in it", () => {
       expect(shellInstaller).toContain('CURRENT_STEP="startup"');
@@ -1160,7 +1166,7 @@ describe.concurrent("install.sh report_error payload", () => {
     } else {
       expect(report).not.toHaveProperty("libc");
     }
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   // detect_libc must be defined in the preamble, ahead of report_error's first
   // call: a missing function would silently report "glibc" for everyone.
@@ -1200,14 +1206,14 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(r.stderr).toContain("sudo apk add libstdc++");
       expect(r.stderr).toContain("https://docs.squirrelscan.com/install");
       expect(r.stderr).toContain("Missing libstdc++");
-    }, 30_000);
+    }, SPAWN_TIMEOUT_MS);
 
     test("non-root without sudo: names plain apk add", async () => {
       const r = await run(`id() { echo 1000; }\n${noSudo}`);
       expect(r.code).not.toBe(0);
       expect(r.stderr).toContain("apk add libstdc++");
       expect(r.stderr).not.toContain("sudo apk add");
-    }, 30_000);
+    }, SPAWN_TIMEOUT_MS);
   });
 
   test("omits version while it is not yet known", async () => {
@@ -1219,7 +1225,7 @@ describe.concurrent("install.sh report_error payload", () => {
     expect(calls).toHaveLength(1);
     const report = JSON.parse(curlDataArg(calls[0])) as Record<string, unknown>;
     expect(report).not.toHaveProperty("version");
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   test("main records the pinned and the resolved version, in both installers", () => {
     expect(shellInstaller.split('INSTALLER_RELEASE_VERSION="${version#v}"')).toHaveLength(3);
@@ -1296,7 +1302,7 @@ describe.concurrent("install.sh curl transport hardening", () => {
     expect(calls).toHaveLength(1);
     expect(missingFromArgv(calls[0])).toEqual([]);
     expect(calls[0]).toContain("https://example.test/manifest.json");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("get_latest_version passes the flags on the release-metadata fetch", async () => {
     const { calls, stdout } = await runWithCurlShim("USE_JQ=false; get_latest_version stable", {
@@ -1306,7 +1312,7 @@ describe.concurrent("install.sh curl transport hardening", () => {
     expect(calls).toHaveLength(1);
     expect(missingFromArgv(calls[0])).toEqual([]);
     expect(calls[0]).toContain("https://install.squirrelscan.com/releases/stable");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("get_latest_version passes the flags on the GitHub API fallback too", async () => {
     // The fallback is the branch a corporate NAT hitting the R2 endpoint takes,
@@ -1321,7 +1327,7 @@ describe.concurrent("install.sh curl transport hardening", () => {
     expect(calls[1]).toContain(
       "https://api.github.com/repos/squirrelscan/squirrelscan/releases",
     );
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("the failure-report POST passes the flags from its detached subshell", async () => {
     const { calls } = await runWithCurlShim('report_error fetch_releases 1 "boom" ""; sleep 1', {
@@ -1338,7 +1344,7 @@ describe.concurrent("install.sh curl transport hardening", () => {
     );
     // Same detached-POST shape as the two payload tests, so the same budget:
     // the script sleeps 1s and the harness can wait 5s more on a loaded runner.
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   // Everything above this point shims curl, so it would pass just as happily
   // with `--tlsv.1.2` in the array. Nothing else pre-merge would catch that:
@@ -1373,7 +1379,7 @@ describe.concurrent("install.sh curl transport hardening", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 });
 
 // A self install killed by a signal now finishes by hand: install.sh lays the
@@ -1406,7 +1412,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
       "1=verify_binary",
       "126=verify_binary",
     ]);
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("place_release_by_hand lays the release out the way self install does", async () => {
     const { dir, home, bin } = scratch();
@@ -1431,7 +1437,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test.each([
     ["without jq, value replaced", "false", '{\n  "channel": "beta",\n  "install_bin_dir": null\n}\n'],
@@ -1461,7 +1467,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("without jq, an empty object gains the key with no trailing comma", async () => {
     const { dir, home, bin } = scratch();
@@ -1478,7 +1484,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("without jq, a recorded directory is left byte-for-byte alone", async () => {
     const { dir, home, bin } = scratch();
@@ -1498,7 +1504,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("a path that cannot be a plain JSON string is left unrecorded, not mangled", async () => {
     const { dir, home } = scratch();
@@ -1514,7 +1520,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("a binary that runs after the kill completes the install", async () => {
     const { dir, home, bin, tmp } = scratch();
@@ -1537,7 +1543,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("a binary that cannot run reports under verify_binary_killed with the paths in place", async () => {
     const { dir, home, bin, tmp } = scratch();
@@ -1564,7 +1570,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 
   // #2310. `bun build --compile` left the darwin binaries carrying a stale
   // ad-hoc signature, and macOS SIGKILLs those. The generic 137 text sent
@@ -1583,7 +1589,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     expect(stdout).toContain("codesign --verify --strict '/r/squirrel'");
     expect(stdout).not.toContain("out-of-memory killer");
     expect(stdout).not.toContain("swapfile");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   // The stubbed tests here would stay green if `is_darwin` or
   // `macos_product_version` themselves broke, so this shims what those two
@@ -1615,7 +1621,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("a Mac whose sw_vers fails still gets the signature guidance", async () => {
     const dir = darwinShims(null);
@@ -1630,7 +1636,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("the printed codesign command quotes a path with a space", async () => {
     const dir = darwinShims("26.1");
@@ -1643,7 +1649,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("off macOS a killed binary still reads as the out-of-memory killer", async () => {
     const { stdout } = await runWithCurlShim(
@@ -1652,7 +1658,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     expect(stdout).toContain("out-of-memory killer");
     expect(stdout).toContain("swapfile");
     expect(stdout).not.toContain("code signature");
-  });
+  }, SPAWN_TIMEOUT_MS);
 
   test("the darwin verify_binary_killed report carries the macOS version", async () => {
     const { dir, home, bin, tmp } = scratch();
@@ -1674,7 +1680,7 @@ describe.concurrent("by-hand install after a killed self install (#2023)", () =>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, SPAWN_TIMEOUT_MS);
 });
 
 // --- release metadata validation (#167) ----------------------------------
