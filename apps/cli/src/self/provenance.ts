@@ -12,6 +12,7 @@ import {
   type ReleaseKeySet,
   activeReleaseKeys,
   getPinnedReleaseKeys,
+  isSignedEra,
   verifyReleaseSignature,
 } from "./release-keys";
 import { REPO_NAME, REPO_OWNER } from "./releases";
@@ -35,6 +36,13 @@ import { REPO_NAME, REPO_OWNER } from "./releases";
  *     gh absent, too old, or logged out           -> skipped, sha256 decides
  *
  * While no key is pinned nothing is fetched and the outcome is exactly #169's.
+ *
+ * Signed era: from `first_signed_version` (release-keys.json) up, the last row
+ * is gone. A binary is accepted ONLY on a valid pinned-key signature or a
+ * valid attestation; a missing .sig with gh absent, too old or logged out is
+ * SIGNATURE_REQUIRED, never a sha256-only pass. The era is decided from the
+ * resolved target version, not from anything in the manifest, because whoever
+ * can strip a .sig can strip a manifest field too.
  */
 
 export type ProvenanceOutcome =
@@ -179,12 +187,21 @@ async function checkSignatures(
   return ok(keyId);
 }
 
+const signedEraRequired = (version: string, reason: string) =>
+  err(
+    commandError(
+      "SIGNATURE_REQUIRED",
+      `v${version.replace(/^v/, "")} must carry a squirrelscan release-key signature or a GitHub attestation, and neither could be verified (${reason}). sha256 alone is not accepted for this version. Nothing was installed.\nTo install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify: https://docs.squirrelscan.com/install#verifying-a-release`
+    )
+  );
+
 export async function verifyReleaseProvenance(
   data: ArrayBuffer,
   release: ReleaseBinaryRef,
   deps?: ProvenanceDeps
 ): Promise<Result<ProvenanceOutcome>> {
   const keys = deps?.releaseKeys ?? getPinnedReleaseKeys();
+  const signedEra = isSignedEra(keys, release.version);
 
   if (activeReleaseKeys(keys).length > 0) {
     const fetchSignatures = deps?.fetchSignatures ?? defaultFetchSignatures;
@@ -212,6 +229,12 @@ export async function verifyReleaseProvenance(
     });
   }
   if (attested.data.status === "skipped") {
+    if (signedEra) {
+      return signedEraRequired(
+        release.version,
+        `no .sig files were published, and the attestation could not be checked: ${attested.data.reason.split(": skipping")[0]}`
+      );
+    }
     return ok<ProvenanceOutcome>({
       status: "skipped",
       reason: attested.data.reason,

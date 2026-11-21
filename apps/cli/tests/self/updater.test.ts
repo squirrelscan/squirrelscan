@@ -145,6 +145,7 @@ describe("updater", () => {
         { slot: "next", id: "", pem: "" },
       ],
       revokedKeyIds: [],
+      firstSignedVersion: "",
     });
   });
 
@@ -806,6 +807,7 @@ describe("updater", () => {
         { slot: "next" as const, id: "", pem: "" },
       ],
       revokedKeyIds: [],
+      firstSignedVersion: "",
     });
     const ghNeverVerifies = async (args: string[]) =>
       args[0] === "attestation" && args[2] !== "--help"
@@ -845,6 +847,46 @@ describe("updater", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("SIGNATURE_FAILED");
       expect(existsSync(join(tempHome, "releases"))).toBe(false);
+    });
+
+    // The signed era: the target version is at or after first_signed_version.
+    const inEra = (key: TestReleaseKey) => ({
+      ...pinnedOnly(key),
+      firstSignedVersion: manifest.version,
+    });
+
+    test("signed era, gh absent, no .sig files: the update fails with nothing installed", async () => {
+      stubInteractiveUpdate();
+      const key = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: inEra(key),
+          fetchSignatures: async () => ({
+            manifest: null,
+            manifestSig: null,
+            assetSig: null,
+          }),
+          runGh: async () => null,
+        },
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe("SIGNATURE_REQUIRED");
+      expect(existsSync(join(tempHome, "releases"))).toBe(false);
+    });
+
+    test("signed era, gh absent, valid signature: the update installs", async () => {
+      stubInteractiveUpdate();
+      const key = makeTestReleaseKey();
+      const result = await runInteractiveUpdate({
+        landingDeps: { which: () => null, isWindows: false },
+        attestation: {
+          releaseKeys: inEra(key),
+          fetchSignatures: async () => signedFiles(key),
+          runGh: async () => null,
+        },
+      });
+      expect(result.ok).toBe(true);
     });
 
     test("a verify timeout fails the update with nothing installed", async () => {

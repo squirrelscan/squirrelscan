@@ -36,12 +36,14 @@ const NO_KEYS: ReleaseKeySet = {
     { slot: "next", id: "", pem: "" },
   ],
   revokedKeyIds: [],
+  firstSignedVersion: "",
 };
 
 function pinned(
   current: TestReleaseKey,
   next?: TestReleaseKey,
-  revoked: string[] = []
+  revoked: string[] = [],
+  firstSignedVersion = ""
 ): ReleaseKeySet {
   return {
     keys: [
@@ -49,6 +51,7 @@ function pinned(
       { slot: "next", id: next?.id ?? "", pem: next?.pem ?? "" },
     ],
     revokedKeyIds: revoked,
+    firstSignedVersion,
   };
 }
 
@@ -402,5 +405,153 @@ describe("verifyReleaseProvenance: no production key pinned = #169 behaviour", (
     });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.data.status).toBe("skipped");
+  });
+});
+
+// Signed era (squirrelscan/repo#5032): from first_signed_version up, sha256
+// alone is never enough. Decided from the target version, not the manifest.
+describe("verifyReleaseProvenance: the signed era", () => {
+  const ERA = "9.9.0"; // RELEASE.version 9.9.9 is at or after it
+  const PRE_ERA = "9.9.10"; // ... and before this
+  const withKey = (
+    key: TestReleaseKey,
+    first: string,
+    revoked: string[] = []
+  ) => pinned(key, undefined, revoked, first);
+
+  /** gh states the attestation check can be in. */
+  function ghIn(
+    state: "absent" | "too-old" | "logged-out" | "match" | "mismatch"
+  ) {
+    const calls = { verify: 0 };
+    const run: GhRunner = async (args) => {
+      if (state === "absent") return null;
+      if (args[0] === "attestation" && args[2] === "--help")
+        return state === "too-old"
+          ? { code: 1, output: "unknown command" }
+          : OK;
+      if (args[0] === "auth")
+        return state === "logged-out"
+          ? { code: 1, output: "not logged in" }
+          : OK;
+      calls.verify++;
+      return state === "mismatch" ? NO_ATTESTATION : OK;
+    };
+    return { run, calls };
+  }
+  const run = (
+    keys: ReleaseKeySet,
+    files: SignedReleaseFiles,
+    g: ReturnType<typeof ghIn>,
+    version = RELEASE.version
+  ) =>
+    verifyReleaseProvenance(
+      DATA,
+      { ...RELEASE, version },
+      { releaseKeys: keys, fetchSignatures: fetcher(files).fetch, runGh: g.run }
+    );
+
+  test("no gh and no .sig files is a hard failure that says how to install by hand", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(withKey(key, ERA), UNSIGNED, ghIn("absent"));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.code).toBe("SIGNATURE_REQUIRED");
+    expect(r.error.message).toContain("sha256 alone is not accepted");
+    expect(r.error.message).toContain("openssl dgst -sha256 -verify");
+    expect(r.error.message).toContain("GitHub CLI (gh) not found");
+    expect(r.error.message).not.toContain("relying on the sha256");
+  });
+
+  test("a gh that is too old or logged out, with no .sig files, is a hard failure", async () => {
+    const key = makeTestReleaseKey();
+    for (const state of ["too-old", "logged-out"] as const) {
+      const r = await run(withKey(key, ERA), UNSIGNED, ghIn(state));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe("SIGNATURE_REQUIRED");
+    }
+  });
+
+  test("no gh and a valid signature installs", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(withKey(key, ERA), signedRelease(key), ghIn("absent"));
+    expect(r).toEqual({
+      ok: true,
+      data: { status: "signature", keyId: key.id },
+    });
+  });
+
+  test("a valid attestation with no .sig files installs", async () => {
+    const key = makeTestReleaseKey();
+    const g = ghIn("match");
+    const r = await run(withKey(key, ERA), UNSIGNED, g);
+    expect(r).toEqual({ ok: true, data: { status: "attestation" } });
+    expect(g.calls.verify).toBe(1);
+  });
+
+  test("a failed attestation with no .sig files is still a hard failure", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(withKey(key, ERA), UNSIGNED, ghIn("mismatch"));
+    expect(r.ok).toBe(false);
+  });
+
+  test("a foreign-key, revoked-key or invalid signature fails even with a passing attestation", async () => {
+    const key = makeTestReleaseKey();
+    const foreign = makeTestReleaseKey();
+    const g = ghIn("match");
+    const cases: [ReleaseKeySet, SignedReleaseFiles][] = [
+      [withKey(key, ERA), signedRelease(foreign)],
+      [withKey(key, ERA, [key.id]), signedRelease(key)],
+      [withKey(key, ERA), signedRelease(foreign, { claimedId: key.id })],
+    ];
+    for (const [keys, files] of cases) {
+      const r = await run(keys, files, g);
+      expect(r.ok).toBe(false);
+    }
+    expect(g.calls.verify).toBe(0);
+  });
+
+  test("the era follows the version being installed, a leading v and a prerelease included", async () => {
+    const key = makeTestReleaseKey();
+    for (const [version, hard] of [
+      ["9.9.9", true],
+      ["v9.9.9", true],
+      ["9.9.9-beta.1", false], // a prerelease of 9.9.9 sorts below it
+      ["9.9.10-beta.1", true],
+      ["9.9.8", false],
+    ] as const) {
+      const r = await run(
+        withKey(key, "9.9.9"),
+        UNSIGNED,
+        ghIn("absent"),
+        version
+      );
+      expect(r.ok).toBe(!hard);
+    }
+  });
+
+  test("before the first signed version: gh absent and no .sig skips with a warning, as before", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(withKey(key, PRE_ERA), UNSIGNED, ghIn("absent"));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.status).toBe("skipped");
+  });
+
+  test("first_signed_version unset: gh absent and no .sig skips with a warning, as before", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(withKey(key, ""), UNSIGNED, ghIn("absent"));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.status).toBe("skipped");
+  });
+
+  test("a version string that does not parse counts as signed-era", async () => {
+    const key = makeTestReleaseKey();
+    const r = await run(
+      withKey(key, ERA),
+      UNSIGNED,
+      ghIn("absent"),
+      "not-a-version"
+    );
+    expect(r.ok).toBe(false);
   });
 });

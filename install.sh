@@ -63,6 +63,7 @@ RELEASE_KEY_CURRENT_PEM=''
 RELEASE_KEY_NEXT_ID=''
 RELEASE_KEY_NEXT_PEM=''
 RELEASE_KEYS_REVOKED=''
+RELEASE_FIRST_SIGNED_VERSION=''
 # END GENERATED RELEASE KEYS
 
 # Transport hardening for every curl this script runs. curl's own defaults will
@@ -1670,6 +1671,110 @@ gh_bounded() {
   return "$rc"
 }
 
+# Signed era (squirrelscan/repo#5032). From RELEASE_FIRST_SIGNED_VERSION up, the
+# release is accepted ONLY on a valid pinned-key signature or a valid GitHub
+# attestation: sha256 alone is a hard failure, with or without gh. The era is
+# decided from the version being installed (the resolved target, whether it came
+# from the channel or SQUIRREL_VERSION), never from a manifest field, because
+# whoever can strip a .sig can strip a field too. Unset means no era.
+# (valid_release_version, above, is the shared version pattern.)
+SIGNED_ERA=false
+SIGNED_ERA_VERSION=""
+SIG_NOTE=""
+
+# num_cmp A B: prints -1, 0 or 1 for two digit strings, no arithmetic (no overflow).
+num_cmp() {
+  local a="$1" b="$2"
+  a="${a#"${a%%[!0]*}"}"
+  b="${b#"${b%%[!0]*}"}"
+  if [ "${#a}" -ne "${#b}" ]; then
+    if [ "${#a}" -lt "${#b}" ]; then echo -1; else echo 1; fi
+  elif [ "$a" = "$b" ]; then
+    echo 0
+  elif [[ "$a" < "$b" ]]; then
+    echo -1
+  else
+    echo 1
+  fi
+}
+
+# version_cmp A B: semver precedence, prints -1, 0 or 1. A leading v and +build
+# are ignored, a prerelease sorts below its release, and prerelease identifiers
+# compare left to right (numeric below alphanumeric, a shorter list below a
+# longer one). Both versions must satisfy valid_release_version. Bash 3.2
+# safe: no sort -V, no associative arrays.
+version_cmp() {
+  local a="${1#v}" b="${2#v}" i c x y xn yn
+  a="${a%%+*}"
+  b="${b%%+*}"
+  local acore="${a%%-*}" bcore="${b%%-*}" apre="" bpre=""
+  [ "$a" = "$acore" ] || apre="${a#*-}"
+  [ "$b" = "$bcore" ] || bpre="${b#*-}"
+  local IFS=.
+  local ac bc ap bp
+  # shellcheck disable=SC2206
+  ac=($acore) bc=($bcore)
+  i=0
+  while [ "$i" -lt 3 ]; do
+    c=$(num_cmp "${ac[$i]}" "${bc[$i]}")
+    if [ "$c" != 0 ]; then echo "$c"; return 0; fi
+    i=$((i + 1))
+  done
+  if [ -z "$apre" ] && [ -z "$bpre" ]; then echo 0; return 0; fi
+  if [ -z "$apre" ]; then echo 1; return 0; fi
+  if [ -z "$bpre" ]; then echo -1; return 0; fi
+  # shellcheck disable=SC2206
+  ap=($apre) bp=($bpre)
+  i=0
+  while :; do
+    if [ "$i" -ge "${#ap[@]}" ] && [ "$i" -ge "${#bp[@]}" ]; then echo 0; return 0; fi
+    if [ "$i" -ge "${#ap[@]}" ]; then echo -1; return 0; fi
+    if [ "$i" -ge "${#bp[@]}" ]; then echo 1; return 0; fi
+    x="${ap[$i]}"
+    y="${bp[$i]}"
+    xn=false
+    yn=false
+    case "$x" in *[!0-9]*) ;; *) xn=true ;; esac
+    case "$y" in *[!0-9]*) ;; *) yn=true ;; esac
+    if [ "$xn" = true ] && [ "$yn" = true ]; then
+      c=$(num_cmp "$x" "$y")
+      if [ "$c" != 0 ]; then echo "$c"; return 0; fi
+    elif [ "$xn" = true ]; then
+      echo -1; return 0
+    elif [ "$yn" = true ]; then
+      echo 1; return 0
+    elif [ "$x" != "$y" ]; then
+      local LC_ALL=C
+      if [[ "$x" < "$y" ]]; then echo -1; else echo 1; fi
+      return 0
+    fi
+    i=$((i + 1))
+  done
+}
+
+# release_signed_era <version>: 0 when the version is at or after
+# RELEASE_FIRST_SIGNED_VERSION. A version that does not parse counts as
+# signed-era, so a malformed target is never the way out of the rule.
+release_signed_era() {
+  [ -n "${RELEASE_FIRST_SIGNED_VERSION:-}" ] || return 1
+  valid_release_version "$1" || return 0
+  [ "$(version_cmp "$1" "$RELEASE_FIRST_SIGNED_VERSION")" != "-1" ]
+}
+
+signed_era_fail() {
+  error "Cannot verify squirrel ${SIGNED_ERA_VERSION#v}: $1.\n  This version is only installed with a valid release-key signature or GitHub attestation; the sha256 checksum alone is not accepted.\n  Nothing was installed.\n  To install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify:\n    https://docs.squirrelscan.com/install#verifying-a-release"
+}
+
+# attestation_skipped <short reason> <warning text>: gh cannot check the
+# attestation. Before the signed era that is a warning and the sha256 decides;
+# in it, it is a hard failure.
+attestation_skipped() {
+  if [ "$SIGNED_ERA" = true ]; then
+    signed_era_fail "${SIG_NOTE:-no signature was checked}, and the GitHub attestation could not be checked ($1)"
+  fi
+  warn "$2"
+}
+
 # Provenance check (#169). The sha256 above comes from a manifest served next
 # to the binary, so it cannot tell a compromised origin from a good one. GitHub
 # artifact attestations are signed in the release workflow and checked against
@@ -1683,7 +1788,7 @@ verify_attestation() {
   local file="$1" out rc
   CURRENT_STEP="verify_attestation"
   if ! command -v gh > /dev/null 2>&1; then
-    warn "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.\n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
+    attestation_skipped "gh is not installed" "GitHub CLI (gh) not found: skipping the release provenance check, relying on the sha256 checksum only.\n  Install gh and run 'gh auth login' to verify installs against the GitHub attestation."
     return 0
   fi
   out=$(mktemp)
@@ -1691,22 +1796,22 @@ verify_attestation() {
   gh_bounded 15 "$out" attestation verify --help || rc=$?
   if [ "$rc" -eq 124 ]; then
     rm -f "$out"
-    warn "gh attestation verify --help timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
+    attestation_skipped "gh attestation verify --help timed out" "gh attestation verify --help timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
     return 0
   elif [ "$rc" -ne 0 ]; then
     rm -f "$out"
-    warn "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
+    attestation_skipped "this gh is too old for 'gh attestation verify'" "This gh is too old for 'gh attestation verify': skipping the release provenance check, relying on the sha256 checksum only."
     return 0
   fi
   rc=0
   gh_bounded 15 "$out" auth status --hostname github.com || rc=$?
   if [ "$rc" -eq 124 ]; then
     rm -f "$out"
-    warn "gh auth status timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
+    attestation_skipped "gh auth status timed out" "gh auth status timed out after ${SQUIRREL_TEST_GH_TIMEOUT_SECS:-15}s: skipping the release provenance check, relying on the sha256 checksum only."
     return 0
   elif [ "$rc" -ne 0 ]; then
     rm -f "$out"
-    warn "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.\n  Run 'gh auth login' to enable it."
+    attestation_skipped "gh is not logged in" "gh is not logged in: skipping the release provenance check, relying on the sha256 checksum only.\n  Run 'gh auth login' to enable it."
     return 0
   fi
   log "Verifying release attestation..."
@@ -1801,9 +1906,13 @@ signature_failed() {
 verify_release_signature() {
   local manifest_file="$1" binary="$2" filename="$3" version="$4" manifest_url="$5" binary_url="$6"
   CURRENT_STEP="verify_signature"
-  release_keys_pinned || return 1
+  if ! release_keys_pinned; then
+    SIG_NOTE="no release key is pinned"
+    return 1
+  fi
   if ! command -v openssl > /dev/null 2>&1; then
     warn "openssl not found: skipping the release-key signature check, falling back to the GitHub attestation."
+    SIG_NOTE="openssl is not installed, so no release-key signature was checked"
     return 1
   fi
 
@@ -1812,6 +1921,7 @@ verify_release_signature() {
   fetch_signature "${manifest_url}.sig" "$dir/manifest.json.sig" && have_manifest_sig=true
   fetch_signature "${binary_url}.sig" "$dir/binary.sig" && have_binary_sig=true
   if [ "$have_manifest_sig" = false ] && [ "$have_binary_sig" = false ]; then
+    SIG_NOTE="the release has no .sig files"
     return 1
   fi
   [ "$have_manifest_sig" = true ] || signature_failed "manifest.json.sig is missing"
@@ -1942,6 +2052,9 @@ download_and_install() {
   info "Checksum verified: ${expected_sha256:0:16}..."
 
   # Provenance (#169, repo#5032): a pinned-key signature, else the attestation.
+  # In the signed era neither skipping nor sha256 alone is an option.
+  SIGNED_ERA_VERSION="$version"
+  if release_signed_era "$version"; then SIGNED_ERA=true; else SIGNED_ERA=false; fi
   if ! verify_release_signature "$tmpdir/manifest.json" "$tmpdir/squirrel" "$filename" "$version" "$manifest_url" "$binary_url"; then
     verify_attestation "$tmpdir/squirrel"
   fi

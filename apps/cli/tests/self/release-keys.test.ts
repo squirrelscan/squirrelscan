@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 
 import {
   derSignatureToRaw,
+  isSignedEra,
   getPinnedReleaseKeys,
   parseReleaseKeys,
   pemToSpkiDer,
@@ -24,6 +25,7 @@ const emptyFile = () => ({
     { slot: "next", id: "", pem: "" },
   ],
   revoked_key_ids: [] as string[],
+  first_signed_version: "",
 });
 
 describe("release-keys.json", () => {
@@ -193,5 +195,63 @@ describe("derSignatureToRaw", () => {
     expect(await verifyReleaseSignature(key.pem, other.sign(data), data)).toBe(
       false
     );
+  });
+});
+
+describe("first_signed_version", () => {
+  const fixture = JSON.parse(
+    readFileSync(`${ROOT}scripts/fixtures/version-compare.json`, "utf8")
+  ) as {
+    compare: { a: string; b: string; cmp: number }[];
+    era: { first: string; version: string; era: boolean }[];
+  };
+  const withFirst = (first: string) => ({
+    keys: [],
+    revokedKeyIds: [],
+    firstSignedVersion: first,
+  });
+
+  test("the shared table decides the era the same way install.sh and install.ps1 do", () => {
+    expect(fixture.era.length).toBeGreaterThan(10);
+    for (const c of fixture.era)
+      expect([
+        c.first,
+        c.version,
+        isSignedEra({ ...withFirst(c.first), keys: [] }, c.version),
+      ]).toEqual([c.first, c.version, c.era]);
+  });
+
+  test("the shared comparison table orders versions semver-correctly", async () => {
+    const { compareVersions } = await import("@/self/releases");
+    for (const c of fixture.compare)
+      expect([c.a, c.b, Math.sign(compareVersions(c.a, c.b))]).toEqual([
+        c.a,
+        c.b,
+        c.cmp,
+      ]);
+  });
+
+  test("it is parsed, defaults to a strict string, and needs a pinned key to be set", () => {
+    const key = makeTestReleaseKey();
+    const pinnedFile = emptyFile();
+    pinnedFile.keys[0] = { slot: "current", id: key.id, pem: key.pem };
+    expect(parseReleaseKeys(pinnedFile).firstSignedVersion).toBe("");
+    expect(
+      parseReleaseKeys({ ...pinnedFile, first_signed_version: "0.0.190" })
+        .firstSignedVersion
+    ).toBe("0.0.190");
+    expect(() =>
+      parseReleaseKeys({ ...emptyFile(), first_signed_version: undefined })
+    ).toThrow("must be a string");
+    expect(() =>
+      parseReleaseKeys({ ...pinnedFile, first_signed_version: "soon" })
+    ).toThrow("must look like");
+    expect(() =>
+      parseReleaseKeys({ ...emptyFile(), first_signed_version: "0.0.190" })
+    ).toThrow("no key is pinned");
+  });
+
+  test("the checked-in file leaves it unset until the maintainer pins the key", () => {
+    expect(getPinnedReleaseKeys().firstSignedVersion).toBe("");
   });
 });

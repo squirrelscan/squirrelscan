@@ -1,4 +1,5 @@
 import releaseKeysFile from "../../../../release-keys.json";
+import { compareVersions } from "./releases";
 
 /**
  * Pinned release signing keys (squirrelscan/repo#5032).
@@ -24,6 +25,31 @@ export interface ReleaseKey {
 export interface ReleaseKeySet {
   keys: ReleaseKey[];
   revokedKeyIds: string[];
+  /**
+   * The first version that must carry a valid pinned-key signature or a valid
+   * GitHub attestation. Empty until the maintainer pins the key, in the same
+   * PR as the key. From this version up, sha256 alone is never enough.
+   */
+  firstSignedVersion: string;
+}
+
+/**
+ * Real squirrel versions: 0.0.189, v0.0.189, 0.0.190-beta.1. The same pattern
+ * as install.sh and install.ps1 (and paths.ts), so all three agree on what is
+ * a version at all.
+ */
+export const RELEASE_VERSION_PATTERN =
+  /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/;
+
+/**
+ * Is `version` at or after the key set's first signed version? False while
+ * that is unset. A version that does not parse counts as signed-era: a
+ * malformed target must never be the way out of the rule.
+ */
+export function isSignedEra(set: ReleaseKeySet, version: string): boolean {
+  if (set.firstSignedVersion === "") return false;
+  if (!RELEASE_VERSION_PATTERN.test(version)) return true;
+  return compareVersions(version, set.firstSignedVersion) >= 0;
 }
 
 export const RELEASE_KEY_ID_PATTERN = /^[0-9a-f]{16}$/;
@@ -41,7 +67,11 @@ export function parseReleaseKeys(value: unknown): ReleaseKeySet {
     throw new Error(`release-keys.json: ${why}`);
   };
   if (!value || typeof value !== "object") fail("not an object");
-  const file = value as { keys?: unknown; revoked_key_ids?: unknown };
+  const file = value as {
+    keys?: unknown;
+    revoked_key_ids?: unknown;
+    first_signed_version?: unknown;
+  };
   if (!Array.isArray(file.keys)) fail("`keys` must be an array");
   if (!Array.isArray(file.revoked_key_ids))
     fail("`revoked_key_ids` must be an array");
@@ -78,7 +108,18 @@ export function parseReleaseKeys(value: unknown): ReleaseKeySet {
     return id as string;
   });
 
-  return { keys, revokedKeyIds };
+  const first = file.first_signed_version;
+  if (typeof first !== "string")
+    fail("`first_signed_version` must be a string");
+  const firstSignedVersion = first as string;
+  if (firstSignedVersion !== "") {
+    if (!RELEASE_VERSION_PATTERN.test(firstSignedVersion))
+      fail("`first_signed_version` must look like 0.0.190 or 0.0.190-beta.1");
+    if (!keys.some((k) => k.pem !== ""))
+      fail("`first_signed_version` is set but no key is pinned");
+  }
+
+  return { keys, revokedKeyIds, firstSignedVersion };
 }
 
 /** The keys this build pins. Parsed on first use, so a bad file breaks updates, not every command. */

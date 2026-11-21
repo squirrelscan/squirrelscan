@@ -57,7 +57,7 @@ FOREIGN_ID="$(key_id test-foreign-key)"
 # `pinned` pins the TEST keys, `unpinned` pins nothing, which is what
 # install.sh does until the maintainer adds the production key.
 render_installer() {
-  local out="$1" pin="$2" blk="$WORK/keys.$2.block"
+  local out="$1" pin="$2" first="${3:-}" blk="$WORK/keys.${1##*/}.block"
   {
     echo "# BEGIN GENERATED RELEASE KEYS (test)"
     if [ "$pin" = pinned ]; then
@@ -66,12 +66,14 @@ render_installer() {
       echo "RELEASE_KEY_NEXT_ID='$REVOKED_ID'"
       echo "RELEASE_KEY_NEXT_PEM='$(cat "$KEYS/test-release-key-revoked.pub")'"
       echo "RELEASE_KEYS_REVOKED='$REVOKED_ID'"
+      echo "RELEASE_FIRST_SIGNED_VERSION='$first'"
     else
       echo "RELEASE_KEY_CURRENT_ID=''"
       echo "RELEASE_KEY_CURRENT_PEM=''"
       echo "RELEASE_KEY_NEXT_ID=''"
       echo "RELEASE_KEY_NEXT_PEM=''"
       echo "RELEASE_KEYS_REVOKED=''"
+      echo "RELEASE_FIRST_SIGNED_VERSION=''"
     fi
     echo "# END GENERATED RELEASE KEYS"
   } > "$blk"
@@ -87,6 +89,10 @@ render_installer() {
 }
 render_installer "$WORK/install-pinned.sh" pinned
 render_installer "$WORK/install-unpinned.sh" unpinned
+# The signed era (first_signed_version): the version under test is v9.9.9, so
+# 9.9.9 is the first signed version and 9.9.10 is still in the future.
+render_installer "$WORK/install-era.sh" pinned 9.9.9
+render_installer "$WORK/install-pre-era.sh" pinned 9.9.10
 
 # --- shims -------------------------------------------------------------------
 SHIMS="$WORK/shims"
@@ -122,6 +128,28 @@ fi
 exit 99
 EOF
 chmod 755 "$SHIMS/curl" "$SHIMS/gh"
+
+# A PATH without gh, and one without gh or openssl: a farm of symlinks to every
+# tool in the system bin dirs except the excluded ones (the shims dir that goes
+# in front carries only curl). Everything else stays the platform's real tool.
+SHIMS_CURL="$WORK/shims-curl"
+mkdir -p "$SHIMS_CURL"
+cp "$SHIMS/curl" "$SHIMS_CURL/curl"
+make_farm() {
+  local dir="$1" skip=" $2 " f name
+  mkdir -p "$dir"
+  for f in /usr/bin/* /bin/* /usr/sbin/* /sbin/*; do
+    name="${f##*/}"
+    case "$skip" in *" $name "*) continue ;; esac
+    [ -e "$dir/$name" ] || ln -s "$f" "$dir/$name" 2> /dev/null || true
+  done
+}
+make_farm "$WORK/farm-nogh" "gh"
+make_farm "$WORK/farm-nogh-nossl" "gh openssl"
+PATH_NOGH="$SHIMS_CURL:$WORK/farm-nogh"
+PATH_NOGH_NOSSL="$SHIMS_CURL:$WORK/farm-nogh-nossl"
+PATH_NOSSL="$SHIMS:$WORK/farm-nogh-nossl"
+CASE_PATH=""
 
 # --- fake release ------------------------------------------------------------
 FAKE_BINARY='#!/bin/sh
@@ -173,7 +201,7 @@ run_case() {
   local root="$WORK/run-$PASSED-$FAILED-$RANDOM" rc=0 ok=true why=""
   mkdir -p "$root/home" "$root/tmp"
   env -i \
-    PATH="$SHIMS:/usr/bin:/bin:/usr/sbin:/sbin" \
+    PATH="${CASE_PATH:-$SHIMS:/usr/bin:/bin:/usr/sbin:/sbin}" \
     HOME="$root/home" TMPDIR="$root/tmp" \
     RELEASE_DIR="$release" CURL_LOG="$root/curl.log" GH_LOG="$root/gh.log" GH_VERIFY_EXIT="$gh_exit" \
     SQUIRREL_VERSION="$VERSION" SQUIRREL_BIN_DIR="$root/home/bin" SQUIRREL_NO_MODIFY_PATH=1 \
@@ -280,6 +308,33 @@ run_case "no key pinned, attestation verifies" "$WORK/install-unpinned.sh" "$R/g
 check eval '! fetched "\.sig$"'
 run_case "no key pinned, attestation fails (signature not consulted)" "$WORK/install-unpinned.sh" "$R/good" fail \
   "Attestation verification failed" 1
+
+# --- signed era (first_signed_version) ---------------------------------------
+# From the first signed version up: a valid pinned-key signature or a valid
+# attestation, nothing else. sha256 alone is a hard failure, with or without gh.
+ERA="$WORK/install-era.sh"
+PRE_ERA="$WORK/install-pre-era.sh"
+no_sig_dir="$R/unsigned"   # no .sig files, from the unsigned case above
+
+CASE_PATH="$PATH_NOGH"
+run_case "era: no gh, no .sig files" "$ERA" "$no_sig_dir" fail "the sha256 checksum alone is not accepted"
+check eval 'case "$LAST_STDERR" in *"the release has no .sig files"*"openssl dgst -sha256 -verify"*) true ;; *) false ;; esac'
+run_case "era: no gh, valid signature" "$ERA" "$R/good" pass "Release signature verified: signed by squirrelscan release key $PINNED_ID"
+CASE_PATH="$PATH_NOGH_NOSSL"
+run_case "era: no openssl, no gh, no attestation" "$ERA" "$R/good" fail "openssl is not installed"
+CASE_PATH="$PATH_NOSSL"
+run_case "era: no openssl, valid attestation (the attestation can still carry it)" "$ERA" "$R/good" pass "Attestation verified" 0
+CASE_PATH=""
+run_case "era: valid attestation, no .sig files" "$ERA" "$no_sig_dir" pass "Attestation verified" 0
+run_case "era: attestation fails, no .sig files" "$ERA" "$no_sig_dir" fail "Attestation verification failed" 1
+run_case "era: foreign key signature, attestation would pass" "$ERA" "$R/foreign" fail "which this installer does not pin" 0
+check eval '! gh_verify_ran'
+
+# Before the era, and with the field unset, today's behaviour holds exactly.
+CASE_PATH="$PATH_NOGH"
+run_case "pre-era version, no gh, no .sig files: warns, installs (unchanged)" "$PRE_ERA" "$no_sig_dir" pass "relying on the sha256 checksum only"
+run_case "first_signed_version unset, no gh, no .sig files: warns, installs (unchanged)" "$WORK/install-pinned.sh" "$no_sig_dir" pass "relying on the sha256 checksum only"
+CASE_PATH=""
 
 echo
 echo "$PASSED passed, $FAILED failed"

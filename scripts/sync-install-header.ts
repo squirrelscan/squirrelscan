@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Writes the squirrelscan header (pixel squirrel + wordmark) into install.sh
 // and install.ps1 from apps/cli/src/cli/brand.ts, the single source of the art,
-// and the pinned release signing keys into install.sh from release-keys.json
+// and the pinned release signing keys (and first_signed_version) into install.sh and install.ps1 from release-keys.json
 // (squirrelscan/repo#5032), the single source `self update` reads too.
 // The installers run before any squirrel binary exists (curl | bash,
 // iwr | iex), so they carry pre-rendered copies between marker comments.
@@ -69,6 +69,30 @@ export function releaseKeysShBlock(set: ReleaseKeySet): string {
     `RELEASE_KEY_NEXT_ID=${bashSingle(next?.id ?? "")}`,
     `RELEASE_KEY_NEXT_PEM=${bashSingle(next?.pem.trimEnd() ?? "")}`,
     `RELEASE_KEYS_REVOKED=${bashSingle(set.revokedKeyIds.join(" "))}`,
+    `RELEASE_FIRST_SIGNED_VERSION=${bashSingle(set.firstSignedVersion)}`,
+    `# ${KEYS_END}`,
+  ].join("\n");
+}
+
+/** A PowerShell single-quoted string: only the quote itself needs escaping. */
+function psSingle(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
+/**
+ * install.ps1's copy of release-keys.json (squirrelscan/repo#5032). The PEMs
+ * are multi-line, which a single-quoted PowerShell string holds as is.
+ */
+export function releaseKeysPsBlock(set: ReleaseKeySet): string {
+  const [current, next] = set.keys;
+  return [
+    `# ${KEYS_BEGIN}`,
+    `$ReleaseKeyCurrentId = ${psSingle(current?.id ?? "")}`,
+    `$ReleaseKeyCurrentPem = ${psSingle(current?.pem.trimEnd() ?? "")}`,
+    `$ReleaseKeyNextId = ${psSingle(next?.id ?? "")}`,
+    `$ReleaseKeyNextPem = ${psSingle(next?.pem.trimEnd() ?? "")}`,
+    `$ReleaseKeysRevoked = ${psSingle(set.revokedKeyIds.join(" "))}`,
+    `$ReleaseFirstSignedVersion = ${psSingle(set.firstSignedVersion)}`,
     `# ${KEYS_END}`,
   ].join("\n");
 }
@@ -99,6 +123,10 @@ export function withReleaseKeys(installSh: string, set: ReleaseKeySet): string {
   return replaceBlock(installSh, releaseKeysShBlock(set), "install.sh", KEYS_BEGIN, KEYS_END);
 }
 
+export function withReleaseKeysPs(installPs1: string, set: ReleaseKeySet): string {
+  return replaceBlock(installPs1, releaseKeysPsBlock(set), "install.ps1", KEYS_BEGIN, KEYS_END);
+}
+
 async function main(argv: string[]): Promise<number> {
   const check = argv.includes("--check");
   let drift = false;
@@ -108,7 +136,7 @@ async function main(argv: string[]): Promise<number> {
   if (problems.length > 0) return 1;
   for (const [file, render] of [
     ["install.sh", (src: string) => withReleaseKeys(replaceBlock(src, shBlock(), "install.sh"), keys)],
-    ["install.ps1", (src: string) => replaceBlock(src, psBlock(), "install.ps1")],
+    ["install.ps1", (src: string) => withReleaseKeysPs(replaceBlock(src, psBlock(), "install.ps1"), keys)],
   ] as const) {
     const path = join(ROOT, file);
     const current = await Bun.file(path).text();
