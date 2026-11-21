@@ -711,6 +711,14 @@ export interface SiteData {
    */
   externalLinks?: ExternalLinkCheckData[];
   /**
+   * True when this audit may request hosts other than the audited site. The
+   * engine sets it in both passes, and it is false on `--offline`, on targeted
+   * runs and with `[external_links] enabled = false`. Absent reads as false. A
+   * rule that probes or follows another host reads this, never whether
+   * `externalLinks` is defined (that field is filled late by the link check).
+   */
+  mayRequestOtherHosts?: boolean;
+  /**
    * True when the crawl did not follow links (Quick level, sitemap scope), so
    * internal link targets outside the seed and the sitemaps were never fetched
    * (repo#2729). Undefined reads as "links were followed".

@@ -13,7 +13,7 @@ import { Effect } from "effect";
 import type { Config } from "@squirrelscan/config";
 import type { CheckResult } from "@squirrelscan/core-contracts";
 import { createCrawler, type SQLiteStorage } from "@squirrelscan/crawler";
-import { getAllRuleIds, LINK_VERDICT_RULE_IDS } from "@squirrelscan/rules";
+import { getAllRuleIds, LINK_VERDICT_RULE_IDS, loadAllRules } from "@squirrelscan/rules";
 
 import { runStreamingRules, type StreamingRulePhase } from "../src/adapter";
 import { BULK_CHECK_CHUNK_SIZE, type ExternalCheckResult } from "../src/external-checker";
@@ -37,7 +37,7 @@ const LINK_HOST = "links.example.com";
  * A fixture site on localhost. `/` links to `count` targets on LINK_HOST; every
  * tenth is `/gone-<i>` (404 when checked locally), the rest `/ok-<i>` (200).
  */
-function serveSite(count: number): { home: string; links: string[] } {
+function serveSite(count: number, extraBody = ""): { home: string; links: string[] } {
   localRequests = [];
   let port = 0;
   const server = Bun.serve({
@@ -50,7 +50,10 @@ function serveSite(count: number): { home: string; links: string[] } {
           { headers: { "content-type": "text/html; charset=utf-8" } },
         );
       if (url.pathname === "/") {
-        return html(links.map((href, i) => `<p><a href="${href}">Target ${i}</a></p>`).join(""));
+        return html(links.map((href, i) => `<p><a href="${href}">Target ${i}</a></p>`).join("") + extraBody);
+      }
+      if (url.pathname === "/app.js") {
+        return new Response(APP_JS, { headers: { "content-type": "text/javascript" } });
       }
       if (url.pathname.startsWith("/gone-")) {
         localRequests.push(url.pathname);
@@ -80,6 +83,22 @@ function verdict(url: string): ExternalCheckResult {
   const gone = url.includes("/gone-");
   return { href: url, status: gone ? 404 : 200, error: null, redirectTarget: null, fromCache: false };
 }
+
+
+const SUPABASE_REF = "abcdefghijklmnopqrst";
+const b64url = (obj: unknown) =>
+  btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const SUPABASE_ANON = `${b64url({ alg: "HS256", typ: "JWT" })}.${b64url({
+  iss: "supabase",
+  ref: SUPABASE_REF,
+  role: "anon",
+  iat: 1700000000,
+  exp: 2000000000,
+})}.c2lnbmF0dXJlc2lnbmF0dXJlc2ln`;
+/** The bundle the fixture serves at /app.js: names a Supabase project, its anon key and a table. */
+const APP_JS = `const sb=createClient("https://${SUPABASE_REF}.supabase.co","${SUPABASE_ANON}");sb.from("todos").select();`;
+/** A page that loads that bundle and has a third-party form action. */
+const SUPABASE_AND_FORM = `<script src="/app.js"></script><form action="https://forms.vendor.example/submit" method="post"><input name="a"></form>`;
 
 /** A gate a test opens when it chooses. */
 function gate() {
@@ -147,19 +166,25 @@ interface AuditOptions {
   onLinkVerdictsStart?: () => void;
   /** Rules enabled on top of CONFIG's. */
   alsoEnable?: string[];
+  /** Overrides CONFIG.external_links.enabled for the run. */
+  externalLinksEnabled?: boolean;
 }
 
 async function audit(home: string, o: AuditOptions) {
   const { storage, crawlId } = await crawl(home);
   const events = o.events ?? [];
+  const baseConfig =
+    o.externalLinksEnabled === undefined
+      ? CONFIG
+      : ({ ...CONFIG, external_links: { ...CONFIG.external_links, enabled: o.externalLinksEnabled } } as Config);
   const config = o.alsoEnable
-    ? ({ ...CONFIG, rules: { enable: [...CONFIG.rules!.enable!, ...o.alsoEnable] } } as Config)
-    : CONFIG;
+    ? ({ ...baseConfig, rules: { enable: [...baseConfig.rules!.enable!, ...o.alsoEnable] } } as Config)
+    : baseConfig;
   const preRules = await Effect.runPromise(
     runStreamingPreRules(storage, crawlId, config, {
       resourceOverrides: { resolveHost },
       externalLinks: {
-        config: CONFIG.external_links,
+        config: config.external_links,
         linkCache: null,
         bulkChecker: o.bulkChecker,
         ...(o.budgetMs !== undefined ? { limits: { budgetMs: o.budgetMs } } : {}),
@@ -194,6 +219,59 @@ async function externalRows(storage: SQLiteStorage, crawlId: string) {
   const links = await Effect.runPromise(storage.getLinks(crawlId));
   return links.filter((l) => !l.isInternal).map((l) => ({ href: l.href, status: l.status }));
 }
+
+
+describe("SiteData.mayRequestOtherHosts (repo-public#2109)", () => {
+  const service = async (urls: string[]) => new Map(urls.map((u) => [u, verdict(u)] as const));
+  const READERS = ["security/supabase-rls", "reliability/broken-forms"];
+
+  /** Wraps the registered rules' `run` to record the flag each saw; restored in afterEach. */
+  const restores: Array<() => void> = [];
+  afterEach(() => {
+    for (const restore of restores.splice(0)) restore();
+  });
+  function recordFlag(id: string): Array<boolean | undefined> {
+    const rule = loadAllRules().get(id)!;
+    const seen: Array<boolean | undefined> = [];
+    const original = rule.run;
+    rule.run = function (this: unknown, ctx) {
+      seen.push(ctx.site?.mayRequestOtherHosts);
+      return original.call(this, ctx);
+    } as typeof rule.run;
+    restores.push(() => {
+      rule.run = original;
+    });
+    return seen;
+  }
+
+  for (const late of [false, true]) {
+    const pass = late ? "late-binding pass" : "blocking pass";
+    for (const [label, count, enabled, expected] of [
+      ["external link checking off", 3, false, false],
+      ["on with zero external links", 0, undefined, true],
+      ["on with external links", 3, undefined, true],
+    ] as const) {
+      test(
+        `${pass}: ${label}: both readers see mayRequestOtherHosts = ${expected}`,
+        async () => {
+          const seen = READERS.map((id) => recordFlag(id));
+          const { home } = serveSite(count, SUPABASE_AND_FORM);
+          await audit(home, {
+            bulkChecker: service,
+            late,
+            externalLinksEnabled: enabled,
+            alsoEnable: READERS,
+          });
+          for (const flags of seen) {
+            expect(flags.length).toBeGreaterThan(0);
+            expect(flags.every((f) => f === expected)).toBe(true);
+          }
+        },
+        T,
+      );
+    }
+  }
+});
 
 describe("linkVerdictDeadlineAt", () => {
   test("is the earliest of the link budget and the run deadline less the reserve", () => {
@@ -261,21 +339,15 @@ describe("late-bound link verdicts (repo#2144)", () => {
   );
 
   test(
-    "security/supabase-rls runs after the link check binds site.externalLinks, not before it",
+    "security/supabase-rls reads no verdicts: it runs in the first pass, with the flag bound",
     async () => {
-      // The rule reads `site.externalLinks === undefined` as "this audit may not
-      // request other hosts" (pub#1883), so it must never read the field before
-      // the link check fills it: on an aggressive online run, read early, it
-      // could skip as external-requests-off. Proven on site-rule order: the late
-      // pass sets its results after every rule of the first pass, and
-      // security/security-txt (a site rule that reads no verdicts) comes right
-      // after security/supabase-rls in the registry, so it is first-pass and
-      // the rule lands after it only when it runs late.
+      // It reads `site.mayRequestOtherHosts`, set before any rule runs, so it
+      // is not a link-verdict rule and does not wait for the link check.
+      expect(LINK_VERDICT_RULE_IDS.has("security/supabase-rls")).toBe(false);
       const ids = await getAllRuleIds();
       expect(ids.indexOf("security/security-txt")).toBeGreaterThan(ids.indexOf("security/supabase-rls"));
-      expect(LINK_VERDICT_RULE_IDS.has("security/security-txt")).toBe(false);
 
-      const { home } = serveSite(3);
+      const { home } = serveSite(3, SUPABASE_AND_FORM);
       const service = async (urls: string[]) => new Map(urls.map((u) => [u, verdict(u)] as const));
       const late = await audit(home, {
         bulkChecker: service,
@@ -284,12 +356,14 @@ describe("late-bound link verdicts (repo#2144)", () => {
       });
 
       const order = [...late.ran.siteRuleResults.keys()];
-      expect(order).toContain("security/supabase-rls");
-      expect(order).toContain("security/security-txt");
-      expect(order.indexOf("security/supabase-rls")).toBeGreaterThan(order.indexOf("security/security-txt"));
-      for (const check of checksOf(late.ran, "security/supabase-rls")) {
-        expect(check.skipReason).not.toBe("external-requests-off");
-      }
+      expect(order.indexOf("security/supabase-rls")).toBeGreaterThanOrEqual(0);
+      // First pass: in registry order, ahead of security-txt (a late rule would land after it).
+      expect(order.indexOf("security/supabase-rls")).toBeLessThan(order.indexOf("security/security-txt"));
+      // The fixture names a Supabase project, so the rule gets past discovery:
+      // an engine run has no probe budget, so it stops at the passive skip.
+      const rls = checksOf(late.ran, "security/supabase-rls");
+      expect(rls.length).toBeGreaterThan(0);
+      for (const check of rls) expect(check.skipReason).toBe("probing-passive");
     },
     T,
   );
