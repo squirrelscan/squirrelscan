@@ -166,6 +166,8 @@ const runWithCurlShim = async (
         SQUIRREL_VERSION: undefined,
         // #3896: never the production default: a shim that fails to intercept must not reach it.
         SQUIRREL_ERROR_ENDPOINT: DEAD_ERROR_ENDPOINT,
+        // The payload tests source the preamble on purpose; a sourced install.sh is otherwise silent (#5020).
+        SQUIRREL_REPORT_WHEN_SOURCED: "1",
         SQUIRREL_RELEASES_ENDPOINT: undefined,
         PATH: `${dir}:${process.env.PATH ?? ""}`,
         SHIM_LOG: log,
@@ -764,9 +766,12 @@ describe.concurrent("install.sh report_error payload", () => {
       expect(report.error_line).toBe(`curl exit ${code} reaching install.squirrelscan.com`);
       expect(JSON.stringify(report)).not.toMatch(/secret|token=abc|\/releases/);
     }
-    // Before any request there is no host to name, and the report says so.
+    // Before any request, with no failing command seen, curl is not blamed: the report says what it knows (#5020).
     const early = await run("( (exit 7) || report_on_exit ); sleep 1");
-    expect(early.error_line).toBe("curl exit 7 reaching an unknown host (before the first request)");
+    expect(early.error_line).toMatch(/^exit 7: no failing command was recorded \(sourced, bash \d+\.\d+\)$/);
+    // A curl that really failed before any request is still named as curl.
+    const bareCurl = await run("( curl --version >/dev/null; (exit 7) || report_on_exit ); sleep 1");
+    expect(bareCurl.exit_code).toBe(7);
   }, SPAWN_TIMEOUT_MS);
 
   test("a failure with its own message, or a non-network code, keeps its report as before", async () => {
@@ -783,7 +788,9 @@ describe.concurrent("install.sh report_error payload", () => {
       env: { NO_TELEMETRY: undefined },
       settleMs: 5000,
     });
-    expect((JSON.parse(curlDataArg(plain.calls[0])) as Record<string, unknown>).error_line).toBe("");
+    expect((JSON.parse(curlDataArg(plain.calls[0])) as Record<string, unknown>).error_line).toMatch(
+      /^exit 1: no failing command was recorded \(sourced, bash \d+\.\d+\)$/,
+    );
   }, SPAWN_TIMEOUT_MS);
 
   // #1681: the report names the host and the IP family the connection was attempted on, for every
