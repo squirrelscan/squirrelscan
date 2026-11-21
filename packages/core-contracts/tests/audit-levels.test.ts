@@ -371,16 +371,17 @@ describe("offlineAuditSettings", () => {
 });
 
 describe("targetedAuditSettings (#1777)", () => {
-  test("records what ran: external link checks off, the level it was asked for kept", () => {
+  test("marks the run and keeps the settings that ran: external link checks stay on (#1778)", () => {
     const asked = resolveAuditSettings("full");
     expect(asked.settings.externalLinks).toBe(true);
     const ran = targetedAuditSettings(asked);
-    expect(ran.settings.externalLinks).toBe(false);
+    // A targeted run checks the links on the listed pages, so the level's external link setting is what ran.
+    expect(ran.settings).toEqual(asked.settings);
     expect(ran.targeted).toBe(true);
     expect(ran.level).toBe(asked.level);
     expect(ran.basedOn).toBe(asked.basedOn);
     // The input is not changed.
-    expect(asked.settings.externalLinks).toBe(true);
+    expect(asked).not.toHaveProperty("targeted");
   });
 
   test("survives a read back, and an ordinary snapshot has no marker", () => {

@@ -167,11 +167,24 @@ const DEFAULT_RULE_CONCURRENCY = 8;
 const ROOT_RESOURCE_RULES: ReadonlySet<string> = new Set(["crawl/sitemap-exists"]);
 
 /**
- * Site rules that still run in a targeted run (#1777): they judge a file the crawl fetches whatever it is
- * given (robots.txt). Every other site rule judges the whole site, or a resource only a probe or the entry
- * page would have fetched, and skips.
+ * Site rules that still run in a targeted run (#1777, #1778): they can be judged from the listed pages alone.
+ * robots.txt is fetched whatever the run is given. The link rules judge the links on the listed pages (their
+ * targets are status-checked, each once, and a target nobody fetched is reported as not checked, never as
+ * fine). leaked-secrets scans the listed pages and the scripts they load. The header rules read each listed
+ * page's own response headers (security/header-pages.ts). Every other site rule judges the whole site
+ * (inbound links, sitemap coverage, duplicates across pages), or a resource only a probe or the entry page
+ * would have fetched, and skips.
  */
-const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set(["crawl/robots-txt"]);
+export const SITE_RULES_ON_TARGETED_RUN: ReadonlySet<string> = new Set([
+  "crawl/robots-txt",
+  "links/broken-links",
+  "links/broken-anchors",
+  "links/broken-external-links",
+  "security/leaked-secrets",
+  "security/csp",
+  "security/hsts",
+  "security/x-frame-options",
+]);
 
 /** Whether a rule's findings are about root resources (a discovery probe or the sitemap). */
 function judgesRootResource(rule: Rule): boolean {

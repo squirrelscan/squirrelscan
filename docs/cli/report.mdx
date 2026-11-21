@@ -257,6 +257,7 @@ An issue that is gone from the current report is **not compared** when:
 | `rule-timed-out` | The rule ran past its time budget in the current audit |
 | `rule-not-run-in-baseline` | The rule judged nothing in the baseline either: the finding there was only carried from an older audit |
 | `page-not-crawled` | The issue's page (or one of an item's source pages) is not among the pages the current audit crawled. `detail` is the page |
+| `targeted-run` | The current audit was a [targeted audit](/cli/audit#targeted-audits) and the issue names no page, so no listed page speaks for it (a header a full audit read from the home page, for example). `crawl/robots-txt` findings are still compared, because every audit fetches the file |
 | `rule-skipped-on-page` | The rule skipped the issue's page in the current audit, for example a `noindex` page. `detail` is the page |
 | `sampled-report` | The current report was rebuilt from a slim JSON export (`squirrel report --input`), which keeps a sample of each check's pages and no passing rows. A finding is fixed only when the export's `rules` list says the rule ran and the check's page list is complete; an older export without `rules`, or a check whose pages were cut (`affectedPagesHasMore`), is never read as fixed |
 | `items-capped` | The rule capped its own item list in the current audit (`details.additional` is above zero), so an item missing from the list may still be failing past the cap |

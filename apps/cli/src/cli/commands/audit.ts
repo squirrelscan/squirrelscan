@@ -1430,7 +1430,7 @@ export const audit = defineCommand({
     "target-url": {
       type: "string",
       description:
-        "Audit exactly this URL and nothing else (repeatable), absolute or a path on the site, e.g. /pricing. No sitemap, probes or link following; site-wide rules skip with the reason targeted-run, and the report lists every URL not audited and why. maxPages caps the list",
+        "Audit exactly this URL and nothing else (repeatable), absolute or a path on the site, e.g. /pricing. No sitemap, probes or link following. The links on the listed pages are still status-checked; rules that need the whole site skip with the reason targeted-run, and the report lists every URL not audited and why. maxPages caps the list",
     },
     "compare-url": {
       type: "string",
@@ -1694,13 +1694,6 @@ export const audit = defineCommand({
       );
       exitWith({ early: "validation" });
       return;
-    }
-
-    // A targeted run checks no links, so a request to turn external link checks ON has no effect (#1777).
-    if (targetUrls.length > 0 && externalLinksOn) {
-      process.stderr.write(
-        "--external-links is ignored on a targeted audit (--target-url): no links are checked.\n"
-      );
     }
 
     // Parse --rule-include/--rule-exclude early so an unknown category fails

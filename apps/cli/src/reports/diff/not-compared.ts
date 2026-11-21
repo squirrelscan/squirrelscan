@@ -8,6 +8,8 @@ const REASON_TEXT: Record<NotComparedIssue["reason"], string> = {
   "rule-timed-out": "the rule timed out in the current audit",
   "rule-not-run-in-baseline": "the rule did not run in the baseline audit",
   "page-not-crawled": "the page was not crawled in the current audit",
+  "targeted-run":
+    "the current audit was targeted and the issue names no page it audited",
   "rule-skipped-on-page": "the rule skipped the page in the current audit",
   "sampled-report":
     "the current report is a sampled export that cannot show the finding is gone",

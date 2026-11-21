@@ -1111,6 +1111,10 @@ export function fetchAssetsFromOccurrences(
             .sort(([ak, a], [bk, b]) => b.pages - a.pages || (ak < bk ? -1 : ak > bk ? 1 : 0))
         : [];
     const probeTargets = unfetchedTargets.slice(0, probeCap).map(([, target]) => target.url);
+    const probeControlUrl =
+      crawl?.stats?.targetedRun === true
+        ? occurrences.coveragePages.find((p) => p.statusCode >= 200 && p.statusCode < 300)?.url
+        : baseUrl || undefined;
 
     // Third-party copies feed reliability/broken-resources alone (#703), so
     // they are requested only when that rule runs, and get a per-kind cap of
@@ -1331,8 +1335,9 @@ export function fetchAssetsFromOccurrences(
             ? { egress: ownSiteEgress }
             : {}),
           ...(fetchBudget ? { budget: fetchBudget } : {}),
-          // The audited URL, which the crawl fetched: the HEAD control.
-          ...(baseUrl ? { controlUrl: baseUrl } : {}),
+          // The audited URL, which the crawl fetched: the HEAD control. A targeted run (#1778) never
+          // fetched it, so the control is a listed page that answered 2xx, and nothing else is requested.
+          ...(probeControlUrl ? { controlUrl: probeControlUrl } : {}),
         }),
         // Third-party copies (#703): status only, through the HEAD-first checker, so
         // no body is stored. Read by reliability/broken-resources alone.
