@@ -1340,19 +1340,44 @@ detect_platform() {
 # `self install`. Auto-install as root via apk; otherwise print the exact
 # command and exit cleanly (better than a wall of relocation errors).
 ensure_musl_runtime() {
+  # Signed releases are checked with openssl; a bare Alpine image lacks it too.
+  # Only the C++ runtime is fatal when missing: without openssl the GitHub
+  # attestation can still carry the install (see openssl_missing_hint).
+  local need_openssl=false have_libstdcxx=false
+  command -v openssl >/dev/null 2>&1 || need_openssl=true
   # Already resolvable by the musl loader (/lib or /usr/lib)?
   if ls /usr/lib/libstdc++.so.6 >/dev/null 2>&1 ||
     ls /lib/libstdc++.so.6 >/dev/null 2>&1; then
+    have_libstdcxx=true
+  fi
+
+  if [ "$have_libstdcxx" = true ] && [ "$need_openssl" = false ]; then
     return 0
   fi
 
   if command -v apk >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-    log "Installing required runtime library (libstdc++)..."
-    if apk add --no-cache libstdc++ >/dev/null 2>&1; then
-      info "Installed libstdc++"
+    local pkgs=""
+    [ "$have_libstdcxx" = true ] || pkgs="libstdc++"
+    [ "$need_openssl" = false ] || pkgs="$pkgs openssl"
+    pkgs="${pkgs# }"
+    log "Installing required runtime packages ($pkgs)..."
+    # shellcheck disable=SC2086 # $pkgs is a space-separated package list
+    if apk add --no-cache $pkgs >/dev/null 2>&1; then
+      info "Installed $pkgs"
       return 0
     fi
-    warn "Auto-install of libstdc++ failed"
+    if [ "$have_libstdcxx" = true ]; then
+      # Only openssl was missing: not fatal, the attestation path remains.
+      warn "Auto-install of openssl failed"
+      return 0
+    fi
+    warn "Auto-install of $pkgs failed"
+  fi
+
+  # Only openssl is missing and we could not add it: say so, keep going.
+  if [ "$have_libstdcxx" = true ]; then
+    warn "openssl is not installed; signed releases need it (or a logged-in gh). Fix: apk add openssl"
+    return 0
   fi
 
   # Non-root, no apk, or apk failed → clear, actionable instructions.
@@ -1684,6 +1709,7 @@ gh_bounded() {
 SIGNED_ERA=false
 SIGNED_ERA_VERSION=""
 SIG_NOTE=""
+OPENSSL_MISSING=false
 
 # num_cmp A B: prints -1, 0 or 1 for two digit strings, no arithmetic (no overflow).
 num_cmp() {
@@ -1764,8 +1790,52 @@ release_signed_era() {
   [ "$(version_cmp "$1" "$RELEASE_FIRST_SIGNED_VERSION")" != "-1" ]
 }
 
+# os_release_ids: the lowercase ID and ID_LIKE words of the os-release file
+# (OS_RELEASE_FILE overrides /etc/os-release for tests), empty when unreadable.
+os_release_ids() {
+  local f="${OS_RELEASE_FILE:-/etc/os-release}" line
+  [ -r "$f" ] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      ID=* | ID_LIKE=*)
+        line="${line#*=}"
+        line="${line//\"/}"
+        line="${line//\'/}"
+        printf '%s ' "$line"
+        ;;
+    esac
+  done < "$f" | tr 'A-Z' 'a-z'
+}
+
+# openssl_missing_hint: the exact fix for a signed release when openssl is
+# missing, the line for this distro first, all three when unsure. Never run.
+openssl_missing_hint() {
+  local ids line_apt line_dnf line_apk first=""
+  ids=" $(os_release_ids)"
+  line_apt="Debian/Ubuntu: apt-get install -y openssl"
+  line_dnf="Fedora/RHEL:   dnf install openssl"
+  line_apk="Alpine:        apk add openssl"
+  case "$ids" in
+    *" debian "* | *" ubuntu "*) first="apt" ;;
+    *" fedora "* | *" rhel "* | *" centos "*) first="dnf" ;;
+    *" alpine "*) first="apk" ;;
+  esac
+  printf '  Install openssl (as root, or with sudo), then run the installer again:\n'
+  case "$first" in
+    apt) printf '    %s\n    %s\n    %s\n' "$line_apt" "$line_dnf" "$line_apk" ;;
+    dnf) printf '    %s\n    %s\n    %s\n' "$line_dnf" "$line_apt" "$line_apk" ;;
+    apk) printf '    %s\n    %s\n    %s\n' "$line_apk" "$line_apt" "$line_dnf" ;;
+    *) printf '    %s\n    %s\n    %s\n' "$line_apt" "$line_dnf" "$line_apk" ;;
+  esac
+  printf '  or install and log in to the GitHub CLI (gh) so the release attestation can be checked.\n'
+}
+
 signed_era_fail() {
-  error "Cannot verify squirrel ${SIGNED_ERA_VERSION#v}: $1.\n  This version is only installed with a valid release-key signature or GitHub attestation; the sha256 checksum alone is not accepted.\n  Nothing was installed.\n  To install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify:\n    https://docs.squirrelscan.com/install#verifying-a-release"
+  local hint=""
+  if [ "$OPENSSL_MISSING" = true ]; then
+    hint="\n$(openssl_missing_hint)"
+  fi
+  error "Cannot verify squirrel ${SIGNED_ERA_VERSION#v}: $1.\n  This version is only installed with a valid release-key signature or GitHub attestation; the sha256 checksum alone is not accepted.\n  Nothing was installed.\n  To install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify:\n    https://docs.squirrelscan.com/install#verifying-a-release${hint}"
 }
 
 # attestation_skipped <short reason> <warning text>: gh cannot check the
@@ -1916,6 +1986,7 @@ verify_release_signature() {
   if ! command -v openssl > /dev/null 2>&1; then
     warn "openssl not found: skipping the release-key signature check, falling back to the GitHub attestation."
     SIG_NOTE="openssl is not installed, so no release-key signature was checked"
+    OPENSSL_MISSING=true
     return 1
   fi
 
