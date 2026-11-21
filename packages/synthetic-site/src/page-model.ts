@@ -212,7 +212,8 @@ function basePage(
   const noun = rngPick(rng, NOUNS);
   const verb = rngPick(rng, VERBS);
   const topic = rngPick(rng, TOPICS);
-  const title = `${adjective} ${noun} — ${template.label} ${index}`;
+  // \u2014 on purpose: the fixture is data, and a non-Latin-1 title keeps the heap shape the residency tests were calibrated on (#2343).
+  const title = `${adjective} ${noun} \u2014 ${template.label} ${index}`;
   const description = `This ${noun} ${verb} ${topic} for teams that need ${adjective.toLowerCase()} results, page ${index}.`;
   const h1 = `${adjective} ${noun} #${index}`;
   const wordCount = rngInt(rng, 150, 900);
@@ -555,7 +556,7 @@ export function generateSiteModel(opts: GenerateSiteModelOptions): SiteModel {
       page.title = value;
     },
     (r, groupIndex) =>
-      `${capitalize(rngPick(r, ADJECTIVES))} ${rngPick(r, NOUNS)} — Group ${groupIndex}`,
+      `${capitalize(rngPick(r, ADJECTIVES))} ${rngPick(r, NOUNS)} \u2014 Group ${groupIndex}`,
     titleClaimed,
   );
   applyDuplicateGroup(

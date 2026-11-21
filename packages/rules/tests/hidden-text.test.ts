@@ -714,7 +714,7 @@ describe("content/hidden-text — payload thresholds and reporting", () => {
     const check = (await run(html));
     expect(check.items).toHaveLength(1);
     expect(check.items?.[0].id).toBe("div#kw.seo-block");
-    expect(check.items?.[0].label).toBe("div#kw.seo-block — display:none");
+    expect(check.items?.[0].label).toBe("div#kw.seo-block: display:none");
     expect(check.items?.[0].meta?.chars).toBe(PAYLOAD.length);
     expect(String(check.items?.[0].meta?.snippet)).toContain("cheap discount widgets");
   });

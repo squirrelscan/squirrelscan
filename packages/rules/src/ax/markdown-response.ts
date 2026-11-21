@@ -136,7 +136,7 @@ export const markdownResponseRule: Rule = {
         name: "markdown-response",
         status: "warn",
         message:
-          "No Markdown response — consider honoring Accept: text/markdown or publishing a .md variant so agents get clean content",
+          "No Markdown response, consider honoring Accept: text/markdown or publishing a .md variant so agents get clean content",
         value: "absent",
         details: {
           negotiatedContentType: md.negotiatedContentType,

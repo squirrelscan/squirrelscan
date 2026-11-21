@@ -16,7 +16,7 @@ export const fakeAuthOverlayRule: Rule = {
     id: "integrity/fake-auth-overlay",
     name: "Fake Authentication Overlay",
     description:
-      "Detects full-viewport fixed high-z-index iframe overlays or sign-in controls that send credentials to an off-brand host — a credential-harvesting overlay pattern",
+      "Detects full-viewport fixed high-z-index iframe overlays or sign-in controls that send credentials to an off-brand host, a credential-harvesting overlay pattern",
     solution:
       "A full-viewport, fixed, high-z-index iframe that covers the page, or a 'Sign in with Google/Microsoft' control whose target is not the brand's real domain, is a credential-harvesting overlay. If you did not build it, your site is likely compromised: remove the overlay markup/script, audit recently modified files, and rotate credentials. Legitimate sign-in always targets the provider's own host (accounts.google.com, login.microsoftonline.com).",
     category: "integrity",
@@ -81,7 +81,7 @@ export const fakeAuthOverlayRule: Rule = {
       status: escalate ? "fail" : "info",
       message: escalate
         ? `Likely credential-harvesting overlay (${signals.size} corroborating integrity signals)`
-        : `Suspicious authentication overlay (single signal — review)`,
+        : `Suspicious authentication overlay (single signal, review)`,
       pageUrl: ctx.page.url,
       value: hit.reason,
       details: {

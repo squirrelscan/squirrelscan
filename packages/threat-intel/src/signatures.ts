@@ -134,7 +134,7 @@ class ConditionParser {
               : parseInt(head, 10);
         return { type: "quant", n, keys };
       }
-      this.i = save; // not a quantifier — fall through to identifier
+      this.i = save; // not a quantifier, fall through to identifier
     }
     const name = this.next();
     if (name === undefined) throw new Error("signature condition: unexpected end");
@@ -214,7 +214,7 @@ function buildStringDef(key: string, raw: unknown): StringDef {
     try {
       re = new RegExp(def.regex, flags);
     } catch (err) {
-      throw new Error(`signature string "${key}": bad regex — ${String(err)}`);
+      throw new Error(`signature string "${key}": bad regex, ${String(err)}`);
     }
     return { key, target, test: (c) => re.test(c) };
   }

@@ -42,9 +42,9 @@ export const wellKnownAgentRule: Rule = {
     id: "ax/well-known-agent",
     name: "Well-Known Agent Files",
     description:
-      "Detects MCP server cards, A2A agent cards, and agent-skills manifests under .well-known — machine-readable descriptors that let an agent discover an MCP endpoint or A2A-compatible agent without a human in the loop",
+      "Detects MCP server cards, A2A agent cards, and agent-skills manifests under .well-known, machine-readable descriptors that let an agent discover an MCP endpoint or A2A-compatible agent without a human in the loop",
     solution:
-      "If the site backs an MCP server, an A2A-compatible agent, or a packaged skill set, publish the corresponding manifest at its .well-known path. This is detect-and-inform only: adoption is still under 0.01% of sites, so absence is never penalized. Remove any leftover /.well-known/ai-plugin.json from the ChatGPT-plugins era — it's stale and more likely to confuse a modern agent than help it.",
+      "If the site backs an MCP server, an A2A-compatible agent, or a packaged skill set, publish the corresponding manifest at its .well-known path. This is detect-and-inform only: adoption is still under 0.01% of sites, so absence is never penalized. Remove any leftover /.well-known/ai-plugin.json from the ChatGPT-plugins era, it's stale and more likely to confuse a modern agent than help it.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -113,7 +113,7 @@ export const wellKnownAgentRule: Rule = {
       checks.push({
         name: "well-known-agent-deprecated",
         status: "warn",
-        message: `Found deprecated OpenAI plugin manifest at ${deprecatedHit.path} — this format was retired; remove it to avoid confusing modern agents`,
+        message: `Found deprecated OpenAI plugin manifest at ${deprecatedHit.path}, this format was retired; remove it to avoid confusing modern agents`,
         value: "deprecated",
         details: { path: deprecatedHit.path },
       });

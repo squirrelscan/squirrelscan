@@ -97,7 +97,7 @@ const CHECK_NAME = "title-pattern-outlier";
  * look-behind sits on the whitespace alone, so a separator right after one a
  * previous match ended on (`:: >>`) still matches.
  */
-const SEPARATOR_RE = sharedRegex(/(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–—·>]\s+|:\s+/g);
+const SEPARATOR_RE = sharedRegex(/(?:(?<!\s)\s+)?(?:::|\||»|>>)\s*|(?<!\s)\s+[-–\u2014·>]\s+|:\s+/g);
 /** Deviation classes, in the order they are reported. */
 const CLASSES = ["brand-only", "brand-missing", "brand-position", "separator"] as const;
 type DeviationClass = (typeof CLASSES)[number];

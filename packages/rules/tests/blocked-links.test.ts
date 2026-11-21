@@ -72,9 +72,9 @@ function pageWithScripts(url: string, ...srcs: string[]): { url: string; html: s
 
 describe("describeBlockedResource", () => {
   test("names known vendor by registrable domain", () => {
-    expect(describeBlockedResource(TW)).toBe("ads-twitter.com — X/Twitter ad pixel");
+    expect(describeBlockedResource(TW)).toBe("ads-twitter.com (X/Twitter ad pixel)");
     expect(describeBlockedResource(FB)).toBe(
-      "connect.facebook.net — Meta/Facebook pixel",
+      "connect.facebook.net (Meta/Facebook pixel)",
     );
   });
 
@@ -166,7 +166,7 @@ describe("blockedLinksRule", () => {
 
     // Sorted by page-impact desc: TW (2 pages) before FB (1 page).
     expect(checks[0].message).toBe(
-      `Blocked by ad blockers: ads-twitter.com — X/Twitter ad pixel — ${TW} (2 pages)`,
+      `Blocked by ad blockers: ads-twitter.com (X/Twitter ad pixel), ${TW} (2 pages)`,
     );
     expect(checks[0].items?.[0]?.sourcePages).toEqual([
       "https://example.com/",
@@ -174,7 +174,7 @@ describe("blockedLinksRule", () => {
     ]);
 
     expect(checks[1].message).toBe(
-      `Blocked by ad blockers: connect.facebook.net — Meta/Facebook pixel — ${FB} (1 page)`,
+      `Blocked by ad blockers: connect.facebook.net (Meta/Facebook pixel), ${FB} (1 page)`,
     );
     expect(checks[1].items?.[0]?.sourcePages).toEqual(["https://example.com/"]);
     expect(checks[1].items?.[0]?.label).toBe('matches "||facebook.net^"');

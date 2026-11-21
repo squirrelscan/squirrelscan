@@ -106,7 +106,7 @@ export const credits = defineCommand({
         // the next `squirrel audit` silently drop to local-only.
         if (balance.total < MIN_AUDIT_CREDITS) {
           console.log(
-            `         ${fmt.yellow(`below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs (${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per page) — cloud audits can't start`)}`
+            `         ${fmt.yellow(`below the ${MIN_AUDIT_CREDITS} credits a one-page audit needs (${AUDIT_BASE_CREDITS} base + ${AUDIT_PAGE_CREDITS} per page), cloud audits can't start`)}`
           );
         }
       }

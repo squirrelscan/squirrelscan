@@ -264,11 +264,11 @@ export function envTokenRejectedMessage(): string {
   const env = token ? parseKeyEnv(token) : null;
   const crossEnvHint =
     env && env !== "production"
-      ? `\n  This is a ${env} key — it is rejected by a production server (and vice-versa).`
+      ? `\n  This is a ${env} key, it is rejected by a production server (and vice-versa).`
       : "";
   return (
     `Error: ${envVar} was rejected by ${getApiUrl()} (invalid, revoked, expired, or wrong environment).\n` +
-    `  The ${kind} from ${envVar} is authoritative — the CLI will not fall back to a logged-in session.${crossEnvHint}\n` +
+    `  The ${kind} from ${envVar} is authoritative, the CLI will not fall back to a logged-in session.${crossEnvHint}\n` +
     `  Manage keys: ${API_KEYS_DASHBOARD_URL}\n` +
     `  To use a logged-in session instead, unset ${envVar}.`
   );
@@ -301,7 +301,7 @@ export function apiKeyNotVerifiableMessage(envVarName?: string | null): string {
     ? `the org API key in ${envVarName}`
     : "an org API key";
   const howToSeeAccount = envVarName
-    ? `  To see your account, run "squirrel auth login", then unset ${envVarName} —\n` +
+    ? `  To see your account, run "squirrel auth login", then unset ${envVarName} ,\n` +
       `  while it is set it takes precedence over the session for every cloud call.\n`
     : `  To see your account, run: squirrel auth login\n`;
   return (

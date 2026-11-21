@@ -74,7 +74,7 @@ export const anchorTextRule: Rule = {
     name: "Anchor Text",
     description: "Checks for empty or generic anchor text",
     solution:
-      "Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing. When a card links to the same target more than once (e.g. an image link and a headline link), only one of those links needs descriptive text — the group is evaluated together, not link by link.",
+      "Descriptive anchor text helps users and search engines understand link destinations. Avoid generic text like 'click here' or 'read more'. Use natural language that describes the target page. For accessibility, anchor text should make sense out of context. Avoid overly long anchor text or keyword stuffing. When a card links to the same target more than once (e.g. an image link and a headline link), only one of those links needs descriptive text, the group is evaluated together, not link by link.",
     category: "links",
     scope: "page",
     findingScope: "page",

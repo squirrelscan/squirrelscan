@@ -322,7 +322,7 @@ export function buildBlocklistPayload(
 // ── keyword/content gaps payloads (mirrors apps/cli/src/audit/cloud-payloads-gaps.ts) ──
 const MIN_SEED_LENGTH = 3;
 const MAX_SEED_LENGTH = 80;
-const TITLE_SEPARATOR_CHARS = new Set(["|", "·", "—", "–"]);
+const TITLE_SEPARATOR_CHARS = new Set(["|", "·", "\u2014", "–"]);
 
 export type GapsPayloads = Pick<CloudSitePayloads, "keyword-gaps" | "content-gaps">;
 

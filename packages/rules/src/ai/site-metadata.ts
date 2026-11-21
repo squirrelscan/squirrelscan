@@ -18,9 +18,9 @@ export const siteMetadataRule: Rule = {
     id: "ai/site-metadata",
     name: "Site Profile",
     description:
-      "Resolves the durable per-domain site profile (type, business category, country, audience, identity, contacts, socials, domain age) — the root of the audit decision graph.",
+      "Resolves the durable per-domain site profile (type, business category, country, audience, identity, contacts, socials, domain age), the root of the audit decision graph.",
     solution:
-      "Informational: the resolved profile anchors which cloud features and audit rules apply to this site. If the classification looks wrong, the site's purpose/identity may not be coming through — sharpen the homepage value proposition, Organization/LocalBusiness JSON-LD, og/twitter meta, and contact details.",
+      "Informational: the resolved profile anchors which cloud features and audit rules apply to this site. If the classification looks wrong, the site's purpose/identity may not be coming through, sharpen the homepage value proposition, Organization/LocalBusiness JSON-LD, og/twitter meta, and contact details.",
     category: "ax",
     scope: "site",
     findingScope: "page",

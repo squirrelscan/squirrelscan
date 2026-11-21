@@ -90,7 +90,7 @@ export const entityPublisherMismatchRule: Rule = {
     const { items, hidden } = cappedItems(
       outliers.map(([key, count]) => ({
         id: key,
-        label: `${label(key)} — named as publisher ${count} ${count === 1 ? "time" : "times"}`,
+        label: `${label(key)}, named as publisher ${count} ${count === 1 ? "time" : "times"}`,
         meta: { key, occurrences: count },
       }))
     );

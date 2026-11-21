@@ -32,7 +32,7 @@ export const contentGapsRule: Rule = {
       "Finds topic clusters with search demand around the site's existing content that lack dedicated coverage",
     solution:
       "Each gap is a topic cluster with combined search volume the site doesn't cover directly. " +
-      "Plan content (guides, comparisons, FAQs) around the highest-volume clusters first — they're " +
+      "Plan content (guides, comparisons, FAQs) around the highest-volume clusters first, they're " +
       "adjacent to what you already rank for, so new pages benefit from existing topical authority.",
     category: "gaps",
     scope: "site",
@@ -81,7 +81,7 @@ export const contentGapsRule: Rule = {
       value: gaps.length,
       items: gaps.slice(0, MAX_ITEMS).map((g) => ({
         id: g.topic,
-        label: g.volume != null ? `${g.topic} — vol ${g.volume}` : g.topic,
+        label: g.volume != null ? `${g.topic}, vol ${g.volume}` : g.topic,
         snippet: g.reason,
       })),
       details: { summary },
@@ -92,7 +92,7 @@ export const contentGapsRule: Rule = {
       checks.push({
         name: "content-gaps-high-volume",
         status: "warn",
-        message: `${highVolume.length} high-volume content gap topics (≥${HIGH_VOLUME_THRESHOLD} combined searches/mo) — significant uncovered demand`,
+        message: `${highVolume.length} high-volume content gap topics (≥${HIGH_VOLUME_THRESHOLD} combined searches/mo), significant uncovered demand`,
         value: highVolume.length,
         expected: `<= ${HIGH_VOLUME_WARN_COUNT}`,
       });

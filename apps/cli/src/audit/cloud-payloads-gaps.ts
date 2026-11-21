@@ -18,7 +18,7 @@ const MIN_SEED_LENGTH = 3;
 /** Seeds longer than this are full sentences, not keywords. */
 const MAX_SEED_LENGTH = 80;
 /** Title segments are split on these site-name separators; first segment wins. */
-const TITLE_SEPARATORS = /\s*[|·—–]\s*|\s+-\s+/;
+const TITLE_SEPARATORS = /\s*[|·\u2014–]\s*|\s+-\s+/;
 
 export type GapsPayloads = Pick<
   CloudSitePayloads,

@@ -86,7 +86,7 @@ function judgeHsts(page: SitePage): CheckResult[] {
     checks.push({
       name: "hsts-malformed",
       status: "warn",
-      message: "Malformed HSTS header — no valid max-age directive",
+      message: "Malformed HSTS header, no valid max-age directive",
       value: hsts,
       expected: "Strict-Transport-Security: max-age=31536000; includeSubDomains",
     });
@@ -100,7 +100,7 @@ function judgeHsts(page: SitePage): CheckResult[] {
     checks.push({
       name: "hsts-disabled",
       status: "warn",
-      message: "HSTS disabled — max-age=0 tells browsers to stop enforcing HTTPS",
+      message: "HSTS disabled, max-age=0 tells browsers to stop enforcing HTTPS",
       value: hsts,
       expected: "max-age of at least 6 months (15768000 seconds)",
     });

@@ -47,7 +47,7 @@ export const htmlSizeRule: Rule = {
       checks.push({
         name: "html-size",
         status: "fail",
-        message: `HTML is ${mb}MB — exceeds Googlebot 2MB limit, content will be truncated`,
+        message: `HTML is ${mb}MB, exceeds Googlebot 2MB limit, content will be truncated`,
         value: bytes,
         expected: opts.error_bytes,
       });
@@ -55,7 +55,7 @@ export const htmlSizeRule: Rule = {
       checks.push({
         name: "html-size",
         status: "warn",
-        message: `HTML is ${kb}KB — approaching Googlebot 2MB limit`,
+        message: `HTML is ${kb}KB, approaching Googlebot 2MB limit`,
         value: bytes,
         expected: opts.error_bytes,
       });

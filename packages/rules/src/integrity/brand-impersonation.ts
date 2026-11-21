@@ -94,7 +94,7 @@ export const brandImpersonationRule: Rule = {
       status: escalate ? "fail" : "info",
       message: escalate
         ? `Likely phishing kit impersonating ${hit.brand} (${signals.size} corroborating integrity signals)`
-        : `Possible ${hit.brand} brand impersonation (single signal — review)`,
+        : `Possible ${hit.brand} brand impersonation (single signal, review)`,
       pageUrl: ctx.page.url,
       value: hit.reason,
       details: {

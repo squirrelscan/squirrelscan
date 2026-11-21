@@ -96,7 +96,7 @@ export const payPerCrawlRule: Rule = {
         name: "pay-per-crawl-user-action",
         status: "warn",
         message:
-          "Claude-User (a live user-action fetch) is charged HTTP 402 while browsers get a normal 2xx response — this bills a real person's in-the-moment question, not a background crawl",
+          "Claude-User (a live user-action fetch) is charged HTTP 402 while browsers get a normal 2xx response, this bills a real person's in-the-moment question, not a background crawl",
         value: "user-action-charged",
         details: { claudeUserStatus: claudeUser.status, browserStatus: browser?.status ?? null },
       });

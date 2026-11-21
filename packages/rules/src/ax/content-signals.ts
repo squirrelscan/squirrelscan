@@ -192,7 +192,7 @@ export const contentSignalsRule: Rule = {
     description:
       "Parses Content-Signal directives in robots.txt (per-purpose AI policy) and flags policy that contradicts the site's own crawler blocks",
     solution:
-      "Content-Signal (contentsignals.org) lets robots.txt declare AI policy per purpose — `search`, `ai-input`, `ai-train`, each `yes` or `no` — instead of allow/disallow-ing named bots one at a time. Add a line like `Content-Signal: search=yes, ai-input=yes, ai-train=no` under `User-agent: *`. Keep it consistent with your crawler blocks: don't declare `ai-train=yes` while Disallow-ing GPTBot/ClaudeBot, or `search=yes` while blocking the AI-search indexers — a crawler then has to guess which directive wins. Declaring a signal is optional and never penalizes; only a contradiction warns.",
+      "Content-Signal (contentsignals.org) lets robots.txt declare AI policy per purpose, `search`, `ai-input`, `ai-train`, each `yes` or `no`, instead of allow/disallow-ing named bots one at a time. Add a line like `Content-Signal: search=yes, ai-input=yes, ai-train=no` under `User-agent: *`. Keep it consistent with your crawler blocks: don't declare `ai-train=yes` while Disallow-ing GPTBot/ClaudeBot, or `search=yes` while blocking the AI-search indexers, a crawler then has to guess which directive wins. Declaring a signal is optional and never penalizes; only a contradiction warns.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -268,7 +268,7 @@ export const contentSignalsRule: Rule = {
       checks.push({
         name: "content-signals-syntax",
         status: "warn",
-        message: `Content-Signal has invalid syntax — ${notes.join("; ")}. Valid form is comma-separated key=value using search/ai-input/ai-train with yes/no.`,
+        message: `Content-Signal has invalid syntax, ${notes.join("; ")}. Valid form is comma-separated key=value using search/ai-input/ai-train with yes/no.`,
         value: "invalid-syntax",
         items: [...unknownKeys, ...malformed].map((t) => ({ id: t, label: t })),
         details: { state: "invalid", unknownKeys, malformed },
@@ -284,7 +284,7 @@ export const contentSignalsRule: Rule = {
         message: contradictions
           .map(
             (c) =>
-              `Content-Signal ${c.signal}=yes but robots.txt fully Disallow-s ${c.blockedTokens.join(", ")} — a crawler can't tell which directive wins`,
+              `Content-Signal ${c.signal}=yes but robots.txt fully Disallow-s ${c.blockedTokens.join(", ")}, a crawler can't tell which directive wins`,
           )
           .join("; "),
         value: `${contradictions.length} contradiction(s)`,

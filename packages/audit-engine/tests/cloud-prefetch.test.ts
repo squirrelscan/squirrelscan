@@ -1163,7 +1163,7 @@ describe("prefetchCloudData — render service (#673)", () => {
       expect(env?.status).toBe("skipped");
       expect(env?.skipReason).toBe("render-disabled");
       expect(humanizeCloudSkip("render-disabled")).toBe(
-        "Cloud analysis skipped — render disabled by the run config.",
+        "Cloud analysis skipped: render disabled by the run config.",
       );
       expect(res.spend).toEqual([]);
     }

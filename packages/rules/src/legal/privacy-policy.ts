@@ -66,10 +66,10 @@ export const privacyPolicyRule: Rule = {
         name: "privacy-policy",
         status: regime ? "fail" : "warn",
         message: regime
-          ? `No privacy policy link found across site — required under ${regime}`
+          ? `No privacy policy link found across site, required under ${regime}`
           : "No privacy policy link found across site",
         value: regime
-          ? `Add a privacy policy — legally required for your audience (${regime})`
+          ? `Add a privacy policy, legally required for your audience (${regime})`
           : "Add a link to your privacy policy",
       });
     }

@@ -379,7 +379,7 @@ export async function runCrawl(
         onRateLimitEvent: (event: RateLimitEvent) => {
           logger.warn(
             "rate limited",
-            `${event.host} — backing off ${Math.max(1, Math.round(event.backoffMs / 1000))}s`
+            `${event.host}, backing off ${Math.max(1, Math.round(event.backoffMs / 1000))}s`
           );
           onProgress({
             phase: "crawling",

@@ -26,7 +26,7 @@ export const archiveIndexingRule: Rule = {
     id: "ax/archive-indexing",
     name: "Archive Indexing",
     description:
-      "Checks whether the site is present in the Wayback Machine and the Common Crawl index — the archives that feed AI training corpora and agent discovery pipelines",
+      "Checks whether the site is present in the Wayback Machine and the Common Crawl index, the archives that feed AI training corpora and agent discovery pipelines",
     solution:
       "Make sure robots.txt does not block CCBot (Common Crawl) or ia_archiver (Internet Archive), then request a Wayback snapshot at web.archive.org/save. Common Crawl inclusion follows from being crawlable and linked; there is no manual submission, so fix crawlability and wait for the next monthly crawl.",
     category: "ax",
@@ -65,7 +65,7 @@ export const archiveIndexingRule: Rule = {
         name: "common-crawl-indexed",
         status: stale ? "warn" : "pass",
         message: stale
-          ? `Site is in the Common Crawl index but the latest capture is over a year old — recent content is missing from CC-derived AI training data`
+          ? `Site is in the Common Crawl index but the latest capture is over a year old, recent content is missing from CC-derived AI training data`
           : `Site is in the Common Crawl index${commonCrawl.source ? ` (${commonCrawl.source})` : ""}`,
         value: commonCrawl.latestCapture ?? "indexed",
         details: { domain, source: commonCrawl.source, latestCapture: commonCrawl.latestCapture },
@@ -75,7 +75,7 @@ export const archiveIndexingRule: Rule = {
         name: "common-crawl-indexed",
         status: "warn",
         message:
-          "Site is not in the Common Crawl index — Common Crawl feeds the training corpora of the major AI labs, so the site is invisible to models trained on it",
+          "Site is not in the Common Crawl index, Common Crawl feeds the training corpora of the major AI labs, so the site is invisible to models trained on it",
         value: "absent",
         details: { domain, source: commonCrawl.source },
       });
@@ -98,7 +98,7 @@ export const archiveIndexingRule: Rule = {
         name: "wayback-archived",
         status: "warn",
         message:
-          "Site has no Wayback Machine snapshot — the Internet Archive has never captured it, a strong signal the archive crawlers can't reach or discover it",
+          "Site has no Wayback Machine snapshot, the Internet Archive has never captured it, a strong signal the archive crawlers can't reach or discover it",
         value: "absent",
         details: { domain },
       });

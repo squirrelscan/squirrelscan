@@ -1470,7 +1470,7 @@ export function fetchPage(
             kind: "fallback",
             url,
             fetcherId,
-            message: `${error.message} — falling back to standard fetch`,
+            message: `${error.message}, falling back to standard fetch`,
           });
 
           // onTlsEvent unset: fetchPageStandard never emits; fallback events go

@@ -19,9 +19,9 @@ export const contentWithoutJsRule: Rule = {
     id: "ax/content-without-js",
     name: "Content Without JavaScript",
     description:
-      "Flags significant main content that only appears in the JS-rendered DOM — invisible to agents that read raw HTML",
+      "Flags significant main content that only appears in the JS-rendered DOM, invisible to agents that read raw HTML",
     solution:
-      "Many AI agents and crawlers read your raw HTML without executing JavaScript, so content injected client-side is invisible to them. Server-render or pre-render your primary content (SSR/SSG), or ship it in the initial HTML, so it's present before JS runs. This is a recommendation, not a penalty — interactive enhancements can stay client-side; only the core content an agent needs to understand the page should be in the raw HTML.",
+      "Many AI agents and crawlers read your raw HTML without executing JavaScript, so content injected client-side is invisible to them. Server-render or pre-render your primary content (SSR/SSG), or ship it in the initial HTML, so it's present before JS runs. This is a recommendation, not a penalty, interactive enhancements can stay client-side; only the core content an agent needs to understand the page should be in the raw HTML.",
     category: "ax",
     scope: "page",
     findingScope: "page",
@@ -50,7 +50,7 @@ export const contentWithoutJsRule: Rule = {
         status: "skipped",
         message: "Raw-vs-rendered content comparison skipped",
         skipReason:
-          "The crawl browser-rendered this page, so its raw and rendered HTML are identical — run a raw (non-rendered) audit to assess JS-gated content",
+          "The crawl browser-rendered this page, so its raw and rendered HTML are identical, run a raw (non-rendered) audit to assess JS-gated content",
       });
       return { checks };
     }
@@ -98,7 +98,7 @@ export const contentWithoutJsRule: Rule = {
       checks.push({
         name: "content-without-js",
         status: "info",
-        message: `~${jsOnlyPct}% of this page's content (${jsOnlyWords} words) appears only after JavaScript runs — agents that read raw HTML won't see it`,
+        message: `~${jsOnlyPct}% of this page's content (${jsOnlyWords} words) appears only after JavaScript runs, agents that read raw HTML won't see it`,
         value: renderedWords,
         details,
       });

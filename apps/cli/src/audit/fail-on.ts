@@ -124,7 +124,7 @@ function parseOne(raw: string): FailOnCondition | string {
   } else if (lhs === "severity") {
     metric = "severity";
   } else if (lhs === "new-issues" || lhs === "new") {
-    return `--fail-on "${raw}": new-issues gating is not supported yet (needs a baseline) — see #167`;
+    return `--fail-on "${raw}": new-issues gating is not supported yet (needs a baseline), see #167`;
   } else {
     return `--fail-on "${raw}": unknown metric "${lhs}". Use score, score:<category>, errors, warnings, or severity`;
   }
@@ -140,7 +140,7 @@ function parseOne(raw: string): FailOnCondition | string {
     }
     // `>error` can never trip — error is the highest rank; reject the no-op.
     if (op === ">" && rhs === "error") {
-      return `--fail-on "${raw}": severity>error can never trip — error is the highest severity. Did you mean severity>=error?`;
+      return `--fail-on "${raw}": severity>error can never trip, error is the highest severity. Did you mean severity>=error?`;
     }
     const severityName = rhs as SeverityName;
     return {
@@ -182,7 +182,7 @@ function compare(actual: number, op: FailOnOp, threshold: number): boolean {
 function noteIfScoreOutOfRange(c: FailOnCondition, notes: string[]): void {
   if (c.value < 0 || c.value > 100) {
     notes.push(
-      `${c.raw}: threshold ${c.value} is outside the 0–100 score range — likely a mistake`
+      `${c.raw}: threshold ${c.value} is outside the 0–100 score range, likely a mistake`
     );
   }
 }
@@ -199,7 +199,7 @@ export function evaluateFailOn(
   // Skip all conditions — the failed audit itself is the signal, not a gate trip.
   if (isAuditFailed(report.status)) {
     notes.push(
-      `audit ${report.status} — fail-on conditions skipped (no audit data)`
+      `audit ${report.status}, fail-on conditions skipped (no audit data)`
     );
     return { total: conditions.length, trips, notes };
   }
@@ -246,7 +246,7 @@ export function evaluateFailOn(
         noteIfScoreOutOfRange(c, notes);
         const overall = report.healthScore?.overall;
         if (overall == null) {
-          notes.push(`${c.raw}: no health score this run — skipped`);
+          notes.push(`${c.raw}: no health score this run, skipped`);
           break;
         }
         if (compare(overall, c.op, c.value)) {
@@ -261,7 +261,7 @@ export function evaluateFailOn(
         );
         if (!cat) {
           notes.push(
-            `${c.raw}: category "${c.category}" not present this run — skipped`
+            `${c.raw}: category "${c.category}" not present this run, skipped`
           );
           break;
         }

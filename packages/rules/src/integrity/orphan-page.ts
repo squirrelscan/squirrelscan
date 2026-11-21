@@ -26,9 +26,9 @@ export const orphanPageRule: Rule = {
     id: "integrity/orphan-page",
     name: "Hidden Orphan Page",
     description:
-      "Detects crawled pages that are absent from every sitemap AND have no inbound internal links — a hidden page is a common injected-page signal",
+      "Detects crawled pages that are absent from every sitemap AND have no inbound internal links, a hidden page is a common injected-page signal",
     solution:
-      "A reachable page that is in no sitemap and linked from nowhere on your site is invisible to you but live to anyone with the URL — exactly how injected phishing/spam pages hide. Confirm you created the page; if not, treat the site as compromised: remove it, audit recently modified files, and review server logs. Legitimate hidden pages (e.g. unlisted landing pages) should at least be in your sitemap if you want them found.",
+      "A reachable page that is in no sitemap and linked from nowhere on your site is invisible to you but live to anyone with the URL, exactly how injected phishing/spam pages hide. Confirm you created the page; if not, treat the site as compromised: remove it, audit recently modified files, and review server logs. Legitimate hidden pages (e.g. unlisted landing pages) should at least be in your sitemap if you want them found.",
     category: "integrity",
     scope: "site",
     findingScope: "page",
@@ -145,7 +145,7 @@ function buildChecks(
     checks.push({
       name: "orphan-page",
       status: "fail",
-      message: `${escalated.length} hidden page(s) carrying compromise signals — likely injected`,
+      message: `${escalated.length} hidden page(s) carrying compromise signals, likely injected`,
       value: listOf(escalated),
       items: escalated.map((h) => ({ id: h.url })),
       details: { total: escalated.length, hasSitemap, escalated: true },

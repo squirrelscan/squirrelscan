@@ -432,7 +432,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
     write("-".repeat(40));
     const summary = techChangeSummary(tech);
     if (summary) write(summary);
-    write("(informational — not part of the score)");
+    write("(informational, not part of the score)");
     write("");
     for (const group of groupTechnologies(tech.items)) {
       const names = group.items
@@ -467,7 +467,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
   if (report.cacheStats) {
     const cs = report.cacheStats;
     const byReason = cacheReasonsLabel(cs);
-    write(`${cacheStatsSummaryLine(cs)}${byReason ? ` — ${byReason}` : ""}`);
+    write(`${cacheStatsSummaryLine(cs)}${byReason ? `, ${byReason}` : ""}`);
     write("");
   }
   if (report.cacheFreshness) {
@@ -634,18 +634,18 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       write(ENTITY_EMPTY_MESSAGE);
     } else {
       write(entitySummaryLine(map));
-      write("(informational — not part of the score)");
+      write("(informational, not part of the score)");
       write("");
       for (const node of primaryEntities(map).slice(0, ENTITY_CONSOLE_LIMIT)) {
         const id = node.id ?? "no @id";
         write(
-          `${entityLabel(node)} (${node.types.join(", ")}) — ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
+          `${entityLabel(node)} (${node.types.join(", ")}), ${node.occurrences}x on ${entityPageTotal(node)} page(s), ${id}`
         );
       }
       if (map.summary.nodesWithoutIdCount > 0) {
         write("");
         write(
-          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id — search engines cannot tell they are one thing.`
+          `${map.summary.nodesWithoutIdCount} entity(ies) declared on several pages carry no @id, search engines cannot tell they are one thing.`
         );
       }
     }
@@ -665,7 +665,7 @@ export function renderText(report: AuditReport, options?: TextRenderOptions): st
       if (locked.cta) write(`${locked.cta.label}: ${locked.cta.url}`);
       write("");
       for (const rule of locked.rules.map(lockedRuleView)) {
-        write(`  ${rule.id} — ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
+        write(`  ${rule.id}, ${rule.name}${rule.reason ? ` (${LOCKED_REASON_LABELS[rule.reason]})` : ""}`);
       }
       write("");
     }

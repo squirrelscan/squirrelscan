@@ -118,7 +118,7 @@ export function printUpdateNotification(settings: UserSettings) {
   // Auto-updating installs don't need the nag box — the background
   // updater is already on it; just say so in one line.
   if (isAutoUpdateEligible(settings)) {
-    const msg = `Updating squirrel to v${notification.to_version} in the background — takes effect on your next run.`;
+    const msg = `Updating squirrel to v${notification.to_version} in the background, takes effect on your next run.`;
     console.error(useColor ? pc.dim(msg) : msg);
     trackTelemetryEvent("update_notified", settings);
     return;
@@ -181,7 +181,7 @@ export function printEndOfRunUpdateReminder(settings: UserSettings): void {
   const notification = settings.pending_update_notification;
   if (!notification?.to_version) return;
 
-  const msg = `Update to v${notification.to_version} didn't complete in the background — run: squirrel self update`;
+  const msg = `Update to v${notification.to_version} didn't complete in the background, run: squirrel self update`;
   console.error(useColor ? pc.yellow(msg) : msg);
 }
 
@@ -387,7 +387,7 @@ export async function promptForUpdate(
         // installable (e.g. release pulled or still draft). Say so instead
         // of silently doing nothing, and clear the stale prompt.
         console.error(
-          `\nNo installable update found — staying on v${result.data.from_version}.`
+          `\nNo installable update found, staying on v${result.data.from_version}.`
         );
         const { updateSettings } = await import("@/self/settings");
         await updateSettings({

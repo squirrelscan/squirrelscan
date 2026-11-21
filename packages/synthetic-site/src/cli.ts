@@ -66,7 +66,7 @@ if (values.help || !values.pages) {
     `Usage: synthetic-site --pages <n> [--serve | --write-db <path>] [options]
 
   --pages <n>                 Page count (required)
-  --seed <string>              Seed — same seed reproduces the identical model (default: "synthetic-site")
+  --seed <string>              Seed, same seed reproduces the identical model (default: "synthetic-site")
   --serve                      Start an HTTP server serving the generated site
   --write-db <path>            Write a crawl directly into a SQLite storage file at <path>
   --port <n>                   Port for --serve (default: random free port)
@@ -165,7 +165,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log("Nothing to do — pass --serve or --write-db <path>.");
+  console.log("Nothing to do, pass --serve or --write-db <path>.");
 }
 
 main().catch((err: unknown) => {

@@ -86,7 +86,7 @@ describe("renderMarkdown locked rules (#780)", () => {
     const md = renderMarkdown(baseReport());
     expect(md).toContain("## Checks not run");
     expect(md).toContain("[Get started to unlock them](https://squirrelscan.com)");
-    expect(md).toContain("`ai/llm-parsability` — LLM Parsability");
+    expect(md).toContain("`ai/llm-parsability`, LLM Parsability");
   });
 
   test("free, no credits: dashboard link, no signup copy", () => {
@@ -117,7 +117,7 @@ describe("renderText locked rules (#780)", () => {
     const txt = renderText(baseReport());
     expect(txt).toContain("CHECKS NOT RUN");
     expect(txt).toContain("Get started to unlock them: https://squirrelscan.com");
-    expect(txt).toContain("ai/llm-parsability — LLM Parsability");
+    expect(txt).toContain("ai/llm-parsability, LLM Parsability");
   });
 
   test("free, no credits: dashboard link, no signup copy", () => {

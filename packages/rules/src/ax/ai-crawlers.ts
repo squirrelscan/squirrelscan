@@ -179,7 +179,7 @@ export const aiCrawlersRule: Rule = {
     description:
       "Classifies AI-agent crawlers (training, AI-search, user-action, archive) and reports which robots.txt allows or blocks",
     solution:
-      "AI assistants and answer engines read your site through named crawlers, but 'AI crawlers' is really several policies. Blocking TRAINING crawlers (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, Amazonbot, Bytespider) only affects one vendor's future model training — a legitimate choice that never penalizes your score. ARCHIVE crawlers (CCBot, ia_archiver) are different: they feed the Common Crawl corpus and the Wayback Machine, the shared sources AI training sets are built from, so blocking them opts you out of every downstream model and archive at once — this rule warns on it. Blocking AI-SEARCH indexers (OAI-SearchBot, Claude-SearchBot, PerplexityBot) drops you from AI-generated search citations; blocking USER-ACTION fetchers (ChatGPT-User, Claude-User, Perplexity-User) breaks live requests a real person made inside an assistant — both are usually accidental, so this rule warns on them. Note these are separate user-agents: blocking ClaudeBot (training) does NOT block Claude-User (user-action). To opt out of training while staying answerable, block the training bots but keep the AI-search and user-action ones allowed.",
+      "AI assistants and answer engines read your site through named crawlers, but 'AI crawlers' is really several policies. Blocking TRAINING crawlers (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, Meta-ExternalAgent, Amazonbot, Bytespider) only affects one vendor's future model training, a legitimate choice that never penalizes your score. ARCHIVE crawlers (CCBot, ia_archiver) are different: they feed the Common Crawl corpus and the Wayback Machine, the shared sources AI training sets are built from, so blocking them opts you out of every downstream model and archive at once, this rule warns on it. Blocking AI-SEARCH indexers (OAI-SearchBot, Claude-SearchBot, PerplexityBot) drops you from AI-generated search citations; blocking USER-ACTION fetchers (ChatGPT-User, Claude-User, Perplexity-User) breaks live requests a real person made inside an assistant, both are usually accidental, so this rule warns on them. Note these are separate user-agents: blocking ClaudeBot (training) does NOT block Claude-User (user-action). To opt out of training while staying answerable, block the training bots but keep the AI-search and user-action ones allowed.",
     category: "ax",
     scope: "site",
     findingScope: "page",
@@ -201,7 +201,7 @@ export const aiCrawlersRule: Rule = {
       checks.push({
         name: "ai-crawler-access",
         status: "info",
-        message: "No robots.txt — all AI crawlers are allowed by default",
+        message: "No robots.txt, all AI crawlers are allowed by default",
       });
       return { checks };
     }
@@ -262,7 +262,7 @@ export const aiCrawlersRule: Rule = {
       value: `${allowed.length}/${verdicts.length} allowed`,
       items: blocked.map((b) => ({
         id: b.token,
-        label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}) — blocked`,
+        label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}), blocked`,
       })),
       details: {
         allowed: allowed.map((b) => b.token),
@@ -311,19 +311,19 @@ export const aiCrawlersRule: Rule = {
       const user = answerBlocked.filter((b) => b.crawlerClass === "user-action");
       const parts: string[] = [];
       if (search.length > 0)
-        parts.push(`AI-search indexers (${search.map((b) => b.token).join(", ")}) — lost AI citations`);
+        parts.push(`AI-search indexers (${search.map((b) => b.token).join(", ")}), lost AI citations`);
       if (user.length > 0)
         parts.push(
-          `user-action fetchers (${user.map((b) => b.token).join(", ")}) — breaks live requests users made inside an assistant`,
+          `user-action fetchers (${user.map((b) => b.token).join(", ")}), breaks live requests users made inside an assistant`,
         );
       checks.push({
         name: "ai-answer-access",
         status: "warn",
-        message: `robots.txt blocks ${parts.join("; ")}. These are separate user-agents from the training bots — blocking ClaudeBot (training) does not block Claude-User (user-action); check the block was intended.`,
+        message: `robots.txt blocks ${parts.join("; ")}. These are separate user-agents from the training bots, blocking ClaudeBot (training) does not block Claude-User (user-action); check the block was intended.`,
         value: `${answerBlocked.length} answer-engine bot(s) blocked`,
         items: answerBlocked.map((b) => ({
           id: b.token,
-          label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}) — blocked`,
+          label: `${b.token} (${b.vendor}, ${CLASS_LABEL[b.crawlerClass]}), blocked`,
         })),
         details: {
           aiSearch: search.map((b) => b.token),
@@ -341,11 +341,11 @@ export const aiCrawlersRule: Rule = {
       checks.push({
         name: "archive-crawler-access",
         status: "warn",
-        message: `robots.txt blocks archive crawlers — this removes the site from the Wayback Machine and/or the Common Crawl corpus, the archives AI training sets are built from. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.`,
+        message: `robots.txt blocks archive crawlers, this removes the site from the Wayback Machine and/or the Common Crawl corpus, the archives AI training sets are built from. Blocking CCBot opts you out of every model trained on Common Crawl, not just one vendor.`,
         value: `${archiveBlocked.length} archive crawler(s) blocked`,
         items: archiveBlocked.map((b) => ({
           id: b.token,
-          label: `${b.token} (${b.vendor}, ${b.purpose}) — blocked`,
+          label: `${b.token} (${b.vendor}, ${b.purpose}), blocked`,
         })),
         details: { archive: archiveBlocked.map((b) => b.token) },
       });

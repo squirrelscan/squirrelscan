@@ -13,7 +13,7 @@ import type { ZodType } from "zod";
 export type RequestAsyncFn = (url: string, options?: RequestInit) => Promise<Response>;
 
 const NOT_INJECTED: RequestAsyncFn = () => {
-  throw new Error("requestAsync not injected — call setRequestAsync() first");
+  throw new Error("requestAsync not injected, call setRequestAsync() first");
 };
 
 let _requestAsync: RequestAsyncFn = NOT_INJECTED;
@@ -63,7 +63,7 @@ export async function llmCallWithSystem<T>(
   prompt: string,
   schema?: ZodType<T>
 ): Promise<string | { success: true; data: T } | { success: false; error: string }> {
-  if (!_llmCall) throw new Error("LLM not injected — call setLlmCall() first");
+  if (!_llmCall) throw new Error("LLM not injected, call setLlmCall() first");
   const raw = await _llmCall(system, prompt);
 
   if (!schema) return raw;

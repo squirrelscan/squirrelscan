@@ -102,7 +102,7 @@ export const entityDanglingRule: Rule = {
           });
         return {
           id: target,
-          label: `${targetId(target)} — referenced as ${[...entry.predicates].sort(compareStrings).join(", ")} by ${sourceLabels.join(", ")}`,
+          label: `${targetId(target)}, referenced as ${[...entry.predicates].sort(compareStrings).join(", ")} by ${sourceLabels.join(", ")}`,
           sourcePages: entry.pages.slice(0, ENTITY_PAGE_CAP),
           meta: {
             target: targetId(target),

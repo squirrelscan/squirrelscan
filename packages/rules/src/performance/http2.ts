@@ -48,7 +48,7 @@ export const http2Rule: Rule = {
         checks.push({
           name: "http3-hint",
           status: "info",
-          message: "Consider enabling HTTP/3 (QUIC) — only HTTP/2 is advertised",
+          message: "Consider enabling HTTP/3 (QUIC), only HTTP/2 is advertised",
           value: altSvc,
           expected: "Alt-Svc advertising h3",
         });

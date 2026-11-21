@@ -25,7 +25,7 @@ export const PRIVACY_PATH_PATTERNS = EEAT_PAGE_PATTERNS.privacy;
 // blog posts that merely lead with the phrase are not.
 const PRIVACY_HEADING_RE =
   /^privacy\s*(?:policy|notice)(?:\s*\([^)]*\)|\s+(?:updated|last\s+updated|effective|revised|rev\.)(?=\s|$).*|\s+\d{4}(?:-\d{2}(?:-\d{2})?)?\s*$)?$/i;
-const TITLE_SEPARATORS = /[|–—\-:·•]+/;
+const TITLE_SEPARATORS = /[|–\u2014\-:·•]+/;
 
 function isPrivacyHeading(text: string): boolean {
   return text.split(TITLE_SEPARATORS).some((seg) => PRIVACY_HEADING_RE.test(seg.trim()));

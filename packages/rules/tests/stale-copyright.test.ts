@@ -32,6 +32,7 @@ describe("latestCopyrightYear", () => {
     expect(latestCopyrightYear("© 2019-2026 Acme")).toBe(2026);
     expect(latestCopyrightYear("© 2019 – 2026 Acme")).toBe(2026);
     expect(latestCopyrightYear("© 2019 to 2026 Acme")).toBe(2026);
+    expect(latestCopyrightYear("© 2018\u20142026 Acme")).toBe(2026);
   });
   test("the newest notice wins when a footer carries several", () => {
     expect(latestCopyrightYear("© 2019 Acme · © 2026 Acme Labs")).toBe(2026);

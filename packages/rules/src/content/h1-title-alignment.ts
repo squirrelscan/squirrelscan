@@ -39,7 +39,7 @@ const WARN_MIN_DEPTH = 2;
 const MIN_PREFIX = 5;
 const MAX_SHOWN = 120;
 
-const SEGMENT_SPLIT = /\s*(?:\||»|::)\s*|\s+[-–—·•]\s+/;
+const SEGMENT_SPLIT = /\s*(?:\||»|::)\s*|\s+[-–\u2014·•]\s+/;
 
 function skip(message: string): RuleResult {
   return { checks: [{ name: CHECK_NAME, status: "skipped", message }] };

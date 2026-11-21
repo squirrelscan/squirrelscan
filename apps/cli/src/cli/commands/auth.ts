@@ -27,7 +27,7 @@ function warnEnvTokenShadowing(): void {
   const envVar = activeEnvTokenVar();
   if (!envVar) return;
   console.error(
-    `${fmt.yellow("Note:")} ${envVar} is set — it takes precedence over a logged-in session for all cloud calls.`
+    `${fmt.yellow("Note:")} ${envVar} is set, it takes precedence over a logged-in session for all cloud calls.`
   );
 }
 
@@ -91,7 +91,7 @@ const authLogout = defineCommand({
     if (envVar) {
       console.log(
         fmt.dim(
-          `  ${envVar} is still set — cloud calls continue to use it. Unset it to fully sign out.`
+          `  ${envVar} is still set, cloud calls continue to use it. Unset it to fully sign out.`
         )
       );
     }
