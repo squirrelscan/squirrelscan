@@ -254,6 +254,8 @@ describe("first_signed_version", () => {
   test("the checked-in file starts the signed era at the first key-signed release", () => {
     // literal on purpose: the test must fail if the pinned era start changes without review
     expect(getPinnedReleaseKeys().firstSignedVersion).toBe("0.0.190-beta.1");
-    expect(getPinnedReleaseKeys().keys.map((k) => k.id)).toContain("3d10cf3775665622");
+    expect(getPinnedReleaseKeys().keys.map((k) => k.id)).toContain(
+      "3d10cf3775665622"
+    );
   });
 });
