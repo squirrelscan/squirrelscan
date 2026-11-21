@@ -1,0 +1,1 @@
+- Correction to an earlier release note: the rule cache adds under 3% of CPU time on a cold run for typical sites (measured at +2.2% on squirrelscan.com and +0.6% on docs.squirrelscan.com), rather than the earlier cost being gone entirely. Very large pages are still being measured in #2206. (#1971)
