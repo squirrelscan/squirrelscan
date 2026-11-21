@@ -624,6 +624,12 @@ export interface StylesheetMotionData {
   hasSmoothScroll: boolean;
   /** Selectors of the rules setting `scroll-behavior: smooth` (capped like `infiniteAnimationSelectors`); counted only when one matches the page. */
   smoothScrollSelectors: string[];
+  /** Selectors of the rules inside a `prefers-reduced-motion: reduce` block that set animation, transition or scroll-behavior: the motion that block covers (a motion rule with the same selector is handled). */
+  reducedMotionSelectors?: string[];
+  /** The same selectors with their case kept, for matching against page elements (class and attribute values are case-sensitive). */
+  reducedMotionMatchers?: string[];
+  /** A `reduce` block resets motion globally (`*`, `html`, `body`, `:root`): handles the whole page. */
+  reducedMotionGlobal?: boolean;
 }
 
 export interface SiteData {

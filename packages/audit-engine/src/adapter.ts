@@ -1573,7 +1573,7 @@ export function fetchAssetsFromOccurrences(
                 read: readable,
                 ...(readable
                   ? stylesheetMotionOf(fetch.content as string)
-                  : { mentionsReducedMotion: false, hasInfiniteAnimation: false, hasSmoothScroll: false, infiniteAnimationSelectors: [], smoothScrollSelectors: [] }),
+                  : { mentionsReducedMotion: false, hasInfiniteAnimation: false, hasSmoothScroll: false, infiniteAnimationSelectors: [], smoothScrollSelectors: [], reducedMotionSelectors: [], reducedMotionMatchers: [], reducedMotionGlobal: false }),
               };
             }),
           }

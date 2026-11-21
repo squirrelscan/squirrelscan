@@ -77,7 +77,7 @@ describe("a11y/reduced-motion", () => {
       `<link rel="stylesheet" href="/app.css">`,
       `<video autoplay loop muted></video>`,
     );
-    expect(run(html, { stylesheetMotion: [sheet({ mentionsReducedMotion: true })] })).toHaveLength(0);
+    expect(run(html, { stylesheetMotion: [sheet({ mentionsReducedMotion: true, reducedMotionGlobal: true })] })).toHaveLength(0);
     // Without the stylesheet body it is unverified: info, never warn.
     const partial = run(html, { stylesheetMotion: [] });
     expect(partial[0]!.status).toBe("info");
@@ -365,5 +365,109 @@ describe("a11y/reduced-motion", () => {
     for (const name of names) {
       expect(staticSelector(`a:${name}-foo`)).toBe(`a:${name}-foo`);
     }
+  });
+
+  // pub#2111: a library's own reduced-motion block does not handle the whole page
+  describe("a library reduced-motion block (pub#2111)", () => {
+    const fa = `<link rel="stylesheet" href="https://example.com/fa.css">`;
+    const faSheet = (): StylesheetMotionData =>
+      sheet({
+        url: "https://example.com/fa.css",
+        ...stylesheetMotionOf(
+          ".fa-spin{animation:fa-spin 2s infinite} @media (prefers-reduced-motion: reduce){.fa-beat,.fa-spin{animation-duration:1s;transition-duration:0s}}",
+        ),
+      });
+
+    test("Font Awesome 6 CSS plus an infinite animation on the page's own element warns", () => {
+      const head = `${fa}<style>.hero{animation:pulse 2s infinite}</style>`;
+      const checks = run(page(head, `<div class="hero"></div><i class="fa-spin"></i>`), { stylesheetMotion: [faSheet()] });
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-css-infinite-animation:warn"]);
+    });
+
+    test("Font Awesome 6 CSS plus a marquee warns", () => {
+      const checks = run(page(fa, `<marquee>hi</marquee>`), { stylesheetMotion: [faSheet()] });
+      expect(checks.map((c) => c.name)).toEqual(["reduced-motion-marquee"]);
+    });
+
+    test("a reduced-motion rule naming the same selector handles that motion", () => {
+      const head = `${fa}<style>.spin{animation:s 1s infinite} @media (prefers-reduced-motion: reduce){.spin{animation:none}}</style>`;
+      expect(run(page(head, `<i class="spin"></i>`), { stylesheetMotion: [faSheet()] })).toHaveLength(0);
+    });
+
+    test("a global reset in the page's own CSS still passes", () => {
+      const head = `${fa}<style>.hero{animation:pulse 2s infinite} @media (prefers-reduced-motion: reduce){*,::before{animation:none !important}}</style>`;
+      expect(run(page(head, `<div class="hero"></div>`), { stylesheetMotion: [faSheet()] })).toHaveLength(0);
+    });
+
+    test("a global reset in a linked stylesheet still passes", () => {
+      const css = ".hero{animation:pulse 2s infinite} @media (prefers-reduced-motion: reduce){:root{scroll-behavior:auto} body{animation:none}}";
+      const s = sheet({ url: "https://example.com/fa.css", ...stylesheetMotionOf(css) });
+      expect(run(page(fa, `<div class="hero"></div>`), { stylesheetMotion: [s] })).toHaveLength(0);
+    });
+
+    test("Bootstrap reboot's no-preference smooth scroll does not handle the page's own motion", () => {
+      const reboot = "@media (prefers-reduced-motion: no-preference){:root{scroll-behavior:smooth}}";
+      expect(stylesheetMotionOf(reboot).reducedMotionGlobal).toBe(false);
+      const s = sheet({ url: "https://example.com/fa.css", ...stylesheetMotionOf(reboot) });
+      const checks = run(page(fa, `<marquee>hi</marquee>`), { stylesheetMotion: [s] });
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
+    });
+
+    test("the animate.css 4.1.1 sheet alone passes: its reduce block covers .animate__animated", () => {
+      // Excerpt of animate.min.css 4.1.1, including its own reduced-motion block.
+      const css =
+        ".animate__animated{animation-duration:1s;animation-fill-mode:both}" +
+        ".animate__animated.animate__infinite{animation-iteration-count:infinite}" +
+        "@media print,(prefers-reduced-motion:reduce){.animate__animated{animation-duration:1ms!important;" +
+        "transition-duration:1ms!important;animation-iteration-count:1!important}.animate__animated[class*=Out]{opacity:0}}";
+      const href = "https://cdn.example.com/animate.css/4.1.1/animate.min.css";
+      const s = sheet({ url: href, ...stylesheetMotionOf(css) });
+      const html = page(`<link rel="stylesheet" href="${href}">`, `<h1 class="animate__animated animate__bounce">hi</h1>`);
+      const checks = run(html, { stylesheetMotion: [s] });
+      expect(checks).toHaveLength(0);
+      expect(runAll(html, { stylesheetMotion: [s] }).map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion:pass"]);
+    });
+
+    test("an inline [data-aos] reduce block handles AOS, not the page's other motion", () => {
+      const head = `<style>@media (prefers-reduced-motion: reduce){[data-aos]{transition:none !important;transform:none !important}}</style>`;
+      expect(run(page(head, `<div data-aos="fade-up">hi</div>`))).toHaveLength(0);
+      const checks = run(page(head, `<div data-aos="fade-up">hi</div><marquee>hi</marquee>`));
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
+    });
+
+    test("Tailwind animate-spin with motion-reduce:animate-none on the element is handled", () => {
+      const css = `.animate-spin{animation:spin 1s linear infinite}@media (prefers-reduced-motion: reduce){.motion-reduce\\:animate-none{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<svg class="animate-spin motion-reduce:animate-none"></svg>`);
+      expect(run(html)).toHaveLength(0);
+      const bare = page(`<style>${css}</style>`, `<svg class="animate-spin"></svg>`);
+      expect(run(bare).map((c) => c.name)).toEqual(["reduced-motion-css-infinite-animation"]);
+    });
+
+    test("animate.css animate__infinite under a .animate__animated reduce rule is handled", () => {
+      const css = `.animate__animated.animate__infinite{animation-iteration-count:infinite}@media (prefers-reduced-motion: reduce){.animate__animated{animation-duration:1ms !important;animation-iteration-count:1 !important}}`;
+      const html = page(`<style>${css}</style>`, `<h1 class="animate__animated animate__infinite animate__pulse">hi</h1>`);
+      expect(run(html)).toHaveLength(0);
+    });
+
+    test("a reduce rule on .Spin does not clear .spin motion (class names are case-sensitive)", () => {
+      const css = `.spin{animation:s 1s infinite}@media (prefers-reduced-motion: reduce){.Spin{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<i class="spin"></i>`);
+      expect(run(html).map((c) => c.name)).toEqual(["reduced-motion-css-infinite-animation"]);
+    });
+
+    test("the element comparison spends the selector budget on a hostile page", () => {
+      const css = `.x{animation:s 1s infinite}@media (prefers-reduced-motion: reduce){.x{animation:none}}`;
+      const html = page(`<style>${css}</style>`, `<i class="x"></i>`.repeat(5000));
+      const start = performance.now();
+      expect(run(html)).toHaveLength(0);
+      expect(performance.now() - start).toBeLessThan(5000);
+    });
+
+    test("stylesheetMotionOf reports covered selectors and the global flag", () => {
+      const scoped = stylesheetMotionOf("@media (prefers-reduced-motion: reduce){.A , .b{animation:none} .c{color:red}}");
+      expect(scoped.reducedMotionSelectors).toEqual([".a", ".b"]);
+      expect(scoped.reducedMotionGlobal).toBe(false);
+      expect(stylesheetMotionOf("@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}").reducedMotionGlobal).toBe(true);
+    });
   });
 });

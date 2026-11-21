@@ -37,6 +37,32 @@ export interface CssMotionSummary {
   infiniteAnimationSelectors: string[];
   /** Selectors of the rules that set `scroll-behavior: smooth`, capped like the animation selectors. */
   smoothScrollSelectors: string[];
+  /**
+   * Selectors of the rules inside a `prefers-reduced-motion: reduce` block that set animation,
+   * transition or scroll-behavior: the motion that block actually covers (capped like the others).
+   */
+  reducedMotionSelectors: string[];
+  reducedMotionMatchers: string[];
+  /** A `reduce` block resets motion globally (`*`, `html`, `body`, `:root`). */
+  reducedMotionGlobal: boolean;
+}
+
+/** Declarations that switch motion off or down inside a reduced-motion block. */
+const MOTION_PROPERTY = /^(-webkit-)?(animation|transition)(-[a-z-]+)?$|^scroll-behavior$/;
+
+/** A selector with case and whitespace normalized, so a reduced-motion rule and a motion rule compare equal. */
+function normalizeSelector(sel: string): string {
+  return sel.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** A selector with whitespace collapsed and case kept. */
+function collapseSelector(sel: string): string {
+  return sel.trim().replace(/\s+/g, " ");
+}
+
+/** The selector list of a rule, split into normalized parts. */
+function selectorParts(list: string): string[] {
+  return splitSelectorList(list).map(normalizeSelector).filter(Boolean);
 }
 
 /**
@@ -95,11 +121,32 @@ export function stylesheetMotionOf(css: string): CssMotionSummary {
     hasSmoothScroll: false,
     infiniteAnimationSelectors: [],
     smoothScrollSelectors: [],
+    reducedMotionSelectors: [],
+    reducedMotionMatchers: [],
+    reducedMotionGlobal: false,
   };
   // Cheap pre-filter: nothing to parse when none of these words appear.
   if (!/infinite|smooth|prefers-reduced-motion/i.test(text)) return summary;
   for (const rule of parseRules(text, MAX_CSS_RULES)) {
-    if (rule.at?.some((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a))) summary.mentionsReducedMotion = true;
+    const reducedAt = rule.at?.find((a) => /^\s*@media\b/i.test(a) && REDUCED_MOTION.test(a));
+    if (reducedAt) {
+      summary.mentionsReducedMotion = true;
+      // A reduce block covers only the selectors whose rules touch motion. Motion inside a
+      // `no-preference` block is already gated (skipped below), so it covers nothing else.
+      if (
+        !/no-preference/i.test(reducedAt) &&
+        [...parseDeclarations(rule.body).keys()].some((property) => MOTION_PROPERTY.test(property))
+      ) {
+        for (const part of selectorParts(rule.selector)) {
+          if (ALWAYS_MATCHES.has(part)) summary.reducedMotionGlobal = true;
+          else pushSelector(summary.reducedMotionSelectors, part);
+        }
+        // Case kept: class and attribute values are case-sensitive, and page elements are matched against these.
+        for (const part of splitSelectorList(rule.selector).map(collapseSelector).filter(Boolean)) {
+          if (!ALWAYS_MATCHES.has(part.toLowerCase())) pushSelector(summary.reducedMotionMatchers, part);
+        }
+      }
+    }
     if (rule.at?.some((a) => REDUCED_MOTION.test(a) || /@keyframes|@-webkit-keyframes/i.test(a))) continue;
     if (!/infinite|smooth/i.test(rule.body)) continue;
     for (const [property, raw] of parseDeclarations(rule.body)) {
@@ -151,20 +198,56 @@ export function staticSelector(sel: string): string {
   return out;
 }
 
+/**
+ * Selectors a motion library's own reduced-motion block uses for the motion it starts. A `reduce`
+ * rule on one of them (AOS's `[data-aos]`, animate.css 4's `.animate__animated`, 3's `.animated`)
+ * handles that library, though not the rest of the page.
+ */
+const LIBRARY_REDUCED_MOTION_SELECTORS: Readonly<Record<string, readonly string[]>> = {
+  aos: ["[data-aos]"],
+  "animate-wow": [".animate__animated", ".animated"],
+};
+
 /** Selectors that match every HTML page, checked without a `querySelector` call. */
 const ALWAYS_MATCHES = new Set(["html", ":root", "body", "*"]);
 
-/** True when any selector in the lists matches an element on the page. Bounded by `budget` querySelector calls. */
-function anySelectorMatches(doc: Document, lists: readonly string[], budget: { left: number }): boolean {
+/**
+ * True when a selector in the lists matches an element that no reduced-motion selector also
+ * matches. Elements are compared, not selector text, so `.animate-spin` on an element that also
+ * carries `motion-reduce:animate-none` is handled, and `.spin` is not handled by `.Spin`.
+ * Bounded by `budget`: every `querySelectorAll` and every `matches` call spends one.
+ */
+function anySelectorMatches(
+  doc: Document,
+  lists: readonly string[],
+  budget: { left: number },
+  reduceSelectors: readonly string[] = [],
+): boolean {
+  const reduce = reduceSelectors.map(staticSelector).filter(Boolean);
   for (const list of lists) {
     for (const part of splitSelectorList(list)) {
-      if (ALWAYS_MATCHES.has(part.trim().toLowerCase())) return true;
+      if (reduce.length === 0 && ALWAYS_MATCHES.has(part.trim().toLowerCase())) return true;
       if (budget.left <= 0) return false;
       const sel = staticSelector(part);
       if (!sel) continue;
       budget.left--;
       try {
-        if (doc.querySelector(sel)) return true;
+        for (const el of doc.querySelectorAll(sel)) {
+          let handledEl = false;
+          for (const r of reduce) {
+            if (budget.left <= 0) return false;
+            budget.left--;
+            try {
+              if (el.matches(r)) {
+                handledEl = true;
+                break;
+              }
+            } catch {
+              // An invalid reduce selector matches nothing.
+            }
+          }
+          if (!handledEl) return true;
+        }
       } catch {
         // An invalid or unsupported selector counts as no match.
       }
@@ -310,7 +393,10 @@ export const reducedMotionRule: Rule = {
     const budget = { left: MAX_SELECTOR_QUERIES };
     let unreadSheets = 0;
     const inline = stylesheetMotionOf(inlineCss);
-    if (inline.mentionsReducedMotion) handled = true;
+    // A reduced-motion block handles the whole page only as a global reset; otherwise only the selectors it names.
+    const covered = new Set<string>(inline.reducedMotionSelectors);
+    const matchers = new Set<string>(inline.reducedMotionMatchers);
+    if (inline.reducedMotionGlobal) handled = true;
     // Inline style attributes always count: they apply to their own element.
     let attrInfinite = false;
     let attrCount = 0;
@@ -323,10 +409,7 @@ export const reducedMotionRule: Rule = {
       }
       if (attrInfinite) break;
     }
-    let cssInfinite =
-      attrInfinite || (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget));
-    let cssSmooth = inline.hasSmoothScroll && anySelectorMatches(doc, inline.smoothScrollSelectors, budget);
-    let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
+    const readSheets: { sheet: StylesheetMotionData; abs: string }[] = [];
     for (const el of doc.querySelectorAll("link[href]")) {
       const rel = (el.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
       if (!rel.includes("stylesheet")) continue;
@@ -343,16 +426,33 @@ export const reducedMotionRule: Rule = {
         if (!isFontOnlyHost(abs)) unreadSheets++;
         continue;
       }
-      if (sheet.mentionsReducedMotion) handled = true;
+      if (sheet.reducedMotionGlobal) handled = true;
+      for (const sel of sheet.reducedMotionSelectors ?? []) covered.add(sel);
+      // Sheet data cached before the case-kept list existed falls back to the lowercased selectors.
+      for (const sel of sheet.reducedMotionMatchers ?? sheet.reducedMotionSelectors ?? []) matchers.add(sel);
+      readSheets.push({ sheet, abs });
+    }
+
+    // Motion is judged once every sheet's reduced-motion rules are known.
+    let cssInfinite =
+      attrInfinite ||
+      (inline.hasInfiniteAnimation && anySelectorMatches(doc, inline.infiniteAnimationSelectors, budget, [...matchers]));
+    let cssSmooth = inline.hasSmoothScroll && anySelectorMatches(doc, inline.smoothScrollSelectors, budget, [...matchers]);
+    let cssSource = cssInfinite || cssSmooth ? "inline <style>" : "";
+    for (const { sheet, abs } of readSheets) {
       if (
         sheet.hasInfiniteAnimation &&
         !cssInfinite &&
-        anySelectorMatches(doc, sheet.infiniteAnimationSelectors ?? [], budget)
+        anySelectorMatches(doc, sheet.infiniteAnimationSelectors ?? [], budget, [...matchers])
       ) {
         cssInfinite = true;
         cssSource ||= shownUrl(abs);
       }
-      if (sheet.hasSmoothScroll && !cssSmooth && anySelectorMatches(doc, sheet.smoothScrollSelectors ?? [], budget)) {
+      if (
+        sheet.hasSmoothScroll &&
+        !cssSmooth &&
+        anySelectorMatches(doc, sheet.smoothScrollSelectors ?? [], budget, [...matchers])
+      ) {
         cssSmooth = true;
         cssSource ||= shownUrl(abs);
       }
@@ -425,6 +525,17 @@ export const reducedMotionRule: Rule = {
     if (cssInfinite) add("css-infinite-animation", "Looping CSS animation", false, cssSource || "infinite animation");
     if (cssSmooth) add("css-smooth-scroll", "Smooth scrolling (scroll-behavior: smooth)", false, cssSource || "scroll-behavior");
 
+    // A library whose own selector a reduced-motion block names is handled; the rest of the page is not.
+    const coveredLower = new Set([...covered].map((c) => c.toLowerCase()));
+    let libraryHandled = false;
+    for (let i = sources.length - 1; i >= 0; i--) {
+      const selectors = LIBRARY_REDUCED_MOTION_SELECTORS[sources[i]!.key];
+      if (selectors?.some((sel) => coveredLower.has(sel))) {
+        sources.splice(i, 1);
+        libraryHandled = true;
+      }
+    }
+
     if (sources.length === 0 || handled) {
       if (unreadSheets > 0) {
         return {
@@ -444,7 +555,8 @@ export const reducedMotionRule: Rule = {
           {
             name: "reduced-motion",
             status: "pass",
-            message: sources.length === 0 ? "No motion that needs reduced-motion handling" : "Reduced-motion handling found",
+            message:
+              sources.length === 0 && !libraryHandled ? "No motion that needs reduced-motion handling" : "Reduced-motion handling found",
           },
         ],
       };

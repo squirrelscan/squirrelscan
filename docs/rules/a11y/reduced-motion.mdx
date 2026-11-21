@@ -24,11 +24,13 @@ A page has a motion signal when it has any of:
 - a motion library: AOS (`data-aos`), GSAP ScrollTrigger, Lottie players, animate.css or WOW.js, parallax (`data-parallax`, Rellax, Jarallax), Locomotive Scroll or Lenis. Library names are matched only in the path of a `<script src>` or a stylesheet, preload or modulepreload link, never in canonical, alternate or icon links, a hostname or a query string
 - a carousel set to auto-advance (`data-autoplay` with a value other than empty, `false`, `0` or `off`, or Swiper, Slick, Splide or Flickity `autoplay` options)
 
-Handling counts only when the page has one of:
+Handling for the whole page counts only when the page has one of:
 
-- an `@media` rule whose condition contains `prefers-reduced-motion`, in an inline `<style>` or a read stylesheet (a comment, body text or string that mentions it does not count)
+- a global reset: a rule inside `@media (prefers-reduced-motion: reduce)` whose selector is `*`, `html`, `body` or `:root` and that sets `animation`, `transition` or `scroll-behavior`, in an inline `<style>` or a read stylesheet (a comment, body text or string that mentions the query does not count)
 - an inline or read script that calls `matchMedia` and contains `prefers-reduced-motion` (`window.matchMedia("(prefers-reduced-motion: reduce)")`, or GSAP's `gsap.matchMedia()`)
 - a `<link rel="stylesheet">` or `<style>` whose `media` attribute contains `prefers-reduced-motion`; the motion in that sheet is gated, so it is not counted either
+
+Any other rule inside `@media (prefers-reduced-motion: reduce)` that sets `animation`, `transition` or `scroll-behavior` handles only its own selectors: CSS motion on the same selector is not counted, and the rest of the page's motion still is. So a library stylesheet that switches off its own animation (Font Awesome 6 does this for `.fa-spin` and friends) does not cover the page's own looping animation, a marquee or autoplay video. A motion library's own reduce rule does handle that library: `[data-aos]` covers AOS, and `.animate__animated` (animate.css 4) or `.animated` (animate.css 3) covers animate.css and WOW.js. A `prefers-reduced-motion: no-preference` block handles nothing: the motion inside it is gated, not switched off.
 
 - A **warning** means the page has a motion signal and none of the CSS and scripts the audit read handles reduced motion, and everything the page references was read.
 - An **info** result means the same, but a referenced stylesheet (including a third-party one) or a same-site script was not read, so the handling may live there. The message says the check was partial.
