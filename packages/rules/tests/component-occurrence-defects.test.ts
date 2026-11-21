@@ -20,30 +20,87 @@ function ctx(html: string, pageUrl = "https://example.test/p"): RuleContext {
 }
 
 describe("region evidence is linear in the number of faulty elements", () => {
-  test("a 5,000-link nav does not re-walk the region per link", async () => {
-    const page = (n: number) =>
-      ctx(
-        `<footer><nav>${Array.from({ length: n }, (_, i) => `<a href="/t${i}">Read more</a>`).join("")}</nav></footer>`,
-      );
-    // Time the rule only (parsing excluded), best of three.
-    const time = async (n: number) => {
-      const c = page(n);
-      let best = Infinity;
-      for (let i = 0; i < 3; i++) {
-        const started = performance.now();
-        await linkTextRule.run(c);
-        best = Math.min(best, performance.now() - started);
-      }
-      return best;
+  const page = (n: number) =>
+    ctx(
+      `<footer><nav>${Array.from({ length: n }, (_, i) => `<a href="/t${i}">Read more</a>`).join("")}</nav></footer>`,
+    );
+
+  /**
+   * DOM work one rule run does, counted rather than timed so a loaded host
+   * cannot move it (#2201): elements yielded by `children` (every digest,
+   * sibling index and child-tag sequence walks through it) and characters read
+   * through `textContent`. The getters are wrapped on linkedom's prototypes for
+   * the run only; parsing happens before, so it is not counted.
+   */
+  async function domWork(n: number): Promise<{ elements: number; characters: number }> {
+    const c = page(n);
+    const nav = c.parsed.document!.querySelector("nav")!;
+    const owner = (name: string) => {
+      let proto: object | null = nav;
+      while (proto && !Object.getOwnPropertyDescriptor(proto, name)) proto = Object.getPrototypeOf(proto);
+      return { proto: proto!, descriptor: Object.getOwnPropertyDescriptor(proto!, name)! };
     };
-    const checks = (await linkTextRule.run(page(5000))).checks;
-    expect(checks[0]?.componentOccurrences).toHaveLength(5000);
-    await time(500); // warm up
-    const small = await time(1250);
-    const large = await time(5000);
-    // A ratio, not an absolute limit, so CI load cannot trip it: 4x the links
-    // is ~4x the time when linear and ~16x when the region is re-walked per link.
-    expect(large / Math.max(small, 0.5)).toBeLessThan(9);
+    const children = owner("children");
+    const textContent = owner("textContent");
+    const counted = { elements: 0, characters: 0 };
+    Object.defineProperty(children.proto, "children", {
+      ...children.descriptor,
+      get(this: Element) {
+        const value = children.descriptor.get!.call(this) as ArrayLike<unknown>;
+        counted.elements += value.length;
+        return value;
+      },
+    });
+    Object.defineProperty(textContent.proto, "textContent", {
+      ...textContent.descriptor,
+      get(this: Element) {
+        const value = textContent.descriptor.get!.call(this) as string | null;
+        counted.characters += value?.length ?? 0;
+        return value;
+      },
+    });
+    try {
+      const checks = (await linkTextRule.run(c)).checks;
+      expect(checks[0]?.componentOccurrences).toHaveLength(n);
+    } finally {
+      Object.defineProperty(children.proto, "children", children.descriptor);
+      Object.defineProperty(textContent.proto, "textContent", textContent.descriptor);
+    }
+    return counted;
+  }
+
+  // 4x the links is ~4x the work when linear and ~16x when the region is
+  // re-walked per link. The counts are deterministic, so the bound has no
+  // timing slack to absorb and sits between the two.
+  const MAX_GROWTH = 6;
+
+  async function growth(smallSize: number): Promise<{ elements: number; characters: number }> {
+    const small = await domWork(smallSize);
+    const large = await domWork(smallSize * 4);
+    return { elements: large.elements / small.elements, characters: large.characters / small.characters };
+  }
+
+  test("a 5,000-link nav does not re-walk the region per link", async () => {
+    const ratio = await growth(1250);
+    expect(ratio.elements).toBeLessThan(MAX_GROWTH);
+    expect(ratio.characters).toBeLessThan(MAX_GROWTH);
+  });
+
+  test("the counter catches a per-link region re-walk", async () => {
+    // A deliberately quadratic variant: the region's child-tag sequence rebuilt
+    // for every link, the regression the cache's own comment records. Smaller
+    // sizes than the guard: the ratio is the same, and the quadratic variant at
+    // 5,000 links is slow enough to hit the test timeout on a loaded host.
+    const original = ComponentOccurrenceCache.prototype.childTagSequence;
+    ComponentOccurrenceCache.prototype.childTagSequence = function (this: ComponentOccurrenceCache, element) {
+      this.childTagSequences.delete(element);
+      return original.call(this, element);
+    };
+    try {
+      expect((await growth(250)).elements).toBeGreaterThan(MAX_GROWTH);
+    } finally {
+      ComponentOccurrenceCache.prototype.childTagSequence = original;
+    }
   });
 });
 
