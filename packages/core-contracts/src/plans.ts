@@ -229,7 +229,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     scheduleFrequencies: SCHEDULE_FREQUENCIES,
     customHeaders: true,
     brokenLinkAlerts: true,
-    // At least Business's ceiling, never below it (#1028) — a contracted plan
+    // At least Business's ceiling, never below it (#1028): a contracted plan
     // that audited fewer pages than the tier under it would be a pricing bug.
     // Kept as its own literal rather than a reference so a tier change is a
     // deliberate decision here too; still clamped at dispatch by
@@ -257,7 +257,7 @@ export function getPlan(planId: string): PlanDefinition {
 }
 
 // Tier hierarchy: free < starter < team = team_legacy < business < enterprise. Keep in sync with
-// PlanId — a new tier must be ranked here (an unranked id resolves to 0 = free, matching getPlan).
+// PlanId: a new tier must be ranked here (an unranked id resolves to 0 = free, matching getPlan).
 // team_legacy ranks WITH team (#5002): the per-seat subscriber keeps every Team entitlement.
 // Enterprise ranks top so it inherits every `planAtLeast` entitlement.
 const PLAN_RANK: Record<PlanId, number> = {
