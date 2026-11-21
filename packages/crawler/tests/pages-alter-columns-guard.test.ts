@@ -101,4 +101,26 @@ describe("PAGES_ALTER_COLUMNS drift guard (#921)", () => {
     const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
     expect(missing).toEqual([]);
   });
+
+  // And `sitemap_urls`: `images` and `images_truncated` (migration 49, pub#2093) are named by every
+  // addSitemapUrls INSERT, so a version-collided DB without them fails the crawl's sitemap write.
+  test("every 'ALTER TABLE sitemap_urls ADD COLUMN' in MIGRATIONS is in SITEMAP_URLS_ALTER_COLUMNS", () => {
+    const src = readFileSync(new URL("../src/storage/sqlite.ts", import.meta.url), "utf8");
+
+    const migrationCols = new Set<string>();
+    for (const m of src.matchAll(/ALTER TABLE sitemap_urls ADD COLUMN\s+(\w+)/g)) {
+      migrationCols.add(m[1]!);
+    }
+
+    const listBlock = src.match(/SITEMAP_URLS_ALTER_COLUMNS[^[]*\[([\s\S]*?)\];/);
+    expect(listBlock).not.toBeNull();
+    const reconciledCols = new Set<string>();
+    for (const m of listBlock![1]!.matchAll(/name:\s*"(\w+)"/g)) {
+      reconciledCols.add(m[1]!);
+    }
+
+    expect(migrationCols.has("images")).toBe(true);
+    const missing = [...migrationCols].filter((c) => !reconciledCols.has(c));
+    expect(missing).toEqual([]);
+  });
 });

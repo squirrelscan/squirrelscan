@@ -1799,6 +1799,10 @@ export interface SitemapUrlRecord {
   lastmod?: string;
   changefreq?: string;
   priority?: number;
+  /** See SitemapUrl.images: the entry's `<image:loc>` values, absent when it declared none (pub#2093). */
+  images?: string[];
+  /** See SitemapUrl.imagesTruncated. */
+  imagesTruncated?: boolean;
 }
 
 // ============================================

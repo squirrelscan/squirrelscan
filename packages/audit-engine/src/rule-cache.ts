@@ -79,6 +79,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
 
 /**
  * Bumped when the payload shape or the key's ingredients change; old rows then miss.
+ * prc-12: `sitemaps` joins the run context (images/sitemap-missing, pub#2093): the image entries per sitemap URL.
  * prc-11: `features.contentSimhash` (content/near-duplicate). A prc-10 row would replay features
  * without it and the page would not be hashed, so near-duplicates would go unseen.
  * prc-10: `features.navLinkSet` (links/nav-set-divergence). A prc-9 row would replay features
@@ -97,7 +98,7 @@ import type { ParsedPage, RuleMeta, SiteData } from "@squirrelscan/rules";
  * without it, which the store reads as "no alternates" and exempts nothing, so
  * the bump is about getting the new field filled, not about safety.
  */
-export const RULE_CACHE_FORMAT = "prc-11";
+export const RULE_CACHE_FORMAT = "prc-12";
 
 /**
  * The `SiteData` keys page-scope rules read, and therefore the only ones the run
@@ -120,6 +121,7 @@ export const PAGE_RULE_SITE_FIELDS = [
   "siteIndexable",
   "stylesheetBackgrounds",
   "stylesheetMotion",
+  "sitemaps",
 ] as const;
 
 /**
@@ -206,6 +208,11 @@ export function pageRuleSiteContext(siteData: SiteData): Record<string, unknown>
     // Only what the rule reads of each stylesheet: its url and the background it sets (#1756).
     stylesheetBackgrounds: (siteData.stylesheetBackgrounds ?? []).map((s) => [s.url, s.background, s.selectors ?? null, s.selectorsTruncated === true]),
     stylesheetMotion: (siteData.stylesheetMotion ?? []).map((s) => [s.url, s.read, s.mentionsReducedMotion, s.hasInfiniteAnimation, s.hasSmoothScroll, s.infiniteAnimationSelectors, s.smoothScrollSelectors]),
+    // Only what images/sitemap-missing reads: each sitemap URL that declares image entries (pub#2093).
+    // loc, images and the truncation flag only (not lastmod): the rule also judges whether the page is listed.
+    sitemaps: (siteData.sitemaps?.discovered ?? []).map((sitemap) =>
+      sitemap.urls.map((u) => [u.loc, u.images ?? null, u.imagesTruncated === true])
+    ),
     scripts: projectEntries(siteData.scripts, PAGE_RULE_SCRIPT_FIELDS),
     preloadedScripts: projectEntries(siteData.preloadedScripts, PAGE_RULE_SCRIPT_FIELDS),
     resourceSizes: resourceSizes
@@ -454,6 +461,7 @@ export async function computeRunContextHash(
         ["resourceSizes", projection.resourceSizes],
         ["stylesheetBackgrounds", projection.stylesheetBackgrounds],
         ["stylesheetMotion", projection.stylesheetMotion],
+        ["sitemaps", projection.sitemaps],
         ["siteMetadata", input.siteMetadata ?? null],
         ["cloudResults", input.cloudResults ?? null],
         ["ignoreApplicability", input.ignoreApplicability],

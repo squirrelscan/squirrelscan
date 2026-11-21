@@ -3664,6 +3664,8 @@ export function createCrawler(
                 lastmod: u.lastmod,
                 changefreq: u.changefreq,
                 priority: u.priority,
+                images: u.images,
+                imagesTruncated: u.imagesTruncated,
               })),
             );
           }
