@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { PageStructureScalars } from "@squirrelscan/core-contracts";
 
-import type { AuditReport } from "../src/types";
+import type { AuditReport, ReportTechnology } from "../src/types";
 import { renderHtml } from "../src/output/html";
 import { renderJson } from "../src/output/json";
 import { renderLlm } from "../src/output/llm";
@@ -289,7 +289,7 @@ describe("page structure in the output formats", () => {
       report({
         structure: STRUCTURE,
         technologies: {
-          items: [{ id: "nextjs", name: "Next.js", category: "framework", version: null, confidence: "high" }],
+          items: [{ id: "nextjs", name: "Next.js", category: "framework", version: null, confidence: "high" } as ReportTechnology],
           added: [],
           removed: [],
           firstScan: true,

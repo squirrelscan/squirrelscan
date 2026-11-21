@@ -8,7 +8,8 @@ import { editorSummaryView, summaryPageCounts } from "../src/editor-summary";
 import { renderHtml } from "../src/output/html";
 import { renderMarkdown } from "../src/output/markdown";
 import { guardSummaryText, pageCounts, scoreMentions } from "../src/summary-text";
-import type { AuditReport, EditorSummary } from "../src/types";
+import type { EditorSummary } from "@squirrelscan/core-contracts";
+import type { AuditReport } from "../src/types";
 
 function report(extra: Partial<AuditReport> = {}): AuditReport {
   return {

@@ -1,6 +1,7 @@
 // #1777: a targeted run must treat a CACHED redirect like a fresh one. A full audit caches `/old` (301 to
 // `/new`); a later `targetUrls: [/old]` run reuses the cached row and must neither queue nor audit `/new`.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { describe, expect, test } from "bun:test";
@@ -98,7 +99,7 @@ async function createCrawlRecord(storage: CrawlStorage, config: Record<string, u
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

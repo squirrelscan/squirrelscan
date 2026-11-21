@@ -41,7 +41,7 @@ describe("getOrRefresh — daily-pull cache", () => {
       kv,
       "k",
       1000,
-      () => Promise.reject(new Error("feed down")),
+      () => Promise.reject<string>(new Error("feed down")),
       5000, // expired → would refresh, but refresh throws
     );
     expect(served).toBe("good");

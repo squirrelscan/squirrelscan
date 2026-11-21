@@ -1,5 +1,6 @@
 // `noCache` sends Cache-Control: no-cache on page fetches (#2032); off by default.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -99,7 +100,7 @@ async function crawl(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats,
     }),
   );

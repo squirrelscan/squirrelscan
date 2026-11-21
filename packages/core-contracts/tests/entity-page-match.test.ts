@@ -9,7 +9,7 @@ import {
 } from "../src/entity-page-match";
 
 describe("matchesEntityPage", () => {
-  test.each(ENTITY_PAGE_MATCH_CASES)(
+  test.each([...ENTITY_PAGE_MATCH_CASES])(
     "$pattern against $url matches: $matches",
     ({ pattern, url, matches }) => {
       expect(matchesEntityPage(url, pattern)).toBe(matches);

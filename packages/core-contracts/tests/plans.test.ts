@@ -166,9 +166,9 @@ describe("scheduled audit entitlements", () => {
   });
 
   test("free omits daily; every paid plan allows all three cadences", () => {
-    expect([...PLANS.free.scheduleFrequencies]).toEqual(["weekly", "monthly"]);
+    expect([...PLANS.free.scheduleFrequencies!]).toEqual(["weekly", "monthly"]);
     for (const id of ["starter", "team", "enterprise"] as const) {
-      expect([...PLANS[id].scheduleFrequencies]).toEqual([...SCHEDULE_FREQUENCIES]);
+      expect([...PLANS[id].scheduleFrequencies!]).toEqual([...SCHEDULE_FREQUENCIES]);
     }
     expect(planAllowsScheduleFrequency("free", "daily")).toBe(false);
     expect(planAllowsScheduleFrequency("free", "weekly")).toBe(true);

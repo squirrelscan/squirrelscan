@@ -8,6 +8,7 @@ import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 
 import { createCrawler } from "../src/core/crawler";
+import type { PageRecord } from "@squirrelscan/core-contracts/storage";
 import type { CrawlerConfig } from "../src/core/types";
 import { SQLiteStorage } from "../src/storage/sqlite";
 
@@ -29,7 +30,7 @@ const CONFIG: Partial<CrawlerConfig> = {
 };
 
 /** The seed page of a crawl: the one whose path is exactly `/` (an exact comparison on the parsed URL, not a substring). */
-const seedOf = (pages: Array<{ normalizedUrl: string }>) => pages.find((p) => new URL(p.normalizedUrl).pathname === "/")!;
+const seedOf = (pages: Array<PageRecord>) => pages.find((p) => new URL(p.normalizedUrl).pathname === "/")!;
 
 const servers: Array<{ stop: (force?: boolean) => void }> = [];
 afterEach(() => {

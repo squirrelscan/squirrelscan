@@ -40,7 +40,7 @@ describe("validators survive every content-encoding", () => {
       test(`${kind} ETag and Last-Modified on a ${encoding} response are stored verbatim`, async () => {
         const url = serve(
           () =>
-            new Response(encode ? encode(PAGE) : PAGE, {
+            new Response(encode ? (encode(PAGE) as Uint8Array<ArrayBuffer>) : PAGE, {
               headers: {
                 "content-type": "text/html; charset=utf-8",
                 "cache-control": "public, max-age=0, must-revalidate",

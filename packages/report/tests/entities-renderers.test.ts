@@ -162,7 +162,7 @@ function reportWithIssues(): AuditReport {
         ],
       },
     },
-  } as AuditReport;
+  } as unknown as AuditReport; // meta is partial on purpose
 }
 
 describe("section placement", () => {

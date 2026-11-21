@@ -272,7 +272,7 @@ function failingFetcher(error: CrawlError): CrawlFetcher {
 
 /** A fetcher that answers every URL with 200 and the given HTML body. */
 function htmlFetcher(body: string): CrawlFetcher {
-  return (url) => statusFetcher(200, body)(url);
+  return (url, options) => statusFetcher(200, body)(url, options);
 }
 
 /** A fetcher that answers every URL with one status and an optional body. */
@@ -393,12 +393,12 @@ describe("the classification reaches CrawlStats (#1822)", () => {
     // each running its own read-modify-write at concurrency 4.
     const links = ["/p0", "/p1", "/p2", "/p3", "/p4"];
     const anchors = links.map((h) => `<a href="${ORIGIN}${h}">${h}</a>`).join("");
-    const fetcher: CrawlFetcher = (url) => {
+    const fetcher: CrawlFetcher = (url, options) => {
       if (url === `${ORIGIN}/p0`) {
         return Effect.fail(CrawlError.network(url, "Server error: 500", 500));
       }
       const body = url === URL_ROOT ? `<!doctype html><html><body>${anchors}</body></html>` : "";
-      return htmlFetcher(body)(url);
+      return htmlFetcher(body)(url, options);
     };
     const stats = await withStubbedRootProbes("", () =>
       runCrawl(fetcher, { maxPages: 10, concurrency: 4, disableLinkDiscovery: false }),

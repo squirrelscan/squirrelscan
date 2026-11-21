@@ -74,7 +74,7 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
     }
   });
 
-  test("evidence stays bounded across several hundred pages", { timeout: 20_000 }, () => {
+  test("evidence stays bounded across several hundred pages", () => {
     const slugs = Array.from({ length: 400 }, (_, i) => `p${String(i).padStart(3, "0")}`);
     const check = groupIssuesByCategory({ "perf/lcp-hints": lcpResult(slugs, 10) })[0]!.rules[0]!
       .checks[0]!;
@@ -90,9 +90,9 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
     for (const entry of details.pageEvidence) {
       expect(entry.candidates).toHaveLength(LCP_PAGE_EVIDENCE.maxCandidatesPerPage);
     }
-  });
+  }, { timeout: 20_000 });
 
-  test("2048-char page and image URLs stay inside the finding payload cap", { timeout: 20_000 }, () => {
+  test("2048-char page and image URLs stay inside the finding payload cap", () => {
     const longPart = "x".repeat(2000);
     const slugs = Array.from({ length: 60 }, (_, i) => `${String(i).padStart(3, "0")}-${longPart}`);
     const check = groupIssuesByCategory({ "perf/lcp-hints": lcpResult(slugs, 3) })[0]!.rules[0]!
@@ -111,7 +111,7 @@ describe("perf/lcp-hints grouped evidence (#1074)", () => {
     for (const entry of details.pageEvidence) {
       for (const c of entry.candidates) expect(c.src.startsWith(entry.page)).toBe(true);
     }
-  });
+  }, { timeout: 20_000 });
 });
 
 function lcpResult(slugs: string[], candidatesPerPage = 1): ReportRuleResult {

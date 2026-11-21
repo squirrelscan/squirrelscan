@@ -29,7 +29,7 @@ const GIB = 1024 * 1024 * 1024;
 const HTML = `<!doctype html><html><head><title>decoded</title></head><body>${"<p>squirrel</p>".repeat(200)}</body></html>`;
 
 /** `total` bytes of spaces through a streaming compressor, never held whole. */
-async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer> {
+async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<Buffer<ArrayBuffer>> {
   const out: Buffer[] = [];
   compressor.on("data", (chunk: Buffer) => out.push(chunk));
   const ended = new Promise((resolve) => compressor.on("end", resolve));
@@ -42,13 +42,13 @@ async function bomb(compressor: NodeJS.ReadWriteStream, total: number): Promise<
   return Buffer.concat(out);
 }
 
-let gzipBomb: Buffer;
-let brBomb: Buffer;
+let gzipBomb: Buffer<ArrayBuffer>;
+let brBomb: Buffer<ArrayBuffer>;
 const requestHeaders: Headers[] = [];
 let server: ReturnType<typeof Bun.serve>;
 let origin: string;
 
-const encoded = (body: Uint8Array | string, coding: string): Response =>
+const encoded = (body: BodyInit, coding: string): Response =>
   new Response(body, { headers: { "content-type": "text/html", "content-encoding": coding } });
 
 beforeAll(async () => {

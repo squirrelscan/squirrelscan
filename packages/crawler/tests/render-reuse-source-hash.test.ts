@@ -15,6 +15,7 @@
 //     and a rotated CF ray, but the normalized source hashes to the stored value
 //     → ZERO renders; every page is reused. This is the drmadnani scenario.
 
+import type { CrawlerConfigSnapshot } from "@squirrelscan/core-contracts";
 import type { DocumentFetcher, FetchResponse } from "@squirrelscan/fetchers";
 
 import { createHash } from "crypto";
@@ -139,7 +140,7 @@ async function createCrawlRecord(
       originalUrl: `${ORIGIN}/`,
       startedAt: Date.now(),
       status: "paused",
-      config,
+      config: config as unknown as CrawlerConfigSnapshot, // tests record a partial snapshot
       stats: emptyStats,
     }),
   );

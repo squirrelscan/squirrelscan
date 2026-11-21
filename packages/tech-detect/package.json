@@ -9,6 +9,9 @@
   "dependencies": {
     "@squirrelscan/core-contracts": "workspace:*"
   },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  },
   "scripts": {
     "typecheck": "tsgo --noEmit"
   },
