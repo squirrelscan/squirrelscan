@@ -3,11 +3,10 @@
 // run's result or, failing that, from the block stamped on the crawl.
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 import {
   generateReportFromStorage,
   runStreamingRules,
@@ -17,7 +16,7 @@ import type { JavascriptShipped, ScriptContentData } from "@squirrelscan/core-co
 import { SQLiteStorage } from "@squirrelscan/crawler";
 
 import { buildV2Report } from "../src/report-stream";
-import { buildGoldenBaselineModel, getGoldenBaselineConfig, run } from "./helpers/golden-baseline";
+import { canonicalFixtureDb, getGoldenBaselineConfig, run } from "./helpers/golden-baseline";
 
 const tmpDir = mkdtempSync(join(tmpdir(), "squirrelscan-javascript-shipped-"));
 
@@ -51,8 +50,9 @@ async function withFixture(
   body: (storage: SQLiteStorage, crawlId: string) => Promise<void>,
 ): Promise<void> {
   const dbPath = join(tmpDir, `${name}.sqlite`);
-  const { storage: writeStorage } = await writeCrawlToStorage(buildGoldenBaselineModel(), dbPath);
-  await run(writeStorage.close());
+  // The canonical crawl DB is built once per process; each fixture gets its own
+  // copy because a body may write to it (updateCrawl).
+  copyFileSync(await canonicalFixtureDb(), dbPath);
   const storage = new SQLiteStorage(dbPath);
   try {
     await run(storage.init());

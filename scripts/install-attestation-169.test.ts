@@ -146,7 +146,7 @@ async function install(ghEnv: Record<string, string> | null): Promise<Result> {
 }
 
 describe("install.sh release attestation (#169)", () => {
-  test("gh present and the attestation matches: verifies the downloaded file against the repo and installs", async () => {
+  test.concurrent("gh present and the attestation matches: verifies the downloaded file against the repo and installs", async () => {
     const r = await install({});
     expect(r.stderr).not.toContain("Error:");
     expect(r.code).toBe(0);
@@ -164,7 +164,7 @@ describe("install.sh release attestation (#169)", () => {
     expect(existsSync(join(r.home, "bin", "squirrel"))).toBe(true);
   }, 60_000);
 
-  test("gh present and the attestation does not match: fails and nothing is installed or run", async () => {
+  test.concurrent("gh present and the attestation does not match: fails and nothing is installed or run", async () => {
     const r = await install({ GH_VERIFY_EXIT: "1" });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Attestation verification failed");
@@ -174,25 +174,25 @@ describe("install.sh release attestation (#169)", () => {
     expect(existsSync(join(r.home, "bin", "squirrel"))).toBe(false);
   }, 60_000);
 
-  test("gh present but not logged in: warns and falls back to sha256, never calls verify", async () => {
+  test.concurrent("gh present but not logged in: warns and falls back to sha256, never calls verify", async () => {
     const r = await install({ GH_AUTH_EXIT: "1", GH_VERIFY_EXIT: "1" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("gh is not logged in");
     expect(r.ghCalls.some((c) => c[0] === "attestation" && c[2] !== "--help")).toBe(false);
   }, 60_000);
 
-  test("gh too old for the attestation command: warns and falls back", async () => {
+  test.concurrent("gh too old for the attestation command: warns and falls back", async () => {
     const r = await install({ GH_HELP_EXIT: "1", GH_VERIFY_EXIT: "1" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("too old");
   }, 60_000);
 
-  test("auth status is pinned to github.com", async () => {
+  test.concurrent("auth status is pinned to github.com", async () => {
     const r = await install({});
     expect(readFileSync(join(r.root, "auth-args"), "utf8").trim()).toBe("auth status --hostname github.com");
   }, 60_000);
 
-  test("a probe that hangs is killed: a warning, then the sha256 check decides", async () => {
+  test.concurrent("a probe that hangs is killed: a warning, then the sha256 check decides", async () => {
     for (const hang of ["help", "auth"]) {
       const started = Date.now();
       const r = await install({ GH_HANG: hang, SQUIRREL_TEST_GH_TIMEOUT_SECS: "1" });
@@ -204,7 +204,7 @@ describe("install.sh release attestation (#169)", () => {
     }
   }, 90_000);
 
-  test("a verify that hangs fails closed and nothing is installed", async () => {
+  test.concurrent("a verify that hangs fails closed and nothing is installed", async () => {
     const r = await install({ GH_HANG: "verify", SQUIRREL_TEST_GH_TIMEOUT_SECS: "1" });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("gh attestation verify timed out after");
@@ -213,7 +213,7 @@ describe("install.sh release attestation (#169)", () => {
     expect(existsSync(join(r.home, "bin", "squirrel"))).toBe(false);
   }, 60_000);
 
-  test("without timeout/gtimeout (macOS) the watchdog still kills a hung gh", async () => {
+  test.concurrent("without timeout/gtimeout (macOS) the watchdog still kills a hung gh", async () => {
     const root = mkdtempSync(join(tmpdir(), "install-169-wd-"));
     pending.push(root);
     const lib = join(root, "installer-lib.sh");
@@ -245,14 +245,14 @@ describe("install.sh release attestation (#169)", () => {
     expect(Date.now() - started).toBeLessThan(15_000);
   }, 60_000);
 
-  test("the attestation check runs after the checksum one", async () => {
+  test.concurrent("the attestation check runs after the checksum one", async () => {
     const r = await install({ GH_VERIFY_EXIT: "0" });
     expect(r.code).toBe(0);
     // The checksum line precedes the attestation line.
     expect(r.stderr.indexOf("Checksum verified")).toBeLessThan(r.stderr.indexOf("Attestation verified"));
   }, 60_000);
 
-  test("gh absent: a visible warning, success, and the sha256 check still decides", async () => {
+  test.concurrent("gh absent: a visible warning, success, and the sha256 check still decides", async () => {
     const root = mkdtempSync(join(tmpdir(), "install-169-lib-"));
     pending.push(root);
     const lib = join(root, "installer-lib.sh");
