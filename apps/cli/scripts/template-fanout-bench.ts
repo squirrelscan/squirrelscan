@@ -65,7 +65,7 @@ import type { SiteData } from "@squirrelscan/rules";
 
 import {
   bindRuleCache,
-  measureSignatureCoverage,
+  createCoverageAccumulator,
   streamPageRules,
 } from "@squirrelscan/audit-engine";
 import { SQLiteStorage } from "@squirrelscan/crawler";
@@ -282,15 +282,16 @@ try {
 
   if (flag("coverage")) {
     const { storage, crawlId } = await openCrawl(corpus.db);
-    const pages: Array<{ url: string; html: string }> = [];
+    // Streamed: each batch is keyed and dropped, so memory is one batch of HTML.
+    const acc = createCoverageAccumulator(SIGNATURE);
     for (let offset = 0; ; offset += BATCH) {
       const batch = await run(storage.getPages(crawlId, { limit: BATCH, offset }));
       if (batch.length === 0) break;
-      for (const p of batch) if (p.html) pages.push({ url: p.url, html: p.html });
+      for (const p of batch) if (p.html) acc.add({ url: p.url, html: p.html });
     }
     await run(storage.close());
     console.log(`db          ${DB}`);
-    const c = measureSignatureCoverage(pages, SIGNATURE);
+    const c = acc.result();
     console.log(`signature   ${c.mode}`);
     console.log(`pages       ${c.pages} (${c.keyed} keyed)`);
     console.log(`clusters    ${c.clusters} (${c.singletons} singletons)`);
