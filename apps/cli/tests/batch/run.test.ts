@@ -453,7 +453,7 @@ describe("runBatch offline guard (signed in)", () => {
       };
     } finally {
       spy.mockRestore();
-      process.exitCode = savedExit;
+      process.exitCode = savedExit ?? 0;
       if (savedKey === undefined) delete process.env.SQUIRRELSCAN_API_KEY;
       else process.env.SQUIRRELSCAN_API_KEY = savedKey;
     }
