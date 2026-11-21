@@ -14,7 +14,7 @@ import type { CloudServicesClient } from "@squirrelscan/cloud-client";
 import type { CloudConfig } from "@squirrelscan/config";
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 import type { CloudPagePayload } from "@squirrelscan/core-contracts";
-import type { CloudResultEnvelope } from "@squirrelscan/rules";
+import type { CloudResultEnvelope, PluginRegistrySnapshot, Rule, RuleContext } from "@squirrelscan/rules";
 import { SQLiteStorage, type ContentStoreAdapter } from "@squirrelscan/crawler";
 import { generateSiteModel, writeCrawlToStorage } from "@squirrelscan/synthetic-site";
 
@@ -27,7 +27,7 @@ import {
   type CloudPrefetchResult,
 } from "../src/cloud-prefetch";
 import { LateCloudResults } from "../src/late-cloud-results";
-import { computeRunContextHash, type RuleCacheStore } from "../src/rule-cache";
+import { computeRunContextHash, lateBoundRuleCache, type RuleCacheStore, type StreamRuleCache } from "../src/rule-cache";
 import { getGoldenBaselineConfig } from "./helpers/golden-baseline";
 import {
   deferred,
@@ -272,6 +272,7 @@ interface Outcome {
   freshPages: number;
   storedEntries: number;
   earlyPages: number;
+  deadlineSkipped: number;
 }
 
 /**
@@ -283,7 +284,18 @@ async function runOnce(
   crawlId: string,
   mode: "serial" | "late",
   client: CloudServicesClient,
-  opts: { cache?: RuleCacheStore; onPageWritten?: (url: string) => void; settleFirst?: boolean } = {},
+  opts: {
+    cache?: RuleCacheStore;
+    onPageWritten?: (url: string) => void | Promise<void>;
+    settleFirst?: boolean;
+    /** Stands in for the prefetch promise the binder is given (e.g. one that rejects). */
+    wrapPrefetch?: (prefetch: Promise<CloudPrefetchResult>) => Promise<CloudPrefetchResult | null>;
+    /** Sees the binder and its accumulator before the pass starts. */
+    onLate?: (late: LateCloudResults, acc: CloudPrefetchAccumulator) => void;
+    batchSize?: number;
+    deadlineAt?: number;
+    plugins?: PluginRegistrySnapshot;
+  } = {},
 ): Promise<Outcome> {
   return withStorage(dbPath, async (storage) => {
     const payloads = payloadsFor(await run(storage.getPages(crawlId)));
@@ -294,12 +306,17 @@ async function runOnce(
     const pageSink = opts.onPageWritten
       ? {
           pageSink: {
-            writePage: (url: string) => {
-              opts.onPageWritten!(url);
-            },
+            writePage: (url: string) => opts.onPageWritten!(url),
           },
         }
       : {};
+    const passOpts = {
+      ...ruleCache,
+      ...pageSink,
+      ...(opts.batchSize !== undefined ? { batchSize: opts.batchSize } : {}),
+      ...(opts.deadlineAt !== undefined ? { deadlineAt: opts.deadlineAt } : {}),
+      ...(opts.plugins ? { plugins: opts.plugins } : {}),
+    };
     let results;
     let late: LateCloudResults | undefined;
     if (mode === "serial") {
@@ -311,17 +328,18 @@ async function runOnce(
           config,
           emptyAssets(),
           { cloudResults: prefetch.store, siteMetadata: prefetch.siteMetadata ?? undefined },
-          { ...ruleCache, ...pageSink },
+          passOpts,
         ),
       );
     } else {
       const acc = new CloudPrefetchAccumulator();
-      late = new LateCloudResults(acc, prefetchCloudData({ ...input, accumulator: acc }));
+      const prefetch = prefetchCloudData({ ...input, accumulator: acc });
+      late = new LateCloudResults(acc, opts.wrapPrefetch ? opts.wrapPrefetch(prefetch) : prefetch);
+      opts.onLate?.(late, acc);
       if (opts.settleFirst) await late.settle();
       results = await run(
         runStreamingRules(storage, crawlId, config, emptyAssets(), undefined, {
-          ...ruleCache,
-          ...pageSink,
+          ...passOpts,
           lateCloudResults: late,
         }),
       );
@@ -338,6 +356,7 @@ async function runOnce(
       freshPages: results.ruleCache.freshPages,
       storedEntries: results.ruleCache.storedEntries,
       earlyPages: late?.earlyPages ?? 0,
+      deadlineSkipped: results.pagesNotEvaluated,
     };
   });
 }
@@ -469,5 +488,405 @@ describe("runStreamingRules with late cloud results (pub#2121)", () => {
     const lateKey = await computeRunContextHash({ ...base, siteMetadata: undefined, cloudResults: late.store });
     expect(lateResult.store).toEqual(serial.store);
     expect(lateKey).toEqual(serialKey);
+  }, TIMEOUT);
+});
+
+// ── Fix round (pub#2185 review) ──────────────────────────────────────────────
+
+/** A promise the test rejects on demand. */
+function rejectable<T>(): { promise: Promise<T>; reject: (error: Error) => void } {
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((_resolve, r) => {
+    reject = r;
+  });
+  return { promise, reject };
+}
+
+/** Holds the render batch carrying the crawl's last payload until `release` resolves. */
+function holdLastRenderBatch(lastUrl: string, release: Promise<void>): CloudServicesClient {
+  return stubCloudClient(async (service, _call, urls) => {
+    if (service === "render" && urls.includes(lastUrl)) await release;
+  });
+}
+
+async function lastPayloadUrl(dbPath: string, crawlId: string): Promise<string> {
+  const payloads = await withStorage(dbPath, async (s) => payloadsFor(await run(s.getPages(crawlId))));
+  return payloads[payloads.length - 1]!.url;
+}
+
+describe("late cloud results: rejection, deadline, cache straddle, plugins (pub#2185)", () => {
+  test(
+    "a prefetch that rejects mid-run writes nothing to the rule cache, does not throw, and the report is produced",
+    async () => {
+      const { dbPath, crawlId } = await buildCrawl("rejected", 24);
+      const lastUrl = await lastPayloadUrl(dbPath, crawlId);
+      const hold = deferred();
+      const failure = rejectable<CloudPrefetchResult>();
+      const cache = memoryCacheStore();
+      let late: LateCloudResults | undefined;
+      let rejectedAfterEarlyPage = false;
+      const outcome = await runOnce(dbPath, crawlId, "late", holdLastRenderBatch(lastUrl, hold.promise), {
+        cache: cache.store,
+        batchSize: 4,
+        // The binder sees the prefetch reject; the prefetch itself keeps running.
+        wrapPrefetch: (prefetch) => Promise.race([prefetch, failure.promise]),
+        onLate: (l) => {
+          late = l;
+        },
+        onPageWritten: async () => {
+          if (rejectedAfterEarlyPage) return;
+          rejectedAfterEarlyPage = true;
+          // A page has already run on early envelopes and the real site profile. Now the
+          // prefetch rejects, and the later stream batches are keyed after that.
+          failure.reject(new Error("prefetch blew up"));
+          await late!.settle();
+          hold.resolve();
+        },
+      });
+      expect(rejectedAfterEarlyPage).toBe(true);
+      expect(late!.failed).toBe(true);
+      expect(late!.settled).toBe(true);
+      // No key describes this run's inputs, so nothing is stored under one.
+      expect(outcome.storedEntries).toBe(0);
+      expect(outcome.replayedPages).toBe(0);
+      expect(cache.rows.size).toBe(0);
+      // The report is still produced.
+      expect(outcome.serialized.length).toBeGreaterThan(100);
+      expect(outcome.freshPages).toBeGreaterThan(4);
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "deadlineAt expiring during a cloudReady wait ends the page pass and leaves no waiter parked",
+    async () => {
+      const { dbPath, crawlId } = await buildCrawl("deadline", 12);
+      const hold = deferred();
+      const client = stubCloudClient(async (service) => {
+        if (service === "render") await hold.promise;
+      });
+      const deadlineMs = 2_500;
+      const deadlineAt = Date.now() + deadlineMs;
+      let acc: CloudPrefetchAccumulator | undefined;
+      let parkedBeforeDeadline = 0;
+      let parkedAfterDeadline = -1;
+      const sampler = setInterval(() => {
+        if (acc && Date.now() < deadlineAt) parkedBeforeDeadline = Math.max(parkedBeforeDeadline, acc.pendingChangeWaiters);
+      }, 10);
+      // After the deadline (the page pass has given up) sample, then let the prefetch finish
+      // so the site pass, which reads the settled store, can run.
+      const after = setTimeout(() => {
+        parkedAfterDeadline = acc?.pendingChangeWaiters ?? -1;
+        hold.resolve();
+      }, deadlineMs + 400);
+      try {
+        const outcome = await runOnce(dbPath, crawlId, "late", client, {
+          deadlineAt,
+          onLate: (_late, a) => {
+            acc = a;
+          },
+        });
+        // The page was waiting on its cloud results when the deadline came.
+        expect(parkedBeforeDeadline).toBe(1);
+        expect(parkedAfterDeadline).toBe(0);
+        expect(outcome.deadlineSkipped).toBeGreaterThan(0);
+        expect(outcome.earlyPages).toBe(0);
+      } finally {
+        clearInterval(sampler);
+        clearTimeout(after);
+        hold.resolve();
+      }
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "rule cache: stream batches straddling settle get null keys, then the serial key, in one pass",
+    async () => {
+      const { dbPath, crawlId } = await buildCrawl("straddle", 24);
+      const lastUrl = await lastPayloadUrl(dbPath, crawlId);
+      const cache = memoryCacheStore();
+      const cold = await runOnce(dbPath, crawlId, "serial", stubCloudClient(), { cache: cache.store, batchSize: 4 });
+      expect(cold.storedEntries).toBeGreaterThan(10);
+      const warm = await runOnce(dbPath, crawlId, "serial", stubCloudClient(), { cache: cache.store, batchSize: 4 });
+      expect(warm.replayedPages).toBe(cold.storedEntries);
+      const serialRows = new Set(cache.rows.keys());
+
+      const hold = deferred();
+      let late: LateCloudResults | undefined;
+      let settledAt = -1;
+      let writes = 0;
+      const straddle = await runOnce(dbPath, crawlId, "late", holdLastRenderBatch(lastUrl, hold.promise), {
+        cache: cache.store,
+        batchSize: 4,
+        onLate: (l) => {
+          late = l;
+        },
+        onPageWritten: async () => {
+          writes++;
+          if (settledAt >= 0) return;
+          // Stream batch 0 was keyed with the prefetch still out; settle before batch 1 is keyed.
+          expect(late!.settled).toBe(false);
+          hold.resolve();
+          await late!.settle();
+          settledAt = writes;
+        },
+      });
+      expect(settledAt).toBe(1);
+      // Batch 0 ran fresh (null keys: no read, no write); the batches after it were keyed with
+      // the serial key and replayed its entries (a page whose template representative ran fresh
+      // in batch 0 runs fresh too, #296), and no new key was written.
+      expect(straddle.freshPages).toBeGreaterThanOrEqual(4);
+      expect(straddle.freshPages).toBeLessThan(cold.freshPages);
+      expect(straddle.replayedPages).toBeGreaterThan(0);
+      expect(straddle.replayedPages + straddle.freshPages).toBe(cold.freshPages);
+      // Every page after batch 0 stored (or carried forward) under the serial key; only the
+      // four null-keyed pages of batch 0 stored nothing.
+      expect(straddle.storedEntries).toBe(cold.storedEntries - 4);
+      expect(straddle.serialized).toBe(cold.serialized);
+      expect(new Set(cache.rows.keys())).toEqual(serialRows);
+    },
+    TIMEOUT,
+  );
+
+  test("lateBoundRuleCache: one key loop straddling settle gives null keys, then the bound cache's keys", async () => {
+    let ready = false;
+    let binds = 0;
+    const loaded: string[][] = [];
+    const inner = {
+      keyFor: async (page: { url: string }) => `k:${page.url}`,
+      load: async (keys: string[]) => {
+        loaded.push(keys);
+        return new Map();
+      },
+      putFresh() {},
+      carryForward() {},
+    } as unknown as StreamRuleCache;
+    const cache = lateBoundRuleCache(
+      () => ready,
+      async () => {
+        binds++;
+        return inner;
+      },
+    );
+    const page = (url: string) => ({ url }) as unknown as Parameters<StreamRuleCache["keyFor"]>[0];
+    const keys: Array<string | null> = [];
+    for (const url of ["a", "b", "c", "d"]) {
+      if (url === "c") ready = true; // the prefetch settles between b and c
+      keys.push(await cache.keyFor(page(url), undefined));
+    }
+    expect(keys).toEqual([null, null, "k:c", "k:d"]);
+    expect(binds).toBe(1);
+    await cache.load(["k:c", "k:d"]);
+    expect(loaded).toEqual([["k:c", "k:d"]]);
+  });
+
+  test(
+    "a plugin rule pack waits for the prefetch to settle before any page rule runs",
+    async () => {
+      const { dbPath, crawlId } = await buildCrawl("plugin", 12);
+      const lastUrl = await lastPayloadUrl(dbPath, crawlId);
+      const hold = deferred();
+      const release = setTimeout(() => hold.resolve(), 300);
+      let late: LateCloudResults | undefined;
+      const settledWhenRun: boolean[] = [];
+      const probe: Rule = {
+        meta: {
+          id: "acme/cloud-probe",
+          name: "acme/cloud-probe",
+          description: "plugin rule",
+          category: "content",
+          scope: "page",
+          severity: "warning",
+          weight: 1,
+          verdictScope: "page",
+        } as Rule["meta"],
+        run: (_ctx: RuleContext) => {
+          settledWhenRun.push(late!.settled);
+          return { checks: [{ name: "probe", status: "pass", message: "ok" }] };
+        },
+      };
+      try {
+        await runOnce(dbPath, crawlId, "late", holdLastRenderBatch(lastUrl, hold.promise), {
+          plugins: { rules: [probe], listeners: new Map() },
+          onLate: (l) => {
+            late = l;
+          },
+        });
+      } finally {
+        clearTimeout(release);
+        hold.resolve();
+      }
+      expect(settledWhenRun.length).toBeGreaterThan(0);
+      expect(settledWhenRun.every(Boolean)).toBe(true);
+      expect(late!.earlyPages).toBe(0);
+    },
+    TIMEOUT,
+  );
+});
+
+describe("waiters wake on every early exit of the prefetch (pub#2185)", () => {
+  /** Park a raw `changed()` waiter and a binder page waiter, then check both wake. */
+  async function expectWaitersWake(
+    acc: CloudPrefetchAccumulator,
+    done: Promise<CloudPrefetchResult>,
+    release: () => void,
+  ): Promise<LateCloudResults> {
+    const late = new LateCloudResults(acc, done);
+    let rawWoke = false;
+    const raw = acc.changed().then(() => {
+      rawWoke = true;
+    });
+    const page = late.pageReady(pages[0]!.url);
+    expect(page).not.toBeNull();
+    expect(acc.pendingChangeWaiters).toBeGreaterThanOrEqual(2);
+    expect(rawWoke).toBe(false);
+    // The accumulator itself wakes its readers when it settles, before the awaited
+    // prefetch resolves, not only the binder's drain after it.
+    let rawWokeByResolve = false;
+    const resolved = done.then(() => {
+      rawWokeByResolve = rawWoke;
+    });
+    release();
+    await raw;
+    await page;
+    await resolved;
+    expect(rawWoke).toBe(true);
+    expect(rawWokeByResolve).toBe(true);
+    expect(acc.pendingChangeWaiters).toBe(0);
+    return late;
+  }
+
+  test("Stage-0 failure wakes the waiters and decides the site profile as absent", async () => {
+    const hold = deferred();
+    const base = stubCloudClient();
+    const client = {
+      ...base,
+      siteMetadata: async () => {
+        await hold.promise;
+        throw new Error("metadata down");
+      },
+    } as unknown as CloudServicesClient;
+    const acc = new CloudPrefetchAccumulator();
+    const renderHold = deferred();
+    const input: Omit<CloudPrefetchInput, "accumulator"> = {
+      ...renderInput(client),
+      client: {
+        ...client,
+        render: async (req: { urls: string[] }) => {
+          await renderHold.promise;
+          return base.render(req as never);
+        },
+      } as unknown as CloudServicesClient,
+      rules: [
+        { id: "ai/site-metadata", cloud: { service: "site-metadata", unit: "site", creditFeature: "site_metadata" } },
+        ...RENDER_RULES,
+      ],
+      metadataPages: [{ url: "https://example.com/", title: "Home" }],
+    };
+    const done = prefetchCloudData({ ...input, accumulator: acc });
+    await until(() => acc.planned !== null && acc.preflight !== null, "preflight");
+    const late = new LateCloudResults(acc, done);
+    const meta = late.siteMetadata();
+    let rawWoke = false;
+    const raw = acc.changed().then(() => {
+      rawWoke = true;
+    });
+    expect(acc.pendingChangeWaiters).toBeGreaterThanOrEqual(2);
+    hold.resolve();
+    await raw;
+    expect(rawWoke).toBe(true);
+    // Decided before any render batch returns: the profile is absent, as the result will say.
+    expect(await meta).toBeUndefined();
+    expect(acc.siteMetadataDecided).toBe(true);
+    expect(late.settled).toBe(false);
+    renderHold.resolve();
+    const result = await done;
+    expect(result.siteMetadata).toBeNull();
+    expect(acc.pendingChangeWaiters).toBe(0);
+  }, TIMEOUT);
+
+  test("skipAll (preflight failure) wakes the waiters", async () => {
+    const hold = deferred();
+    const client = {
+      ...stubCloudClient(),
+      getBalance: async () => {
+        await hold.promise;
+        throw new Error("network down");
+      },
+    } as unknown as CloudServicesClient;
+    const acc = new CloudPrefetchAccumulator();
+    const done = prefetchCloudData({ ...renderInput(client), accumulator: acc });
+    const late = await expectWaitersWake(acc, done, () => hold.resolve());
+    const result = await done;
+    expect(result.store.get("render")?.get(pages[0]!.url)?.status).toBe("skipped");
+    expect(late.store.get("render")?.get(pages[0]!.url)).toEqual(result.store.get("render")?.get(pages[0]!.url));
+  }, TIMEOUT);
+
+  test("skipAll (cloud disabled) wakes the waiters", async () => {
+    const acc = new CloudPrefetchAccumulator();
+    const done = prefetchCloudData({
+      ...renderInput(stubCloudClient()),
+      config: { ...renderConfig, enabled: false },
+      accumulator: acc,
+    });
+    await expectWaitersWake(acc, done, () => {});
+    expect((await done).store.get("render")?.get(pages[0]!.url)?.status).toBe("skipped");
+  }, TIMEOUT);
+
+  test("emptyResult (no cloud rules) wakes the waiters", async () => {
+    const acc = new CloudPrefetchAccumulator();
+    const done = prefetchCloudData({ ...renderInput(stubCloudClient()), rules: [], accumulator: acc });
+    await expectWaitersWake(acc, done, () => {});
+    expect((await done).store.size).toBe(0);
+  }, TIMEOUT);
+});
+
+describe("a url listed in two batches (pub#2185)", () => {
+  test("is final only once both batches returned, and carries the later batch's envelope", async () => {
+    const dup = pages[0]!.url;
+    const dupPages = [pages[0]!, pages[1]!, { ...pages[0]!, textExcerpt: "again" }];
+    const hold = deferred();
+    const jobs = new Map<string, string[]>();
+    let calls = 0;
+    const client = {
+      ...stubCloudClient(),
+      render: async (req: { urls: string[] }) => {
+        const call = calls++;
+        if (call === 2) await hold.promise;
+        const jobId = `job-${call}`;
+        jobs.set(jobId, req.urls);
+        return { jobId, status: "queued" };
+      },
+      renderResult: async (jobId: string) => ({
+        jobId,
+        status: "done",
+        results: (jobs.get(jobId) ?? []).map((url) => ({
+          url,
+          status: 200,
+          html: `<html><body><p>${jobId}</p></body></html>`,
+        })),
+      }),
+    } as unknown as CloudServicesClient;
+    const acc = new CloudPrefetchAccumulator();
+    const done = prefetchCloudData({ ...renderInput(client), pages: dupPages, accumulator: acc });
+    const late = new LateCloudResults(acc, done);
+
+    await until(() => acc.inFlight?.outcomes[0] !== undefined && acc.inFlight?.outcomes[1] !== undefined, "batches 0, 1");
+    expect(acc.inFlight?.batchesOf.get(dup)).toEqual([0, 2]);
+    // Batch 0 returned, but the url's second batch has not: not final.
+    expect(acc.pageEnvelopes(dup)).toBeNull();
+    const wait = late.pageReady(dup);
+    expect(wait).not.toBeNull();
+    expect(late.pageReady(pages[1]!.url)).toBeNull();
+
+    hold.resolve();
+    await wait;
+    const fromView = late.store.get("render")?.get(dup);
+    const result = await done;
+    // The later batch wins, in the view as in the batch-order merge.
+    expect(JSON.stringify(fromView)).toContain("job-2");
+    expect(fromView).toEqual(result.store.get("render")!.get(dup)!);
+    expect(late.store.get("render")?.get(dup)).toEqual(result.store.get("render")!.get(dup)!);
   }, TIMEOUT);
 });

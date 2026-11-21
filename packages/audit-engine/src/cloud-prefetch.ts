@@ -423,11 +423,29 @@ export class CloudPrefetchAccumulator {
    * Stage 0 may have moved on (a page batch landed, a service finished, Stage 0
    * decided, the run settled or was abandoned). Already settled: resolves now.
    * For a reader that starts rules on a page as soon as its results are final
-   * (pub#2121); it changes nothing about what the prefetch does.
+   * (pub#2121); it changes nothing about what the prefetch does. Aborting
+   * `signal` resolves the promise and removes the waiter.
    */
-  changed(): Promise<void> {
-    if (this.settled) return Promise.resolve();
-    return new Promise<void>((resolve) => this.changeWaiters.push(resolve));
+  changed(signal?: AbortSignal): Promise<void> {
+    if (this.settled || signal?.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const onAbort = () => {
+        // A reader that stopped waiting (its deadline won) leaves no waiter behind.
+        this.changeWaiters = this.changeWaiters.filter((w) => w !== wake);
+        resolve();
+      };
+      const wake = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      this.changeWaiters.push(wake);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  /** @internal Readers parked in {@link changed}, for tests. */
+  get pendingChangeWaiters(): number {
+    return this.changeWaiters.length;
   }
 
   /** @internal Wake every {@link changed} waiter. */
