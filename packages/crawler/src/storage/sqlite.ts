@@ -163,7 +163,7 @@ interface UnfinishedCrawlRow extends LeaseCrawlRow {
   last_activity: number;
 }
 
-export const SCHEMA_VERSION = 48;
+export const SCHEMA_VERSION = 49;
 
 /**
  * Most node keys one page's `entity_map_pages.refs` row stores (#2135). A relative
@@ -184,6 +184,23 @@ function decodeStoredRefs(raw: string): { keys: string[]; total: number } {
     return { keys, total: typeof total === "number" ? total : keys.length };
   }
   throw new Error("refs is not an array");
+}
+
+/** Decode a `sitemap_urls` row's image columns (v49, pub#2093); absent keys when it declared none. */
+function sitemapUrlImages(row: Record<string, unknown>): { images?: string[]; imagesTruncated?: true } {
+  let images: string[] = [];
+  if (typeof row.images === "string") {
+    try {
+      const parsed: unknown = JSON.parse(row.images);
+      if (Array.isArray(parsed)) images = parsed.filter((v): v is string => typeof v === "string");
+    } catch {
+      // A corrupt cell reads as no image entries, like a pre-v49 row.
+    }
+  }
+  return {
+    ...(images.length > 0 ? { images } : {}),
+    ...(row.images_truncated ? { imagesTruncated: true as const } : {}),
+  };
 }
 
 // Migrations to run when upgrading from older versions
@@ -719,6 +736,13 @@ const MIGRATIONS: Record<number, string[]> = {
     "ALTER TABLE markdown_response ADD COLUMN strict_negotiation_answered INTEGER",
     "ALTER TABLE markdown_response ADD COLUMN md_variant_answered INTEGER",
   ],
+  // Version 49: the `<image:loc>` entries of each sitemap URL (pub#2093), JSON array, and whether the
+  // per-URL cap cut them. ADDITIVE, nullable (a row written before reads as "no image entries"); also
+  // in the sitemap_urls self-heal list below. Local sqlite only: NOT a prod migration.
+  49: [
+    "ALTER TABLE sitemap_urls ADD COLUMN images TEXT",
+    "ALTER TABLE sitemap_urls ADD COLUMN images_truncated INTEGER",
+  ],
 };
 
 // Every `pages` column but the two that hold a page's body, for
@@ -806,6 +830,14 @@ const LINKS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
   { name: "waf_provider", type: "TEXT" },
   { name: "rate_limited", type: "INTEGER" },
   { name: "unverified_reason", type: "TEXT" },
+];
+
+// Same guard for `sitemap_urls`. Every addSitemapUrls INSERT names the columns migration 49 added
+// (pub#2093), so a DB stamped past 49 by a build numbering its own migration 49 would fail the
+// crawl's sitemap write.
+const SITEMAP_URLS_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
+  { name: "images", type: "TEXT" },
+  { name: "images_truncated", type: "INTEGER" },
 ];
 
 const SITEMAP_URL_STATUSES_ALTER_COLUMNS: ReadonlyArray<{ name: string; type: string }> = [
@@ -1185,6 +1217,8 @@ CREATE TABLE IF NOT EXISTS sitemap_urls (
   lastmod TEXT,
   changefreq TEXT,
   priority REAL,
+  images TEXT,
+  images_truncated INTEGER,
   FOREIGN KEY (crawl_id) REFERENCES crawls(id)
 );
 
@@ -1721,6 +1755,7 @@ export class SQLiteStorage implements CrawlStorage {
     this.reconcileColumns("sitemaps", SITEMAPS_ALTER_COLUMNS);
     this.reconcileColumns("robots_txt", ROBOTS_TXT_ALTER_COLUMNS);
     this.reconcileColumns("links", LINKS_ALTER_COLUMNS);
+    this.reconcileColumns("sitemap_urls", SITEMAP_URLS_ALTER_COLUMNS);
     this.reconcileColumns("sitemap_url_statuses", SITEMAP_URL_STATUSES_ALTER_COLUMNS);
     this.reconcileColumns("crawls", CRAWLS_ALTER_COLUMNS);
     this.reconcileColumns("entity_edges", ENTITY_EDGES_ALTER_COLUMNS);
@@ -1774,6 +1809,7 @@ export class SQLiteStorage implements CrawlStorage {
     table:
       | "pages"
       | "sitemaps"
+      | "sitemap_urls"
       | "robots_txt"
       | "links"
       | "sitemap_url_statuses"
@@ -3999,8 +4035,8 @@ export class SQLiteStorage implements CrawlStorage {
       try: () => {
         const db = this.getDb();
         const stmt = db.prepare(`
-          INSERT INTO sitemap_urls (crawl_id, sitemap_url, loc, lastmod, changefreq, priority)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO sitemap_urls (crawl_id, sitemap_url, loc, lastmod, changefreq, priority, images, images_truncated)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         const transaction = db.transaction(() => {
@@ -4011,7 +4047,9 @@ export class SQLiteStorage implements CrawlStorage {
               url.loc,
               url.lastmod ?? null,
               url.changefreq ?? null,
-              url.priority ?? null
+              url.priority ?? null,
+              url.images && url.images.length > 0 ? JSON.stringify(url.images) : null,
+              url.imagesTruncated ? 1 : null
             );
           }
         });
@@ -4038,6 +4076,8 @@ export class SQLiteStorage implements CrawlStorage {
           lastmod: (row.lastmod as string | null) ?? undefined,
           changefreq: (row.changefreq as string | null) ?? undefined,
           priority: (row.priority as number | null) ?? undefined,
+          // NULL on rows written before v49, or when the entry declared none: no image entries.
+          ...sitemapUrlImages(row),
         }));
       },
       catch: (e) => StorageError.read(e),

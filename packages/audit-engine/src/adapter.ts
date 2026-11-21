@@ -75,6 +75,8 @@ import type {
   RenderedRequest,
   ResourceSizeData,
   ScriptContentData,
+  SitemapUrl,
+  SitemapUrlRecord,
   SitemapUrlStatusData,
   SiteQuery,
   UnverifiedReason,
@@ -201,6 +203,21 @@ import {
   releaseSiteContextDocuments,
   type SiteContextPage,
 } from "./site-fetch";
+
+/**
+ * A stored sitemap URL as the rules read it. Every field the record carries, image entries included
+ * (pub#2093): a field-by-field copy here once dropped the image entries before any rule saw them.
+ */
+function sitemapUrlFromRecord(u: SitemapUrlRecord): SitemapUrl {
+  return {
+    loc: u.loc,
+    lastmod: u.lastmod,
+    changefreq: u.changefreq,
+    priority: u.priority,
+    ...(u.images && u.images.length > 0 ? { images: u.images } : {}),
+    ...(u.imagesTruncated ? { imagesTruncated: true } : {}),
+  };
+}
 export {
   buildHeadersMap,
   buildSiteContext,
@@ -818,12 +835,7 @@ export function fetchAssetsFromOccurrences(
 
     const sitemapUrlsMap = new Map<
       string,
-      Array<{
-        loc: string;
-        lastmod?: string;
-        changefreq?: string;
-        priority?: number;
-      }>
+      SitemapUrl[]
     >();
     for (const sitemap of sitemaps) {
       const urls = yield* storage
@@ -831,12 +843,7 @@ export function fetchAssetsFromOccurrences(
         .pipe(Effect.catchAll(() => Effect.succeed([])));
       sitemapUrlsMap.set(
         sitemap.url,
-        urls.map((u) => ({
-          loc: u.loc,
-          lastmod: u.lastmod,
-          changefreq: u.changefreq,
-          priority: u.priority,
-        })),
+        urls.map(sitemapUrlFromRecord),
       );
     }
 
@@ -2007,12 +2014,7 @@ export function runRulesOnStorage(
     // Load sitemap URLs for each sitemap
     const sitemapUrlsMap = new Map<
       string,
-      Array<{
-        loc: string;
-        lastmod?: string;
-        changefreq?: string;
-        priority?: number;
-      }>
+      SitemapUrl[]
     >();
     for (const sitemap of sitemaps) {
       const urls = yield* storage
@@ -2020,12 +2022,7 @@ export function runRulesOnStorage(
         .pipe(Effect.catchAll(() => Effect.succeed([])));
       sitemapUrlsMap.set(
         sitemap.url,
-        urls.map((u) => ({
-          loc: u.loc,
-          lastmod: u.lastmod,
-          changefreq: u.changefreq,
-          priority: u.priority,
-        })),
+        urls.map(sitemapUrlFromRecord),
       );
     }
 
@@ -2961,7 +2958,7 @@ function buildStreamingSiteData(
 
     const sitemapUrlsMap = new Map<
       string,
-      Array<{ loc: string; lastmod?: string; changefreq?: string; priority?: number }>
+      SitemapUrl[]
     >();
     for (const sitemap of sitemaps) {
       const urls = yield* storage
@@ -2969,12 +2966,7 @@ function buildStreamingSiteData(
         .pipe(Effect.catchAll(() => Effect.succeed([])));
       sitemapUrlsMap.set(
         sitemap.url,
-        urls.map((u) => ({
-          loc: u.loc,
-          lastmod: u.lastmod,
-          changefreq: u.changefreq,
-          priority: u.priority,
-        })),
+        urls.map(sitemapUrlFromRecord),
       );
     }
 
