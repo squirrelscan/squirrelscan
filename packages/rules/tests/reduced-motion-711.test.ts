@@ -413,6 +413,28 @@ describe("a11y/reduced-motion", () => {
       expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
     });
 
+    test("the animate.css 4.1.1 sheet alone passes: its reduce block covers .animate__animated", () => {
+      // Excerpt of animate.min.css 4.1.1, including its own reduced-motion block.
+      const css =
+        ".animate__animated{animation-duration:1s;animation-fill-mode:both}" +
+        ".animate__animated.animate__infinite{animation-iteration-count:infinite}" +
+        "@media print,(prefers-reduced-motion:reduce){.animate__animated{animation-duration:1ms!important;" +
+        "transition-duration:1ms!important;animation-iteration-count:1!important}.animate__animated[class*=Out]{opacity:0}}";
+      const href = "https://cdn.example.com/animate.css/4.1.1/animate.min.css";
+      const s = sheet({ url: href, ...stylesheetMotionOf(css) });
+      const html = page(`<link rel="stylesheet" href="${href}">`, `<h1 class="animate__animated animate__bounce">hi</h1>`);
+      const checks = run(html, { stylesheetMotion: [s] });
+      expect(checks).toHaveLength(0);
+      expect(runAll(html, { stylesheetMotion: [s] }).map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion:pass"]);
+    });
+
+    test("an inline [data-aos] reduce block handles AOS, not the page's other motion", () => {
+      const head = `<style>@media (prefers-reduced-motion: reduce){[data-aos]{transition:none !important;transform:none !important}}</style>`;
+      expect(run(page(head, `<div data-aos="fade-up">hi</div>`))).toHaveLength(0);
+      const checks = run(page(head, `<div data-aos="fade-up">hi</div><marquee>hi</marquee>`));
+      expect(checks.map((c) => `${c.name}:${c.status}`)).toEqual(["reduced-motion-marquee:warn"]);
+    });
+
     test("stylesheetMotionOf reports covered selectors and the global flag", () => {
       const scoped = stylesheetMotionOf("@media (prefers-reduced-motion: reduce){.A , .b{animation:none} .c{color:red}}");
       expect(scoped.reducedMotionSelectors).toEqual([".a", ".b"]);

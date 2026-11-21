@@ -187,6 +187,16 @@ export function staticSelector(sel: string): string {
   return out;
 }
 
+/**
+ * Selectors a motion library's own reduced-motion block uses for the motion it starts. A `reduce`
+ * rule on one of them (AOS's `[data-aos]`, animate.css 4's `.animate__animated`, 3's `.animated`)
+ * handles that library, though not the rest of the page.
+ */
+const LIBRARY_REDUCED_MOTION_SELECTORS: Readonly<Record<string, readonly string[]>> = {
+  aos: ["[data-aos]"],
+  "animate-wow": [".animate__animated", ".animated"],
+};
+
 /** Selectors that match every HTML page, checked without a `querySelector` call. */
 const ALWAYS_MATCHES = new Set(["html", ":root", "body", "*"]);
 
@@ -482,6 +492,16 @@ export const reducedMotionRule: Rule = {
     if (cssInfinite) add("css-infinite-animation", "Looping CSS animation", false, cssSource || "infinite animation");
     if (cssSmooth) add("css-smooth-scroll", "Smooth scrolling (scroll-behavior: smooth)", false, cssSource || "scroll-behavior");
 
+    // A library whose own selector a reduced-motion block names is handled; the rest of the page is not.
+    let libraryHandled = false;
+    for (let i = sources.length - 1; i >= 0; i--) {
+      const selectors = LIBRARY_REDUCED_MOTION_SELECTORS[sources[i]!.key];
+      if (selectors?.some((sel) => covered.has(sel))) {
+        sources.splice(i, 1);
+        libraryHandled = true;
+      }
+    }
+
     if (sources.length === 0 || handled) {
       if (unreadSheets > 0) {
         return {
@@ -501,7 +521,8 @@ export const reducedMotionRule: Rule = {
           {
             name: "reduced-motion",
             status: "pass",
-            message: sources.length === 0 ? "No motion that needs reduced-motion handling" : "Reduced-motion handling found",
+            message:
+              sources.length === 0 && !libraryHandled ? "No motion that needs reduced-motion handling" : "Reduced-motion handling found",
           },
         ],
       };
