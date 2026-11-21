@@ -72,6 +72,7 @@ squirrel audit --urls-file <file> --out-dir <dir> [options]
 | `--no-classifier` | | Do not run the bundled page classifier: link sections in findings come from page markup only. Same as `[classifier] enabled = false`. See [Page Classifier](/configuration/classifier) | on |
 | `--header` | `-H` | Custom HTTP header on every crawl request, `Name: Value` (repeatable). Merges over `[crawler] headers`; values are redacted in output. See [Web Bot Auth](/guides/web-bot-auth) | none |
 | `--fail-on` | | Exit `2` when a threshold trips, for CI gating (repeatable / comma-separated) | none |
+| `--compare-url` | | With `--target-url`: also fetch this URL (repeatable) as the comparison set, so site rules that judge only the pages fetched can run. See [Comparison set](#comparison-set) | none |
 | `--target-url` | | Audit exactly this URL and nothing else (repeatable), absolute or a path on the audited site such as `/pricing`. No sitemap, probes or link following. See [Targeted audits](#targeted-audits) | none |
 | `--rule-include` | | Only run these rule categories or rules, e.g. `ax,perf`, `core/meta-title` or a rule group such as `group:security` (repeatable / comma-separated). Replaces `[rules] enable` for this run | none |
 | `--rule-exclude` | | Skip these rule categories or rules, e.g. `images,social` or `group:performance` (repeatable / comma-separated). Adds to `[rules] disable` for this run | none |
@@ -685,11 +686,16 @@ Use `--target-url` to audit exactly the pages you name, for a quick re-check of 
 squirrel audit https://nutshop.squirrelscan.com --target-url /shop --target-url https://nutshop.squirrelscan.com/blog/raw-vs-roasted-nuts
 ```
 
-A targeted audit fetches `robots.txt` (and honours it) and then those URLs, and no other page: no sitemap, no discovery probes, no link following, and no request for the start URL itself unless you list it. Links on the listed pages are not status-checked: internal and external link checks are off for a targeted audit, because the link rules judge the whole site and skip, so no request goes to a link target. The report's audit level records this (`targeted: true`, external link checks off), and `--external-links` on a targeted audit prints a note that it is ignored. Pass the site's final host as the start URL, because its redirect is not resolved, and the first listed URL stands in for it in the reachability check. Each listed URL goes through the same scope, robots and length checks as any page, and `--max-pages` caps the list. A list is cut at 1,000 URLs: the rest are counted in `overLimit` and not audited.
+A targeted audit fetches `robots.txt` (and honours it) and then those URLs, and no other page: no sitemap, no discovery probes, no link following, and no request for the start URL itself unless you list it. The links on the listed pages are status-checked as in any audit, and only those: each link target is checked once, internal ones with a status-only request (the [`[internal_links]`](/configuration/external-links#internal-links) check, its HEAD control sent to a listed page) and external ones when external link checks are on for the run (the level's setting, or `--external-links` and `--no-external-links`). A link that only appears on a page you did not list is never requested. The report's audit level records the run as targeted (`targeted: true`). Pass the site's final host as the start URL, because its redirect is not resolved, and the first listed URL stands in for it in the reachability check. Each listed URL goes through the same scope, robots and length checks as any page, and `--max-pages` caps the list. A list is cut at 1,000 URLs: the rest are counted in `overLimit` and not audited.
 
 How a targeted audit differs from a full one:
 
-- **Whole-site rules do not run.** Rules that judge the whole site (inbound links, sitemap coverage, discovery probes, security headers read from the entry page) are skipped with the reason `targeted-run`: they report **Not checked**, never a pass or a finding. `crawl/robots-txt` still runs, because the file is always fetched. A finding from an earlier audit that depends on a skipped rule is not resolved by the targeted run.
+- **Site rules run when the listed pages are enough to judge them.** These run on a targeted audit, over the listed pages only:
+  - `crawl/robots-txt`, because the file is always fetched.
+  - [`links/broken-links`](/rules/links/broken-links), [`links/broken-anchors`](/rules/links/broken-anchors) and [`links/broken-external-links`](/rules/links/broken-external-links): broken links and anchors on the listed pages. A link target that was not checked (over the check's limit, or link checks turned off) is reported as not checked, never as fine, and an anchor into a page you did not list is not judged.
+  - [`security/leaked-secrets`](/rules/security/leaked-secrets): the listed pages and the scripts they load.
+  - [`security/csp`](/rules/security/csp), [`security/hsts`](/rules/security/hsts) and [`security/x-frame-options`](/rules/security/x-frame-options): each listed page that answered is judged on its own response headers, and each finding names the pages it was read from. A full audit reads them from the entry page.
+- **Rules that need the whole site do not run, unless they have a [comparison set](#comparison-set).** Every other site rule (orphan pages, inbound links, sitemap coverage, duplicate content and titles across pages, discovery probes) is skipped with the reason `targeted-run`: it reports **Not checked**, never a pass or a finding. A finding from an earlier audit that depends on a skipped rule is not resolved by the targeted run, and [`squirrel report --diff`](/cli/report#what-counts-as-fixed) never counts a site finding that names no page (such as a header the full audit read from the home page) as fixed by a targeted run.
 - **It is not published on its own.** A signed-in targeted audit does not auto-publish, because a report of a few pages would replace the site's latest audit (and the baseline a CI gate compares against). Pass `--publish` to publish it anyway. The outcome's `publish.reason` is `targeted`.
 - **The score covers what ran.** Without smart audits, the health score is computed from the listed pages and the rules that ran, so it is not comparable with a full audit's score. With [smart audits](/configuration#smart-audits) on, the run is merged over the union of the pages known from earlier audits, so the score covers that union: the listed pages are fresh, the rest keep their earlier findings, carried and marked as such, and nothing is resolved by a rule that did not run.
 - **Every URL is accounted for.** The report's `scanScope.targeted` says how many URLs were requested and audited, and lists each one that was not, with its reason, up to 100: `robots_disallowed`, `over_max_pages` (past the `--max-pages` cap), `url_too_long`, `invalid_url`, `email_protection` (a Cloudflare email-protection link is an address, not a page), `failed`, a scope reason for a URL on another site, or `redirected`. A URL over 2,048 characters is stored cut short with `url_too_long`.
@@ -707,7 +713,27 @@ How a targeted audit differs from a full one:
 }
 ```
 
-The JSON report carries the same as `meta.targeted` (schema 1.16), and the console scan line adds `Targeted run: 2 of 3 URLs given were audited; site-wide rules were not run.`
+The JSON report carries the same as `meta.targeted` (schema 1.16), and the console scan line adds `Targeted run: 2 of 3 URLs given were audited; rules that need the whole site were not run.`
+
+
+#### Comparison set
+
+A site rule such as `content/duplicate-description` compares pages with each other, so on its own a targeted audit has nothing to compare. Add `--compare-url` (repeatable, same URL forms as `--target-url`) to hand it the other pages:
+
+```bash
+squirrel audit https://nutshop.squirrelscan.com --target-url /shop --compare-url /shop/almonds --compare-url /shop/cashews
+```
+
+Comparison URLs are fetched once each, like targets, through the same scope, robots and length checks, and count against `--max-pages` together with the targets (they appear in `scanScope.targeted` as requested and audited URLs, and page rules run on them). `--compare-url` without `--target-url` is an error.
+
+Two rules declare a bounded comparison set (`comparisonSet: "listed-pages"`: their verdict depends only on the pages fetched) and run over the targets plus the comparison set:
+
+- `content/duplicate-description`
+- `crawl/schema-noindex-conflict`
+
+Every other site rule judges the whole site or a probe a targeted audit never sends, so it stays **Not checked** with the reason `targeted-run`, never a pass. A rule with a comparison set but no `--compare-url` is Not checked too. To verify a fix for a duplicate cluster, pass every URL of the cluster from the earlier report as a `--compare-url`.
+
+A finding from an earlier audit counts as fixed only when its pages were fetched again: `squirrel report diff` lists a finding whose pages were not among the targets and the comparison set as not compared, never as fixed.
 
 ### Summary output
 

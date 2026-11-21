@@ -3384,6 +3384,9 @@ export function createCrawler(
             allowedDomains: config.allowedDomains,
             ...(config.noCache ? { noCache: true } : {}),
             ...(isTargetedRun() ? { targetUrls: config.targetUrls!.slice(0, MAX_TARGET_URLS) } : {}),
+            ...(isTargetedRun() && (config.compareUrls?.length ?? 0) > 0
+              ? { compareUrls: config.compareUrls!.slice(0, MAX_TARGET_URLS) }
+              : {}),
           },
           stats: {
             pagesTotal: 0,
@@ -3456,12 +3459,15 @@ export function createCrawler(
         // for. No discovery probes, no sitemaps, no links; only the listed URLs, through the same scope,
         // robots and length checks as any URL, each refusal kept with its reason.
         if (isTargetedRun()) {
-          const all = config.targetUrls ?? [];
+          // The comparison set (#2096) is fetched like a target, once: a URL in both lists is one row.
+          const compareUrls = (config.compareUrls ?? []).slice(0, MAX_TARGET_URLS);
+          const all = [...(config.targetUrls ?? []), ...compareUrls];
           // Bounded input: the list is cut at MAX_TARGET_URLS and the rest only counted.
           const targets = all.slice(0, MAX_TARGET_URLS);
           const overLimit = Math.max(0, all.length - targets.length);
           yield* storage.updateStats(crawlId, {
             targetedRun: true,
+            ...(compareUrls.length > 0 ? { comparisonRun: true } : {}),
             linkDiscoveryOff: true,
             ...(overLimit > 0 ? { targetsOverLimit: overLimit } : {}),
           });

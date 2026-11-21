@@ -9,7 +9,11 @@ import {
   type SupersededOutcome,
 } from "@squirrelscan/core-contracts/resolution";
 import { skipReasonClass } from "@squirrelscan/core-contracts/rule-outcome";
-import { ruleRuns, type RuleRun } from "@squirrelscan/report";
+import {
+  ruleRuns,
+  scanScopeTargeted,
+  type RuleRun,
+} from "@squirrelscan/report";
 import { loadAllRules, type RuleCheckDecl } from "@squirrelscan/rules";
 
 import type { SeverityLevel } from "@/reports/filters";
@@ -357,6 +361,9 @@ function makeNotComparedJudge(
   const norm = (url: string) => normalizeTargetId(url, current.baseUrl);
   // Empty when the report does not list its pages: nothing then says a page was not crawled.
   const crawled = new Set((current.pages ?? []).map((p) => norm(p.url)));
+  // A targeted current audit (#1778) judged only the listed pages, so a finding that names no page (a
+  // header read off the baseline's entry page, a count over the whole site) has nothing to be compared with.
+  const targetedCurrent = scanScopeTargeted(current) !== null;
   // Pages of the baseline audit: an item whose id is one of them describes that page (#1835).
   const baselinePages = new Set(
     (baseline.pages ?? []).map((p) =>
@@ -456,6 +463,14 @@ function makeNotComparedJudge(
               : []),
             ...(issue.sourcePages ?? []).map(norm),
           ];
+    // robots.txt is fetched by every run, a targeted one included, so its pageless findings are compared.
+    if (
+      pages.length === 0 &&
+      targetedCurrent &&
+      issue.ruleId !== RULE_ID_ROBOTS_TXT
+    ) {
+      return { reason: "targeted-run" };
+    }
     if (pages.length > 0) {
       const rule = reportRule(current, issue.ruleId);
       const skippedHere = new Set<string>();

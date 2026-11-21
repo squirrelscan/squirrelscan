@@ -243,7 +243,9 @@ describe("#289: the repair of rows superseded before automatic retention", () =>
     await run(s.repairSupersededPagesOnce({ budgetMs: 0 }));
     expect(rowsOf(first)).toHaveLength(700);
     s.close?.();
-  });
+    // No wall-clock bound in the assertion (budgetMs 0 makes it exactly one
+    // chunk); the timeout only covers writing 2,400 rows on a loaded host (#2193).
+  }, 30_000);
 
   test("a project that never retired anything loses nothing", async () => {
     const s = await open();

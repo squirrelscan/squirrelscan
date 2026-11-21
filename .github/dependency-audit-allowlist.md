@@ -50,17 +50,3 @@ renders at request time, and every page is our own MDX with no untrusted props o
 view-transition values. Neither advisory has untrusted input to work with.
 
 Remove this exception, and the cap, when tangly moves to `@astrojs/mdx` `8`.
-
-## GHSA-fc5q-39xc-vjpf
-
-picomatch ReDoS through single-branch repeated extglobs (high, every version up
-to `4.0.7`; no patched release exists yet, and `4.0.7` is the latest). The tree
-resolves `picomatch` `4.0.x` and `2.3.2`, and every path to it is build or lint
-tooling: the docs workspace (`tangly`, Astro, Vite, Rollup, `tinyglobby`) and
-`eslint-plugin-github` through `typescript-eslint`, both dev dependencies
-(`bun why picomatch`). Nothing in the compiled `squirrel` binary loads
-picomatch, and the globs it sees come from our own config, not from audited
-sites.
-
-Remove this exception when a patched picomatch is released and the tree
-resolves it.

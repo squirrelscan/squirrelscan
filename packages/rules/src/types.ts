@@ -257,6 +257,12 @@ export interface RuleMeta {
    */
   wcagRelated?: WcagCriterion[];
   scope: RuleScope;
+  /**
+   * A site-scope rule whose verdict depends only on the pages the run fetched (#2096): on a targeted run with a
+   * comparison set it runs over the targets plus that set. `"listed-pages"` is the only bound; a site rule
+   * without it judges the whole site (or a probe the targeted run never sends) and skips with `targeted-run`.
+   */
+  comparisonSet?: "listed-pages";
   severity: RuleSeverity;
   weight: number; // scoring weight (1-10)
   // Zod schema for rule options - self-describing with defaults
@@ -724,6 +730,11 @@ export interface SiteData {
    * that judges the whole site skips with `targeted-run` instead of reporting on pages nobody fetched.
    */
   targetedRun?: boolean;
+  /**
+   * True on a targeted run that also fetched a comparison set (`--compare-url`, #2096). A site-scope rule that
+   * declares `comparisonSet: "listed-pages"` then runs over the pages fetched (targets plus comparison set).
+   */
+  comparisonRun?: boolean;
   /**
    * External link checking this audit (repo#2729): distinct external links
    * found, how many were checked, and the per-audit limit. Undefined when the

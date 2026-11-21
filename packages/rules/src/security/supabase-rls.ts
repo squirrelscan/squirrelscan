@@ -28,7 +28,11 @@
 //  - Tables: only the names the site's own shipped code queries
 //    (`.from("x").select(...)`, `/rest/v1/x`). No table name is guessed. At most
 //    MAX_PROJECTS projects, MAX_TABLES_PER_PROJECT tables each and
-//    MAX_TABLE_PROBES requests in all.
+//    MAX_TABLE_PROBES requests in all. The order is fixed so the same site
+//    probes the same tables on every run (#2104): sources are read in script
+//    URL order, projects are taken in project ref order and tables in name
+//    order (code-unit order, see compareNames), so when the code names more
+//    tables than the caps allow, the first ones by name are probed.
 //
 // What is sent (the planning decision on repo#1959: no row is ever read). One
 // `HEAD /rest/v1/<table>` per table, with no query string, `Prefer: count=exact`
@@ -58,10 +62,14 @@ const CHECK = "supabase-rls";
 
 /** Supabase projects probed per run. */
 export const MAX_PROJECTS = 2;
-/** Tables probed per project. */
-export const MAX_TABLES_PER_PROJECT = 8;
-/** Table requests per run, across every project. */
-export const MAX_TABLE_PROBES = 10;
+/**
+ * Tables probed per project. Raised from 8 (#2104): real apps name dozens of
+ * tables, so at 8 a site could never be reported clean. Each probe is a HEAD
+ * with no body read, and the run stops at the first throttle or challenge.
+ */
+export const MAX_TABLES_PER_PROJECT = 30;
+/** Table requests per run, across every project. Raised from 10 (#2104). */
+export const MAX_TABLE_PROBES = 40;
 /** Per-request timeout, on top of the shared probe budget's deadline. */
 export const PROBE_TIMEOUT_MS = 10_000;
 /** Characters of one script scanned. Bundles past it are read up to it. */
@@ -100,7 +108,7 @@ export interface SupabaseDiscovery {
   projects: SupabaseProject[];
   /** Projects past MAX_PROJECTS. */
   projectsSkipped: number;
-  /** Table names the site's code queries, in first-seen order. */
+  /** Table names the site's code queries, deduped, in name order ({@link compareNames}). */
   tables: string[];
   /** Service-role or secret keys seen and deliberately not used. */
   privilegedKeysIgnored: number;
@@ -137,8 +145,18 @@ export function readSupabaseJwt(
 }
 
 /**
+ * Code-unit order: the same on every machine and locale, unlike localeCompare.
+ * Upper case sorts before lower case, and `t10` before `t2`.
+ */
+export function compareNames(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
  * The Supabase projects, anon keys and queried table names in the given
- * sources. Pure: sends nothing.
+ * sources. Pure: sends nothing. Deterministic whatever order the sources come
+ * in (#2104): they are read in URL order, projects are returned in ref order
+ * and tables in name order.
  */
 export function discoverSupabase(
   sources: ReadonlyArray<{ url: string; content: string }>,
@@ -157,7 +175,8 @@ export function discoverSupabase(
     tables.push(name);
   };
 
-  for (const source of sources) {
+  const ordered = [...sources].sort((a, b) => compareNames(a.url, b.url));
+  for (const source of ordered) {
     const text =
       source.content.length > MAX_SCAN_CHARS
         ? source.content.slice(0, MAX_SCAN_CHARS)
@@ -206,18 +225,21 @@ export function discoverSupabase(
     for (const m of text.matchAll(REST_PATH_RE)) addTable(m[1]!);
   }
 
-  const all = [...projects.values()];
+  const all = [...projects.values()].sort((a, b) => compareNames(a.ref, b.ref));
   return {
     projects: all.slice(0, MAX_PROJECTS),
     projectsSkipped: Math.max(0, all.length - MAX_PROJECTS),
-    tables,
+    tables: tables.sort(compareNames),
     privilegedKeysIgnored,
   };
 }
 
-/** The tables to try on one project: only the ones the site's own code names, capped. */
+/**
+ * The tables to try on one project: only the ones the site's own code names,
+ * the first MAX_TABLES_PER_PROJECT in name order.
+ */
 export function tableTargets(codeTables: readonly string[]): string[] {
-  return [...new Set(codeTables)].slice(0, MAX_TABLES_PER_PROJECT);
+  return [...new Set(codeTables)].sort(compareNames).slice(0, MAX_TABLES_PER_PROJECT);
 }
 
 /** The exact URL and init of one table probe. Exported so tests can pin what is sent. */
@@ -528,6 +550,13 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       // answer. discovery.tables is deduped, so it is every table the code names.
       const planned = (discovery.projects.length + discovery.projectsSkipped) * discovery.tables.length;
       const unanswered = planned - sentTotal;
+      // A definite answer: exposed, protected, zero rows or missing. Everything
+      // else planned (never sent, errored, not judgeable, throttled) is unchecked.
+      const tablesChecked = results.reduce(
+        (n, r) => n + r.exposed.length + r.protectedCount + r.empty + r.missing,
+        0,
+      );
+      const tablesUnchecked = planned - tablesChecked;
       // Left out by a cap in the projects that were probed: past the per-run
       // cap, plus the tables past MAX_TABLES_PER_PROJECT in each project.
       // Projects past MAX_PROJECTS are reported as projectsSkipped.
@@ -538,6 +567,9 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         ...discovered,
         tablesProbed: sentTotal,
         tablesCapped: capped,
+        tablesPlanned: planned,
+        tablesChecked,
+        tablesUnchecked,
         budgetStopped,
         throttled,
         perProject: results.map((r) => ({
@@ -552,6 +584,26 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           throttled: r.throttled,
         })),
       };
+
+      const budgetSize =
+        budget.budgetMs % 1000 === 0 ? `${budget.budgetMs / 1000} s` : `${budget.budgetMs} ms`;
+      const budgetCap = `the shared probe time budget of ${budgetSize} for all probing rules ran out`;
+      const errored = results.reduce((n, r) => n + r.errored, 0);
+      const notChecked = results.reduce((n, r) => n + r.notChecked, 0);
+      const why: string[] = [];
+      if (throttled)
+        why.push(
+          "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent",
+        );
+      if (budgetStopped) why.push(budgetCap);
+      if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
+      if (notChecked > 0)
+        why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
+      if (capped + discovery.projectsSkipped * targets.length > 0 || discovery.tables.length > targets.length)
+        why.push(
+          `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`,
+        );
+      const counts = `${tablesChecked} of ${planned} table probe(s) got a definite answer and ${tablesUnchecked} were left unchecked`;
 
       for (const r of results) {
         if (r.exposed.length === 0) continue;
@@ -568,10 +620,16 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
           snippet: `${rows} row(s) visible to the anon key`,
           meta: { project: host, table, rows, keyKind, keySource },
         }));
+        // A fail from a run that did not reach every table may not list them
+        // all: say how many went unchecked and why (#2104).
+        const incomplete =
+          tablesUnchecked > 0
+            ? `. The list may be incomplete: ${counts}${why.length > 0 ? ` (${why.join("; ")})` : ""}`
+            : "";
         checks.push({
           name: CHECK,
           status: "fail",
-          message: `${r.exposed.length} Supabase table(s) in ${host} report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`,
+          message: `${r.exposed.length} Supabase table(s) in ${host} report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)${incomplete}`,
           items,
           details: {
             project: host,
@@ -582,9 +640,6 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       }
       if (checks.length > 0) return { checks };
 
-      const budgetSize =
-        budget.budgetMs % 1000 === 0 ? `${budget.budgetMs / 1000} s` : `${budget.budgetMs} ms`;
-      const budgetCap = `the shared probe time budget of ${budgetSize} for all probing rules ran out`;
       if (sentTotal === 0) {
         checks.push({
           name: CHECK,
@@ -595,8 +650,6 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
         });
         return { checks };
       }
-      const errored = results.reduce((n, r) => n + r.errored, 0);
-      const notChecked = results.reduce((n, r) => n + r.notChecked, 0);
       if (errored === sentTotal && !throttled) {
         checks.push({
           name: CHECK,
@@ -632,27 +685,14 @@ export function createSupabaseRlsRule(deps: SupabaseRlsDeps = {}): Rule {
       // names, in every project. Pushback, an error, an HTML error page, an
       // answer without a usable total, or a table never reached leaves the run
       // not checked (#1883 review).
-      const unverified = unanswered + errored + notChecked + (throttled ? 1 : 0);
+      const unverified = tablesUnchecked;
       if (unverified > 0) {
-        const why: string[] = [];
-        if (throttled)
-          why.push(
-            "the Supabase project throttled the probes (HTTP 429) or answered with a bot challenge, so no further request was sent",
-          );
-        if (budgetStopped) why.push(budgetCap);
-        if (errored > 0) why.push(`${errored} probe(s) failed with a network error or timeout`);
-        if (notChecked > 0)
-          why.push(`${notChecked} answer(s) had no status and row count squirrel can judge`);
-        if (capped + discovery.projectsSkipped * targets.length > 0 || discovery.tables.length > targets.length)
-          why.push(
-            `the per-audit cap of ${MAX_TABLE_PROBES} table probes, ${MAX_TABLES_PER_PROJECT} tables per project and ${MAX_PROJECTS} projects was reached`,
-          );
         checks.push({
           name: CHECK,
           status: "skipped",
           skipReason: PROBE_INCOMPLETE_SKIP_REASON,
           value: "not-checked",
-          message: `Supabase Row Level Security check incomplete: ${why.join("; ")}. ${unverified} of ${planned} table probe(s) got no definite answer, and those tables may be readable with the anon key`,
+          message: `Supabase Row Level Security check incomplete: ${why.join("; ")}. ${counts}, and the unchecked tables may be readable with the anon key`,
           details: { ...summary, unverified },
         });
         return { checks };

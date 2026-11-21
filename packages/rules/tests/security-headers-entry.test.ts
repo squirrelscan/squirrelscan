@@ -1,7 +1,8 @@
 // @squirrelscan/rules/security-headers must stay loadable without the rules
 // barrel: the web security headers checker imports it into a Worker, where
 // linkedom, the runner and the other rules would blow the bundle. Its runtime
-// import closure is the entry and the six header rule files, nothing else.
+// import closure is the entry, the six header rule files and the dependency-free
+// helper three of them share to pick the pages they read (#1778), nothing else.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -45,10 +46,11 @@ function closure(entry: string): string[] {
 }
 
 describe("@squirrelscan/rules/security-headers", () => {
-  test("loads only the six header rule files at runtime", () => {
+  test("loads only the six header rule files and their page helper at runtime", () => {
     expect(closure(ENTRY)).toEqual([
       "security-headers.ts",
       "security/csp.ts",
+      "security/header-pages.ts",
       "security/hsts.ts",
       "security/permissions-policy.ts",
       "security/referrer-policy.ts",

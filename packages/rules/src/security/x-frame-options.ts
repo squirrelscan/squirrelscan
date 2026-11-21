@@ -2,6 +2,10 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { headerPages, judgeHeaderPages } from "./header-pages";
+
+type SitePage = NonNullable<RuleContext["site"]>["pages"][number];
+
 /** Trim + uppercase; a header repeated with the same value ("DENY, DENY") collapses to it. */
 function normalizeXfo(raw: string): string {
   const parts = raw.split(",").map((p) => p.trim().toUpperCase());
@@ -48,54 +52,49 @@ export const xFrameOptionsRule: Rule = {
   },
 
   run(ctx: RuleContext): RuleResult {
-    const checks: CheckResult[] = [];
-    const firstPage = ctx.site?.pages[0];
+    const pages = headerPages(ctx);
 
-    if (!firstPage) {
-      checks.push({
-        name: "x-frame-options-no-pages",
-        status: "skipped",
-        message: "No pages to check",
-        skipReason: "No pages crawled",
-      });
-      return { checks };
+    if (pages.length === 0) {
+      return {
+        checks: [
+          {
+            name: "x-frame-options-no-pages",
+            status: "skipped",
+            message: "No pages to check",
+            skipReason: "No pages crawled",
+          },
+        ],
+      };
     }
 
-    const headers = firstPage.headers ?? {};
-    const xFrameOptions = headers["x-frame-options"];
-    const csp = headers["content-security-policy"];
-    const hasFrameAncestors = csp ? hasFrameAncestorsDirective(csp) : false;
+    return { checks: judgeHeaderPages(ctx, pages, judgeXfo) };
+  },
+};
 
-    if (xFrameOptions) {
-      const value = normalizeXfo(xFrameOptions);
-      if (value === "DENY" || value === "SAMEORIGIN") {
-        checks.push({
-          name: "x-frame-options",
-          status: "pass",
-          message: "X-Frame-Options header present",
-          value: xFrameOptions,
-        });
-      } else if (value.includes("ALLOW-FROM")) {
-        checks.push({
-          name: "x-frame-options-allow-from",
-          status: "warn",
-          message: "ALLOW-FROM is deprecated",
-          value: "Use CSP frame-ancestors instead",
-        });
-      } else if (hasFrameAncestors) {
-        checks.push({
-          name: "x-frame-options-csp-frame-ancestors",
-          status: "pass",
-          message: "Clickjacking protection via CSP frame-ancestors",
-        });
-      } else {
-        checks.push({
-          name: "x-frame-options-invalid",
-          status: "warn",
-          message: `Unrecognised X-Frame-Options value: ${printable(xFrameOptions)}`,
-          value: "Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors",
-        });
-      }
+/** The clickjacking-protection checks of one page's response headers. */
+function judgeXfo(page: SitePage): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const headers = page.headers ?? {};
+  const xFrameOptions = headers["x-frame-options"];
+  const csp = headers["content-security-policy"];
+  const hasFrameAncestors = csp ? hasFrameAncestorsDirective(csp) : false;
+
+  if (xFrameOptions) {
+    const value = normalizeXfo(xFrameOptions);
+    if (value === "DENY" || value === "SAMEORIGIN") {
+      checks.push({
+        name: "x-frame-options",
+        status: "pass",
+        message: "X-Frame-Options header present",
+        value: xFrameOptions,
+      });
+    } else if (value.includes("ALLOW-FROM")) {
+      checks.push({
+        name: "x-frame-options-allow-from",
+        status: "warn",
+        message: "ALLOW-FROM is deprecated",
+        value: "Use CSP frame-ancestors instead",
+      });
     } else if (hasFrameAncestors) {
       checks.push({
         name: "x-frame-options-csp-frame-ancestors",
@@ -104,13 +103,26 @@ export const xFrameOptionsRule: Rule = {
       });
     } else {
       checks.push({
-        name: "x-frame-options-missing",
+        name: "x-frame-options-invalid",
         status: "warn",
-        message: "No clickjacking protection",
-        value: "Add X-Frame-Options: DENY or CSP frame-ancestors",
+        message: `Unrecognised X-Frame-Options value: ${printable(xFrameOptions)}`,
+        value: "Browsers ignore it. Use DENY or SAMEORIGIN, or CSP frame-ancestors",
       });
     }
+  } else if (hasFrameAncestors) {
+    checks.push({
+      name: "x-frame-options-csp-frame-ancestors",
+      status: "pass",
+      message: "Clickjacking protection via CSP frame-ancestors",
+    });
+  } else {
+    checks.push({
+      name: "x-frame-options-missing",
+      status: "warn",
+      message: "No clickjacking protection",
+      value: "Add X-Frame-Options: DENY or CSP frame-ancestors",
+    });
+  }
 
-    return { checks };
-  },
-};
+  return checks;
+}

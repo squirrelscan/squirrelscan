@@ -63,6 +63,56 @@ export interface SignatureCoverage {
   readonly coverage: number;
 }
 
+/** Incremental form of `measureSignatureCoverage`: feed pages one at a time. */
+export interface CoverageAccumulator {
+  /** Parse one page, record its fan-out key, and keep nothing of the HTML. */
+  add(page: CoveragePage): void;
+  result(): SignatureCoverage;
+}
+
+/**
+ * Same measurement as `measureSignatureCoverage`, for callers that cannot hold
+ * every page's HTML at once (a real crawl is gigabytes of it). Only the key
+ * counts are retained, so memory grows with the number of clusters.
+ */
+export function createCoverageAccumulator(mode: SignatureMode): CoverageAccumulator {
+  const sizes = new Map<string, number>();
+  let total = 0;
+  let keyed = 0;
+  return {
+    add({ url, html }) {
+      total++;
+      const parsed = parseHtmlForRules(html, url);
+      const signature =
+        mode === "derived"
+          ? derivedFanoutSignature(parsed.document)
+          : fanoutInputSignature(parsed.document);
+      const key = fanoutClusterKey(
+        templateFingerprintKey(fingerprintPage(parsed, url)),
+        url,
+        signature,
+      );
+      if (key === null) return;
+      keyed++;
+      sizes.set(key, (sizes.get(key) ?? 0) + 1);
+    },
+    result() {
+      const clusters = sizes.size;
+      const singletons = [...sizes.values()].filter((n) => n === 1).length;
+      const fannedPages = keyed - clusters;
+      return {
+        mode,
+        pages: total,
+        keyed,
+        clusters,
+        singletons,
+        fannedPages,
+        coverage: total === 0 ? 0 : fannedPages / total,
+      };
+    },
+  };
+}
+
 /**
  * Group pages by the fan-out key under `mode` and count what would fan out. Pure
  * over its input: parses each page once, no storage, no rule run.
@@ -71,35 +121,7 @@ export function measureSignatureCoverage(
   pages: Iterable<CoveragePage>,
   mode: SignatureMode,
 ): SignatureCoverage {
-  const sizes = new Map<string, number>();
-  let total = 0;
-  let keyed = 0;
-  for (const { url, html } of pages) {
-    total++;
-    const parsed = parseHtmlForRules(html, url);
-    const signature =
-      mode === "derived"
-        ? derivedFanoutSignature(parsed.document)
-        : fanoutInputSignature(parsed.document);
-    const key = fanoutClusterKey(
-      templateFingerprintKey(fingerprintPage(parsed, url)),
-      url,
-      signature,
-    );
-    if (key === null) continue;
-    keyed++;
-    sizes.set(key, (sizes.get(key) ?? 0) + 1);
-  }
-  const clusters = sizes.size;
-  const singletons = [...sizes.values()].filter((n) => n === 1).length;
-  const fannedPages = keyed - clusters;
-  return {
-    mode,
-    pages: total,
-    keyed,
-    clusters,
-    singletons,
-    fannedPages,
-    coverage: total === 0 ? 0 : fannedPages / total,
-  };
+  const acc = createCoverageAccumulator(mode);
+  for (const page of pages) acc.add(page);
+  return acc.result();
 }

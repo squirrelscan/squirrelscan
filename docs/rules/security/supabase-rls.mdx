@@ -25,13 +25,15 @@ Finding them sends no request. squirrel reads the scripts and inline scripts the
 - An anon key: a JWT whose payload says `"iss": "supabase"` and `"role": "anon"`, names the project in `ref` and has not expired. It is sent only to the project it names. A `sb_publishable_` key is used only when the same script names exactly one project.
 - A service-role key or a `sb_secret_` key is never used. It bypasses RLS, so a table answering it proves nothing. [`security/leaked-secrets`](/rules/security/leaked-secrets) reports those keys.
 
-At most two projects are probed.
+At most two projects are probed. When the scripts name more, the two with the lowest project refs (in character order) are probed.
 
 ### Which tables are probed
 
 Only the tables your own shipped code queries: `.from("todos").select(...)` and similar supabase-js chains, and `/rest/v1/<table>` URLs. No table name is guessed, so a project whose scripts name no table is not probed at all.
 
-At most eight tables per project and ten requests per audit.
+At most 30 tables per project and 40 requests per audit. Each probe is a `HEAD` request with no body, and the run stops at the first throttle or challenge, so the caps leave room for a typical app's full table list.
+
+The order is fixed, so the same site audited twice probes the same tables. Scripts are read in URL order, projects are taken in project ref order, and tables in name order: plain character order, so upper case sorts before lower case and `t10` sorts before `t2`. When the code names more tables than the caps allow, the first ones by name are probed. The first project gets up to 30, and the second gets what is left of the 40.
 
 ### What is sent
 
@@ -69,9 +71,9 @@ What a count can and cannot tell apart:
 
 The rule emits checks named `supabase-rls`:
 
-- Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item labelled with the bare table name, such as `profiles`, with the count beside it: `42 row(s) visible to the anon key`. No row, value or column name is fetched, so none is stored or reported.
+- Fail, one check per project, when one or more tables report rows. Message: `1 Supabase table(s) in abcdefghijklmnopqrst.supabase.co report rows to the site's public anon key. Row Level Security is off, or a policy lets anyone read them (counted with a HEAD request, no row read)`. Each exposed table is an item labelled with the bare table name, such as `profiles`, with the count beside it: `42 row(s) visible to the anon key`. No row, value or column name is fetched, so none is stored or reported. When the run did not get a definite answer from every table (throttled, capped, out of budget or a failed probe), the message adds how many went unchecked and why, for example `The list may be incomplete: 31 of 34 table probe(s) got a definite answer and 3 were left unchecked (...)`, because another table may be exposed too.
 - Pass only when every table the code names, in every project found, got a definite answer: protected, zero rows or missing. Message: `No Supabase table reported rows to the public anon key (4 table(s) probed in 1 project(s))`.
-- Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed, answered with an HTML error page or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. Those tables may be readable, so the run is never a pass and never clears an earlier finding.
+- Skipped, reason `probe-incomplete` (not checked), when any table got no definite answer: the project throttled or challenged a probe, a probe failed, answered with an HTML error page or had no usable total, the budget ran out partway, or a table or project was left out by the per-audit caps. The message says how many table probes got a definite answer and how many were left unchecked, such as `40 of 68 table probe(s) got a definite answer and 28 were left unchecked`, and the details carry `tablesPlanned`, `tablesChecked` and `tablesUnchecked`. A table named in the code counts once per project found, so two projects and 34 tables plan 68 probes. Those unchecked tables may be readable, so the run is never a pass and never clears an earlier finding.
 - Skipped, reason `not-applicable`, when the site's scripts hold no Supabase project with an anon key.
 - Skipped, reason `probing-passive` or `probing-not-aggressive`, when probing is below `aggressive`. Nothing is sent.
 - Skipped, reason `external-requests-off`, on an `--offline` audit or one with external link checking off. Nothing is sent.

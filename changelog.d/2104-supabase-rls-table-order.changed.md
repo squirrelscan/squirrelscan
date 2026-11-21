@@ -1,0 +1,1 @@
+- `security/supabase-rls` now probes up to 30 tables per Supabase project and 40 per audit (was 8 and 10), picks them in a fixed name order so the same site probes the same tables on every run, and says how many tables were checked and how many were left unchecked in a not-checked result and in a fail that did not reach every table (#2104)

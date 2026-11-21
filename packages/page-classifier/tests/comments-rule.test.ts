@@ -347,14 +347,54 @@ describe("hostile markup stays cheap", () => {
     expect(ms).toBeLessThan(BUDGET_MS);
   });
 
+  /** Wraps every class value in `document` so the test sees the most characters of one the
+   *  rule reads: a slice counts its length, anything that needs the whole string (a regex
+   *  test, a split, toLowerCase) converts it and counts all of it. */
+  function countClassReads(document: { querySelectorAll(selector: string): ArrayLike<Element> }) {
+    const reads = { longest: 0 };
+    const note = (n: number) => {
+      if (n > reads.longest) reads.longest = n;
+    };
+    class CountedString extends String {
+      override toString(): string {
+        note(this.length);
+        return super.valueOf();
+      }
+      override valueOf(): string {
+        note(this.length);
+        return super.valueOf();
+      }
+      override slice(start?: number, end?: number): string {
+        const part = super.valueOf().slice(start, end);
+        note(part.length);
+        return part;
+      }
+    }
+    const elements = document.querySelectorAll("[class]");
+    for (let i = 0; i < elements.length; i++) {
+      const el = elements[i]!;
+      const get = el.getAttribute.bind(el);
+      el.getAttribute = (name: string) => {
+        const value = get(name);
+        return (name === "class" && value !== null ? new CountedString(value) : value) as string | null;
+      };
+    }
+    return reads;
+  }
+
   test("the whole-page scan stays cheap on the same markup", () => {
     const filler = manyTokens();
     const { document } = parseHTML(
       `<html><body><h1>T</h1><div class="${filler}comments"><p>x</p></div><div class="comments ${filler}"><p>y</p></div></body></html>`,
     );
-    const { value, ms } = timed(() => findCommentSections(document));
+    // Work, not wall clock (#2198): the scan is a few ms either way and a loaded host has
+    // stretched it past any budget a regression would still break. What makes it cheap is
+    // that each 1 MB class list is read only up to its first 4 KB, so assert exactly that.
+    const reads = countClassReads(document);
+    const value = findCommentSections(document);
     expect(value.length).toBe(1);
-    expect(ms).toBeLessThan(BUDGET_MS);
+    expect(reads.longest).toBeGreaterThan(0);
+    expect(reads.longest).toBeLessThanOrEqual(4096);
   });
 });
 
