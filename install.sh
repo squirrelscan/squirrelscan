@@ -46,6 +46,9 @@ umask "$(printf '%04o' "$((0$(umask) | 022))")"
 #                        install.squirrelscan.com (for networks that block
 #                        GitHub). Any value but empty, 0 or false enables it.
 #   GITHUB_TOKEN       - GitHub token to avoid API rate limits (optional)
+#   NO_TELEMETRY       - Send no failure report (any defined value, even empty);
+#                        DO_NOT_TRACK=1 does the same. Sourcing this file never
+#                        reports either (see INSTALLER_INVOCATION).
 
 REPO="squirrelscan/squirrelscan"
 CERT_IDENTITY="https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main"
@@ -118,6 +121,15 @@ INSTALLER_REPORT_VERSION="4"
 # (pinned or resolved). Empty before that, and then the report omits the field.
 INSTALLER_RELEASE_VERSION=""
 ERROR_ENDPOINT="${SQUIRREL_ERROR_ENDPOINT:-https://install.squirrelscan.com/error}"
+# How this file is being run: `stream` (piped to bash, or bash -c "$(curl ...)"), `file` (bash install.sh) or
+# `sourced`. A sourced copy is a test harness or a wrapper borrowing the functions, not a user installing: its
+# failures are not install failures, and 134 reports of one made-up shape ((exit 7) || report_on_exit) reached
+# production that way (#5020). report_error stays silent for it; SQUIRREL_REPORT_WHEN_SOURCED=1 is the
+# contract tests' switch for the payload tests that source the preamble on purpose.
+INSTALLER_INVOCATION="stream"
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+  if [ "${BASH_SOURCE[0]}" = "$0" ]; then INSTALLER_INVOCATION="file"; else INSTALLER_INVOCATION="sourced"; fi
+fi
 # Release metadata (latest version per channel) — R2-backed, no rate limits.
 RELEASES_ENDPOINT="${SQUIRREL_RELEASES_ENDPOINT:-https://install.squirrelscan.com/releases}"
 # Release assets, mirrored through our own origin. A GitHub release-asset URL
@@ -137,6 +149,10 @@ LAST_ERROR_MSG=""
 LAST_ERROR_OUTPUT=""
 # Real exit code of a failed sub-command, when it isn't the one error() exits with.
 LAST_ERROR_CODE=""
+# The last command that failed under `set -e` (its bare name, never arguments or paths) and its line, recorded by
+# the ERR trap, so a report with no message can still say what died.
+FAILED_CMD=""
+FAILED_LINE=""
 TMPDIR_TO_CLEAN=""
 # A second staging directory, under ~/.squirrel/tmp, used when the system temp dir is noexec.
 STAGE_TO_CLEAN=""
@@ -212,6 +228,7 @@ report_error() {
   # value; so does DO_NOT_TRACK=1 or true (mirrors the CLI).
   [ "${NO_TELEMETRY+x}" = x ] && return 0
   case "${DO_NOT_TRACK:-}" in 1 | [Tt][Rr][Uu][Ee]) return 0 ;; esac
+  [ "$INSTALLER_INVOCATION" = sourced ] && [ -z "${SQUIRREL_REPORT_WHEN_SOURCED:-}" ] && return 0
   command -v curl >/dev/null 2>&1 || return 0
 
   local os arch scrubbed="" scrubbed_output="" version_field="" libc_field=""
@@ -858,6 +875,28 @@ is_curl_network_code() {
   case "$1" in 6 | 7 | 28 | 35 | 52 | 56) return 0 ;; *) return 1 ;; esac
 }
 
+# Remember the command that failed. Called from the ERR trap with the line and BASH_COMMAND; keeps the first word
+# only, stripped of any path and of everything but a plain name, so no argument, path or value is ever kept.
+record_failed_command() {
+  local name="${2%%[[:space:]]*}"
+  name="${name##*/}"
+  name="${name//[!A-Za-z0-9_.-]/}"
+  FAILED_CMD="${name:0:32}"
+  FAILED_LINE="${1//[!0-9]/}"
+  return 0
+}
+
+# The message for an exit nobody explained: which command failed (when the ERR trap saw it), the exit code, how the
+# script was run and the bash version. Fixed vocabulary plus numbers, nothing from the user's machine.
+describe_unrecorded_exit() {
+  local what="no failing command was recorded"
+  if [ -n "$FAILED_CMD" ]; then
+    what="'$FAILED_CMD' failed"
+    [ -n "$FAILED_LINE" ] && what="$what at line $FAILED_LINE"
+  fi
+  printf 'exit %s: %s (%s, bash %s.%s)' "$1" "$what" "$INSTALLER_INVOCATION" "${BASH_VERSINFO[0]:-0}" "${BASH_VERSINFO[1]:-0}"
+}
+
 # Single EXIT trap: cleans the temp dir and reports genuine failures. Replaces
 # the per-call tmpdir trap (a second `trap ... EXIT` would clobber this one).
 report_on_exit() {
@@ -887,15 +926,26 @@ report_on_exit() {
   # error() always exits 1; prefer the failing sub-command's own code when the
   # call site recorded one (self install, which runs under tee).
   [ -n "$LAST_ERROR_CODE" ] && code="$LAST_ERROR_CODE"
-  # A bare curl failure under `set -e` leaves no message: name the host it was
-  # talking to (a hostname only) so the report says where, not just which code.
-  if [ -z "$msg" ] && is_curl_network_code "$code"; then
-    msg="curl exit $code reaching $(reportable_host "$LAST_FETCH_HOST")"
-    [ "$msg" = "curl exit $code reaching " ] && msg="curl exit $code reaching an unknown host (before the first request)"
+  # A bare failure under `set -e` leaves no message. A curl network failure names the host it was talking to (a
+  # hostname only), so the report says where, not just which code. Anything else names the command the ERR trap
+  # saw, the line, and the bash that ran it; a curl code is NOT blamed on curl unless a request was made or curl
+  # was the failing command, which is how a report from nowhere used to read as a network failure (#5020).
+  if [ -z "$msg" ]; then
+    if is_curl_network_code "$code" && { [ -n "$LAST_FETCH_HOST" ] || [ "$FAILED_CMD" = "curl" ]; }; then
+      msg="curl exit $code reaching $(reportable_host "$LAST_FETCH_HOST")"
+      [ "$msg" = "curl exit $code reaching " ] && msg="curl exit $code reaching an unknown host (before the first request)"
+    else
+      msg=$(describe_unrecorded_exit "$code")
+    fi
   fi
   report_error "$CURRENT_STEP" "$code" "$msg" "$LAST_ERROR_OUTPUT"
 }
 trap report_on_exit EXIT
+# -E so the ERR trap also fires inside functions and command substitutions.
+set -E
+# The trap must leave $? as it found it (older bash does not restore it): `rc=$?` after a failed command is how the
+# installer reads an exit code it deliberately survives. The subshell `exit` puts the status back.
+trap '_err_rc=$?; record_failed_command "$LINENO" "$BASH_COMMAND"; (exit "$_err_rc")' ERR
 # bash skips EXIT traps when it is killed by an untrapped fatal signal, so Ctrl-C during a
 # download leaked the temp directory and sent no report. Turning each signal into an exit runs
 # report_on_exit: the directory is removed and the failure is reported under the step that was
