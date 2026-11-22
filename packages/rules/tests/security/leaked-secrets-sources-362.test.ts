@@ -291,8 +291,27 @@ describe("planSecretSources (#362)", () => {
       `${ORIGIN}/env.js`,
       `${ORIGIN}/api/config`,
       `${ORIGIN}/.well-known/app-settings`,
-      `${ORIGIN}/assets/runtime-config.json?v=3`,
+      `${ORIGIN}/assets/runtime-config.json`,
     ]);
+  });
+
+  test("a config literal's query never reaches a planned URL, so a key in it never reaches a label", () => {
+    const key = stripeKey();
+    const scripts = [script("boot.js", `fetch("/config.json?key=${key}")`)];
+    expect(configEndpointUrlsOf(scripts[0]!)).toEqual([
+      `${ORIGIN}/config.json`,
+    ]);
+    const { targets } = planSecretSources(scripts);
+    expect(targets.map((t) => t.url)).toEqual([`${ORIGIN}/config.json`]);
+    expect(JSON.stringify(targets)).not.toContain(key);
+  });
+
+  test("a same-origin map URL carrying credentials is never planned", () => {
+    expect(
+      sourceMapUrlOf(
+        script("a.js", "x();", "https://deploy:hunter2@app.acme.test/a.js.map")
+      )
+    ).toBeNull();
   });
 
   test("at most 10 targets, the two kinds taken in turn, the rest counted", () => {

@@ -44,7 +44,7 @@ const MAP_COMMENT_RE = /\/\/[#@]\s*sourceMappingURL=(\S+)\s*$/;
  * are outside every class here).
  */
 const CONFIG_LITERAL_RE = sharedRegex(
-  /["'`]((?:https?:\/\/[A-Za-z0-9.-]{1,253}(?::\d{1,5})?)?\/(?:[\w.~-]{1,128}\/){0,8}(?:(?:(?:app|runtime|client|public|site)[-_.]?)?(?:config|env|environment|settings)(?:\.[\w-]{1,32}){0,3}\.(?:json|js)|api\/(?:v\d{1,3}\/)?(?:config|env|settings)|\.well-known\/[\w.~-]{1,128}(?:\/[\w.~-]{1,128}){0,4}))(\?[\w.~%=&-]{0,256})?["'`]/g
+  /["'`]((?:https?:\/\/[A-Za-z0-9.-]{1,253}(?::\d{1,5})?)?\/(?:[\w.~-]{1,128}\/){0,8}(?:(?:(?:app|runtime|client|public|site)[-_.]?)?(?:config|env|environment|settings)(?:\.[\w-]{1,32}){0,3}\.(?:json|js)|api\/(?:v\d{1,3}\/)?(?:config|env|settings)|\.well-known\/[\w.~-]{1,128}(?:\/[\w.~-]{1,128}){0,4}))(?:\?[\w.~%=&-]{0,256})?["'`]/g
 );
 
 /** Config literals read per script: a bundle that names hundreds is not naming its boot config. */
@@ -81,7 +81,7 @@ function sameOrigins(script: SecretSourceScript): Set<string> {
   return origins;
 }
 
-/** `raw` resolved against `base`, without its fragment, when it is an http(s) URL on one of `origins`. */
+/** `raw` resolved against `base`, without its fragment, when it is an http(s) URL on one of `origins` that carries no credentials. */
 function sameOriginUrl(
   raw: string,
   base: string,
@@ -91,6 +91,8 @@ function sameOriginUrl(
   if (!url || (url.protocol !== "http:" && url.protocol !== "https:"))
     return null;
   if (!origins.has(url.origin)) return null;
+  // Credentials in the URL would land unmasked in the finding's label.
+  if (url.username || url.password) return null;
   url.hash = "";
   return url.href;
 }
@@ -134,7 +136,9 @@ export function configEndpointUrlsOf(script: SecretSourceScript): string[] {
     m = CONFIG_LITERAL_RE.exec(content)
   ) {
     literals++;
-    const url = sameOriginUrl(`${m[1]}${m[2] ?? ""}`, base, origins);
+    // The query is dropped: a literal like `/config.json?key=<secret>` would
+    // otherwise put that key, unmasked, into the finding's label and meta.
+    const url = sameOriginUrl(m[1], base, origins);
     if (url && !seen.has(url)) {
       seen.add(url);
       out.push(url);
