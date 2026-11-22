@@ -6,7 +6,7 @@ icon: "rocket"
 
 A deploy hook is a URL that starts a cloud audit of one website when your pipeline calls it, so every deploy gets checked without anyone opening the dashboard. The request is signed with a key only you hold. No API key is involved, and a hook can only ever audit its own website.
 
-Each audit a hook starts is an ordinary cloud audit: it is priced in [credits](/cloud/credits) like any other and lands in the website's audit history. It also renders pages fresh instead of reusing a cached render, so it sees the site as deployed.
+Each audit a hook starts is an ordinary cloud audit: it is priced in [credits](/cloud/credits) like any other and lands in the website's audit history. It also renders pages fresh instead of reusing a cached render, so it sees the site as deployed. Hook audits, like targeted audits, use the `refresh` option automatically, so no page stored by an earlier crawl is reused.
 
 ## Create a hook
 
