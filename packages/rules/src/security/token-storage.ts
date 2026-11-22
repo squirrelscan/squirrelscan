@@ -19,11 +19,21 @@ import type {
   ScriptContentData,
 } from "@squirrelscan/core-contracts";
 
-import { getDomain } from "tldts";
-
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
 import { sharedRegex } from "../shared-regex";
+import {
+  EXECUTABLE_SCRIPT_TYPE,
+  formatScriptHosts,
+  isThirdPartyScript,
+  scriptHostDetails,
+  thirdPartyScriptHosts,
+} from "./third-party-script-hosts";
+
+// A vendor SDK or widget writes to storage under its own configuration, so the site
+// owner reads such a finding differently: it is labelled, not hidden, because an
+// auth SDK that persists the user's JWT is still an exposure the owner chose.
+export { isThirdPartyScript };
 
 export type StorageKind = "localStorage" | "sessionStorage";
 
@@ -361,30 +371,6 @@ interface Located extends TokenStorageWrite {
   thirdParty?: boolean;
 }
 
-const registrable = (url: string): string | null => {
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
-    return getDomain(host, { allowPrivateDomains: true }) ?? host;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Is this script served from a different registrable domain than the page? A
- * vendor SDK or widget writes to storage under its own configuration, so the site
- * owner reads such a finding differently: it is labelled, not hidden, because an
- * auth SDK that persists the user's JWT is still an exposure the owner chose.
- */
-export function isThirdPartyScript(
-  scriptUrl: string,
-  pageUrl: string
-): boolean {
-  const script = registrable(scriptUrl);
-  const page = registrable(pageUrl);
-  return script !== null && page !== null && script !== page;
-}
-
 const REASON_LABEL: Record<TokenStorageReason, string> = {
   "key-name": "token-like key",
   "jwt-value": "JWT-shaped value (redacted)",
@@ -395,12 +381,18 @@ const describe = (w: Located): string =>
 
 const MAX_ITEMS = 20;
 
-/** The `type` of an inline script the browser runs as code; JSON data blocks and templates are not. */
-const EXECUTABLE_SCRIPT_TYPE =
-  /^(?:text|application)\/(?:javascript|ecmascript)$|^module$/;
-
-/** One check for the writes found in one script (or in a page's inline scripts). */
-function findingCheck(found: Located[]): CheckResult {
+/**
+ * One check for the writes found in one script (or in a page's inline scripts).
+ *
+ * `otherHosts` are the third-party script hosts on the page that could read the
+ * stored value (#2089): with any, the check fails instead of warning and names
+ * them. The copies of an external script's check fold only across pages that
+ * load the same hosts, so a folded message never names a host a page lacks.
+ */
+function findingCheck(
+  found: Located[],
+  otherHosts: readonly string[] = []
+): CheckResult {
   const items: CheckItem[] = found.slice(0, MAX_ITEMS).map((w) => ({
     id: `${w.script}: ${describe(w)} (${w.reason})`,
     label: `${REASON_LABEL[w.reason]} written in ${
@@ -420,21 +412,31 @@ function findingCheck(found: Located[]): CheckResult {
     },
   }));
   const first = found[0]!;
+  const exposed = otherHosts.length > 0;
   return {
     name: "token-storage",
-    status: "warn",
+    status: exposed ? "fail" : "warn",
     message: `${found.length} auth token write(s) to web storage: ${describe(first)} in ${
       first.thirdParty ? "third-party script " : ""
     }${first.script}${
       found.length > 1 ? `, and ${found.length - 1} more` : ""
+    }${
+      exposed
+        ? `. Any script on the page can read web storage, and this page loads scripts from ${otherHosts.length} third-party host(s): ${formatScriptHosts(otherHosts)}`
+        : ""
     }`,
     value: found.length,
     items,
     details: {
       note: "Token values are never reported.",
       ...(first.location === "external-script"
-        ? { foldKey: `security/token-storage:${first.script}` }
+        ? {
+            foldKey: `security/token-storage:${first.script}${
+              exposed ? `:third-party-hosts:${otherHosts.join(",")}` : ""
+            }`,
+          }
         : {}),
+      ...(exposed ? scriptHostDetails(otherHosts) : {}),
       ...(first.thirdParty ? { thirdParty: true } : {}),
       ...(found.length > MAX_ITEMS
         ? { additional: found.length - MAX_ITEMS }
@@ -442,6 +444,14 @@ function findingCheck(found: Located[]): CheckResult {
     },
   };
 }
+
+const hostnameOf = (url: string): string | null => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+};
 
 /** A shared bundle is scanned once per run, not once per page that loads it. */
 const externalScanCache = new WeakMap<object, TokenStorageScan>();
@@ -552,7 +562,9 @@ export const tokenStorageRule: Rule = {
         inline.push({ ...w, location: "inline-script", script: ctx.page.url });
       }
     }
-    if (inline.length > 0) checks.push(findingCheck(inline));
+    // Every third-party script on the page can read what any script stores (#2089).
+    const pageHosts = thirdPartyScriptHosts(doc, ctx.page.url);
+    if (inline.length > 0) checks.push(findingCheck(inline, pageHosts));
     if (inlineTruncated) checks.push(truncationCheck(ctx.page.url));
 
     // An external script is judged on EVERY page that loads it, by a check that
@@ -566,6 +578,8 @@ export const tokenStorageRule: Rule = {
       const { writes, truncated } = externalScan(script);
       if (truncated) checks.push(truncationCheck(script.url));
       if (writes.length === 0) continue;
+      // A script already holds what it wrote: the exposure is the OTHER hosts.
+      const ownHost = hostnameOf(script.url);
       checks.push(
         findingCheck(
           writes.map((w) => ({
@@ -573,7 +587,8 @@ export const tokenStorageRule: Rule = {
             location: "external-script" as const,
             script: script.url,
             thirdParty: isThirdPartyScript(script.url, ctx.page.url),
-          }))
+          })),
+          pageHosts.filter((h) => h !== ownHost)
         )
       );
     }
