@@ -474,6 +474,105 @@ function formHasCaptchaWidget(form: Element): boolean {
   return false;
 }
 
+// A honeypot (#2228) is a decoy field a human never sees or reaches, so a bot
+// that fills every input gives itself away. Credited only as a weaker signal
+// than a CAPTCHA (info, not pass), and only when all three markers agree: the
+// field is out of the tab order (tabindex="-1"), opted out of autofill
+// (autocomplete="off", so a browser never fills it for a real visitor), and
+// hidden or off-screen on itself or a wrapper inside the form. The third
+// marker can also be an hp/honeypot/trap name or id token, since the hiding
+// rule often lives in a stylesheet the static HTML does not show. A visible
+// field that merely carries tabindex="-1" and autocomplete="off" is not one.
+const HONEYPOT_INPUT_TYPES = new Set([
+  "",
+  "text",
+  "email",
+  "url",
+  "tel",
+  "search",
+  "number",
+  "checkbox",
+]);
+const HONEYPOT_NAME_TOKEN = /(?:^|[-_])(?:hp|honeypot|trap)(?:$|[-_])/i;
+// Class names that hide an element in every common CSS framework.
+const HIDDEN_CLASS_TOKENS = new Set([
+  "hidden",
+  "hide",
+  "d-none",
+  "sr-only",
+  "visually-hidden",
+  "visuallyhidden",
+  "screen-reader-text",
+  "hp",
+  "honeypot",
+]);
+const HIDDEN_STYLE_PATTERNS = [
+  /(?:^|;)\s*display\s*:\s*none/i,
+  /(?:^|;)\s*visibility\s*:\s*hidden/i,
+  /(?:^|;)\s*opacity\s*:\s*0(?:\.0+)?\s*(?:;|$|!)/i,
+  /(?:^|;)\s*(?:width|height)\s*:\s*0(?:px)?\s*(?:;|$|!)/i,
+  /(?:^|;)\s*clip\s*:\s*rect\(\s*0/i,
+];
+const POSITIONED_STYLE = /(?:^|;)\s*position\s*:\s*(?:absolute|fixed)/i;
+const NEGATIVE_OFFSET_STYLE =
+  /(?:^|;)\s*(?:left|top|right|bottom)\s*:\s*-\s*\d/i;
+
+function looksHidden(el: Element): boolean {
+  const hidden = el.getAttribute("hidden");
+  if (hidden !== null && hidden.toLowerCase() !== "until-found") return true;
+  if ((el.getAttribute("aria-hidden") || "").toLowerCase() === "true") {
+    return true;
+  }
+  const style = el.getAttribute("style") || "";
+  if (style) {
+    if (HIDDEN_STYLE_PATTERNS.some((pattern) => pattern.test(style))) {
+      return true;
+    }
+    if (POSITIONED_STYLE.test(style) && NEGATIVE_OFFSET_STYLE.test(style)) {
+      return true;
+    }
+  }
+  const className = el.getAttribute("class") || "";
+  for (const cls of className.split(CLASS_SPLIT)) {
+    if (HIDDEN_CLASS_TOKENS.has(cls.toLowerCase())) return true;
+  }
+  return false;
+}
+
+function isHoneypotField(field: Element, form: Element): boolean {
+  if (field.tagName.toLowerCase() === "input") {
+    const type = (field.getAttribute("type") || "").trim().toLowerCase();
+    if (!HONEYPOT_INPUT_TYPES.has(type)) return false;
+  }
+  if ((field.getAttribute("tabindex") || "").trim() !== "-1") return false;
+  if ((field.getAttribute("autocomplete") || "").trim().toLowerCase() !== "off")
+    return false;
+  if (
+    HONEYPOT_NAME_TOKEN.test(field.getAttribute("name") || "") ||
+    HONEYPOT_NAME_TOKEN.test(field.getAttribute("id") || "")
+  ) {
+    return true;
+  }
+  for (
+    let el: Element | null = field;
+    el && el !== form;
+    el = el.parentElement
+  ) {
+    if (looksHidden(el)) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if form contains a honeypot field
+ */
+function formHasHoneypot(form: Element): boolean {
+  for (const field of form.querySelectorAll("input, textarea")) {
+    if (isHoneypotField(field, form)) return true;
+  }
+  return false;
+}
+
 /**
  * Classify form as public, excluded, or unknown
  */
@@ -608,6 +707,7 @@ export const formCaptchaRule: Rule = {
       : false;
 
     const unprotectedForms: string[] = [];
+    const honeypotForms: string[] = [];
     for (const { form, index } of publicForms) {
       const formHasCaptcha =
         formHasCaptchaWidget(form) ||
@@ -622,7 +722,9 @@ export const formCaptchaRule: Rule = {
         (hasPageCaptcha && publicForms.length === 1 && !anotherFormOwnsCaptcha);
 
       if (!formHasCaptcha && !assumeProtected) {
-        unprotectedForms.push(getFormIdentifier(form, index));
+        const id = getFormIdentifier(form, index);
+        if (formHasHoneypot(form)) honeypotForms.push(id);
+        else unprotectedForms.push(id);
       }
     }
 
@@ -641,11 +743,25 @@ export const formCaptchaRule: Rule = {
         status: "warn",
         message: `${unprotectedForms.length} public form(s) without detectable client-side CAPTCHA markup`,
         items: unprotectedForms.map((id) => ({ id })),
+        ...(honeypotForms.length > 0 ? { details: { honeypotForms } } : {}),
         observation: {
           mode: "static",
           applicability: "applicable",
           uncertainty:
             "Only client-side markup was inspected; this does not establish whether server-side abuse controls exist.",
+        },
+      });
+    } else if (honeypotForms.length > 0) {
+      checks.push({
+        name: "form-captcha",
+        status: "info",
+        message: `${honeypotForms.length} public form(s) rely on a honeypot field instead of CAPTCHA`,
+        items: honeypotForms.map((id) => ({ id })),
+        observation: {
+          mode: "static",
+          applicability: "applicable",
+          uncertainty:
+            "A hidden decoy field (tabindex=-1, autocomplete=off) was found; a honeypot only works if the server rejects submissions that fill it, and it does not stop bots that skip hidden fields.",
         },
       });
     } else {
