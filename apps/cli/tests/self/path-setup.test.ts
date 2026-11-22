@@ -41,6 +41,7 @@ describe("path_setup stamp", () => {
     home = mkdtempSync(join(realOs.tmpdir(), "squirrel-path-setup-"));
     process.env = { ...originalEnv, HOME: home };
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     delete process.env.SQUIRREL_PATH_SETUP;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
   });

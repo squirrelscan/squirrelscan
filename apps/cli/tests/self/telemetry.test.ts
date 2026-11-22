@@ -49,6 +49,7 @@ describe("telemetry", () => {
 
   test("telemetry never sends an API credential", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
     process.env.SQUIRRELSCAN_API_KEY = "sq_test_secret";
 
@@ -69,6 +70,7 @@ describe("telemetry", () => {
 
   test("error telemetry sends a category but never the raw error message", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     let payload: Record<string, string> = {};
@@ -90,6 +92,7 @@ describe("telemetry", () => {
 
   test("posts audit trace with install id", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     let calledUrl = "";
@@ -114,6 +117,7 @@ describe("telemetry", () => {
 
   test("posts update event correctly", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     let payload: Record<string, string> = {};
@@ -134,6 +138,7 @@ describe("telemetry", () => {
 
   test("includes version in payload", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     let payload: Record<string, string> = {};
@@ -156,6 +161,7 @@ describe("telemetry", () => {
 
   test("sends update lifecycle events", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     const events: string[] = [];
@@ -190,6 +196,7 @@ describe("telemetry", () => {
 
   test("handles network errors silently", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     globalThis.fetch = (async () => {
@@ -203,6 +210,7 @@ describe("telemetry", () => {
 
   test("handles timeout silently", async () => {
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
 
     globalThis.fetch = (async (

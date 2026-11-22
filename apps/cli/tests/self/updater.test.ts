@@ -165,6 +165,7 @@ describe("updater", () => {
     process.env = { ...originalEnv, HOME: tempHome };
     for (const v of CI_VARS) delete process.env[v];
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     // pub#2249: telemetry stays enabled here, so every unstubbed send must hit
     // a dead local endpoint through a recording stub, never api.squirrelscan.com.
     process.env.SQUIRREL_API_SERVER = DEAD_API_URL;
