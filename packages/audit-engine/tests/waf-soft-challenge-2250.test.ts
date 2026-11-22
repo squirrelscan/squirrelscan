@@ -104,6 +104,19 @@ describe("a one-page crawl of a 2xx interstitial (#2250)", () => {
     expect(stats?.wafBlocked?.seed).toBeUndefined();
   });
 
+  test("a JS-only SPA shell with a noscript notice is not blocked", async () => {
+    const origin = serve({
+      "/": () =>
+        new Response(
+          `<!doctype html><html><head><title>App</title></head><body><div id="root"></div><noscript>Please enable JavaScript to continue.</noscript></body></html>`,
+          { headers: HTML }
+        ),
+    });
+    const { stats, pages } = await crawl(origin);
+    expect(pages).toHaveLength(1);
+    expect(stats?.wafBlocked?.seed).toBeUndefined();
+  });
+
   test("a challenge-worded page is not blocked when the crawl reached other pages", async () => {
     const origin = serve({
       "/": () =>

@@ -24,4 +24,16 @@ describe("detectSoftChallengeEntry (#2250)", () => {
     const html = `<!doctype html><html><body><p>Just a moment</p>${"<p>Real article text goes here.</p>".repeat(60)}</body></html>`;
     expect(detectSoftChallengeEntry(200, html).detected).toBe(false);
   });
+  test("does not flag a JS-only SPA shell whose noscript asks for JavaScript", () => {
+    const html = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div><noscript>Please enable JavaScript to continue.</noscript></body></html>`;
+    expect(detectSoftChallengeEntry(200, html).detected).toBe(false);
+  });
+  test("still flags the same wording outside noscript on a tiny page", () => {
+    const html = `<!doctype html><html><head><title>App</title></head><body><div id="root"></div><p>Please enable JavaScript to continue.</p></body></html>`;
+    expect(detectSoftChallengeEntry(200, html).detected).toBe(true);
+  });
+  test("flags challenge wording outside an unclosed noscript-free body even when a noscript precedes it", () => {
+    const html = `<!doctype html><html><body><noscript>x</noscript><p>Checking your browser</p></body></html>`;
+    expect(detectSoftChallengeEntry(200, html).detected).toBe(true);
+  });
 });

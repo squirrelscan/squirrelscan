@@ -15,6 +15,9 @@ const SOFT_CHALLENGE_WORDING = [
   /just a moment/i,
 ];
 
+/** A noscript element, or an unclosed one to the end of the input. */
+const NOSCRIPT_BLOCK = /<noscript\b[\s\S]*?(?:<\/noscript\s*>|$)/gi;
+
 export interface SoftChallengeResult {
   detected: boolean;
   /** From a fixed vocabulary, never a slice of the page. */
@@ -36,7 +39,9 @@ export function detectSoftChallengeEntry(
   if (status < 200 || status > 299 || !html) return none;
   if (visibleTextLength(html) > CHALLENGE_INTERSTITIAL_MAX_TEXT) return none;
   const head = html.slice(0, 20480);
-  const views = signatureViews(head);
+  // A `<noscript>` notice ("Please enable JavaScript") is what an unrendered
+  // single-page app ships, so it is not challenge wording.
+  const views = signatureViews(head.replace(NOSCRIPT_BLOCK, " "));
   if (SOFT_CHALLENGE_WORDING.some((p) => p.test(views.text))) {
     return {
       detected: true,
