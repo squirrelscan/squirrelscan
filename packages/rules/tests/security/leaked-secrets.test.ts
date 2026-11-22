@@ -30,6 +30,7 @@ import {
   selectFastPatterns,
   type LeakedSecret,
 } from "../../src/security/leaked-secrets";
+import { sourceMapSources } from "../../src/security/secrets/sources";
 import {
   CASES,
   HARNESS_ERRORS,
@@ -65,6 +66,20 @@ function ctxFor(c: Case): RuleContext {
         content: s.content,
         sourcePages: [c.url],
       })),
+      ...(c.sources
+        ? {
+            secretSources: c.sources.map((s) => ({
+              kind: s.kind,
+              url: s.url,
+              referencedBy: s.referencedBy,
+              sourcePages: [c.url],
+              status: 200,
+              error: null,
+              contentType: s.contentType,
+              content: s.content,
+            })),
+          }
+        : {}),
     },
     options: {},
   } as unknown as RuleContext;
@@ -79,7 +94,9 @@ const CHECK_NAMES: Record<Check, string> = {
 };
 
 // The rule's item label: `Found in <location> (<url>)`, where the location
-// may carry the ` (base64)` suffix of a decoded blob (#360).
+// may carry the ` (base64)` suffix of a decoded blob (#360). The locations of
+// #362 (`html-comment`, `framework-payload`, `source-map`, `config-endpoint`)
+// match the same class.
 const LOCATION_RE = /^Found in ([a-z-]+(?: \(base64\))?)/;
 
 /** What the rule reported, in the same shape as a case's `expect`. */
@@ -121,6 +138,15 @@ function rawScan(c: Case): LeakedSecret[] {
   const out = scanPageForSecrets(doc, c.url);
   for (const s of c.scripts ?? [])
     out.push(...scanContent(s.content, "external-script", s.url));
+  // The bodies the engine fetched for those scripts (#362), read as the rule reads them.
+  for (const s of c.sources ?? []) {
+    if (s.kind === "config-endpoint") {
+      out.push(...scanContent(s.content, "config-endpoint", s.url));
+      continue;
+    }
+    for (const text of sourceMapSources(s.content) ?? [])
+      out.push(...scanContent(text, "source-map", s.url));
+  }
   return out;
 }
 

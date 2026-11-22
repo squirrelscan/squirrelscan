@@ -39,6 +39,7 @@ import type {
   EndpointSurface,
   ParsedPage,
   RuleRunResult,
+  SecretSourceData,
   SiteData,
   StylesheetBackgroundData,
   StylesheetMotionData,
@@ -186,6 +187,7 @@ import {
   type ScriptContentCache,
   type ScriptFetchResult,
 } from "./script-fetcher";
+import { fetchSecretSources } from "./secret-sources";
 // Site-context + header helpers live in ./site-fetch so ./streaming and
 // ./page-features need not import this module back (#1409). Re-exported below
 // to keep the package barrel (index.ts) and every ./adapter importer unchanged.
@@ -380,6 +382,9 @@ const BROKEN_RESOURCES_RULE_ID = "reliability/broken-resources";
 /** The one rule that reads the web app manifest fetch (#710). */
 const WEB_APP_MANIFEST_RULE_ID = "mobile/web-app-manifest";
 
+/** The one rule that reads the source map and config endpoint fetch (#362). */
+const LEAKED_SECRETS_RULE_ID = "security/leaked-secrets";
+
 /** Most script URLs kept for scripts held back from the rules (#1757). */
 export const SCRIPTS_NOT_READ_URLS_CAP = 20;
 
@@ -443,6 +448,12 @@ export interface PreFetchedAssets {
    * cross-origin, budget, error). NEVER published: rules emit derived signals only.
    */
   stylesheets?: StylesheetContentData[];
+  /**
+   * Same-origin source maps and config endpoints the rule scripts reference, fetched for
+   * security/leaked-secrets (`ctx.site.secretSources`, #362), at most SECRET_SOURCE_FETCH_LIMITS.MAX_FETCHES
+   * requests per audit. NEVER published. Absent when the rule is off or the asset phase did not run.
+   */
+  secretSources?: SecretSourceData[];
   /**
    * Same-site chunks a page preloads (`modulepreload`, `preload as=script`) that
    * no `<script src>` names. Held apart from `scripts` so the file-size,
@@ -1258,6 +1269,14 @@ export function fetchAssetsFromOccurrences(
       .sort((a, b) => b[1].size - a[1].size)
       .map(([url]) => url)
       .slice(0, STYLESHEET_BACKGROUND_FETCH_LIMIT);
+    const probeSecretSources = isRuleEnabled(
+      LEAKED_SECRETS_RULE_ID,
+      config.rules?.enable ?? [],
+      config.rules?.disable ?? [],
+      (
+        config.rule_options as Record<string, { enabled?: boolean }> | undefined
+      )?.[LEAKED_SECRETS_RULE_ID]
+    );
     const probeWebAppManifests = isRuleEnabled(
       WEB_APP_MANIFEST_RULE_ID,
       config.rules?.enable ?? [],
@@ -1555,6 +1574,24 @@ export function fetchAssetsFromOccurrences(
       ? scriptRuleLimit(occurrences.pageCount, maxResources)
       : resourceResults.scripts.length;
     const ruleScripts = resourceResults.scripts.slice(0, ruleScriptCount);
+    // #362: the same-origin source maps and config endpoints those scripts name, for security/leaked-secrets. A
+    // second step because the URLs come out of the script bodies; on the same budget, egress and headers, at most
+    // SECRET_SOURCE_FETCH_LIMITS.MAX_FETCHES requests, one per URL. Skipped when the asset step timed out (no scripts).
+    const secretSources = probeSecretSources
+      ? yield* fetchSecretSources(
+          ruleScripts.map((fetch) => ({
+            url: fetch.url,
+            content: fetch.content,
+            sourcePages: Array.from(
+              resourceOccurrences.scripts.get(fetch.url) ?? []
+            ),
+            ...(fetch.sourceMapHeader !== undefined
+              ? { sourceMapHeader: fetch.sourceMapHeader }
+              : {}),
+          })),
+          nonStoreScriptOptions
+        )
+      : null;
     const storedOnlyScripts = resourceResults.scripts.slice(ruleScriptCount);
     // The first timed script of each origin carries the connection setup in its response time (#1751).
     const timedHosts = new Set<string>();
@@ -1603,6 +1640,7 @@ export function fetchAssetsFromOccurrences(
     });
 
     const result: PreFetchedAssets = {
+      ...(secretSources ? { secretSources: secretSources.sources } : {}),
       // Absent on the timeout fallback: not checked, rather than "no manifest linked".
       ...(resourceResults.webAppManifests
         ? {
@@ -2340,6 +2378,7 @@ export function runRulesOnStorage(
       stylesheetBackgrounds,
       stylesheetMotion,
       stylesheets,
+      secretSources,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -2478,6 +2517,7 @@ export function runRulesOnStorage(
       stylesheetBackgrounds,
       stylesheetMotion,
       stylesheets,
+      secretSources,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -3391,6 +3431,7 @@ function buildStreamingSiteData(
       stylesheetBackgrounds,
       stylesheetMotion,
       stylesheets,
+      secretSources,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,
@@ -3548,6 +3589,7 @@ function buildStreamingSiteData(
       stylesheetBackgrounds,
       stylesheetMotion,
       stylesheets,
+      secretSources,
       pdfSizes,
       sitemapUrlStatuses,
       webAppManifests,

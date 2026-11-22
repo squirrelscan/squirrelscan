@@ -599,6 +599,27 @@ export interface StylesheetContentData {
   content?: string;
 }
 
+/** A body security/leaked-secrets reads beyond the pages and their scripts (#362). */
+export type SecretSourceKind = "source-map" | "config-endpoint";
+
+/**
+ * One same-origin source map or config endpoint a fetched script referenced, as the asset phase requested it for
+ * security/leaked-secrets (#362). `content` is the decoded body, null when it was not read (refused, failed, over
+ * the script size cap, budget spent). In-process only: never published, so the rule emits masked findings, not the body.
+ */
+export interface SecretSourceData {
+  kind: SecretSourceKind;
+  url: string;
+  /** The script that referenced it. */
+  referencedBy: string;
+  /** Pages that load a script referencing it. */
+  sourcePages: string[];
+  status: number | null;
+  error: string | null;
+  contentType: string | null;
+  content: string | null;
+}
+
 /** What a stylesheet says about the colour behind the page: only its `html`, `body` and `:root` rules are read (#1756). */
 export type StylesheetBackground =
   | { kind: "none" }
@@ -840,6 +861,12 @@ export interface SiteData {
   stylesheetMotion?: StylesheetMotionData[];
   /** Same-site stylesheet bodies, in-process only (repo#1374). Absent when the asset phase did not fetch them. */
   stylesheets?: StylesheetContentData[];
+  /**
+   * Same-origin source maps and config endpoints the fetched scripts reference, requested for
+   * security/leaked-secrets (#362), at most SECRET_SOURCE_FETCH_LIMITS.MAX_FETCHES per audit. In-process only.
+   * Absent when the asset phase did not run or the rule is off.
+   */
+  secretSources?: SecretSourceData[];
   /**
    * Referenced URLs the asset fetch caps (`maxScripts`, `maxResources`) left
    * unfetched, per kind (#703). Absent or zero means nothing was dropped.

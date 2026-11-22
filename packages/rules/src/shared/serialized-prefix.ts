@@ -7,15 +7,17 @@
 // characters child by child, and can stop early or leave a script's text out.
 
 const ELEMENT_NODE = 1;
+const COMMENT_NODE = 8;
 
 export interface SerializeOptions {
   /** Stop once at least this many characters are built (the result may run past it). */
   need?: number;
   /**
-   * Text to serialise in place of an element's own text (a script's), by element. Only elements that serialise
-   * themselves (script, style, title, textarea) are looked up; they are replaced in page order.
+   * Text to serialise in place of an element's own text (a script's), by element, or of a comment's (pub#362), by
+   * comment node. Only elements that serialise themselves (script, style, title, textarea) and comments are looked
+   * up; they are replaced in page order.
    */
-  replaceText?: ReadonlyMap<Element, string>;
+  replaceText?: ReadonlyMap<Node, string>;
 }
 
 /**
@@ -88,6 +90,12 @@ export function serializeChildren(
             );
             continue;
           }
+        }
+      } else if (replaceText && child.nodeType === COMMENT_NODE) {
+        const text = replaceText.get(child);
+        if (text !== undefined) {
+          push(`<!--${text}-->`);
+          continue;
         }
       }
       push(String(child));

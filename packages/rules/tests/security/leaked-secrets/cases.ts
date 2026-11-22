@@ -8,7 +8,7 @@ import {
   FAST_PATTERNS,
   scanContent,
 } from "../../../src/security/leaked-secrets";
-import { CONTEXTS, type Location } from "./contexts";
+import { CONTEXTS, type Embedded, type Location } from "./contexts";
 import {
   algoliaSecuredKey,
   awsKeySuffix,
@@ -41,6 +41,8 @@ export interface Case {
   url: string;
   html: string;
   scripts?: Array<{ url: string; content: string }>;
+  /** Source maps and config endpoints the engine fetched for the page's scripts (#362): `site.secretSources`. */
+  sources?: Embedded["sources"];
   /** Exact set of rule-level findings, order-insensitive. */
   expect: Expectation[];
   /** Patterns that must not appear at all, whatever else does. */
@@ -199,7 +201,10 @@ const SERVER_ONLY = new Set([
 function escalate(pattern: string, check: Check, location: string): Check {
   const served =
     location.startsWith("inline-script") ||
-    location.startsWith("external-script");
+    location.startsWith("external-script") ||
+    location.startsWith("framework-payload") ||
+    location.startsWith("source-map") ||
+    location.startsWith("config-endpoint");
   return SERVER_ONLY.has(pattern) &&
     served &&
     (check === "high" || check === "medium")
@@ -280,6 +285,7 @@ const POSITIVES: Case[] = GENERATORS.flatMap((g) => {
         url: "https://app.acme.test/dashboard",
         html: embedded.html,
         scripts: embedded.scripts,
+        ...(embedded.sources ? { sources: embedded.sources } : {}),
         expect,
         secret: value.secret,
         knownGap,

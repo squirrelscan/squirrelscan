@@ -138,6 +138,16 @@ export interface ScriptFetcherOptions {
    * `anyContentType`, whose bodies are not scripts.
    */
   contentCache?: ScriptContentCache;
+  /**
+   * Retries after a network error. Absent: SCRIPT_FETCH_LIMITS.MAX_RETRIES. Zero for a fetch that must stay at one
+   * request per URL (the leaked-secrets sources, #362).
+   */
+  maxRetries?: number;
+  /**
+   * `false`: a 3xx is the answer (read as `HTTP 3xx`), its Location never requested, so each URL costs exactly one
+   * request (#362). Absent: redirects are followed, every hop vetted.
+   */
+  followRedirects?: boolean;
 }
 
 /** The `error` of a script the fetcher dropped for its size (over `maxSizeBytes`). */
@@ -239,7 +249,8 @@ async function fetchScriptAttempt(
       // #2717: undecoded on every hop; readBodyCapped decodes within its cap.
       options.egress
         ? egressGuardedSend(fetchUndecoded, options.egress)
-        : fetchUndecoded
+        : fetchUndecoded,
+      options.followRedirects === false ? () => false : undefined
     );
 
     const contentType = response.headers.get("content-type");
@@ -387,7 +398,7 @@ async function fetchSingleScriptAsync(
     // retry started inside the attempt's `finally` would inherit an expired
     // timer, or keep the spent one alive for the length of the retry.
     if (
-      retryCount < SCRIPT_FETCH_LIMITS.MAX_RETRIES &&
+      retryCount < (options.maxRetries ?? SCRIPT_FETCH_LIMITS.MAX_RETRIES) &&
       (error as Error).name !== "AbortError"
     ) {
       const delay =

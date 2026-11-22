@@ -21,6 +21,11 @@ export * from "./cloud";
 export * from "./discovery-probes";
 export * from "./link-verdict-rules";
 export {
+  planSecretSources,
+  type SecretSourceScript,
+  type SecretSourceTarget,
+} from "./security/secrets/sources";
+export {
   APPLICABILITY_MIN_CONFIDENCE,
   type ApplicabilityVerdict,
   ruleApplies,
