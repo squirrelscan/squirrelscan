@@ -39,6 +39,7 @@ import {
   loadUserSettings,
   updateSettings,
 } from "@/self/settings";
+import { SELF_UPDATE_TELEMETRY_CAP_MS } from "@/self/telemetry";
 import {
   applyPendingUpdateInForeground,
   classifyBinDir,
@@ -862,7 +863,6 @@ describe("updater", () => {
           attestation: failingAttestation,
         });
         expect(result.ok).toBe(false);
-        await waitForTelemetry();
         const errors = captured.events.filter((e) => e.event === "error");
         expect(errors).toHaveLength(1);
         expect(errors[0]?.error_type).toBe("self_update:ATTESTATION_FAILED");
@@ -873,6 +873,66 @@ describe("updater", () => {
         expect(message).not.toMatch(/https?:|\/|@|\.com/i);
       });
 
+      test("the error event has fully left when a failed manual update resolves (no wait)", async () => {
+        stubInteractiveUpdate();
+        // A transport that takes a real moment, like DNS + TLS + POST: the
+        // event only counts as sent once the response has completed.
+        const delivered: Array<Record<string, unknown>> = [];
+        globalThis.fetch = (async (
+          _url: string | URL | Request,
+          init?: RequestInit
+        ) => {
+          const body = JSON.parse(init?.body as string) as Record<
+            string,
+            unknown
+          >;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          delivered.push(body);
+          return new Response("{}", { status: 200 });
+        }) as unknown as typeof fetch;
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        const errors = delivered.filter((e) => e.event === "error");
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.error_type).toBe("self_update:ATTESTATION_FAILED");
+      });
+
+      test("a telemetry transport that never resolves delays the failure by at most the cap", async () => {
+        stubInteractiveUpdate();
+        globalThis.fetch = ((_url: string | URL | Request) =>
+          new Promise<Response>(() => {})) as unknown as typeof fetch;
+        const start = Date.now();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        const elapsed = Date.now() - start;
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.code).toBe("ATTESTATION_FAILED");
+        expect(elapsed).toBeLessThan(SELF_UPDATE_TELEMETRY_CAP_MS + 1_000);
+      }, 10_000);
+
+      test("opted out, a failed update resolves without waiting on the transport", async () => {
+        stubInteractiveUpdate();
+        process.env.NO_TELEMETRY = "1";
+        let calls = 0;
+        globalThis.fetch = ((_url: string | URL | Request) => {
+          calls++;
+          return new Promise<Response>(() => {});
+        }) as unknown as typeof fetch;
+        const start = Date.now();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        expect(Date.now() - start).toBeLessThan(500);
+        expect(calls).toBe(0);
+      });
+
       test("the banner prompt flow reports with the prompt prefix", async () => {
         stubInteractiveUpdate();
         const captured = captureTelemetry();
@@ -881,7 +941,6 @@ describe("updater", () => {
           landingDeps,
           attestation: failingAttestation,
         });
-        await waitForTelemetry();
         const errors = captured.events.filter((e) => e.event === "error");
         expect(errors).toHaveLength(1);
         expect(errors[0]?.error_type).toBe(
@@ -897,7 +956,6 @@ describe("updater", () => {
         });
         const captured = captureTelemetry();
         await runInteractiveUpdate({ landingDeps });
-        await waitForTelemetry();
         const errors = captured.events.filter((e) => e.event === "error");
         expect(errors).toHaveLength(1);
         expect(errors[0]?.error_type).toBe("self_update:UNKNOWN");
@@ -927,7 +985,6 @@ describe("updater", () => {
           attestation: failingAttestation,
         });
         expect(result.ok).toBe(false);
-        await waitForTelemetry();
         expect(captured.events).toHaveLength(0);
       });
 
@@ -939,7 +996,6 @@ describe("updater", () => {
           landingDeps,
           attestation: failingAttestation,
         });
-        await waitForTelemetry();
         expect(captured.events).toHaveLength(0);
       });
     });

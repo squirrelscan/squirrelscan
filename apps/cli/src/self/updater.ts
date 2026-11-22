@@ -55,6 +55,7 @@ import {
   shouldCheckForUpdates,
 } from "./settings";
 import {
+  SELF_UPDATE_TELEMETRY_CAP_MS,
   trackSelfUpdateFailure,
   trackTelemetryEvent,
   type SelfUpdateSource,
@@ -1304,11 +1305,36 @@ export async function runInteractiveUpdate(options?: {
   // the new version.
   try {
     const result = await runInteractiveUpdateInner(options);
-    if (!result.ok) trackSelfUpdateFailure(source, result.error.code);
+    if (!result.ok) await sendFailureBounded(source, result.error.code);
     return result;
   } catch (error) {
-    trackSelfUpdateFailure(source, undefined);
+    await sendFailureBounded(source, undefined);
     throw error;
+  }
+}
+
+/**
+ * Await the failure event so a caller that exits right after (the manual
+ * `update` command) does not kill the in-flight POST, but never longer than
+ * the cap. Never throws.
+ */
+async function sendFailureBounded(
+  source: SelfUpdateSource,
+  code: string | undefined
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      trackSelfUpdateFailure(source, code),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, SELF_UPDATE_TELEMETRY_CAP_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } catch {
+    // Telemetry must never change the update's outcome.
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

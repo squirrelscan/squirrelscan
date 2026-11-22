@@ -110,16 +110,28 @@ export function trackTelemetryEvent(
   settings?: UserSettings,
   detail?: { error_type?: string; error_message?: string }
 ): void {
-  if (isTelemetryDisabled(settings)) return;
+  void trackTelemetryEventSent(event, settings, detail);
+}
 
-  void sendTelemetryEvent({
+/**
+ * Same as `trackTelemetryEvent`, but returns the send so a caller that is
+ * about to exit can await it. Never rejects; resolves at once when opted out.
+ */
+function trackTelemetryEventSent(
+  event: TelemetryEvent,
+  settings?: UserSettings,
+  detail?: { error_type?: string; error_message?: string }
+): Promise<void> {
+  if (isTelemetryDisabled(settings)) return Promise.resolve();
+
+  return sendTelemetryEvent({
     event,
     version,
     ...(detail?.error_type && { error_type: detail.error_type.slice(0, 128) }),
     ...(detail?.error_message && {
       error_message: detail.error_message.slice(0, 256),
     }),
-  });
+  }).catch(() => {});
 }
 
 /**
@@ -152,6 +164,15 @@ const SELF_UPDATE_FAILURES = {
 
 export type SelfUpdateFailureCode = keyof typeof SELF_UPDATE_FAILURES;
 
+/**
+ * Longest a failed manual update waits for its failure event to leave before
+ * the process may exit. Below TELEMETRY_TIMEOUT_MS (3000) on purpose.
+ */
+export const SELF_UPDATE_TELEMETRY_CAP_MS = Math.min(
+  TELEMETRY_TIMEOUT_MS,
+  2_000
+);
+
 /** Which flow ran the update: the command, or the startup banner prompt. */
 export type SelfUpdateSource = "self_update" | "self_update_prompt";
 
@@ -165,12 +186,12 @@ export function trackSelfUpdateFailure(
   source: SelfUpdateSource,
   rawCode: string | undefined,
   settings?: UserSettings
-): void {
+): Promise<void> {
   const code: SelfUpdateFailureCode =
     rawCode && Object.hasOwn(SELF_UPDATE_FAILURES, rawCode)
       ? (rawCode as SelfUpdateFailureCode)
       : "UNKNOWN";
-  trackTelemetryEvent("error", settings, {
+  return trackTelemetryEventSent("error", settings, {
     error_type: `${source}:${code}`,
     error_message: SELF_UPDATE_FAILURES[code],
   });
