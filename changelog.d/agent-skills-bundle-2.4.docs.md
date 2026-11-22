@@ -1,1 +1,0 @@
-- The agent skills served over MCP (the `io.modelcontextprotocol/skills` extension of `squirrel mcp` and the hosted server) now carry audit-website 3.3 and squirrelscan 2.4: hosted `run_audit` accepts `refresh: true` to re-audit after a deploy.
