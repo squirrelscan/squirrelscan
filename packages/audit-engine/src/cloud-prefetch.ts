@@ -302,6 +302,13 @@ interface InFlightPageService {
    * has not returned yet. Only `render` (charge-on-submit, then poll) sets it.
    */
   charged: boolean[];
+  /**
+   * Batch indices (ascending) each page url is in, for
+   * {@link CloudPrefetchAccumulator.pageEnvelopes} (pub#2121). Usually one; a url
+   * listed twice in the payloads is in two, and the later batch's envelope wins,
+   * as it does in the batch-order merge.
+   */
+  batchesOf: Map<string, number[]>;
 }
 
 /**
@@ -333,10 +340,22 @@ export class CloudPrefetchAccumulator {
   /** @internal */ inFlight: InFlightPageService | null = null;
   /** @internal Per-call listener (repo#2129), set by the prefetch from its input. */
   onCall: ((event: CloudPrefetchCallEvent) => void) | undefined = undefined;
+  /**
+   * @internal Stage 0 is behind the run: `siteMetadata` holds what the run's
+   * result will carry (pub#2121). Set whether Stage 0 ran, was skipped or failed.
+   */
+  siteMetadataDecided = false;
+  /**
+   * @internal Page-unit services whose envelopes are all in {@link store} and
+   * will not change again (pub#2121): their batches merged, or the run never
+   * dispatches them (gated out, fully capped, stopped).
+   */
+  readonly finalServices = new Set<CloudServiceId>();
   private settled: CloudPrefetchResult | null = null;
   private wasAbandoned = false;
   private readonly openCalls = new Map<number, OpenCall>();
   private nextCallId = 0;
+  private changeWaiters: Array<() => void> = [];
 
   /** @internal Record a call as dispatched; pass the id to {@link endCall} when it returns. */
   beginCall(
@@ -391,9 +410,125 @@ export class CloudPrefetchAccumulator {
     return this.wasAbandoned;
   }
 
+  /**
+   * The run's result once it finished or was abandoned (the same object
+   * {@link abandon} returns), else null.
+   */
+  get result(): CloudPrefetchResult | null {
+    return this.settled;
+  }
+
   /** @internal Record the completed run's result; a later abandon returns it unchanged. */
   settle(result: CloudPrefetchResult): void {
     this.settled ??= result;
+    this.notifyChanged();
+  }
+
+  /**
+   * Resolves at the next point where {@link pageEnvelopes}, {@link result} or
+   * Stage 0 may have moved on (a page batch landed, a service finished, Stage 0
+   * decided, the run settled or was abandoned). Already settled: resolves now.
+   * For a reader that starts rules on a page as soon as its results are final
+   * (pub#2121); it changes nothing about what the prefetch does. Aborting
+   * `signal` resolves the promise and removes the waiter.
+   */
+  changed(signal?: AbortSignal): Promise<void> {
+    if (this.settled || signal?.aborted) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const onAbort = () => {
+        // A reader that stopped waiting (its deadline won) leaves no waiter behind.
+        this.changeWaiters = this.changeWaiters.filter((w) => w !== wake);
+        resolve();
+      };
+      const wake = () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      };
+      this.changeWaiters.push(wake);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  /** @internal Readers parked in {@link changed}, for tests. */
+  get pendingChangeWaiters(): number {
+    return this.changeWaiters.length;
+  }
+
+  /** @internal Wake every {@link changed} waiter. */
+  notifyChanged(): void {
+    if (this.changeWaiters.length === 0) return;
+    const waiters = this.changeWaiters;
+    this.changeWaiters = [];
+    for (const wake of waiters) wake();
+  }
+
+  /** @internal Mark a page-unit service final (see {@link finalServices}). */
+  finishService(service: CloudServiceId): void {
+    this.finalServices.add(service);
+    this.notifyChanged();
+  }
+
+  /**
+   * Every envelope the run's final store will hold for page `url`, as
+   * `[service, envelope]` pairs, or null while one of them can still change
+   * (pub#2121). Non-null means final: each pair is exactly what the store the
+   * awaited prefetch (or {@link abandon}) returns holds for that key.
+   *
+   * Before the run settles, a page is final once every planned page-unit
+   * service is either in {@link finalServices}, or in flight with every batch
+   * holding the url returned. A url in no payload is final at once, since no
+   * page-unit service keys by it. Site-unit keys are never included: no page
+   * rule reads them, and the site rules run on the settled store.
+   */
+  pageEnvelopes(
+    url: string
+  ): Array<[CloudServiceId, CloudResultEnvelope]> | null {
+    const out: Array<[CloudServiceId, CloudResultEnvelope]> = [];
+    const settled = this.settled;
+    if (settled) {
+      for (const [service, byKey] of settled.store) {
+        const env = byKey.get(url);
+        if (env) out.push([service, env]);
+      }
+      return out;
+    }
+    const planned = this.planned;
+    if (!planned) return null;
+    const inFlight = this.inFlight;
+    let fromBatches: CloudResultEnvelope | undefined;
+    for (const [service, unit] of planned) {
+      if (unit === "site" || this.finalServices.has(service)) continue;
+      if (inFlight?.service === service) {
+        const indices = inFlight.batchesOf.get(url);
+        if (!indices) continue; // not in a batch: its envelope (if any) is already in the store
+        if (indices.some((i) => inFlight.outcomes[i] === undefined))
+          return null;
+        // The batch-order merge sets each batch's entries in turn, so the last one wins.
+        const last = inFlight.outcomes[indices[indices.length - 1]]!;
+        for (const [entryUrl, env] of last.entries)
+          if (entryUrl === url) fromBatches = env;
+        continue;
+      }
+      if (!this.pageUrls().has(url)) continue; // never keyed by any page-unit service
+      return null;
+    }
+    for (const [service, byKey] of this.store) {
+      if (fromBatches && service === inFlight?.service) continue;
+      const env = byKey.get(url);
+      if (env) out.push([service, env]);
+    }
+    if (fromBatches && inFlight) out.push([inFlight.service, fromBatches]);
+    return out;
+  }
+
+  private pageUrlSet: Set<string> | null = null;
+  private pageUrlSource: CloudPagePayload[] | null = null;
+  private pageUrls(): Set<string> {
+    if (this.pageUrlSource !== this.pages || !this.pageUrlSet) {
+      this.pageUrlSet = new Set(this.pages.map((p) => p.url));
+      this.pageUrlSource = this.pages;
+    }
+    return this.pageUrlSet;
   }
 
   /**
@@ -507,6 +642,7 @@ export class CloudPrefetchAccumulator {
         ? { balanceAfterApproximate: true as const }
         : {}),
     };
+    this.notifyChanged();
     return this.settled;
   }
 }
@@ -519,9 +655,13 @@ export class CloudPrefetchAccumulator {
  */
 export async function prefetchCloudDataWithDeadline(
   input: Omit<CloudPrefetchInput, "accumulator">,
-  deadlineMs: number
+  deadlineMs: number,
+  /**
+   * Caller-owned accumulator (pub#2121), for a caller that reads it while the
+   * prefetch runs (`LateCloudResults`). Absent → a private one, exactly as before.
+   */
+  accumulator: CloudPrefetchAccumulator = new CloudPrefetchAccumulator()
 ): Promise<CloudPrefetchResult> {
-  const accumulator = new CloudPrefetchAccumulator();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<CloudPrefetchResult>((resolve) => {
     timer = setTimeout(
@@ -1128,6 +1268,9 @@ async function runPrefetch(
     }
     specs.delete(SITE_METADATA_SERVICE);
   }
+  // Whatever Stage 0 did, `acc.siteMetadata` is now what this run's result carries (pub#2121).
+  acc.siteMetadataDecided = true;
+  acc.notifyChanged();
 
   // ── STAGE 1: gate downstream services by the resolved metadata ──
   // A gated-out service is removed BEFORE applyCap, so it never charges and its
@@ -1137,6 +1280,7 @@ async function runPrefetch(
       if (!input.gate(siteMetadata, service)) {
         skipService(store, service, spec.unit, input.pages, "not-applicable");
         specs.delete(service);
+        acc.finishService(service);
       }
     }
   }
@@ -1199,9 +1343,13 @@ async function runPrefetch(
   // Spend confirmation already happened up front (before Stage 0), covering the
   // worst-case total including the metadata cost — no second prompt here.
 
+  let previous: ServicePlan | null = null;
   for (const plan of plans) {
     // An abandoned run stops dispatching: anything charged now would never reach a report.
     if (acc.abandoned) break;
+    // Services run one at a time, so the one before this is done with the store (pub#2121).
+    if (previous) acc.finishService(previous.service);
+    previous = plan;
     if (plan.fullyCapped) continue;
     if (plan.unit !== "site" && plan.pages.length === 0) continue;
     const line: CloudSpendLine = {
@@ -1328,6 +1476,14 @@ async function runPrefetch(
     const perPage = computeCost(plan.feature, 1);
 
     // Publish the in-flight batches so an abandon mid-service keeps the ones that returned (#280).
+    const batchesOf = new Map<string, number[]>();
+    batches.forEach((batch, i) => {
+      for (const p of batch) {
+        const indices = batchesOf.get(p.url);
+        if (indices) indices.push(i);
+        else batchesOf.set(p.url, [i]);
+      }
+    });
     const inFlight: InFlightPageService = {
       service: plan.service,
       feature: plan.feature,
@@ -1335,6 +1491,7 @@ async function runPrefetch(
       batches,
       outcomes: [],
       charged: [],
+      batchesOf,
     };
     acc.inFlight = inFlight;
     const abandoned = (): boolean => acc.abandoned;
@@ -1347,6 +1504,10 @@ async function runPrefetch(
     ): Promise<BatchOutcome> => {
       const outcome = await fetchBatchOutcome(batch, i);
       inFlight.outcomes[i] = outcome;
+      // Its pages may now be final (pub#2121). The store is NOT written here: the
+      // batch-order merge below stays the only writer, so the result is in batch
+      // order whatever order the batches return in.
+      acc.notifyChanged();
       return outcome;
     };
 
@@ -1463,6 +1624,7 @@ async function runPrefetch(
     }
     // Merged synchronously above, so no abandon can see this service half-merged.
     acc.inFlight = null;
+    acc.finishService(plan.service);
   }
 
   return {

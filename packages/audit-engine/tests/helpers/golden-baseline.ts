@@ -256,7 +256,7 @@ function statusBucket(tally: RuleTallySnapshot, status: CheckStatus): void {
   }
 }
 
-function buildSnapshot(
+export function buildSnapshot(
   pageCount: number,
   ruleResults: RuleExecutionResult,
   report: FullAuditReport
