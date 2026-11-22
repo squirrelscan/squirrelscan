@@ -17,6 +17,7 @@ The rule is passive. It reads the inline `<script>` blocks of each crawled page 
 - Pass when no write was found. Message: `No auth tokens written to localStorage or sessionStorage`.
 - Info, as a separate check named `token-storage-truncated`, when a script that mentions web storage is longer than 6 MB and was read only up to that length. Message: `Script https://example.com/static/big.js is longer than 6 MB: only the first 6 MB were scanned for token writes`. It never counts as a finding, so a page with only this note still passes.
 - Warn when a write was found, one check for the page's inline scripts and one for each external script. Message: `1 auth token write(s) to web storage: localStorage["access_token"] in https://example.com/static/app.js`. Each item names the script, the storage, the key and the reason.
+- Fail instead of warn when the page also loads scripts from another registrable domain, with the message naming up to five of those hosts. Message: `1 auth token write(s) to web storage: localStorage["token"] in https://example.com/account. Any script on the page can read web storage, and this page loads scripts from 2 third-party host(s): cdn.optimizely.com, js.hs-scripts.com`. See [Third-party scripts on the page](#third-party-scripts-on-the-page).
 
 Two things count as a token write:
 
@@ -43,9 +44,17 @@ When a key has a namespace such as `app:auth` or `app.session`, only the last pa
 
 The word lists are a blocklist that wins over a strong word, so a key that mixes them is missed: `token_view`, `jwt_mode` and `auth_token_time` stay clean. That trades some recall for precision. A bare `auth` or `session` key is flagged for any value that is not empty or a flag, so `setItem("auth", "guest")` warns.
 
-### Third-party scripts
+### Third-party scripts that write a token
 
-A script served from another registrable domain than the page, such as an analytics tag, a widget or an auth SDK, is labelled `third-party script` in the message and the item, and carries `thirdParty` in the item `meta`. The status does not change. A vendor script that writes its own `session_id` is not something you can fix, so read the label first. An auth SDK that stores your user's JWT in web storage is still your risk, because you chose how it is configured.
+A script served from another registrable domain than the page, such as an analytics tag, a widget or an auth SDK, is labelled `third-party script` in the message and the item, and carries `thirdParty` in the item `meta`. The label alone does not change the status. A vendor script that writes its own `session_id` is not something you can fix, so read the label first. An auth SDK that stores your user's JWT in web storage is still your risk, because you chose how it is configured.
+
+### Third-party scripts on the page
+
+Every script on the page can read web storage, so a stored token is exposed to each third-party tag the page runs, not only to an XSS bug. When one of those scripts changes, whoever controls it can read the token, without any bug in your own code. The rule reads the page's `<script src>` elements: a script from another registrable domain than the page counts (`cdn.optimizely.com` on `www.example.com` does, `cdn.example.com` does not). Scripts inside `<noscript>` and blocks that are not JavaScript are skipped.
+
+When the page loads at least one, each `token-storage` finding on that page fails instead of warning, one severity step higher. The message names up to five script hosts and counts the rest, and `details.thirdPartyScriptHosts` and `details.thirdPartyScriptHostCount` carry the same. The message does not say that any of those scripts does anything wrong; it says that any of them can read the value. For a write in a third-party script, that script's own host is left out, since it already holds what it wrote: a vendor SDK alone on the page still warns.
+
+A page with no third-party script reports exactly as before. Only scripts in the page's markup are seen, so a tag that another script adds while the page runs is not counted. A shared script's finding is grouped into one issue across the pages that load the same third-party hosts; pages with a different set of hosts form a separate issue, so a grouped message never names a host a page does not load.
 
 ### The value is never printed
 
@@ -57,7 +66,7 @@ The rule reads script text, so it sees what a script writes and not what the bro
 
 ## How to fix it
 
-Move the credential into an `httpOnly` cookie that the server sets, and let the browser send it. If a token has to stay in script, hold it in memory for the life of the page, give it a short lifetime and rotate refresh tokens. Add a strict [Content-Security-Policy](/rules/security/csp) to limit what can run on the page.
+Move the credential into an `httpOnly` cookie that the server sets, and let the browser send it. If a token has to stay in script, hold it in memory for the life of the page, give it a short lifetime and rotate refresh tokens. Add a strict [Content-Security-Policy](/rules/security/csp) to limit what can run on the page. A failure raised by third-party scripts is fixed the same way, by moving the token out of web storage.
 
 If the key is not a credential, rename it so it says what it holds, for example `theme` in place of `session`.
 

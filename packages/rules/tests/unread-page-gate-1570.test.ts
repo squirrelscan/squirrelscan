@@ -133,7 +133,9 @@ const readsParsed = (text: string): boolean =>
         !/^\s*(\/\/|\*|\/\*)/.test(line) &&
         /\bparsed\b/.test(line.replace(/"(?:[^"\\]|\\.)*"|`[^`]*`/g, ""))
     );
-// Rules whose source reads parsed fields but that still run: the raw HTML is what they judge.
+// Rules whose source reads parsed fields but that still run: the raw HTML is what they judge. `security/cookie-flags` judges the
+// Set-Cookie header; it reads the parse only to name third-party script hosts (#2089), and an unread page's empty document has
+// none, so it reports exactly as it would without the parse.
 // Rules that hand `ctx` to a helper, checked by hand: none of the helpers read the parse.
 const HELPER_CHECKED = new Set<string>();
 // Rules that read only the cloud results, but the cloud payload is built from the parsed page (title, text, headings), so an unread
@@ -142,6 +144,7 @@ const CLOUD_FED = new Set(["ai/llm-parsability", "eeat/authority-signals"]);
 const READS_PARSED_BUT_RUNS = new Set([
   "crawl/html-size",
   "integrity/kit-signature",
+  "security/cookie-flags",
 ]);
 
 describe("every page rule is classified for an unread page (#1570)", () => {

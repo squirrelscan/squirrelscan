@@ -511,3 +511,141 @@ describe("registration", () => {
     expect(loadAllRules().get("security/token-storage")).toBe(tokenStorageRule);
   });
 });
+
+// #2089: every script on the page can read web storage, so a token write fails,
+// naming the hosts, on a page that loads third-party scripts.
+describe("third-party scripts on the page (#2089)", () => {
+  /** Like `run`, with `<script src>` markup in the head. */
+  async function runWithTags(
+    tags: string,
+    inline: string,
+    scripts: Array<{
+      url: string;
+      content: string;
+      sourcePages: string[];
+    }> = [],
+    url = PAGE
+  ) {
+    const page = `<html><head><title>t</title>${tags}</head><body><script>${inline}</script></body></html>`;
+    const { document } = parseHTML(page);
+    const ctx = {
+      page: { url, html: page, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: { document } as unknown as ParsedPage,
+      options: {},
+      site: {
+        scripts: scripts.map((s) => ({
+          status: 200,
+          error: null,
+          contentType: "application/javascript",
+          sizeBytes: s.content.length,
+          ...s,
+        })),
+      },
+    } as unknown as RuleContext;
+    return (await tokenStorageRule.run(ctx)).checks;
+  }
+
+  const VENDORS =
+    '<script src="https://cdn.optimizely.com/js/1.js"></script>' +
+    '<script src="https://js.hs-scripts.com/2.js"></script>';
+  const APP = {
+    url: "https://shop.test/app.js",
+    content: 'localStorage.setItem("access_token", t)',
+    sourcePages: [PAGE],
+  };
+
+  test("an inline token write fails and names the third-party hosts", async () => {
+    const checks = await runWithTags(
+      VENDORS,
+      'localStorage.setItem("token", t)'
+    );
+    expect(checks).toHaveLength(1);
+    expect(checks[0]!.status).toBe("fail");
+    expect(checks[0]!.message).toBe(
+      `1 auth token write(s) to web storage: localStorage["token"] in ${PAGE}. Any script on the page can read web storage, and this page loads scripts from 2 third-party host(s): cdn.optimizely.com, js.hs-scripts.com`
+    );
+    expect(checks[0]!.details).toMatchObject({
+      thirdPartyScriptHosts: ["cdn.optimizely.com", "js.hs-scripts.com"],
+      thirdPartyScriptHostCount: 2,
+    });
+  });
+
+  test("a sessionStorage write in an external script fails too, and folds per host set", async () => {
+    const checks = await runWithTags(VENDORS, "", [
+      { ...APP, content: 'sessionStorage.setItem("jwt", j)' },
+    ]);
+    expect(checks[0]!.status).toBe("fail");
+    expect(checks[0]!.message).toContain(
+      "this page loads scripts from 2 third-party host(s): cdn.optimizely.com, js.hs-scripts.com"
+    );
+    expect(checks[0]!.details!.foldKey).toBe(
+      "security/token-storage:https://shop.test/app.js:third-party-hosts:cdn.optimizely.com,js.hs-scripts.com"
+    );
+  });
+
+  test("with no third-party script the checks are exactly as before", async () => {
+    const own =
+      '<script src="/vendor.js"></script><script src="https://static.shop.test/x.js"></script>';
+    const tagged = await runWithTags(own, 'localStorage.setItem("token", t)', [
+      APP,
+    ]);
+    const bare = await run('localStorage.setItem("token", t)', [APP]);
+    expect(tagged).toEqual(bare);
+    expect(tagged.map((c) => c.status)).toEqual(["warn", "warn"]);
+    expect(tagged[1]!.details!.foldKey).toBe(
+      "security/token-storage:https://shop.test/app.js"
+    );
+    expect(tagged[1]!.details).not.toHaveProperty("thirdPartyScriptHosts");
+  });
+
+  test("a third-party script's own host is not counted against its own write", async () => {
+    const sdk = {
+      url: "https://cdn.optimizely.com/js/1.js",
+      content: 'localStorage.setItem("session_id", s)',
+      sourcePages: [PAGE],
+    };
+    const alone = await runWithTags(
+      '<script src="https://cdn.optimizely.com/js/1.js"></script>',
+      "",
+      [sdk]
+    );
+    expect(alone[0]!.status).toBe("warn");
+    expect(alone[0]!.details).not.toHaveProperty("thirdPartyScriptHosts");
+
+    const withOthers = await runWithTags(VENDORS, "", [sdk]);
+    expect(withOthers[0]!.status).toBe("fail");
+    expect(withOthers[0]!.details).toMatchObject({
+      thirdPartyScriptHosts: ["js.hs-scripts.com"],
+      thirdPartyScriptHostCount: 1,
+    });
+  });
+
+  test("names five hosts and counts the rest", async () => {
+    const tags = ["a", "b", "c", "d", "e", "f"]
+      .map((h) => `<script src="https://t.${h}-vendor.net/t.js"></script>`)
+      .join("");
+    const checks = await runWithTags(tags, 'localStorage.setItem("jwt", j)');
+    expect(checks[0]!.message).toContain(
+      "6 third-party host(s): t.a-vendor.net, t.b-vendor.net, t.c-vendor.net, t.d-vendor.net, t.e-vendor.net and 1 more"
+    );
+    expect(checks[0]!.details!.thirdPartyScriptHostCount).toBe(6);
+  });
+
+  test("a page with third-party scripts and no token write still passes", async () => {
+    const checks = await runWithTags(
+      VENDORS,
+      'localStorage.setItem("theme", t)'
+    );
+    expect(checks.map((c) => c.status)).toEqual(["pass"]);
+  });
+
+  test("never calls a vendor malicious", async () => {
+    const checks = await runWithTags(
+      VENDORS,
+      'localStorage.setItem("token", t)'
+    );
+    const text = JSON.stringify(checks).toLowerCase();
+    for (const word of ["malicious", "malware", "attacker", "compromised"])
+      expect(text).not.toContain(word);
+  });
+});

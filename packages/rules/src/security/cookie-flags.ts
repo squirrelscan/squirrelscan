@@ -3,6 +3,12 @@
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { platformCookie } from "./platform-cookies";
+import {
+  formatScriptHosts,
+  scriptHostDetails,
+  thirdPartyScriptHosts,
+} from "./third-party-script-hosts";
+import { isTokenKey } from "./token-storage";
 
 interface ParsedCookie {
   name: string;
@@ -50,6 +56,44 @@ function parseCookieDirective(directive: string): ParsedCookie {
   }
 
   return { name, secure, httpOnly, sameSite };
+}
+
+// Session cookie names that frameworks and servers use by default.
+const SESSION_COOKIE_NAMES = new Set([
+  "phpsessid",
+  "jsessionid",
+  "asp.net_sessionid",
+  "aspsessionid",
+  "cfid",
+  "cftoken",
+  "connect.sid",
+  "sid",
+  "ssid",
+  "sessid",
+  "sessionid",
+  "session",
+  "_session",
+  "session_id",
+]);
+
+/** `laravel_session`, `_myapp_session`, `app.sid`, `__Host-session`. */
+const SESSION_SUFFIX = /(?:^|[._-])(?:session|sess|sid|sessid|sessionid)$/;
+
+/**
+ * Does the cookie name look like it holds a session or an auth token? Used only
+ * to decide which cookies without HttpOnly rate higher when third-party scripts
+ * run on the page (#2089). A default session name (`PHPSESSID`, `connect.sid`,
+ * `laravel_session`) or a credential name `security/token-storage` recognises
+ * (`auth_token`, `jwt`, `session_id`) counts. Names are compared lowercased, with
+ * a `__Host-` or `__Secure-` prefix removed.
+ */
+export function isSessionLikeCookie(name: string): boolean {
+  const lower = name.toLowerCase().replace(/^__(?:host|secure)-/, "");
+  if (!lower) return false;
+  if (SESSION_COOKIE_NAMES.has(lower)) return true;
+  if (/^aspsessionid/.test(lower)) return true;
+  if (SESSION_SUFFIX.test(lower)) return true;
+  return isTokenKey(name.replace(/^__(?:Host|Secure)-/i, ""));
 }
 
 export const cookieFlagsRule: Rule = {
@@ -160,12 +204,36 @@ export const cookieFlagsRule: Rule = {
         items: csrfOwned.map((c) => ({ id: c.name })),
       });
     }
-    if (missingHttpOnly.length > 0) {
+    // Any script on the page can read a cookie without HttpOnly. When the page
+    // loads scripts from other registrable domains, a session-like cookie among
+    // them fails instead of warning, and the check names those hosts (#2089).
+    // With no third-party script, or no parsed document, nothing changes.
+    const scriptHosts =
+      missingHttpOnly.length > 0
+        ? thirdPartyScriptHosts(ctx.parsed?.document, ctx.page.url)
+        : [];
+    const exposed =
+      scriptHosts.length > 0
+        ? missingHttpOnly.filter((c) => isSessionLikeCookie(c.name))
+        : [];
+    const plainMissingHttpOnly = missingHttpOnly.filter(
+      (c) => !exposed.includes(c)
+    );
+    if (exposed.length > 0) {
+      checks.push({
+        name: "cookie-httponly-third-party-scripts",
+        status: "fail",
+        message: `${exposed.length} session-like cookie(s) missing the HttpOnly flag on a page that loads scripts from ${scriptHosts.length} third-party host(s): ${formatScriptHosts(scriptHosts)}. Any script on the page can read these cookies`,
+        items: exposed.map((c) => ({ id: c.name })),
+        details: scriptHostDetails(scriptHosts),
+      });
+    }
+    if (plainMissingHttpOnly.length > 0) {
       checks.push({
         name: "cookie-httponly",
         status: "warn",
-        message: `${missingHttpOnly.length} cookie(s) missing the HttpOnly flag`,
-        items: missingHttpOnly.map((c) => ({ id: c.name })),
+        message: `${plainMissingHttpOnly.length} cookie(s) missing the HttpOnly flag`,
+        items: plainMissingHttpOnly.map((c) => ({ id: c.name })),
       });
     }
 
