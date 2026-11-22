@@ -1,12 +1,12 @@
 // squirrelscan/squirrelscan#2224: a missing aria-controls target of a collapsed
 // disclosure is not an error, and a missing id reads differently from a duplicate.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { ParsedPage, RuleContext } from "../src/types";
 
 import { duplicateIdAriaRule } from "../src/a11y/duplicate-id-aria";
-import type { ParsedPage, RuleContext } from "../src/types";
 
 const URL = "https://example.com/";
 
