@@ -1,0 +1,1 @@
+- `squirrel crawl` no longer shows the project-name prompt when stdin or stdout is not a TTY, so piped and scripted runs no longer hang (#2263)
