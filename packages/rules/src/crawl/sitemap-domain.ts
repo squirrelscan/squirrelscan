@@ -6,6 +6,10 @@ import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { URL_ITEM_SAMPLE, sampleUrlItems } from "../shared/sample-items";
 
+function normalizeSitemapUrl(url: string): string {
+  return url.trim();
+}
+
 export const sitemapDomainRule: Rule = {
   meta: {
     id: "crawl/sitemap-domain",
@@ -45,9 +49,41 @@ export const sitemapDomainRule: Rule = {
       return { checks };
     }
 
+    // Sitemaps declared in robots.txt may live on any host (sitemaps.org
+    // allows a cross-host sitemap when robots.txt declares it), and so may
+    // the children of a declared index. Their URL sets are not flagged.
+    const declared = new Set<string>(
+      [
+        ...(sitemaps.sources?.robotsTxt ?? []),
+        ...(ctx.site?.robotsTxt?.sitemaps ?? []),
+      ].map(normalizeSitemapUrl)
+    );
+    const byUrl = new Map(
+      sitemaps.discovered.map((s) => [normalizeSitemapUrl(s.url), s])
+    );
+    const queue = [...declared];
+    while (queue.length > 0) {
+      const entry = byUrl.get(queue.pop() as string);
+      for (const child of entry?.childSitemaps ?? []) {
+        const key = normalizeSitemapUrl(child);
+        if (!declared.has(key)) {
+          declared.add(key);
+          queue.push(key);
+        }
+      }
+    }
+
     const crossDomainUrls: { url: string; host: string }[] = [];
+    let robotsDeclaredSkipped = 0;
 
     for (const sitemap of sitemaps.discovered) {
+      if (declared.has(normalizeSitemapUrl(sitemap.url))) {
+        const sitemapHost = getHostname(sitemap.url).toLowerCase();
+        if (sitemapHost && sitemapHost !== expectedHost) {
+          robotsDeclaredSkipped += sitemap.urls.length;
+        }
+        continue;
+      }
       for (const sitemapUrl of sitemap.urls) {
         const urlHost = getHostname(sitemapUrl.loc).toLowerCase();
         if (!urlHost) continue;
@@ -83,11 +119,12 @@ export const sitemapDomainRule: Rule = {
       checks.push({
         name: "sitemap-domain",
         status: "fail",
-        message: `${crossDomainUrls.length} URL(s) point to different domain(s)`,
+        message: `${crossDomainUrls.length} URL(s) point to different domain(s) in sitemap(s) not declared in robots.txt`,
         items,
         details: {
           ...truncation,
           total: crossDomainUrls.length,
+          robotsDeclared: false,
           expectedHost,
           foundHosts: uniqueHosts.slice(0, URL_ITEM_SAMPLE),
           ...(uniqueHosts.length > URL_ITEM_SAMPLE
@@ -99,8 +136,16 @@ export const sitemapDomainRule: Rule = {
       checks.push({
         name: "sitemap-domain",
         status: "pass",
-        message: "All sitemap URLs match site domain",
-        details: { host: expectedHost },
+        message:
+          robotsDeclaredSkipped > 0
+            ? `All sitemap URLs match site domain (${robotsDeclaredSkipped} URL(s) in cross-host sitemap(s) declared in robots.txt were not flagged)`
+            : "All sitemap URLs match site domain",
+        details: {
+          host: expectedHost,
+          ...(robotsDeclaredSkipped > 0
+            ? { robotsDeclared: true, robotsDeclaredSkipped }
+            : {}),
+        },
       });
     }
 
