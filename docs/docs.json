@@ -644,6 +644,7 @@
                   "rules/security/form-captcha",
                   "rules/security/new-tab",
                   "rules/security/password-form-get",
+                  "rules/security/card-fields-third-party",
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",
