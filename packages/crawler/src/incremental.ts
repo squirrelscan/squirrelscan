@@ -3,7 +3,6 @@
 
 import {
   type CacheControl,
-  cacheControlLifetimeSeconds,
   expiresLifetimeSeconds,
   parseCacheControl,
 } from "@squirrelscan/utils/cache-control";
@@ -261,19 +260,11 @@ export interface FreshnessInput {
 export type FreshnessState =
   /** Usable as-is — no request needed */
   | "fresh"
-  /**
-   * Stale but within the stale-while-revalidate window — serve immediately
-   * without blocking. NOTE: the background revalidation is not yet implemented;
-   * the crawler serves the stale copy and lets the NEXT audit revalidate it via
-   * conditional GET (writing a background refresh into the current crawl would
-   * corrupt its report row). So this is "serve stale, no request now".
-   */
-  | "revalidate"
   /** Must revalidate before use (conditional GET) */
   | "stale";
 
 /** Reasons a cached entry can be reused without a request (state === "fresh"). */
-export type FreshReason = "max-age" | "s-maxage" | "expires" | "immutable";
+export type FreshReason = "max-age" | "expires" | "immutable";
 
 export type FreshnessReason =
   | FreshReason
@@ -287,7 +278,7 @@ export type FreshnessReason =
 export interface FreshnessResult {
   state: FreshnessState;
   reason: FreshnessReason;
-  /** Effective freshness lifetime in seconds (max-age/s-maxage/Expires), if known */
+  /** Effective freshness lifetime in seconds (max-age/Expires), if known */
   lifetimeSeconds?: number;
   /** Current age of the entry in seconds (response Age + time since stored) */
   ageSeconds: number;
@@ -338,11 +329,10 @@ export function calculateFreshness(
 
   // immutable: reusable within its declared lifetime without revalidation. We
   // still honor the staleness cap to bound how long a single audit trusts it.
-  // s-maxage (shared cache) takes precedence over max-age, then max-age, then
-  // Expires.
+  // The crawler is a private client, so s-maxage (shared caches only) is
+  // ignored: max-age, then Expires (#2229).
   const lifetime =
-    cacheControlLifetimeSeconds(cc) ??
-    expiresLifetimeSeconds(input.expires, input.fetchedAt);
+    cc.maxAge ?? expiresLifetimeSeconds(input.expires, input.fetchedAt);
 
   if (lifetime === undefined) {
     // No usable freshness information — must revalidate.
@@ -351,11 +341,9 @@ export function calculateFreshness(
 
   const reason: FreshnessReason = cc.immutable
     ? "immutable"
-    : cc.sMaxAge !== undefined
-      ? "s-maxage"
-      : cc.maxAge !== undefined
-        ? "max-age"
-        : "expires";
+    : cc.maxAge !== undefined
+      ? "max-age"
+      : "expires";
 
   // Within freshness lifetime → fresh, but never beyond the staleness cap.
   if (ageSeconds < lifetime) {
@@ -370,13 +358,16 @@ export function calculateFreshness(
     return { state: "fresh", reason, lifetimeSeconds: lifetime, ageSeconds };
   }
 
-  // Stale. If within the stale-while-revalidate window, the entry may be served
-  // immediately while a background revalidation refreshes it.
+  // Stale. Inside a stale-while-revalidate window the entry is still revalidated
+  // with a conditional GET: SWR lets a cache serve stale WHILE it revalidates in
+  // the background, and this crawler has no background step, so reusing the body
+  // with no request would grade a copy the site may have replaced (#2229). The
+  // reason is kept for diagnostics.
   if (cc.staleWhileRevalidate !== undefined && !cc.mustRevalidate) {
     const staleness = ageSeconds - lifetime;
     if (staleness < cc.staleWhileRevalidate && ageSeconds <= maxStaleness) {
       return {
-        state: "revalidate",
+        state: "stale",
         reason: "stale-while-revalidate",
         lifetimeSeconds: lifetime,
         ageSeconds,

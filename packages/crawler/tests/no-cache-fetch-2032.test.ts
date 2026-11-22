@@ -176,11 +176,11 @@ describe("no-cache page fetches (#2032)", () => {
   }, 30_000);
 
   // Planning review: a no-cache run must not reuse a page cached by an earlier audit without a
-  // request (origin-fresh max-age, or stale-while-revalidate), even though incremental and
+  // request (origin-fresh max-age), even though incremental and
   // useCacheControl are on by default. It revalidates with a conditional GET instead.
   for (const [label, cacheControl] of [
     ["fresh max-age", "max-age=3600"],
-    ["stale-while-revalidate", "max-age=0, stale-while-revalidate=86400"],
+    // A stale-while-revalidate page is never reused without a request at all (#2229).
   ] as const) {
     test(`noCache revalidates a ${label} cached page instead of reusing it`, async () => {
       const storage = await Effect.runPromise(createTestStorage());

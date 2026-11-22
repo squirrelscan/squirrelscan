@@ -188,8 +188,8 @@ describe("StorageCacheStore.lookup", () => {
     expect(res.freshness?.state).toBe("fresh");
   });
 
-  // Crawler SWR branch relies on the seam surfacing a "revalidate" verdict (#147).
-  test("stale-while-revalidate entry returns revalidate verdict (SWR branch)", async () => {
+  // A stale-while-revalidate entry is revalidated by conditional GET, never reused (#2229).
+  test("stale-while-revalidate entry returns a stale verdict", async () => {
     const { storage } = fakeStorage(
       page({
         fetchedAt: now - 120 * 1000,
@@ -203,7 +203,8 @@ describe("StorageCacheStore.lookup", () => {
       store.lookup("https://example.com/", ctx, { now })
     );
     expect(res.entry).not.toBeNull();
-    expect(res.freshness?.state).toBe("revalidate");
+    expect(res.freshness?.state).toBe("stale");
+    expect(res.freshness?.reason).toBe("stale-while-revalidate");
   });
 
   // Crawler passes maxStalenessSeconds; the seam must honor it — verdict flips (#147).
@@ -228,7 +229,7 @@ describe("StorageCacheStore.lookup", () => {
         maxStalenessSeconds: 3600,
       })
     );
-    // No stale-while-revalidate directive → the cap surfaces "stale", not "revalidate".
+    // No stale-while-revalidate directive → the cap surfaces the "staleness-cap" reason.
     expect(tightCap.freshness?.state).toBe("stale");
   });
 });
