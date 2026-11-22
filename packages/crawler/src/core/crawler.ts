@@ -73,7 +73,10 @@ import {
   safeRedirectFetch,
 } from "@squirrelscan/utils/safe-fetch";
 import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
-import { classifyWafResponse } from "@squirrelscan/utils/waf";
+import {
+  classifyWafResponse,
+  detectSoftChallengeEntry,
+} from "@squirrelscan/utils/waf";
 import { Effect, Stream, PubSub, Duration, Deferred, Either } from "effect";
 
 import type { PhaseBudget, ProbeGate } from "../deadline";
@@ -3135,6 +3138,33 @@ export function createCrawler(
         // one, already names the better reason and is kept.
         if (pagesCommitted === 0 && !rootFailure && processFailure) {
           yield* updateStats(crawlId, { rootFailure: processFailure });
+        }
+        // #2250: a one-page crawl whose only page is a 2xx interstitial or empty
+        // shell is not the site. Recorded as a blocked seed so it takes the same
+        // path as a hard block: status `blocked`, no score.
+        if (!wafBlocked?.seed && seedNormalizedUrl) {
+          const seedUrl = seedNormalizedUrl;
+          const pageTotal = yield* storage.getPageCount(crawlId);
+          if (pageTotal === 1) {
+            const seedPage = yield* storage.getPage(crawlId, seedUrl);
+            const soft = seedPage
+              ? detectSoftChallengeEntry(seedPage.status, seedPage.html)
+              : null;
+            if (seedPage && soft?.detected) {
+              wafBlocked = addWafBlockedPage(
+                wafBlocked,
+                wafBlockedPage({
+                  url: seedPage.normalizedUrl,
+                  status: seedPage.status,
+                  provider: null,
+                  providerId: null,
+                  signal: soft.signal ?? "challenge page",
+                }),
+                true
+              );
+              yield* updateStats(crawlId, {});
+            }
+          }
         }
         const stats = yield* storage.getStats(crawlId);
         const durationMs = Date.now() - startTime;
