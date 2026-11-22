@@ -1,1 +1,0 @@
-- CLI output and rule messages no longer contain em dashes; they use a colon, comma or parentheses instead, and a guard test keeps them out. (#2211)

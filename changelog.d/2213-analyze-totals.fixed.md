@@ -1,1 +1,0 @@
-- `squirrel analyze` no longer counts warnings from advisory rules in its warning total, so its totals match the audit report, and it prints a line saying why the totals can still differ slightly (#2213).

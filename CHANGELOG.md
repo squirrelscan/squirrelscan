@@ -17,6 +17,31 @@ How it works:
   `bun run changelog` prints them as the next release's section, and the release bump PR
   assembles them into a new `## vX.Y.Z` section and deletes them.
 
+## v0.0.190-beta.2 (2026-11-22)
+
+This release is signed with the squirrelscan release key, key id 3d10cf3775665622. If you are logged in to `gh` and on 0.0.189 or older, run the install one-liner once (`curl -fsSL https://install.squirrelscan.com | bash`), or run `env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR=$(mktemp -d) squirrel self update`, because older CLIs only accept GitHub attestations. Re-audits no longer reuse a stored copy of a page for up to a day when the site sends CDN cache headers (#2229).
+
+### Added
+
+- Smart-audit reports state, per rule check, how many pages held an open finding going in, how many this run re-checked and how many stayed carried (`meta.coverage.findings`), and the requested page set when one is given (`meta.coverage.requested`), so a consumer can decide whether an issue may resolve after a partial re-audit. JSON schema 1.30. (#2079)
+
+### Changed
+
+- CLI output and rule messages no longer contain em dashes; they use a colon, comma or parentheses instead, and a guard test keeps them out. (#2211)
+- The console report labels its counts: section headers count findings ("3 warning findings") and the Group and Category Breakdown count checks ("Category Breakdown (checks):"), so the numbers no longer read as a contradiction. (#2212)
+- `schema/entity-publisher-mismatch` now says "two entities share the name X" and names both `@id`s when the publisher and the primary organization have the same name, instead of calling the publisher "not the primary organization" (#2227).
+- `security/form-captcha` recognises honeypot fields: a public form whose only protection is a hidden decoy input with `tabindex="-1"` and `autocomplete="off"` now reports as info naming the honeypot instead of a warning. (#2228)
+
+### Fixed
+
+- `squirrel analyze` no longer counts warnings from advisory rules in its warning total, so its totals match the audit report, and it prints a line saying why the totals can still differ slightly (#2213).
+- `a11y/aria-command-name` no longer flags a link or button named by a child `svg role="img"` with `aria-label` or `aria-labelledby` (#2223).
+- Re-audits no longer reuse a stored page for up to a day when a site sends CDN cache headers (`s-maxage`, `stale-while-revalidate`): the crawler ignores `s-maxage` and revalidates stale pages with a conditional request (#2229).
+
+### Docs
+
+- The rule pages for 39 more rules (adblock, ai, analytics, i18n, integrity, legal, local, mobile, reliability, social and video) list the check names each rule emits and which clean check clears which problem check (#2218).
+
 ## v0.0.190-beta.1 (2026-11-21)
 
 This release is signed with the squirrelscan release key, key id 3d10cf3775665622, instead of a GitHub attestation. If you are logged in to `gh` and on 0.0.189 or older, run the install one-liner once (`curl -fsSL https://install.squirrelscan.com | bash`), or run `env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR=$(mktemp -d) squirrel self update`, because older CLIs only accept GitHub attestations. The token variables are unset because either one would still authenticate `gh`. Everyone else is unaffected. Signed installs on Linux need `openssl` or a logged-in `gh`; the installer adds openssl itself on Alpine when run as root. npm has no provenance attestation on this release.
