@@ -35,7 +35,11 @@ export const elementHidingRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "adblock-elements", outcome: "problem" },
-      { name: "adblock-elements", outcome: "clean", clears: ["adblock-elements"] },
+      {
+        name: "adblock-elements",
+        outcome: "clean",
+        clears: ["adblock-elements"],
+      },
       { name: "adblock-elements", outcome: "skipped" },
     ],
     optionsSchema,

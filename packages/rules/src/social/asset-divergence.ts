@@ -711,7 +711,11 @@ export const assetDivergenceRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "asset-divergence", outcome: "problem" },
-      { name: "asset-divergence", outcome: "clean", clears: ["asset-divergence"] },
+      {
+        name: "asset-divergence",
+        outcome: "clean",
+        clears: ["asset-divergence"],
+      },
       { name: "asset-divergence", outcome: "skipped" },
     ],
   },

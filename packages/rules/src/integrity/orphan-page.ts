@@ -37,7 +37,11 @@ export const orphanPageRule: Rule = {
     checks: [
       { name: "orphan-page", outcome: "problem" },
       { name: "orphan-page-review", outcome: "problem" },
-      { name: "orphan-page", outcome: "clean", clears: ["orphan-page", "orphan-page-review"] },
+      {
+        name: "orphan-page",
+        outcome: "clean",
+        clears: ["orphan-page", "orphan-page-review"],
+      },
       { name: "orphan-page", outcome: "skipped" },
     ],
     // Compromise detection: an ignore could hide a compromised site (#1262).

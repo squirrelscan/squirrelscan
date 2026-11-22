@@ -81,7 +81,11 @@ export const templateDiscontinuityRule: Rule = {
     checks: [
       { name: "template-discontinuity", outcome: "problem" },
       { name: "template-discontinuity-review", outcome: "problem" },
-      { name: "template-discontinuity", outcome: "clean", clears: ["template-discontinuity", "template-discontinuity-review"] },
+      {
+        name: "template-discontinuity",
+        outcome: "clean",
+        clears: ["template-discontinuity", "template-discontinuity-review"],
+      },
       { name: "template-discontinuity", outcome: "skipped" },
     ],
     // Compromise detection: an ignore could hide a compromised site (#1262).

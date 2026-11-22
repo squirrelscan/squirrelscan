@@ -36,7 +36,11 @@ export const privacyBlockedRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "privacy-blocked", outcome: "problem" },
-      { name: "privacy-blocked", outcome: "clean", clears: ["privacy-blocked"] },
+      {
+        name: "privacy-blocked",
+        outcome: "clean",
+        clears: ["privacy-blocked"],
+      },
       { name: "privacy-blocked", outcome: "skipped" },
     ],
     optionsSchema,

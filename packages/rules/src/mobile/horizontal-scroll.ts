@@ -18,7 +18,11 @@ export const horizontalScrollRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "horizontal-scroll", outcome: "problem" },
-      { name: "horizontal-scroll", outcome: "clean", clears: ["horizontal-scroll"] },
+      {
+        name: "horizontal-scroll",
+        outcome: "clean",
+        clears: ["horizontal-scroll"],
+      },
     ],
   },
 

@@ -118,7 +118,11 @@ export const hreflangRule: Rule = {
       { name: "hreflang-xdefault", outcome: "problem" },
       { name: "hreflang-self", outcome: "problem" },
       { name: "hreflang-codes", outcome: "problem" },
-      { name: "hreflang", outcome: "clean", clears: ["hreflang-xdefault", "hreflang-self", "hreflang-codes"] },
+      {
+        name: "hreflang",
+        outcome: "clean",
+        clears: ["hreflang-xdefault", "hreflang-self", "hreflang-codes"],
+      },
     ],
   },
 

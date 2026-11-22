@@ -23,7 +23,11 @@ export const videoAccessibleRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "video-accessible", outcome: "problem" },
-      { name: "video-accessible", outcome: "clean", clears: ["video-accessible"] },
+      {
+        name: "video-accessible",
+        outcome: "clean",
+        clears: ["video-accessible"],
+      },
     ],
   },
 

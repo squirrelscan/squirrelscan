@@ -125,7 +125,11 @@ export const subprocessorDisclosureRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "subprocessor-disclosure", outcome: "problem" },
-      { name: "subprocessor-disclosure", outcome: "clean", clears: ["subprocessor-disclosure"] },
+      {
+        name: "subprocessor-disclosure",
+        outcome: "clean",
+        clears: ["subprocessor-disclosure"],
+      },
       { name: "subprocessor-disclosure", outcome: "skipped" },
     ],
     // Art. 28 sub-processor duty applies to commercial data-processors. Gate on

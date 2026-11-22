@@ -22,7 +22,11 @@ export const llmParsabilityRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "llm-parsability", outcome: "problem" },
-      { name: "llm-parsability", outcome: "clean", clears: ["llm-parsability"] },
+      {
+        name: "llm-parsability",
+        outcome: "clean",
+        clears: ["llm-parsability"],
+      },
       { name: "llm-parsability", outcome: "skipped" },
     ],
     cloud: { service: "ai-parse", unit: "page", creditFeature: "ai_parse" },

@@ -18,7 +18,11 @@ export const videoThumbnailRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "video-thumbnail", outcome: "problem" },
-      { name: "video-thumbnail", outcome: "clean", clears: ["video-thumbnail"] },
+      {
+        name: "video-thumbnail",
+        outcome: "clean",
+        clears: ["video-thumbnail"],
+      },
     ],
   },
 

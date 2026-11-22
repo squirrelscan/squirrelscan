@@ -18,7 +18,11 @@ export const termsOfServiceRule: Rule = {
     // Check names by outcome class (#1741, #2218).
     checks: [
       { name: "terms-of-service", outcome: "problem" },
-      { name: "terms-of-service", outcome: "clean", clears: ["terms-of-service"] },
+      {
+        name: "terms-of-service",
+        outcome: "clean",
+        clears: ["terms-of-service"],
+      },
     ],
     // A soft-404 error page has no footer/links — don't report a missing ToS
     // link on a broken URL (#1174).

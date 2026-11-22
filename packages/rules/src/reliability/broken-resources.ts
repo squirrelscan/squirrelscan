@@ -236,7 +236,11 @@ export const brokenResourcesRule: Rule = {
     checks: [
       { name: "broken-resources", outcome: "problem" },
       { name: "unreachable-resources", outcome: "problem" },
-      { name: "broken-resources", outcome: "clean", clears: ["broken-resources", "unreachable-resources"] },
+      {
+        name: "broken-resources",
+        outcome: "clean",
+        clears: ["broken-resources", "unreachable-resources"],
+      },
       { name: "broken-resources", outcome: "skipped" },
       { name: "unverified-resources", outcome: "skipped" },
       { name: "unchecked-resources", outcome: "skipped" },

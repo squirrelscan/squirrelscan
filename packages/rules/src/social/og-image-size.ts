@@ -96,8 +96,16 @@ export const ogImageSizeRule: Rule = {
       { name: "twitter-image-format", outcome: "problem" },
       { name: "og-image-exists", outcome: "clean", clears: ["og-image-size"] },
       { name: "og-image-size", outcome: "clean", clears: ["og-image-size"] },
-      { name: "og-image-format", outcome: "clean", clears: ["og-image-format"] },
-      { name: "twitter-image-format", outcome: "clean", clears: ["twitter-image-format"] },
+      {
+        name: "og-image-format",
+        outcome: "clean",
+        clears: ["og-image-format"],
+      },
+      {
+        name: "twitter-image-format",
+        outcome: "clean",
+        clears: ["twitter-image-format"],
+      },
     ],
   },
 
