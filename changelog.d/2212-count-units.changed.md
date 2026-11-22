@@ -1,1 +1,0 @@
-- The console report labels its counts: section headers count findings ("3 warning findings") and the Group and Category Breakdown count checks ("Category Breakdown (checks):"), so the numbers no longer read as a contradiction. (#2212)

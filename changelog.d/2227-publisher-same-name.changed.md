@@ -1,1 +1,0 @@
-- `schema/entity-publisher-mismatch` now says "two entities share the name X" and names both `@id`s when the publisher and the primary organization have the same name, instead of calling the publisher "not the primary organization" (#2227).

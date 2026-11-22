@@ -1,1 +1,0 @@
-- `security/form-captcha` recognises honeypot fields: a public form whose only protection is a hidden decoy input with `tabindex="-1"` and `autocomplete="off"` now reports as info naming the honeypot instead of a warning. (#2228)

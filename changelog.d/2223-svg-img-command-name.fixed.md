@@ -1,1 +1,0 @@
-- `a11y/aria-command-name` no longer flags a link or button named by a child `svg role="img"` with `aria-label` or `aria-labelledby` (#2223).

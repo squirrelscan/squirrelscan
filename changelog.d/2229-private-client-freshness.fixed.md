@@ -1,1 +1,0 @@
-- Re-audits no longer reuse a stored page for up to a day when a site sends CDN cache headers (`s-maxage`, `stale-while-revalidate`): the crawler ignores `s-maxage` and revalidates stale pages with a conditional request (#2229).
