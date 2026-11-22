@@ -1,0 +1,1 @@
+- `a11y/duplicate-id-aria` no longer errors on a missing `aria-controls` or `aria-owns` target of a collapsed disclosure (`aria-expanded="false"`) or `aria-haspopup` trigger. Missing ids now read "ARIA reference to a missing id", separate from duplicated ids; a missing `aria-labelledby` or `aria-describedby` target stays an error and other missing targets are a warning. (#2224)

@@ -10,7 +10,7 @@ export const duplicateIdAriaRule: Rule = {
     name: "Duplicate ID ARIA",
     description: "Checks that IDs used in ARIA attributes are unique",
     solution:
-      "IDs referenced by ARIA attributes (aria-labelledby, aria-describedby, aria-controls, etc.) must be unique on the page. Duplicate IDs cause assistive technology to potentially reference the wrong element. Rename duplicate IDs to be unique.",
+      'IDs referenced by ARIA attributes (aria-labelledby, aria-describedby, aria-controls, etc.) must be unique on the page. Duplicate IDs cause assistive technology to potentially reference the wrong element. Rename duplicate IDs to be unique. A reference to an id that does not exist is reported separately; aria-controls/aria-owns on a collapsed disclosure (aria-expanded="false") or an aria-haspopup trigger is ignored, since its panel may not be mounted yet.',
     category: "a11y",
     wcag: [wcag("4.1.2")],
     scope: "page",
@@ -37,15 +37,31 @@ export const duplicateIdAriaRule: Rule = {
       "aria-errormessage",
     ];
 
-    // Collect all IDs referenced by ARIA
+    // aria-controls/aria-owns on a collapsed disclosure (aria-expanded="false")
+    // or a popup trigger (aria-haspopup) point at a panel that is often not
+    // mounted until it opens. axe's aria-valid-attr-value tolerates that, so
+    // a missing target there is not a finding (#2224).
+    const TOGGLE_ATTRS = new Set(["aria-controls", "aria-owns"]);
+    // Missing targets of these break the accessible name or description, so
+    // they stay errors. Other missing references are a lesser finding.
+    const NAME_ATTRS = new Set(["aria-labelledby", "aria-describedby"]);
+
     const referencedIds = new Set<string>();
+    const strictRefs = new Set<string>(); // id referenced where a missing target is an error
+    const softRefs = new Set<string>(); // id referenced where a missing target is a warning
     for (const attr of ariaIdAttrs) {
       const elements = doc.querySelectorAll(`[${attr}]`);
       for (const el of elements) {
         const value = el.getAttribute(attr) || "";
         const ids = value.split(/\s+/).filter(Boolean);
+        const tolerated =
+          TOGGLE_ATTRS.has(attr) &&
+          (el.getAttribute("aria-expanded")?.trim().toLowerCase() === "false" ||
+            el.hasAttribute("aria-haspopup"));
         for (const id of ids) {
           referencedIds.add(id);
+          if (tolerated) continue;
+          (NAME_ATTRS.has(attr) ? strictRefs : softRefs).add(id);
         }
       }
     }
@@ -60,42 +76,73 @@ export const duplicateIdAriaRule: Rule = {
       if (id) idCounts.set(id, (idCounts.get(id) ?? 0) + 1);
     }
 
-    // Check for duplicates among referenced IDs
     const duplicateIds: string[] = [];
+    const missingNameIds: string[] = [];
+    const missingOtherIds: string[] = [];
     for (const id of referencedIds) {
       const count = idCounts.get(id) ?? 0;
-      if (count > 1) {
-        duplicateIds.push(`"${id}" (${count} occurrences)`);
-      } else if (count === 0) {
-        // Also flag IDs that don't exist
-        duplicateIds.push(`"${id}" (not found)`);
+      if (count > 1) duplicateIds.push(`"${id}" (${count} occurrences)`);
+      else if (count === 0) {
+        if (strictRefs.has(id)) missingNameIds.push(`"${id}"`);
+        else if (softRefs.has(id)) missingOtherIds.push(`"${id}"`);
       }
     }
 
-    if (duplicateIds.length > 0) {
+    const emit = (
+      name: string,
+      status: "fail" | "warn",
+      message: string,
+      list: string[]
+    ) => {
       checks.push({
-        name: "duplicate-id-aria",
-        status: "fail",
-        message: `${duplicateIds.length} problematic ID(s) in ARIA attributes`,
-        items: duplicateIds.slice(0, 10).map((id) => ({ id })),
+        name,
+        status,
+        message,
+        items: list.slice(0, 10).map((id) => ({ id })),
         details:
-          duplicateIds.length > 10
-            ? { additional: duplicateIds.length - 10 }
-            : undefined,
+          list.length > 10 ? { additional: list.length - 10 } : undefined,
       });
-    } else if (referencedIds.size > 0) {
-      checks.push({
-        name: "duplicate-id-aria",
-        status: "pass",
-        message: "All ARIA ID references are valid and unique",
-        details: { idsChecked: referencedIds.size },
-      });
-    } else {
-      checks.push({
-        name: "duplicate-id-aria",
-        status: "info",
-        message: "No ARIA ID references found",
-      });
+    };
+
+    if (duplicateIds.length > 0) {
+      emit(
+        "duplicate-id-aria",
+        "fail",
+        `${duplicateIds.length} duplicated ID(s) referenced by ARIA attributes`,
+        duplicateIds
+      );
+    }
+    if (missingNameIds.length > 0) {
+      emit(
+        "aria-missing-name-id",
+        "fail",
+        `ARIA reference to a missing id: ${missingNameIds.length} aria-labelledby/aria-describedby target(s) not found`,
+        missingNameIds
+      );
+    }
+    if (missingOtherIds.length > 0) {
+      emit(
+        "aria-missing-id-ref",
+        "warn",
+        `ARIA reference to a missing id: ${missingOtherIds.length} target(s) not found`,
+        missingOtherIds
+      );
+    }
+    if (checks.length === 0) {
+      if (referencedIds.size > 0) {
+        checks.push({
+          name: "duplicate-id-aria",
+          status: "pass",
+          message: "All ARIA ID references are valid and unique",
+          details: { idsChecked: referencedIds.size },
+        });
+      } else {
+        checks.push({
+          name: "duplicate-id-aria",
+          status: "info",
+          message: "No ARIA ID references found",
+        });
+      }
     }
 
     return { checks };
