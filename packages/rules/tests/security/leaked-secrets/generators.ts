@@ -245,8 +245,9 @@ function mapboxToken(r: Rng, kind: "pk" | "sk"): string {
 }
 
 const NOT_A_BEARER = ["fetch-bearer-header", "sourcemap-comment"];
-// A Pusher or Uploadcare key is sent as a parameter, never as a bearer token,
-// and 20 hex is under the Bearer pattern's entropy floor anyway.
+// A Pusher, Uploadcare or Algolia key is sent as a parameter or its own
+// header, never as a bearer token (and 20 hex is under the Bearer pattern's
+// entropy floor anyway).
 const NOT_A_PAIR_BEARER = ["fetch-bearer-header"];
 
 const value = (secret: string, text = secret): Generated => ({ text, secret });
@@ -801,8 +802,12 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(P.cfpat + mixedRun(r, 43, B64URL)),
   },
   {
+    // Gated on Airtable's name within 200 characters: the key carries it.
+    // JSON-LD spells its own key (`identifier`) and never carries the name.
     pattern: "Airtable Personal Access Token",
     tier: "prefixed",
+    keyName: "airtableToken",
+    notIn: ["json-ld"],
     make: (r) =>
       value(
         `${["p", "at"].join("")}${runOf(r, ALNUM, 14)}.${runOf(r, HEX, 64)}`
@@ -919,6 +924,11 @@ export const GENERATORS: Generator[] = [
         secret,
       };
     },
+  },
+  {
+    pattern: "Mux Token Secret",
+    tier: "assignment",
+    make: (r) => entry("MUX_TOKEN_SECRET", keyedRun(r, ALNUM + "+/", 75)),
   },
   {
     pattern: "Sentry Organization Token",
@@ -1183,8 +1193,11 @@ export const GENERATORS: Generator[] = [
     make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)),
   },
   {
+    // Algolia sends it as `X-Algolia-API-Key`, never as a bearer token; a
+    // 32-hex `Authorization: Bearer` value is the Bearer pattern's, medium.
     pattern: "Algolia Search-Only API Key",
     tier: "keyed",
+    notIn: NOT_A_PAIR_BEARER,
     keyName: "algoliaSearchKey",
     gapKey: "searchKey",
     make: (r) => value(keyedRun(r, HEX, 32)),
@@ -1213,15 +1226,6 @@ export const GENERATORS: Generator[] = [
     tier: "keyed",
     keyName: "squarespaceKey",
     make: (r) => value(uuid(r)),
-  },
-  {
-    // Under `MUX_TOKEN_SECRET` the generic secret assignment claims the
-    // value first (the documented tier order: generic FAST before context),
-    // still at medium. This key reaches the Mux pattern itself.
-    pattern: "Mux Token Secret",
-    tier: "keyed",
-    keyName: "muxToken",
-    make: (r) => value(keyedRun(r, ALNUM, 75)),
   },
   {
     pattern: "OneSignal REST API Key (legacy)",

@@ -434,6 +434,40 @@ describe("security/leaked-secrets corpus: rule output", () => {
   }
 });
 
+// pub#359's public-by-design list, written out rather than read from the
+// table: the generated cases take their expected check from the pattern's own
+// `publicByDesign`, so a flag flipped to false would move the expectation with
+// it. This list does not move.
+const PUBLIC_BY_DESIGN_359 = [
+  "Stripe Publishable Test Key",
+  "PostHog Project Key",
+  "Pusher App Key",
+  "PubNub Subscribe Key",
+  "Algolia Search-Only API Key",
+  "LaunchDarkly Client-side ID",
+];
+
+describe("security/leaked-secrets corpus: pub#359 public tiers", () => {
+  for (const pattern of PUBLIC_BY_DESIGN_359) {
+    const prefix = `${pattern
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")}@`;
+    test(`${pattern}: reported under leaked-secrets-public in every context, never high or medium`, async () => {
+      const cases = ok.filter((c) => c.id.startsWith(prefix));
+      expect(cases.length).toBeGreaterThanOrEqual(2);
+      for (const c of cases) {
+        const got = await observed(c);
+        expect(got.findings.length).toBeGreaterThan(0);
+        expect(
+          got.findings.filter((f) => f.check !== "public").map((f) => f.pattern)
+        ).toEqual([]);
+        expect(got.passed).toBe(true);
+      }
+    });
+  }
+});
+
 describe("security/leaked-secrets corpus: known gaps (asserting CURRENT behaviour; each fix is its own PR)", () => {
   test("the gap list (printed, since bun hides todo names)", () => {
     const distinct = new Map<string, number>();

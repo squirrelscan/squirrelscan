@@ -128,6 +128,16 @@ generic assignments yield to those patterns as they do to the public ones.
 Calendly tokens are JWTs and are named by the decoder; Azure SAS tokens are
 tiered by their own `sp`, `sr` and `se`. Both are probes in `cases.ts`.
 
+Cost: measured in one process, alternating the origin/main detector and this
+one over the bench corpus's filler bodies (58 MB, 9 passes each, min per
+side, Linux x64, Bun 1.4.4): 12.98 ms per MB before, 13.49 after (+3.9%).
+The first cut was +19%, from three things a prefilter could not gate: the
+Airtable token has no literal of four characters (now gated on `airtable`
+within 200 characters, as trufflehog gates it), Mux keyed on the three
+letters `mux` (now keyed on its `MUX_TOKEN_SECRET` name), and a second
+`cloudflare` pattern walking every occurrence again (the context pass now
+works out each keyword's regions once per body, for every pattern sharing it).
+
 ### Remaining (7 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.

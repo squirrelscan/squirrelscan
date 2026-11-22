@@ -3983,9 +3983,6 @@
   "airtable-personal-access-token@data-attribute": [
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"pat3sl********************78d4"}
   ],
-  "airtable-personal-access-token@json-ld": [
-    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pat3nI********************a5ee"}
-  ],
   "airtable-personal-access-token@external-bundle": [
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"patMYB********************ef29"}
   ],
@@ -4573,6 +4570,42 @@
   ],
   "azure-function-key@url-encoded-inline-settings": [
     {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************hW=="}
+  ],
+  "mux-token-secret@inline-config-object": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************W3q\""}
+  ],
+  "mux-token-secret@window-env": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************srv\""}
+  ],
+  "mux-token-secret@next-data": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************KUF\""}
+  ],
+  "mux-token-secret@nuxt-payload": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************IEQ\""}
+  ],
+  "mux-token-secret@html-comment": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"MUX_TO********************5ws\""}
+  ],
+  "mux-token-secret@external-bundle": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"MUX_TO********************84T\""}
+  ],
+  "mux-token-secret@entity-encoded-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"MUX_TO********************oKN\""}
+  ],
+  "mux-token-secret@unicode-escaped-script-string": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************LBg\""}
+  ],
+  "mux-token-secret@base64-data-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"MUX_TO********************RJu\""}
+  ],
+  "mux-token-secret@base64-global": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"MUX_TO********************HEy\""}
+  ],
+  "mux-token-secret@url-encoded-data-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"MUX_TO********************LMs\""}
+  ],
+  "mux-token-secret@url-encoded-inline-settings": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************5El\""}
   ],
   "sentry-organization-token@inline-config-object": [
     {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************vMjk"}
@@ -6818,9 +6851,6 @@
   "algolia-search-only-api-key@external-bundle": [
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"3ccabf********************c7ae"}
   ],
-  "algolia-search-only-api-key@fetch-bearer-header": [
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************eab7"}
-  ],
   "algolia-search-only-api-key@pre-env-dump": [
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9ddc06********************46b8"}
   ],
@@ -7054,57 +7084,6 @@
   ],
   "squarespace-api-key@url-encoded-inline-settings": [
     {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"06397f********************0153"}
-  ],
-  "mux-token-secret@inline-config-object": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6x3oXv********************3U2p"}
-  ],
-  "mux-token-secret@window-env": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"61mLOW********************Srru"}
-  ],
-  "mux-token-secret@next-data": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3Pk1GP********************LJTE"}
-  ],
-  "mux-token-secret@nuxt-payload": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4bJOZX********************nHEP"}
-  ],
-  "mux-token-secret@html-comment": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"6pl60F********************k3wr"}
-  ],
-  "mux-token-secret@meta-content": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"4w6Hi7********************bu5Y"}
-  ],
-  "mux-token-secret@data-attribute": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"1NwNls********************tkZV"}
-  ],
-  "mux-token-secret@external-bundle": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"9F4OVj********************K62R"}
-  ],
-  "mux-token-secret@fetch-bearer-header": [
-    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************BVWt"}
-  ],
-  "mux-token-secret@pre-env-dump": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"7X9byh********************fnOy"}
-  ],
-  "mux-token-secret@sourcemap-comment": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"1vshvq********************TYll"}
-  ],
-  "mux-token-secret@entity-encoded-attribute": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"9LzCLF********************yoJM"}
-  ],
-  "mux-token-secret@unicode-escaped-script-string": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5rrpZN********************HKAg"}
-  ],
-  "mux-token-secret@base64-data-attribute": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"4fKGRm********************zQIu"}
-  ],
-  "mux-token-secret@base64-global": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"5jfjBc********************cGDx"}
-  ],
-  "mux-token-secret@url-encoded-data-attribute": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"6xubpZ********************9KLr"}
-  ],
-  "mux-token-secret@url-encoded-inline-settings": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0eDwqj********************l3Dl"}
   ],
   "onesignal-rest-api-key-legacy@inline-config-object": [
     {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0AXsBo********************qUOV"}

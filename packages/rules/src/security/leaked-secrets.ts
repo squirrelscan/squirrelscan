@@ -758,14 +758,21 @@ export const FAST_PATTERNS: FastPattern[] = [
     confidence: "high",
   },
   {
-    // `pat` + 14 + `.` + 64 hex. `pat` is also a word, so the declared
-    // literal is the separator: the dot and the 64-hex tail are what make
-    // this a token, and a pattern with a sub-four-character keyword always
-    // runs, exactly as before the prefilter.
+    // `pat` + 14 + `.` + 64 hex. The token has no literal of four characters
+    // or more, so the prefilter could never skip it and it would read every
+    // byte of every page; like trufflehog's detector it is gated on the
+    // service's name instead, within AIRTABLE_CONTEXT_REACH of the token.
     name: "Airtable Personal Access Token",
     pattern: /pat[A-Za-z0-9]{14}\.[a-f0-9]{64}/g,
-    keywords: ["."],
+    keywords: ["airtable"],
     confidence: "high",
+    accept: (value, content, index) =>
+      AIRTABLE_CONTEXT_RE.test(
+        content.slice(
+          Math.max(0, index - AIRTABLE_CONTEXT_REACH),
+          index + value.length + AIRTABLE_CONTEXT_REACH
+        )
+      ),
   },
   {
     // Notion's current integration token: `ntn_` + 11 digits + 35
@@ -880,6 +887,19 @@ export const FAST_PATTERNS: FastPattern[] = [
       /https:\/\/[a-z0-9-]+\.azurewebsites\.net\/api\/[^\s"'<>?]*\?(?:[^\s"'<>&]*&){0,10}code=[A-Za-z0-9_-]{40,}(?:=|%3D){0,2}/gi,
     keywords: [".azurewebsites.net/api/"],
     confidence: "medium",
+  },
+  {
+    // The secret half of a Mux access token pair, under the name Mux's docs
+    // give it (`MUX_TOKEN_SECRET`, `muxTokenSecret`). A brand-word context
+    // pattern would need `mux`, three letters the prefilter cannot gate on
+    // and a fragment of `demux`/`remux` in every video player bundle.
+    name: "Mux Token Secret",
+    pattern:
+      /mux[_-]?token[_-]?secret(?:['"]\s*\]|['"]?)\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][A-Za-z0-9+/]{75}['"]/gi,
+    keywords: ["mux_token_secret", "mux-token-secret", "muxtokensecret"],
+    confidence: "medium",
+    keyAnchored: true,
+    generic: true,
   },
   {
     // Sentry organization auth token: `sntrys_` + base64 JSON + secret.
@@ -1286,14 +1306,6 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     name: "Squarespace API Key",
     keyword: "squarespace",
     pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-    confidence: "medium",
-  },
-  {
-    // The secret half of a Mux access token pair (the id is a UUID and
-    // proves nothing alone).
-    name: "Mux Token Secret",
-    keyword: "mux",
-    pattern: /[A-Za-z0-9+/]{75}/g,
     confidence: "medium",
   },
   {
@@ -3585,6 +3597,11 @@ const REVENUECAT_CONTEXT_REACH = 200;
 // sits in says so: `"type": "service_account"` (quotes possibly escaped).
 const SERVICE_ACCOUNT_TYPE_RE = /\\?"type\\?"\s*:\s*\\?"service_account\\?"/;
 const SERVICE_ACCOUNT_REACH = 600;
+
+// Airtable's name (`api.airtable.com`, `AIRTABLE_TOKEN`, `new Airtable(`)
+// within this many characters either side of a personal access token.
+const AIRTABLE_CONTEXT_RE = /airtable/i;
+const AIRTABLE_CONTEXT_REACH = 200;
 
 /** Characters of source text kept on each side of a match in a finding's `context`. */
 export const EVIDENCE_CONTEXT_RADIUS = 120;
@@ -5955,6 +5972,10 @@ function scanInto(
   // The lowercase copy is built the first time a keyword survives the index:
   // on a page where none does, the pass costs nothing and the megabyte-sized
   // allocation never happens.
+  const keywordRegions = new Map<
+    string,
+    Array<{ from: number; limit: number }>
+  >();
   for (const {
     name,
     keyword,
@@ -5966,25 +5987,41 @@ function scanInto(
     if (keywordFilter && !mayContain(keywordFilter, keyword)) continue;
     contentLower ??= content.toLowerCase();
 
-    let pos = 0;
-    while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
-      const keywordAt = pos;
-      pos = keywordAt + keyword.length;
+    // Where each occurrence of the keyword lets a value start. Several
+    // patterns share a keyword (`algolia`, `cloudflare`, `pusher`), and
+    // finding the tag around every occurrence is most of this pass's cost, so
+    // the regions are worked out once per keyword per body (#359).
+    let regions = keywordRegions.get(keyword);
+    if (regions === undefined) {
+      regions = [];
+      let pos = 0;
+      while ((pos = contentLower.indexOf(keyword, pos)) !== -1) {
+        const keywordAt = pos;
+        pos = keywordAt + keyword.length;
 
-      // The region the value may START in: the keyword gap after the
-      // keyword, or, when the keyword is a naming attribute of a tag, the
-      // whole tag in either direction.
-      let from = pos;
-      let limit = CONTEXT_KEYWORD_GAP;
-      const tag = tagBoundsAround(content, keywordAt);
-      if (tag && tagNamesKeyword(content.slice(tag.start, tag.end), keyword)) {
-        from = tag.start;
-        limit = tag.end - tag.start;
-        // `<script id="shopify-features">`: the tag names its whole block.
-        if (/^<script\b/i.test(content.slice(tag.start, tag.start + 8))) {
-          limit = scriptBlockEnd(content, tag.end) - tag.start;
+        // The region the value may START in: the keyword gap after the
+        // keyword, or, when the keyword is a naming attribute of a tag, the
+        // whole tag in either direction.
+        let from = pos;
+        let limit = CONTEXT_KEYWORD_GAP;
+        const tag = tagBoundsAround(content, keywordAt);
+        if (
+          tag &&
+          tagNamesKeyword(content.slice(tag.start, tag.end), keyword)
+        ) {
+          from = tag.start;
+          limit = tag.end - tag.start;
+          // `<script id="shopify-features">`: the tag names its whole block.
+          if (/^<script\b/i.test(content.slice(tag.start, tag.start + 8))) {
+            limit = scriptBlockEnd(content, tag.end) - tag.start;
+          }
         }
+        regions.push({ from, limit });
       }
+      keywordRegions.set(keyword, regions);
+    }
+
+    for (const { from, limit } of regions) {
       const region = content.slice(
         from,
         from + Math.max(CONTEXT_SCAN_SPAN, limit)
