@@ -113,12 +113,28 @@ describe("mergeOptionsToConfig", () => {
   // repo-public#2109: the engine derives "may request other hosts" from
   // external_links.enabled, so each run kind that must not contact other hosts
   // has to switch it off here.
-  test("a targeted run switches external link checks off", () => {
+  // The adapter binds SiteData.mayRequestOtherHosts as `config.external_links?.enabled !== false`
+  // (packages/audit-engine/src/adapter.ts); there is no exported helper, so mirror that derivation.
+  const mayRequestOtherHosts = (c: {
+    external_links?: { enabled?: boolean };
+  }) => c.external_links?.enabled !== false;
+
+  test("a targeted run keeps link checks and may request other hosts (#2183)", () => {
     const merged = mergeOptionsToConfig(getDefaultConfig(), {
       url: "https://example.com",
       targetUrls: ["https://example.com/a"],
     });
+    expect(merged.external_links.enabled).toBe(true);
+    expect(mayRequestOtherHosts(merged)).toBe(true);
+  });
+
+  test("an offline run may not request other hosts", () => {
+    const merged = mergeOptionsToConfig(getDefaultConfig(), {
+      url: "https://example.com",
+      offline: true,
+    });
     expect(merged.external_links.enabled).toBe(false);
+    expect(mayRequestOtherHosts(merged)).toBe(false);
   });
 
   // #2307: the page classifier is on by default; --no-classifier switches it off for the run and
