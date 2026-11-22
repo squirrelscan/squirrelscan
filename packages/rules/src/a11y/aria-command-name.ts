@@ -37,6 +37,18 @@ function hasAccessibleName(el: Element): boolean {
   const svg = el.querySelector("svg title");
   if (svg?.textContent?.trim()) return true;
 
+  // pub#2223: name from content includes embedded role=img children
+  // (accname 2F), e.g. <a><svg role="img" aria-label="Logo">...</svg></a>.
+  for (const child of el.querySelectorAll('[role="img"]')) {
+    if (child.closest('[aria-hidden="true"]')) continue;
+    if (child.getAttribute("aria-label")?.trim()) return true;
+    const ids = child.getAttribute("aria-labelledby")?.split(/\s+/) ?? [];
+    for (const id of ids) {
+      if (id && el.ownerDocument?.getElementById(id)?.textContent?.trim())
+        return true;
+    }
+  }
+
   return false;
 }
 
