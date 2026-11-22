@@ -50,7 +50,7 @@ import {
 import { printDatabaseLockWarningIfNeeded } from "../db-lock-warning";
 import { fmt, pageLimitHint } from "../format";
 import { createProgress } from "../progress";
-import { promptForProjectName } from "../prompt";
+import { promptEligible, promptForProjectName } from "../prompt";
 import {
   lastFlagValue,
   parsePositiveIntFlag,
@@ -267,7 +267,7 @@ export const crawl = defineCommand({
           urlParsed.url,
           config.project.name
         );
-        if (nameContext.needsCustomName && process.stdout.isTTY) {
+        if (nameContext.needsCustomName && promptEligible()) {
           projectName = await promptForProjectName(
             nameContext.suggestedName,
             urlParsed.url
