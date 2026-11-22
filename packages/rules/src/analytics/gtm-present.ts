@@ -15,6 +15,11 @@ export const gtmPresentRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "gtm-present", outcome: "problem" },
+      { name: "gtm-present", outcome: "clean", clears: ["gtm-present"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

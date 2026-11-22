@@ -97,6 +97,28 @@ enable = ["reliability/broken-forms"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `dead-form-action` | Problem |  |
+| `form-action-not-found-to-probe` | Problem |  |
+| `non-production-form-action` | Problem |  |
+| `mailto-form-action` | Problem |  |
+| `unreachable-form-action` | Problem |  |
+| `unnamed-form-fields` | Problem |  |
+| `unnamed-form-fields-no-action` | Problem |  |
+| `broken-forms` | Clean | `dead-form-action`, `form-action-not-found-to-probe`, `non-production-form-action`, `mailto-form-action`, `unreachable-form-action`, `unnamed-form-fields`, `unnamed-form-fields-no-action` |
+| `broken-forms` | Not checked |  |
+| `unverified-form-actions` | Not checked |  |
+| `unchecked-form-actions` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [security/form-https](/rules/security/form-https): forms that submit over plain `http:`.

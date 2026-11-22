@@ -15,6 +15,11 @@ export const langAttributeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "lang-attribute", outcome: "problem" },
+      { name: "lang-attribute", outcome: "clean", clears: ["lang-attribute"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

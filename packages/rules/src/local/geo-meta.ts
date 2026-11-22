@@ -15,6 +15,11 @@ export const geoMetaRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "geo-meta", outcome: "problem" },
+      { name: "geo-meta", outcome: "clean", clears: ["geo-meta"] },
+    ],
     // Geo meta tags only help real-world local businesses. Skip with a visible
     // reason for global SaaS / blogs. Offline / no-metadata runs as today.
     appliesWhen: { requiresLocalBusiness: true },

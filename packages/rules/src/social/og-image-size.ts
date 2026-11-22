@@ -89,6 +89,24 @@ export const ogImageSizeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "og-image-size", outcome: "problem" },
+      { name: "og-image-format", outcome: "problem" },
+      { name: "twitter-image-format", outcome: "problem" },
+      { name: "og-image-exists", outcome: "clean", clears: ["og-image-size"] },
+      { name: "og-image-size", outcome: "clean", clears: ["og-image-size"] },
+      {
+        name: "og-image-format",
+        outcome: "clean",
+        clears: ["og-image-format"],
+      },
+      {
+        name: "twitter-image-format",
+        outcome: "clean",
+        clears: ["twitter-image-format"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

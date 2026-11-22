@@ -17,6 +17,12 @@ export const viewportZoomRule: Rule = {
     verdictScope: "template",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "viewport-zoom", outcome: "problem" },
+      { name: "viewport-zoom", outcome: "clean", clears: ["viewport-zoom"] },
+      { name: "viewport-zoom", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -15,6 +15,11 @@ export const ogUrlMatchRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "og-url-match", outcome: "problem" },
+      { name: "og-url-match", outcome: "clean", clears: ["og-url-match"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

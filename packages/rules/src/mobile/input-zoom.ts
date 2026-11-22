@@ -720,6 +720,11 @@ export const inputZoomRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "input-zoom", outcome: "problem" },
+      { name: "input-zoom", outcome: "clean", clears: ["input-zoom"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

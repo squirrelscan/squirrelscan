@@ -33,6 +33,16 @@ export const privacyBlockedRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "privacy-blocked", outcome: "problem" },
+      {
+        name: "privacy-blocked",
+        outcome: "clean",
+        clears: ["privacy-blocked"],
+      },
+      { name: "privacy-blocked", outcome: "skipped" },
+    ],
     optionsSchema,
     cloud: {
       service: "blocklist-check",

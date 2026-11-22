@@ -15,6 +15,15 @@ export const videoThumbnailRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "video-thumbnail", outcome: "problem" },
+      {
+        name: "video-thumbnail",
+        outcome: "clean",
+        clears: ["video-thumbnail"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

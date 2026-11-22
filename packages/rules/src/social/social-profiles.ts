@@ -33,6 +33,15 @@ export const socialProfilesRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "social-profiles-missing", outcome: "problem" },
+      {
+        name: "social-profiles",
+        outcome: "clean",
+        clears: ["social-profiles-missing"],
+      },
+    ],
     // A linked social presence matters for brand / commerce / publisher sites;
     // it's noise for docs, landing pages, personal pages. Gate to types where a
     // social presence is expected. Offline / no-metadata runs as today.

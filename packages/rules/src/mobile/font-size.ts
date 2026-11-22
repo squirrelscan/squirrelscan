@@ -15,6 +15,11 @@ export const fontSizeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "font-size", outcome: "problem" },
+      { name: "font-size", outcome: "clean", clears: ["font-size"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

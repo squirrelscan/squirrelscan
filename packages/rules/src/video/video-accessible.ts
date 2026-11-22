@@ -20,6 +20,15 @@ export const videoAccessibleRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "video-accessible", outcome: "problem" },
+      {
+        name: "video-accessible",
+        outcome: "clean",
+        clears: ["video-accessible"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

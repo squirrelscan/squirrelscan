@@ -154,6 +154,11 @@ export const duplicateTagsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "duplicate-tags", outcome: "problem" },
+      { name: "duplicate-tags", outcome: "clean", clears: ["duplicate-tags"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

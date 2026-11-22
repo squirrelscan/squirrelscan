@@ -15,6 +15,11 @@ export const viewportRule: Rule = {
     verdictScope: "template",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "viewport", outcome: "problem" },
+      { name: "viewport", outcome: "clean", clears: ["viewport"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

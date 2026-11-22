@@ -1,0 +1,1 @@
+- The rule pages for 39 more rules (adblock, ai, analytics, i18n, integrity, legal, local, mobile, reliability, social and video) list the check names each rule emits and which clean check clears which problem check (#2218).

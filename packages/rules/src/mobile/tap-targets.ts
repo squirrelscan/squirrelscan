@@ -15,6 +15,11 @@ export const tapTargetsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "small-tap-targets", outcome: "problem" },
+      { name: "tap-targets", outcome: "clean", clears: ["small-tap-targets"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

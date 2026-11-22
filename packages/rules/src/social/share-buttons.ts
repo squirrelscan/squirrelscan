@@ -29,6 +29,11 @@ export const shareButtonsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "share-buttons", outcome: "problem" },
+      { name: "share-buttons", outcome: "clean", clears: ["share-buttons"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
