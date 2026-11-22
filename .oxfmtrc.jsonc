@@ -21,6 +21,7 @@
     "**/fixtures/**",
     "**/golden/**",
     "**/generated.ts",
+    "**/agent-skills/bundle.generated.ts",
     "**/*.html",
     "**/*.css",
     "**/*.md",
