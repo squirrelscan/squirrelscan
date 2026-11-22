@@ -314,6 +314,23 @@ describe("planSecretSources (#362)", () => {
     ).toBeNull();
   });
 
+  test("a map URL's query never reaches a planned URL, from the comment or the header", () => {
+    const key = stripeKey();
+    const fromComment = script(
+      "a.js",
+      `x();\n//# sourceMappingURL=a.js.map?token=${key}\n`
+    );
+    const fromHeader = script("b.js", "x();", `/b.js.map?sig=${key}`);
+    expect(sourceMapUrlOf(fromComment)).toBe(`${ORIGIN}/static/a.js.map`);
+    expect(sourceMapUrlOf(fromHeader)).toBe(`${ORIGIN}/b.js.map`);
+    const { targets } = planSecretSources([fromComment, fromHeader]);
+    expect(targets.map((t) => t.url)).toEqual([
+      `${ORIGIN}/static/a.js.map`,
+      `${ORIGIN}/b.js.map`,
+    ]);
+    expect(JSON.stringify(targets)).not.toContain(key);
+  });
+
   test("at most 10 targets, the two kinds taken in turn, the rest counted", () => {
     const scripts = Array.from({ length: 8 }, (_, i) =>
       script(

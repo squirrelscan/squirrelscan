@@ -81,7 +81,12 @@ function sameOrigins(script: SecretSourceScript): Set<string> {
   return origins;
 }
 
-/** `raw` resolved against `base`, without its fragment, when it is an http(s) URL on one of `origins` that carries no credentials. */
+/**
+ * `raw` resolved against `base`, without its query or fragment, when it is an
+ * http(s) URL on one of `origins` that carries no credentials. The query is
+ * dropped because a signed or tokened URL (`a.js.map?token=<secret>`) would
+ * otherwise be requested and land, unmasked, in the finding's label.
+ */
 function sameOriginUrl(
   raw: string,
   base: string,
@@ -93,6 +98,7 @@ function sameOriginUrl(
   if (!origins.has(url.origin)) return null;
   // Credentials in the URL would land unmasked in the finding's label.
   if (url.username || url.password) return null;
+  url.search = "";
   url.hash = "";
   return url.href;
 }
