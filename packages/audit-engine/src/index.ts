@@ -25,6 +25,7 @@ export {
   createSiteAssetCollector,
   fetchAssetsFromOccurrences,
   V1_REPORT_PAGE_BATCH,
+  mayRequestOtherHosts,
 } from "./adapter";
 export { hasAuditableHtmlBody, isAuditableEmptyBodyStatus } from "./site-fetch";
 export type {

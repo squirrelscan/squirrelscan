@@ -2,6 +2,8 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { mayRequestOtherHosts } from "@squirrelscan/audit-engine";
+
 import { getDefaultConfig } from "../src/config";
 import {
   CRAWL_PHASE_DERIVED_MAX_TIMEOUT_MS,
@@ -113,12 +115,6 @@ describe("mergeOptionsToConfig", () => {
   // repo-public#2109: the engine derives "may request other hosts" from
   // external_links.enabled, so each run kind that must not contact other hosts
   // has to switch it off here.
-  // The adapter binds SiteData.mayRequestOtherHosts as `config.external_links?.enabled !== false`
-  // (packages/audit-engine/src/adapter.ts); there is no exported helper, so mirror that derivation.
-  const mayRequestOtherHosts = (c: {
-    external_links?: { enabled?: boolean };
-  }) => c.external_links?.enabled !== false;
-
   test("a targeted run keeps link checks and may request other hosts (#2183)", () => {
     const merged = mergeOptionsToConfig(getDefaultConfig(), {
       url: "https://example.com",
