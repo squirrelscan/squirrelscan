@@ -696,7 +696,7 @@ This creates `.squirrel/settings.json` in the current directory and sets the val
 
 ### Telemetry
 
-Telemetry is enabled by default. The CLI sends only the event name, CLI version, a random install ID, and a bounded error category or step outcome. It does not send URLs, hosts, paths, email addresses, report contents, or raw error messages. Telemetry requests never carry an API key. After `squirrel auth login`, they carry your login session token (the 90-day sign-in token from login), which the API turns into your user ID, so events can be tied to your account. Signed out, they are anonymous. Nothing is sent when telemetry is off.
+Telemetry is enabled by default. The CLI sends only the event name, CLI version, a random install ID, and a bounded error category or step outcome, plus the code locations of a crash (see [Crash reports](#crash-reports)). It does not send URLs, hosts, paths, email addresses, report contents, or raw error messages. Telemetry requests never carry an API key. After `squirrel auth login`, they carry your login session token (the 90-day sign-in token from login), which the API turns into your user ID, so events can be tied to your account. Signed out, they are anonymous. Nothing is sent when telemetry is off.
 
 Besides audit and update events, the CLI reports the first run so we can see where new installs stall:
 
@@ -709,7 +709,7 @@ Besides audit and update events, the CLI reports the first run so we can see whe
 
 The install registration (sent once) also reports where the install came from: a short `source` label such as `binary` or `npm`. Installers set it with `SQUIRREL_INSTALL_SOURCE` (lowercase letters, digits and hyphens, up to 32 characters; anything else is ignored). On macOS it also reports two booleans, `cpu_translated` (running under Rosetta) and `hw_arm64` (Apple Silicon hardware), read with `sysctl`. The installers also set `SQUIRREL_PATH_SETUP`, which the registration reports as `path_setup`: `on_path`, `added`, `opted_out`, `ci` or `failed` (what the installer did about your PATH; see [Install](/install#how-the-installer-sets-up-your-path)).
 
-The CLI shows this disclosure once before its first telemetry-enabled command, and once more on installs that saw an earlier wording, because the user ID after login is new. Disable telemetry in user settings with:
+The CLI shows this disclosure once before its first telemetry-enabled command, and once more on installs that saw an earlier wording, because the user ID after login and the crash code locations are new. Disable telemetry in user settings with:
 
 ```bash
 squirrel self settings set telemetry false
@@ -720,6 +720,12 @@ For CI, containers, or one-off commands, define `NO_TELEMETRY`. Its presence is 
 ```bash
 NO_TELEMETRY=1 squirrel audit https://nutshop.squirrelscan.com
 ```
+
+#### Crash reports
+
+If the CLI or the local MCP server crashes (an uncaught exception or unhandled rejection), it prints a short message with a reference such as `cli_3f9a1c0b7d2e` and exits with code 1. Quote that reference when you [open an issue](https://github.com/squirrelscan/squirrelscan/issues). Set `SQUIRREL_LOG_LEVEL=debug` to print the full stack trace locally.
+
+When telemetry is on, the crash is also sent as an `error` event to the squirrelscan API, never straight to a third-party service: the binary carries no error-tracking key. The event holds the reference, the error class (for example `TypeError`), the subcommand name (for example `audit`, never its arguments), your OS and architecture, and the crash's code locations: function names, file names and line numbers, with directories, URLs and email addresses removed. The error message is never sent. The code locations are only included once you have seen the disclosure that mentions them. An MCP tool that fails unexpectedly returns a tool error carrying the same kind of reference, and is reported the same way. `--offline` runs and every opt-out above send nothing.
 
 ---
 

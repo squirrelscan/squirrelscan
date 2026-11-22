@@ -15,6 +15,7 @@ import { defineCommand } from "citty";
 
 import type { UserSettings } from "@/self/types";
 
+import { installCrashHandlers } from "@/self/crash-reporter";
 import { loadSettings } from "@/self/settings";
 import { setLogLevel } from "@/utils/logger";
 
@@ -74,6 +75,10 @@ export const main = defineCommand({
 });
 
 export function run(): void {
+  // First, so a crash anywhere below (settings included) gets the friendly
+  // message, a reference and a non-zero exit (repo#705).
+  installCrashHandlers();
+
   // Load settings and configure log level
   const settings = loadSettings();
   if (settings.ok && settings.data.log_level) {
