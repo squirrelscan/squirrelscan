@@ -12,6 +12,10 @@
  * on the plugin by pointing its entry at squirrelscan/skills. Both modes fail if
  * that redirect stops pointing there, or gains a local path or a pinned version.
  *
+ * bun.lock records every workspace's package.json version and
+ * `bun install --frozen-lockfile` does not compare it, so this stamps each
+ * drifted workspace's lock entry to its package.json version too (#2247).
+ *
  * server.json is deliberately NOT synced. It tracks its own 1.0.x cadence
  * because the MCP registry can reject a backwards version jump, so stamping the
  * CLI version into it would break publishing. Do not add it to `edits` below.
@@ -21,6 +25,8 @@
  *   bun run scripts/sync-plugin-manifests.ts --version 0.0.79
  */
 import { join } from "node:path";
+
+import { describeDrift, LOCKFILE, lockVersionDrift, stampLockVersion } from "./lockfile-versions";
 
 const ROOT = join(import.meta.dir, "..");
 const PUBLIC = ROOT;
@@ -115,13 +121,35 @@ async function main() {
     if (!check) await Bun.write(path, serialize(obj));
   }
 
+  // bun.lock follows package.json, not the other way round: a workspace whose
+  // lock entry disagrees gets the package.json version stamped in. An entry
+  // that gains or loses a version line needs bun install, not a text edit.
+  const lockDrift = await lockVersionDrift(ROOT);
+  const unstampable = lockDrift.filter((d) => !d.packageVersion || !d.lockVersion);
+  if (lockDrift.length) {
+    drift.push(...lockDrift.map(describeDrift));
+    if (!check && !unstampable.length) {
+      const lockPath = join(ROOT, LOCKFILE);
+      let lockText = await Bun.file(lockPath).text();
+      for (const d of lockDrift) lockText = stampLockVersion(lockText, d.workspace, d.packageVersion!);
+      await Bun.write(lockPath, lockText);
+    }
+  }
+  if (!check && unstampable.length) {
+    console.error(`${LOCKFILE} cannot be stamped:\n  ${unstampable.map(describeDrift).join("\n  ")}`);
+    console.error("Run: bun install");
+    process.exit(1);
+  }
+
   if (check) {
     if (drift.length) {
       console.error(`Manifests out of sync (version ${version}):\n  ${drift.join("\n  ")}`);
       console.error("Run: bun run scripts/sync-plugin-manifests.ts");
       process.exit(1);
     }
-    console.log(`Manifests in sync (version ${version}); marketplace redirects to squirrelscan/skills.`);
+    console.log(
+      `Manifests in sync (version ${version}); ${LOCKFILE} workspace versions match; marketplace redirects to squirrelscan/skills.`,
+    );
     return;
   }
 

@@ -13,7 +13,7 @@
     },
     "apps/cli": {
       "name": "@squirrelscan/cli",
-      "version": "0.0.190-beta.1",
+      "version": "0.0.190",
       "bin": {
         "squirrelscan": "./build/squirrelscan",
       },
