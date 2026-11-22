@@ -41,6 +41,7 @@ describe("install source persistence", () => {
     home = mkdtempSync(join(realOs.tmpdir(), "squirrel-install-source-"));
     process.env = { ...originalEnv, HOME: home };
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     delete process.env.SQUIRREL_INSTALL_SOURCE;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";
   });

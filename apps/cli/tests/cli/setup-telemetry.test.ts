@@ -41,6 +41,7 @@ describe("setup telemetry", () => {
     home = mkdtempSync(join(realOs.tmpdir(), "squirrel-setup-"));
     process.env = { ...originalEnv, HOME: home };
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     delete process.env.SQUIRRELSCAN_API_KEY;
     delete process.env.SQUIRREL_API_TOKEN;
     process.env.SQUIRREL_API_SERVER = "http://localhost:9999";

@@ -68,6 +68,7 @@ describe("first-run telemetry", () => {
     home = mkdtempSync(join(realOs.tmpdir(), "squirrel-first-run-"));
     process.env = { ...originalEnv, HOME: home };
     delete process.env.NO_TELEMETRY;
+    delete process.env.DO_NOT_TRACK;
     delete process.env.SQUIRRELSCAN_API_KEY;
     delete process.env.SQUIRREL_API_TOKEN;
     // The production URL: the session token is only attached there. fetch is
