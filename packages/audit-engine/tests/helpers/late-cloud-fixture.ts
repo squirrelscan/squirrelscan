@@ -15,6 +15,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 
 import type { CloudPrefetchInput } from "../../src/cloud-prefetch";
+
 import { gateStage1, selectCloudRules } from "../../src/cloud-prefetch-run";
 
 export const STUB_METADATA: SiteMetadataResponse = {
@@ -44,7 +45,8 @@ function seedOf(url: string): number {
 /** The rendered page the stub returns: some pages gain JS-only words, some error. */
 function renderItem(url: string): RenderResultItem {
   const s = seedOf(url);
-  const extra = s % 3 === 0 ? " ".repeat(1) + "hydrated words ".repeat(400) : "";
+  const extra =
+    s % 3 === 0 ? " ".repeat(1) + "hydrated words ".repeat(400) : "";
   return {
     url,
     status: 200,
@@ -52,7 +54,12 @@ function renderItem(url: string): RenderResultItem {
     ...(s % 5 === 0
       ? {
           runtime: {
-            consoleErrors: [{ message: `TypeError: x is undefined (${s % 4})`, source: `${url}/app.js` }],
+            consoleErrors: [
+              {
+                message: `TypeError: x is undefined (${s % 4})`,
+                source: `${url}/app.js`,
+              },
+            ],
             pageErrors: [],
             failedRequests: [],
           },
@@ -73,8 +80,12 @@ export interface StubCalls {
  * a page-unit call's latency is paid on its submit.
  */
 export function stubCloudClient(
-  latency: (service: CloudServiceId, call: number, urls: string[]) => Promise<void> | void = () => {},
-  calls: StubCalls = { dispatched: [] },
+  latency: (
+    service: CloudServiceId,
+    call: number,
+    urls: string[]
+  ) => Promise<void> | void = () => {},
+  calls: StubCalls = { dispatched: [] }
 ): CloudServicesClient {
   const counts = new Map<CloudServiceId, number>();
   const delay = async (service: CloudServiceId, urls: string[]) => {
@@ -115,7 +126,7 @@ export function stubCloudClient(
     aiParse: async (req: { pages: CloudPagePayload[] }) => {
       await delay(
         "ai-parse",
-        req.pages.map((p) => p.url),
+        req.pages.map((p) => p.url)
       );
       return {
         results: req.pages.map((p) => {
@@ -132,7 +143,7 @@ export function stubCloudClient(
     authoritySignals: async (req: { pages: CloudPagePayload[] }) => {
       await delay(
         "authority-signals",
-        req.pages.map((p) => p.url),
+        req.pages.map((p) => p.url)
       );
       return {
         results: req.pages.map((p) => {
@@ -164,7 +175,9 @@ export function stubCloudClient(
 /** Slim payloads for every stored 2xx HTML page, in crawl order, as the container sends. */
 export function payloadsFor(pages: readonly PageRecord[]): CloudPagePayload[] {
   return pages
-    .filter((p) => p.status >= 200 && p.status < 300 && (p.html ?? "").length > 0)
+    .filter(
+      (p) => p.status >= 200 && p.status < 300 && (p.html ?? "").length > 0
+    )
     .map((p) => ({ url: p.url, textExcerpt: `excerpt of ${p.url}` }));
 }
 
@@ -174,7 +187,7 @@ export function prefetchInputFor(
   config: Config,
   pages: CloudPagePayload[],
   siteUrl: string,
-  batchSize: number,
+  batchSize: number
 ): Omit<CloudPrefetchInput, "accumulator"> {
   const cloud: CloudConfig = {
     ...config.cloud,

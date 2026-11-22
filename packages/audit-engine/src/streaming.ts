@@ -519,7 +519,8 @@ export function streamPageRules(
         // pub#2121: a page whose cloud prefetch is still running waits here, before
         // the deadline check, so a wait that runs past the deadline ends the loop
         // exactly as a slow page before it would.
-        const cloudWait = cloudReady && waitForCloud(cloudReady, page.url, deadlineAt);
+        const cloudWait =
+          cloudReady && waitForCloud(cloudReady, page.url, deadlineAt);
         if (cloudWait) yield* Effect.promise(() => cloudWait);
         if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
           deadlineHit = true;
@@ -1083,17 +1084,20 @@ function replayPage(
 function waitForCloud(
   cloudReady: (pageUrl: string, signal: AbortSignal) => Promise<void> | null,
   pageUrl: string,
-  deadlineAt: number | undefined,
+  deadlineAt: number | undefined
 ): Promise<void> | null {
   const abort = new AbortController();
   const wait = cloudReady(pageUrl, abort.signal);
   if (!wait || deadlineAt === undefined) return wait;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<void>((resolve) => {
-    timer = setTimeout(() => {
-      abort.abort();
-      resolve();
-    }, Math.max(0, deadlineAt - Date.now()));
+    timer = setTimeout(
+      () => {
+        abort.abort();
+        resolve();
+      },
+      Math.max(0, deadlineAt - Date.now())
+    );
   });
   return Promise.race([wait, deadline]).finally(() => clearTimeout(timer));
 }

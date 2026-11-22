@@ -21,10 +21,16 @@
 // is byte-for-byte what the serial path gets; nothing here changes what the
 // prefetch calls or charges.
 
-import type { CloudResultStore, CloudResultEnvelope } from "@squirrelscan/rules";
 import type { SiteMetadata } from "@squirrelscan/core-contracts";
+import type {
+  CloudResultStore,
+  CloudResultEnvelope,
+} from "@squirrelscan/rules";
 
-import type { CloudPrefetchAccumulator, CloudPrefetchResult } from "./cloud-prefetch";
+import type {
+  CloudPrefetchAccumulator,
+  CloudPrefetchResult,
+} from "./cloud-prefetch";
 
 export class LateCloudResults {
   /** The store the runner reads (`RunnerScope.cloudResults`). Written only by this binder. */
@@ -45,14 +51,14 @@ export class LateCloudResults {
    */
   constructor(
     private readonly accumulator: CloudPrefetchAccumulator,
-    result: Promise<CloudPrefetchResult | null>,
+    result: Promise<CloudPrefetchResult | null>
   ) {
     this.settling = result.then(
       (r) => this.bindFinal(r),
       () => {
         this.rejected = true;
         return this.bindFinal(null);
-      },
+      }
     );
   }
 
@@ -86,7 +92,8 @@ export class LateCloudResults {
    */
   async siteMetadata(): Promise<SiteMetadata | undefined> {
     for (;;) {
-      if (this.final !== undefined) return this.final?.siteMetadata ?? undefined;
+      if (this.final !== undefined)
+        return this.final?.siteMetadata ?? undefined;
       const acc = this.accumulator;
       if (acc.result) return acc.result.siteMetadata ?? undefined;
       if (acc.siteMetadataDecided) return acc.siteMetadata ?? undefined;
@@ -103,7 +110,8 @@ export class LateCloudResults {
   pageReady(url: string, signal?: AbortSignal): Promise<void> | null {
     if (this.tryExpose(url)) return null;
     return (async () => {
-      while (!signal?.aborted && !this.tryExpose(url)) await this.nextChange(signal);
+      while (!signal?.aborted && !this.tryExpose(url))
+        await this.nextChange(signal);
     })();
   }
 
@@ -116,7 +124,11 @@ export class LateCloudResults {
     return true;
   }
 
-  private setEntry(service: string, key: string, env: CloudResultEnvelope): void {
+  private setEntry(
+    service: string,
+    key: string,
+    env: CloudResultEnvelope
+  ): void {
     const svc = service as Parameters<CloudResultStore["get"]>[0];
     let byKey = this.store.get(svc);
     if (!byKey) {
@@ -130,13 +142,16 @@ export class LateCloudResults {
     return Promise.race([this.accumulator.changed(signal), this.settling]);
   }
 
-  private bindFinal(result: CloudPrefetchResult | null): CloudPrefetchResult | null {
+  private bindFinal(
+    result: CloudPrefetchResult | null
+  ): CloudPrefetchResult | null {
     // Rebuilt rather than patched: the pages copied in early went in the order
     // they ran, and the final store's order is the batch order the site rules
     // and the rule cache's run-context hash read.
     this.store.clear();
     if (result) {
-      for (const [service, byKey] of result.store) this.store.set(service, new Map(byKey));
+      for (const [service, byKey] of result.store)
+        this.store.set(service, new Map(byKey));
     }
     this.final = result;
     // A rejected prefetch never settles its accumulator: release whoever is parked on it.

@@ -805,7 +805,11 @@ export async function runContainerCloudPrefetchFromPayloads(
     // No `confirm` — the dashboard spendAck already consented; the cap bounds spend.
   };
   if (input.deadlineMs !== undefined) {
-    return prefetchCloudDataWithDeadline(prefetchInput, input.deadlineMs, input.accumulator);
+    return prefetchCloudDataWithDeadline(
+      prefetchInput,
+      input.deadlineMs,
+      input.accumulator
+    );
   }
   return prefetchCloudData({
     ...prefetchInput,
