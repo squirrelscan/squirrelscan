@@ -1,0 +1,1 @@
+- `crawl/sitemap-domain` no longer flags URLs from a sitemap declared in robots.txt on another host (or its child sitemaps), and its messages say whether the sitemap was robots-declared. (#2225)

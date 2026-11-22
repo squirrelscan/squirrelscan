@@ -119,7 +119,9 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
     const locs = urls(50_000, "https://other.example.net");
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
     expect(c.status).toBe("fail");
-    expect(c.message).toBe("50000 URL(s) point to different domain(s)");
+    expect(c.message).toBe(
+      "50000 URL(s) point to different domain(s) in sitemap(s) not declared in robots.txt"
+    );
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
     expect(c.items?.[0]).toEqual({
       id: locs[0],
@@ -137,7 +139,9 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
   test("250,000 off-domain URLs serialize to a few kilobytes, not tens of megabytes", () => {
     const locs = urls(250_000, "https://other.example.net");
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
-    expect(c.message).toBe("250000 URL(s) point to different domain(s)");
+    expect(c.message).toBe(
+      "250000 URL(s) point to different domain(s) in sitemap(s) not declared in robots.txt"
+    );
     expect(JSON.stringify(c).length).toBeLessThan(10_000);
   });
 
@@ -157,7 +161,9 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
       `${BASE}/`,
     ];
     const c = check(sitemapDomainRule, sitemaps({ locs }), "sitemap-domain");
-    expect(c.message).toBe("60 URL(s) point to different domain(s)");
+    expect(c.message).toBe(
+      "60 URL(s) point to different domain(s) in sitemap(s) not declared in robots.txt"
+    );
     expect(c.items).toHaveLength(URL_ITEM_SAMPLE);
     expect(c.details?.additional).toBe(10);
     expect(c.details?.pagesTruncated).toBeUndefined();
@@ -169,6 +175,7 @@ describe("crawl/sitemap-domain (repo#2320)", () => {
     expect(c.items).toHaveLength(3);
     expect(c.details).toEqual({
       total: 3,
+      robotsDeclared: false,
       expectedHost: "example.com",
       foundHosts: ["other.example.net"],
     });
