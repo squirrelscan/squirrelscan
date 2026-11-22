@@ -2,10 +2,9 @@
 // scriptSrcs, fingerprint and anchors hold attribute values and text cut from the page, and a cut keeps its parent alive.
 // Measured with a forced GC and no timing: the heap kept for N pages' field stays near the heap of parsing alone.
 
-import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import type { HreflangPageSignal } from "../src/i18n/hreflang-signal";
+import { parsePage } from "@squirrelscan/parser";
 
 import { pageScriptSrcs } from "../src/adblock/blocked-links";
 import {
@@ -14,6 +13,7 @@ import {
   detachFingerprint,
   detachHreflang,
 } from "../src/collected-signals";
+import type { HreflangPageSignal } from "../src/i18n/hreflang-signal";
 import { buildHreflangSignal } from "../src/i18n/hreflang-signal";
 import {
   fingerprintPage,
@@ -111,10 +111,23 @@ function retained(
   return grown;
 }
 
+/**
+ * Flake fix (#2242): one heap reading is exposed to GC timing and to memory pressure from other suites in the same sandbox,
+ * so every figure is the median of SAMPLES independent readings. A single outlier (a late collection, a neighbour's
+ * allocation) cannot move the median; a real retention regression shifts every sample, so it still fails.
+ */
+const SAMPLES = 3;
+function median(extract: Extract, build: (i: number) => string = page): number {
+  const readings = Array.from({ length: SAMPLES }, () =>
+    retained(extract, build)
+  ).sort((a, b) => a - b);
+  return readings[Math.floor(SAMPLES / 2)]!;
+}
+
 /** Heap kept by holding nothing of the page but its index: what parsing N padded pages alone leaves behind. */
 let parseOnlyMb: number | undefined;
 /** Measured once per file: the baseline does not depend on the field, so each field compares against the same number. */
-const parseOnly = (): number => (parseOnlyMb ??= retained((_p, i) => i));
+const parseOnly = (): number => (parseOnlyMb ??= median((_p, i) => i));
 
 // The collector's secrets scan serialises the document first, which flattens attribute strings, so a build through
 // `buildCollectedPageSignal` hides most of this on some engine versions. Measuring the fields off an unserialised document
@@ -124,8 +137,8 @@ describe("a collected signal field does not keep its page", () => {
   for (const field of ["scriptSrcs", "fingerprint", "anchors", "hreflang"]) {
     test(`${field}: the copy keeps close to the parse-only heap, the uncopied field keeps clearly more`, () => {
       const base = parseOnly();
-      const copy = retained(copied[field]!, heavyPage);
-      const uncopied = retained(raw[field]!, heavyPage);
+      const copy = median(copied[field]!, heavyPage);
+      const uncopied = median(raw[field]!, heavyPage);
       const floor = Math.max(base, 0);
       const msg = `${field}: parse-only ${base.toFixed(1)} MB, copy ${copy.toFixed(1)} MB, uncopied ${uncopied.toFixed(1)} MB`;
       expect(copy, msg).toBeLessThan(floor + MARGIN_MB);
