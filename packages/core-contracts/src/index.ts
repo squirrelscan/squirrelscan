@@ -81,6 +81,7 @@ import type { AuditLevel, ResolvedAuditSettings } from "./audit-levels";
 import type { CacheFreshness } from "./cache-stats";
 import type { EntityMap } from "./entity-map";
 import type { AuditStatusReasonCode } from "./failure-reason";
+import type { FindingCoverage, RequestedPages } from "./finding-coverage";
 import type { IgnoreSummary } from "./ignore";
 import type { JavascriptShipped } from "./javascript-shipped";
 import type { ReportCapTier } from "./limits";
@@ -88,7 +89,6 @@ import type { PageMap } from "./page-map";
 import type { RefusedFetch } from "./refused-fetch";
 import type { CompactResolutionSignal, ResolutionSignal } from "./resolution";
 import type { SeedRedirectHop, SeedRedirectRecord } from "./seed-redirect";
-import type { FindingCoverage, RequestedPages } from "./finding-coverage";
 import type { SeedVerification } from "./seed-verification";
 import type { SiteMetadata } from "./site-metadata";
 import type {

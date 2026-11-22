@@ -63,7 +63,10 @@ export function summarizeFindingCoverage(input: {
   /** Findings still carried after the merge (never re-observed this run). */
   carried: Iterable<HeldFinding>;
 }): FindingCoverage | null {
-  const pagesByCheck = new Map<string, { ruleId: string; checkName: string; pages: Set<string> }>();
+  const pagesByCheck = new Map<
+    string,
+    { ruleId: string; checkName: string; pages: Set<string> }
+  >();
   for (const f of input.held) {
     const key = `${f.ruleId}${SEP}${f.checkName}`;
     let entry = pagesByCheck.get(key);
@@ -101,7 +104,7 @@ export function summarizeFindingCoverage(input: {
     (a, b) =>
       b.pagesCarried - a.pagesCarried ||
       (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0) ||
-      (a.checkName < b.checkName ? -1 : a.checkName > b.checkName ? 1 : 0),
+      (a.checkName < b.checkName ? -1 : a.checkName > b.checkName ? 1 : 0)
   );
   const clipped = rows.length > FINDING_COVERAGE_MAX_ROWS;
   return {

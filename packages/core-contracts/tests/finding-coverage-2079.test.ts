@@ -7,7 +7,11 @@ import {
   summarizeRequestedPages,
 } from "../src/finding-coverage";
 
-const f = (url: string, ruleId = "core/meta-title", checkName = "Meta Title") => ({
+const f = (
+  url: string,
+  ruleId = "core/meta-title",
+  checkName = "Meta Title"
+) => ({
   normalizedUrl: `https://a.test/${url}`,
   ruleId,
   checkName,
@@ -24,8 +28,20 @@ describe("summarizeFindingCoverage (#2079)", () => {
       carried: [f("b"), f("c")],
     })!;
     expect(cov.rows).toEqual([
-      { ruleId: "core/meta-title", checkName: "Meta Title", pagesHeld: 3, pagesRechecked: 1, pagesCarried: 2 },
-      { ruleId: "core/h1", checkName: "H1", pagesHeld: 1, pagesRechecked: 1, pagesCarried: 0 },
+      {
+        ruleId: "core/meta-title",
+        checkName: "Meta Title",
+        pagesHeld: 3,
+        pagesRechecked: 1,
+        pagesCarried: 2,
+      },
+      {
+        ruleId: "core/h1",
+        checkName: "H1",
+        pagesHeld: 1,
+        pagesRechecked: 1,
+        pagesCarried: 0,
+      },
     ]);
   });
 
@@ -34,12 +50,16 @@ describe("summarizeFindingCoverage (#2079)", () => {
       held: [f("a"), f("a")],
       carried: [f("a"), f("a"), f("zzz")],
     })!;
-    expect(cov.rows[0]).toMatchObject({ pagesHeld: 1, pagesRechecked: 0, pagesCarried: 1 });
+    expect(cov.rows[0]).toMatchObject({
+      pagesHeld: 1,
+      pagesRechecked: 0,
+      pagesCarried: 1,
+    });
   });
 
   test("clips rows at the cap, keeping the most carried, and says so", () => {
     const held = Array.from({ length: FINDING_COVERAGE_MAX_ROWS + 5 }, (_, i) =>
-      f("p", `r/x${String(i).padStart(3, "0")}`, "c"),
+      f("p", `r/x${String(i).padStart(3, "0")}`, "c")
     );
     const last = held[held.length - 1]!;
     const cov = summarizeFindingCoverage({ held, carried: [last] })!;
@@ -51,7 +71,9 @@ describe("summarizeFindingCoverage (#2079)", () => {
 
 describe("summarizeRequestedPages (#2079)", () => {
   test("is null when nothing was requested", () => {
-    expect(summarizeRequestedPages({ requested: [], observed: new Set() })).toBeNull();
+    expect(
+      summarizeRequestedPages({ requested: [], observed: new Set() })
+    ).toBeNull();
   });
 
   test("counts the requested set and how much of it was re-observed", () => {
@@ -59,12 +81,22 @@ describe("summarizeRequestedPages (#2079)", () => {
       requested: ["https://a.test/b", "https://a.test/a", "https://a.test/a"],
       observed: new Set(["https://a.test/a", "https://a.test/other"]),
     })!;
-    expect(r).toEqual({ pages: 2, rechecked: 1, urls: ["https://a.test/a", "https://a.test/b"] });
+    expect(r).toEqual({
+      pages: 2,
+      rechecked: 1,
+      urls: ["https://a.test/a", "https://a.test/b"],
+    });
   });
 
   test("clips the listed urls but keeps the counts exact", () => {
-    const requested = Array.from({ length: REQUESTED_PAGES_MAX_URLS + 3 }, (_, i) => `https://a.test/${i}`);
-    const r = summarizeRequestedPages({ requested, observed: new Set(requested) })!;
+    const requested = Array.from(
+      { length: REQUESTED_PAGES_MAX_URLS + 3 },
+      (_, i) => `https://a.test/${i}`
+    );
+    const r = summarizeRequestedPages({
+      requested,
+      observed: new Set(requested),
+    })!;
     expect(r.pages).toBe(REQUESTED_PAGES_MAX_URLS + 3);
     expect(r.rechecked).toBe(REQUESTED_PAGES_MAX_URLS + 3);
     expect(r.urls).toHaveLength(REQUESTED_PAGES_MAX_URLS);
