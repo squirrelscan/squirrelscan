@@ -294,6 +294,10 @@ export interface SmartMergeOverride {
     pagesWithStaleCarry?: number;
     /** What became of the known pages with open findings (#1759). */
     seedVerification?: import("@squirrelscan/core-contracts/seed-verification").SeedVerification;
+    /** The page set the caller asked this run to check, and how much of it was re-observed (#2079). */
+    requested?: import("@squirrelscan/core-contracts/finding-coverage").RequestedPages;
+    /** Per rule check: pages held with an open finding vs pages re-checked and carried (#2079). */
+    findings?: import("@squirrelscan/core-contracts/finding-coverage").FindingCoverage;
   };
   carriedLastSeen: Map<string, number>;
 }

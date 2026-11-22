@@ -30,6 +30,12 @@ import {
   type NotEvaluatedEvidence,
   type RuleTally,
 } from "@squirrelscan/audit-engine";
+import {
+  summarizeFindingCoverage,
+  summarizeRequestedPages,
+  type FindingCoverage,
+  type RequestedPages,
+} from "@squirrelscan/core-contracts/finding-coverage";
 import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import {
   summarizeSeedVerification,
@@ -140,6 +146,10 @@ export interface SmartAuditResult {
     unrenderedFindings?: number;
     /** What became of the known pages with open findings (#1759). Only when the run was given its seeds. */
     seedVerification?: SeedVerification;
+    /** The page set the caller asked this run to check, and how much of it was re-observed (#2079). Only when given. */
+    requested?: RequestedPages;
+    /** Per rule check: pages held with an open finding vs pages re-checked and carried (#2079). Omitted on a first run. */
+    findings?: FindingCoverage;
   };
   /**
    * carriedKey → lastSeenAt (epoch ms) for tagging report checks as carried.
@@ -182,6 +192,11 @@ export interface RunSmartAuditsInput {
     finalUrl?: string;
   }>;
   /**
+   * (#2079) Normalized URLs the caller asked this run to check. Stated in `coverage.requested` with how
+   * many were re-observed. It changes nothing the merge resolves or carries. Absent: no `requested`.
+   */
+  requestedUrls?: readonly string[];
+  /**
    * (#1759) The run's carried seeds and the frontier it left. Given, the coverage says how many known
    * pages with open findings were re-verified (live, gone, redirected) and how many were left carried
    * (skipped by the page budget, no longer linked). It changes nothing the merge resolves or carries.
@@ -214,6 +229,7 @@ export function runSmartAudits(
     ruleMeta,
     pages,
     seedVerification,
+    requestedUrls,
   } = input;
 
   return Effect.gen(function* () {
@@ -244,12 +260,13 @@ export function runSmartAudits(
     }
 
     // Read before the merge: it turns the open priors into resolved or stale rows.
+    const openIn = (yield* storage.getFindings(siteKey, ["open"])).map((f) => ({
+      normalizedUrl: f.normalizedUrl,
+      ruleId: f.ruleId,
+      checkName: f.checkName,
+    }));
     const carriedPagesIn = seedVerification
-      ? new Set(
-          (yield* storage.getFindings(siteKey, ["open"])).map(
-            (f) => f.normalizedUrl
-          )
-        )
+      ? new Set(openIn.map((f) => f.normalizedUrl))
       : undefined;
 
     // (pub#2099) The pages as the store holds them before the merge rewrites the
@@ -378,6 +395,21 @@ export function runSmartAudits(
       ),
     });
 
+    // (#2079) Per rule check: pages held going in vs pages this run left carried. Counts only.
+    const findingCoverage = summarizeFindingCoverage({
+      held: openIn.filter((f) => !notApplicable.has(f.ruleId)),
+      carried: carriedFindings,
+    });
+    // Re-observed = crawled, or gone/redirecting (their findings resolve): every stored page row.
+    const observedUrls = new Set<string>(crawledUrls);
+    for (const p of pages) observedUrls.add(p.normalizedUrl);
+    const requestedSummary = requestedUrls
+      ? summarizeRequestedPages({
+          requested: requestedUrls,
+          observed: observedUrls,
+        })
+      : null;
+
     const seedSummary =
       seedVerification && carriedPagesIn
         ? summarizeSeedVerification({
@@ -407,6 +439,8 @@ export function runSmartAudits(
         carriedFindings: carriedFindings.length - unrenderedCount,
         ...(unrenderedCount > 0 ? { unrenderedFindings: unrenderedCount } : {}),
         ...(seedSummary ? { seedVerification: seedSummary } : {}),
+        ...(requestedSummary ? { requested: requestedSummary } : {}),
+        ...(findingCoverage ? { findings: findingCoverage } : {}),
       },
       carriedLastSeen,
     };
