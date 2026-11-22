@@ -46,7 +46,7 @@ export const cspRule: Rule = {
     description:
       "Checks for Content-Security-Policy header and validates directives",
     solution:
-      "CSP prevents XSS attacks by restricting which resources can load. Start with a report-only policy to identify issues. Key directives: default-src 'self', script-src (avoid 'unsafe-inline'), img-src, style-src, frame-ancestors. Use nonces or hashes instead of 'unsafe-inline' for scripts. Test thoroughly as strict CSP can break functionality.",
+      "CSP prevents XSS attacks by restricting which resources can load. Start with a report-only policy to identify issues. Key directives: default-src 'self', script-src (avoid 'unsafe-inline'), img-src, style-src, frame-ancestors. Use nonces or hashes instead of 'unsafe-inline' for scripts. On pages that load third-party scripts, set connect-src to the hosts the page needs so a compromised vendor script cannot send data elsewhere, and add report-to or report-uri so violations are collected. Test thoroughly as strict CSP can break functionality.",
     category: "security",
     scope: "site",
     findingScope: "page",
@@ -62,6 +62,9 @@ export const cspRule: Rule = {
       { name: "csp-self-proxy-script", outcome: "problem" },
       { name: "csp-no-frame-ancestors", outcome: "problem" },
       { name: "csp-no-object-src", outcome: "problem" },
+      { name: "csp-connect-unrestricted", outcome: "problem" },
+      { name: "csp-strict-dynamic-third-party", outcome: "problem" },
+      { name: "csp-no-reporting", outcome: "problem" },
       {
         name: "csp-present",
         outcome: "clean",
@@ -128,6 +131,10 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
 
   // Parse directives
   const directives = parseCSP(policy);
+
+  // #2087: the third-party script hosts this page loads. The containment
+  // checks below only speak for a page that loads at least one.
+  const thirdPartyHosts = thirdPartyScriptHosts(ctx, page);
 
   // Report-only mode
   if (isReportOnly) {
@@ -200,13 +207,21 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
     const hasUnsafeEval = weakValues.includes("'unsafe-eval'");
 
     if (hasUnsafeInline || hasUnsafeEval) {
+      // #2087: on a page that loads third-party scripts, 'unsafe-eval' also lets
+      // a compromised vendor script run a payload it builds from a string.
+      const evalContext = hasUnsafeEval && thirdPartyHosts.length > 0;
       checks.push({
         name: "csp-unsafe-scripts",
         status: "warn",
         message: `CSP allows ${[hasUnsafeInline && "'unsafe-inline'", hasUnsafeEval && "'unsafe-eval'"].filter(Boolean).join(" and ")}`,
-        value: "Weakens XSS protection significantly",
-        expected: "Use nonces or hashes instead of unsafe-inline",
+        value: evalContext
+          ? `Weakens XSS protection significantly, and 'unsafe-eval' lets a compromised third-party script (${hostSummary(thirdPartyHosts)}) run code it builds from a string`
+          : "Weakens XSS protection significantly",
+        expected: evalContext
+          ? "Use nonces or hashes instead of unsafe-inline, and remove 'unsafe-eval'"
+          : "Use nonces or hashes instead of unsafe-inline",
         ...evidence({
+          ...(evalContext ? { thirdPartyHosts } : {}),
           // The directive carrying 'unsafe-inline' (else 'unsafe-eval') and its value.
           ...((carrier("'unsafe-inline'") ?? carrier("'unsafe-eval'"))
             ? {
@@ -266,6 +281,10 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
     }
   }
 
+  if (!isReportOnly && thirdPartyHosts.length > 0) {
+    checks.push(...containmentChecks(policy, thirdPartyHosts, evidence));
+  }
+
   // Check for frame-ancestors (clickjacking protection)
   if (!directives.has("frame-ancestors")) {
     const xfo = headers["x-frame-options"];
@@ -292,6 +311,239 @@ function judgeCsp(ctx: RuleContext, page: SitePage): CheckResult[] {
   }
 
   return checks;
+}
+
+/** Most third-party script hosts named in evidence. */
+const MAX_THIRD_PARTY_HOSTS = 20;
+/** Most hosts named in a message or value. */
+const MAX_HOSTS_IN_TEXT = 3;
+
+/** Network schemes a scheme-only connect source opens to every host. */
+const NETWORK_SCHEME_SOURCES = new Set(["http:", "https:", "ws:", "wss:"]);
+
+/**
+ * #2087: whether an enforced policy would contain a hijacked third-party
+ * script, judged from the header alone. A header that carries several
+ * comma-joined policies is read per policy: the browser enforces all of them,
+ * so one that restricts connections restricts them, and 'strict-dynamic'
+ * trusts inserted scripts only when every policy that controls scripts says so.
+ */
+function containmentChecks(
+  header: string,
+  thirdPartyHosts: string[],
+  evidence: (extra?: Record<string, unknown>) => {
+    pages: string[];
+    details: Record<string, unknown>;
+  }
+): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const policies = header
+    .split(",")
+    .map(parseCSP)
+    .filter((p) => p.size > 0);
+  if (policies.length === 0) return checks;
+  const hosts = hostSummary(thirdPartyHosts);
+
+  const connect = policies.map(connectSource);
+  if (connect.every((c) => c.open)) {
+    const open = connect.find((c) => c.directive !== null) ?? connect[0]!;
+    checks.push({
+      name: "csp-connect-unrestricted",
+      status: "warn",
+      message: "Script on the page can send data to any host",
+      value: open.directive
+        ? `${open.directive} allows ${open.sources.join(" ")}, so a compromised third-party script (${hosts}) can send what it reads anywhere`
+        : `No connect-src or default-src restricts connections, so a compromised third-party script (${hosts}) can send what it reads anywhere`,
+      expected:
+        "Set connect-src to the hosts the page needs to reach, such as connect-src 'self' https://api.example.com",
+      ...evidence({
+        ...(open.directive
+          ? { directive: open.directive, value: open.value }
+          : {}),
+        thirdPartyHosts,
+      }),
+    });
+  }
+
+  const scriptLists = policies
+    .map(scriptElementSource)
+    .filter((v): v is string => v !== null);
+  if (
+    scriptLists.length > 0 &&
+    scriptLists.every((v) => sourceTokens(v).has("'strict-dynamic'"))
+  ) {
+    checks.push({
+      name: "csp-strict-dynamic-third-party",
+      status: "info",
+      message:
+        "CSP 'strict-dynamic' also trusts every script a third-party script inserts",
+      value: `A script that ${hosts} adds to the page runs without matching the policy, so a compromised vendor can load any code`,
+      expected:
+        "Keep 'strict-dynamic' only if you trust everything these vendors load, and restrict connect-src so inserted code cannot send data out",
+      ...evidence({ thirdPartyHosts }),
+    });
+  }
+
+  if (!policies.some((p) => p.has("report-uri") || p.has("report-to"))) {
+    checks.push({
+      name: "csp-no-reporting",
+      status: "info",
+      message: "CSP violations are not being collected",
+      value: `The policy has no report-to or report-uri, so a blocked request from a compromised third-party script (${hosts}) goes unnoticed`,
+      expected:
+        "Add report-to (with a Reporting-Endpoints header) or report-uri",
+      ...evidence({ thirdPartyHosts }),
+    });
+  }
+
+  return checks;
+}
+
+/**
+ * The connect directive browsers read for one policy (connect-src, else
+ * default-src) and whether it lets script reach any host: absent, or carrying
+ * an any-host source (`*`, `https://*`) or a network scheme-only source
+ * (`https:`, `wss:`). `data:` and `blob:` are not network destinations.
+ */
+function connectSource(directives: Map<string, string>): {
+  open: boolean;
+  directive: string | null;
+  value: string;
+  sources: string[];
+} {
+  const directive = directives.has("connect-src")
+    ? "connect-src"
+    : directives.has("default-src")
+      ? "default-src"
+      : null;
+  if (directive === null)
+    return { open: true, directive: null, value: "", sources: [] };
+  const value = directives.get(directive) ?? "";
+  const sources = [...sourceTokens(value)].filter(
+    (t) => isAnyHostSource(t) || NETWORK_SCHEME_SOURCES.has(t)
+  );
+  return {
+    open: sources.length > 0,
+    directive,
+    value: value.slice(0, MAX_DIRECTIVE_VALUE),
+    sources,
+  };
+}
+
+/** One policy's source list for script elements, or null when it has none. */
+function scriptElementSource(directives: Map<string, string>): string | null {
+  return (
+    directives.get("script-src-elem") ??
+    directives.get("script-src") ??
+    directives.get("default-src") ??
+    null
+  );
+}
+
+/** The first few hosts, then how many more. */
+function hostSummary(hosts: string[]): string {
+  const shown = hosts.slice(0, MAX_HOSTS_IN_TEXT).join(", ");
+  const more = hosts.length - MAX_HOSTS_IN_TEXT;
+  return more > 0 ? `${shown} and ${more} more` : shown;
+}
+
+/**
+ * Hosts of the `<script src>` elements on one page that are served from
+ * outside the page's own domain (#2087). Read from the page-time collected
+ * signals on the streaming path, else from the live document; a page with
+ * neither yields none. Script that the page's scripts insert at run time is
+ * not seen: the rule reads the fetched HTML and executes nothing.
+ */
+function thirdPartyScriptHosts(ctx: RuleContext, page: SitePage): string[] {
+  let pageUrl: URL;
+  try {
+    pageUrl = new URL(page.finalUrl ?? page.url);
+  } catch {
+    return [];
+  }
+  const srcs =
+    ctx.collectedSignals?.pages.find((p) => p.url === page.url)?.scriptSrcs ??
+    documentScriptSrcs(page.parsed?.document);
+  const own = ownDomain(pageUrl.hostname);
+  const hosts = new Set<string>();
+  for (const src of srcs) {
+    let url: URL;
+    try {
+      url = new URL(src, pageUrl);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") continue;
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (host === own || host.endsWith(`.${own}`)) continue;
+    hosts.add(host);
+    if (hosts.size >= MAX_THIRD_PARTY_HOSTS) break;
+  }
+  return [...hosts];
+}
+
+/**
+ * Raw `<script src>` values of a live document, leaving out scripts inside
+ * `<noscript>` (they never load). Duck-typed on purpose: this file is part of
+ * the dependency-free `@squirrelscan/rules/security-headers` entry, so it
+ * cannot import the DOM helpers.
+ */
+function documentScriptSrcs(doc: unknown): string[] {
+  const d = doc as {
+    querySelectorAll?(sel: string): Iterable<{
+      getAttribute(name: string): string | null;
+      closest?(sel: string): unknown;
+    }>;
+  } | null;
+  if (typeof d?.querySelectorAll !== "function") return [];
+  const srcs: string[] = [];
+  try {
+    for (const el of d.querySelectorAll("script[src]")) {
+      if (el.closest?.("noscript")) continue;
+      const src = el.getAttribute("src");
+      if (src !== null) srcs.push(src);
+    }
+  } catch {
+    // linkedom edge cases: treat as no scripts.
+  }
+  return srcs;
+}
+
+/** Second-level labels that sit under a two-letter country code as a public suffix (`co.uk`, `com.au`). */
+const CCTLD_SECOND_LEVELS = new Set([
+  "ac",
+  "co",
+  "com",
+  "edu",
+  "gov",
+  "ltd",
+  "ne",
+  "net",
+  "or",
+  "org",
+  "plc",
+]);
+
+/**
+ * The domain whose hosts count as the page's own: the last two labels of the
+ * page host (`www.example.com` owns `static.example.com`), or three when the
+ * last two look like a country suffix such as `co.uk`. No public suffix list
+ * is loaded here, so this is a guess, and it errs toward first party: a vendor
+ * on another tenant of a shared hosting suffix is missed, a first-party CDN is
+ * never reported. An IP address owns only itself.
+ */
+function ownDomain(pageHost: string): string {
+  const host = pageHost.toLowerCase().replace(/\.$/, "");
+  const labels = host.split(".");
+  if (/^[\d.]+$/.test(host) || host.includes(":")) return host;
+  const lastTwo = labels.slice(-2);
+  const keep =
+    lastTwo.length === 2 &&
+    lastTwo[1]!.length === 2 &&
+    CCTLD_SECOND_LEVELS.has(lastTwo[0]!)
+      ? 3
+      : 2;
+  return labels.slice(-keep).join(".");
 }
 
 /** Longest directive value kept in evidence (the policy itself can be long). */
