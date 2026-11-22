@@ -85,4 +85,19 @@ describe("crawl/sitemap-domain robots.txt declarations", () => {
     expect(c.status).toBe("fail");
     expect(c.details?.total).toBe(1);
   });
+
+  test("declared cross-host sitemap still flags URLs on a third host", () => {
+    const c = run(
+      [DOCS_INDEX],
+      [
+        entry(DOCS_INDEX, [
+          "https://docs.kadeep.ai/a",
+          "https://evil.example/x",
+        ]),
+      ]
+    );
+    expect(c.status).toBe("fail");
+    expect(c.details?.total).toBe(1);
+    expect(c.details?.foundHosts).toEqual(["evil.example"]);
+  });
 });

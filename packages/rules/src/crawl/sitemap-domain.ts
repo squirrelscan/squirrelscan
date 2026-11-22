@@ -77,13 +77,12 @@ export const sitemapDomainRule: Rule = {
     let robotsDeclaredSkipped = 0;
 
     for (const sitemap of sitemaps.discovered) {
-      if (declared.has(normalizeSitemapUrl(sitemap.url))) {
-        const sitemapHost = getHostname(sitemap.url).toLowerCase();
-        if (sitemapHost && sitemapHost !== expectedHost) {
-          robotsDeclaredSkipped += sitemap.urls.length;
-        }
-        continue;
-      }
+      // A robots.txt-declared sitemap may live on another host and list URLs
+      // on that host. URLs on any third host are still flagged.
+      const isDeclared = declared.has(normalizeSitemapUrl(sitemap.url));
+      const sitemapHost = isDeclared
+        ? getHostname(sitemap.url).toLowerCase()
+        : "";
       for (const sitemapUrl of sitemap.urls) {
         const urlHost = getHostname(sitemapUrl.loc).toLowerCase();
         if (!urlHost) continue;
@@ -94,12 +93,17 @@ export const sitemapDomainRule: Rule = {
           urlHost === `www.${expectedHost}` ||
           `www.${urlHost}` === expectedHost;
 
-        if (!isMatch) {
-          crossDomainUrls.push({
-            url: sitemapUrl.loc,
-            host: urlHost,
-          });
+        if (isMatch) continue;
+
+        if (sitemapHost && urlHost === sitemapHost) {
+          robotsDeclaredSkipped++;
+          continue;
         }
+
+        crossDomainUrls.push({
+          url: sitemapUrl.loc,
+          host: urlHost,
+        });
       }
     }
 
