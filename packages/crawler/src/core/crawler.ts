@@ -12,6 +12,7 @@ import type {
 } from "@squirrelscan/core-contracts";
 import type {
   RenderedRequestSink,
+  RenderRuntimeSink,
   WellKnownProbe,
 } from "@squirrelscan/core-contracts";
 
@@ -649,6 +650,11 @@ export interface CreateCrawlerOptions {
    * URL, so endpoint discovery can use them (repo#4188). In memory only: nothing is stored.
    */
   renderedRequestSink?: RenderedRequestSink;
+  /**
+   * Opt-in: receives what the browser recorded while a rendered page ran (page errors, failed requests,
+   * CSP violations), keyed by the page's normalized URL, for the page rules (#425). In memory only.
+   */
+  renderRuntimeSink?: RenderRuntimeSink;
   /**
    * Opt-in: run the page classifier on every parsed page (#2307). It fills `LinkData.section`
    * where the markup is silent and stores the page type on the parsed page. Absent = markup rules
@@ -2619,6 +2625,16 @@ export function createCrawler(
               entry.normalizedUrl,
               result.renderedRequests
             );
+          }
+          if (options.renderRuntimeSink) {
+            // Set or cleared on every commit: a page re-fetched without a render must not keep the
+            // runtime of an earlier fetch of the same URL.
+            if (result.renderRuntime)
+              options.renderRuntimeSink.set(
+                entry.normalizedUrl,
+                result.renderRuntime
+              );
+            else options.renderRuntimeSink.delete(entry.normalizedUrl);
           }
           yield* storage.upsertPage(crawlId, pageRecord);
           pagesCommitted++;

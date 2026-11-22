@@ -1,0 +1,113 @@
+---
+title: "CSP violations: what the browser blocked while the page rendered"
+description: "A Content-Security-Policy that blocks a widget or an analytics endpoint leaves the page answering 200. On a rendered crawl, squirrel reports each load the browser refused, by host and directive."
+---
+
+## What this rule catches
+
+A Content-Security-Policy (CSP) tells the browser which hosts a page may load from. When it leaves out a host the site depends on, the browser refuses the load and the page still answers 200 and looks normal. A booking widget injected after hydration never appears, every analytics hit is dropped, an ads script never runs. Nothing in the HTML is wrong, so a check of the markup or of the header text cannot see it.
+
+The browser does report each refusal, as a `securitypolicyviolation` event. This rule reads those events from a rendered crawl and reports what was blocked, so the finding is the browser's own verdict rather than a prediction.
+
+[security/csp](/rules/security/csp) judges how strict the policy is, and [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources) predicts blocks from the page's markup without a render. This rule covers what neither can see: loads that only happen at runtime, such as a script injected after `load` or the endpoints an analytics tag posts to.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check named `csp-violations`. It reads only what the render recorded, not the markup, so it also runs on a page whose HTML could not be parsed.
+
+The data comes from the renderer. On a rendered crawl, the renderer registers a `securitypolicyviolation` listener before any page script runs and keeps listening for a few seconds after `load`, then hands each violation's `effectiveDirective`, `violatedDirective`, `blockedURI`, `sourceFile` and `lineNumber` to the audit with the page. No extra page load is made. The hosted renderer does not record violations yet; that work is tracked privately. Until it does, rendered pages are skipped with `runtime-not-recorded`, as described below.
+
+- **Skipped** when the page was fetched as plain HTML, not rendered: an `--http` audit, `--render-mode off`, or a page an `auto` crawl did not render. Message: `CSP violations were not checked: the page was fetched as plain HTML, not rendered in a browser`. The reason says that only a browser render records what a policy blocks, and to audit with `--render` (or `--render-mode auto`) to check it.
+- **Skipped** when the page was rendered but the renderer did not record CSP violations for it. Message: `CSP violations were not checked: the renderer did not record them for this page`, reason `runtime-not-recorded`. This is listed under **Not checked**, never as a pass, and it never resolves an earlier finding. Re-analysing a stored crawl gives the same result: the violations are held in memory during the crawl and are not stored.
+- **Pass** when the renderer recorded violations and none were enforced. Message: `The browser blocked nothing under the page's Content-Security-Policy while it rendered`.
+- **Fail** when at least one blocked load belongs to a known analytics, ads, payments, captcha, form or booking vendor.
+- **Warn** when the blocked loads are all something else.
+
+Violations from a `Content-Security-Policy-Report-Only` policy blocked nothing, so they are ignored.
+
+### How blocks are grouped
+
+Violations are grouped by the directive the browser enforced (`effectiveDirective`, such as `script-src-elem` or `connect-src`) and the blocked host. The check message has the form `The page's Content-Security-Policy blocked N sources while it rendered, M from a known analytics, ads, payments, captcha, form or booking vendor (<directive>: <host>; ...)`, naming up to five groups. Vendor groups come first, then the most frequent.
+
+Each group is an item (up to 25 per page; the rest are counted in `details.additional`) with a label of the form `<directive> blocked <host> (<endpoints>), N times: add <scheme>://<host> to <directive>`. The endpoints are up to five distinct host and path pairs, such as `analytics.google.com/g/collect`. The query string is never printed, because a beacon's query carries visitor and property ids. When the browser reported the script that made the request, the item's snippet reads `from <script URL>:<line>`. The item's `meta` carries `directive`, `host`, `count`, `endpoints` and, for a known vendor, `category`.
+
+A blocked value that is not a URL is grouped by its keyword: `inline` (inline code), `eval`, `wasm-eval`, `data`, `blob`, `trusted-types-policy` and `trusted-types-sink`. For inline code the advice is to move the code to a file or allow it with a nonce or hash, never `'unsafe-inline'`. Any other value that is not an absolute `http` or `https` URL is ignored.
+
+### Which blocks are errors
+
+A blocked host is a known vendor when it matches the vendor host table that [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources#vendor-hosts-the-html-never-names) uses (for example `google-analytics.com`, `analytics.google.com`, `googletagmanager.com`, `doubleclick.net`, `stripe.com`, `challenges.cloudflare.com`, `calendly.com`, `typeform.com`). `www.google.com` serves much more than ads and analytics, so only its vendor paths count: `/g/collect` (analytics, an Ads-linked GA4 property posts there), `/pagead/` and `/ads/` (ads), and `/recaptcha/` (captcha).
+
+Severity for the rule is error, weight 6. A page with only unknown hosts blocked reports a warning.
+
+## How to fix it
+
+Add each reported host to the directive the finding names. The browser reports the specific directive it enforced: when your policy has no `script-src-elem`, add the host to `script-src` instead (or to `default-src` when neither is set). Then reload the page with the browser console open and confirm no violation remains.
+
+For an Ads-linked Google Analytics 4 property, `connect-src` needs every endpoint the tag posts to:
+
+```http
+Content-Security-Policy: default-src 'self';
+  script-src 'self' https://www.googletagmanager.com;
+  connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.google.com https://stats.g.doubleclick.net
+```
+
+If a blocked host is something you no longer use, remove the tag that loads it instead. Test a change in `Content-Security-Policy-Report-Only` first if the site is busy.
+
+| | |
+|---|---|
+| **Rule ID** | `security/csp-violations` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/csp-violations"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/csp-violations"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `csp-violations` | Problem |  |
+| `csp-violations` | Clean | `csp-violations` |
+| `csp-violations` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/csp-blocks-own-resources](/rules/security/csp-blocks-own-resources): the same question answered from the markup, on every audit, without a render.
+- [security/csp](/rules/security/csp): how strict the policy is, and a missing policy.
+- [reliability/js-errors](/rules/reliability/js-errors): uncaught errors and failed requests from the same render, which leaves CSP violations to this rule.
+
+{/* glossary:backlinks:start */}
+
+Glossary: [Content Security Policy (CSP)](/glossary/content-security-policy).
+
+{/* glossary:backlinks:end */}

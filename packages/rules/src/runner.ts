@@ -401,6 +401,7 @@ export const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
   "perf/http2",
   "perf/ttfb",
   "security/cookie-flags",
+  "security/csp-violations",
   "security/https",
   "url/hyphens",
   "url/length",

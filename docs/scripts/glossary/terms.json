@@ -2090,7 +2090,8 @@
       "definition": "A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.",
       "rules": [
         "security/csp",
-        "security/csp-blocks-own-resources"
+        "security/csp-blocks-own-resources",
+        "security/csp-violations"
       ],
       "related": [
         "security-headers",

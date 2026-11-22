@@ -23,7 +23,10 @@
 // cluster key and is left alone — with `SQUIRREL_TEMPLATE_FANOUT=0` as the kill
 // switch. See template-fanout.ts for what makes it sound and what it can never do.
 
-import type { PageRecord } from "@squirrelscan/core-contracts";
+import type {
+  PageRecord,
+  RenderRuntimeDiagnostics,
+} from "@squirrelscan/core-contracts";
 import type { SQLiteStorage } from "@squirrelscan/crawler";
 import type {
   PageFingerprint,
@@ -251,6 +254,11 @@ export function streamPageRules(
       string,
       ParsedPage["soft404Confirmation"]
     >;
+    /**
+     * Render runtime per normalized URL, from the crawl (#425): set as `PageData.renderRuntime`. A page
+     * with an entry never replays from the rule cache, whose key does not cover it.
+     */
+    renderRuntime?: ReadonlyMap<string, RenderRuntimeDiagnostics>;
     signal?: AbortSignal;
     /**
      * Wall-clock time (epoch ms) after which no further page starts its rules (#1271):
@@ -471,6 +479,9 @@ export function streamPageRules(
             // A redirect row (#1762) is not a page and runs only the redirect rules: it has no cached entry,
             // and a key built from its empty record must never be looked up as if it did.
             if (isRedirectSourcePage(page)) continue;
+            // #425: the render runtime is in-memory crawl data the key does not hash, so a page that
+            // has it always runs fresh instead of replaying verdicts from a different render.
+            if (opts?.renderRuntime?.has(page.normalizedUrl)) continue;
             const key = await cache.keyFor(
               page,
               soft404?.get(page.normalizedUrl)
@@ -697,6 +708,8 @@ export function streamPageRules(
           redirectChain: page.redirectChain,
           rendered: isRenderedFetch(page.fetcherId),
         };
+        const renderRuntime = opts?.renderRuntime?.get(pageUrl);
+        if (renderRuntime) pageData.renderRuntime = renderRuntime;
 
         // ONE fingerprint per page, three consumers now: `page_features.template_fp`
         // reduces it to an equality cluster key (#1949), the collected signal keeps

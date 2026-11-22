@@ -13,6 +13,7 @@ import type {
   RslData,
   RedirectChain,
   RenderedRequest,
+  RenderRuntimeDiagnostics,
   ResourceSizeData,
   ScriptContentData,
   SitemapUrlStatusData,
@@ -3880,6 +3881,11 @@ export function runStreamingRules(
      * Fed to endpoint discovery as `render` candidates. Omitted: discovery stays static.
      */
     renderedRequests?: ReadonlyMap<string, readonly RenderedRequest[]>;
+    /**
+     * What the browser recorded while each page rendered during the crawl, from the crawler's sink (#425).
+     * Handed to the page rules as `PageData.renderRuntime`. Omitted: the rules read "not recorded".
+     */
+    renderRuntime?: ReadonlyMap<string, RenderRuntimeDiagnostics>;
     hooks?: StreamPageRulesHooks;
     signal?: AbortSignal;
     /** Epoch ms after which no further page starts its rules; see {@link streamPageRules} (#1271). */
@@ -4268,6 +4274,7 @@ export function runStreamingRules(
       streamPageRules(storage, crawlId, runner, siteDataForPageRules, {
         batchSize,
         soft404Confirmations: soft404Map,
+        ...(opts?.renderRuntime ? { renderRuntime: opts.renderRuntime } : {}),
         collectors: [signalCollector, endpointCollector],
         hooks: opts?.hooks,
         signal: opts?.signal,
