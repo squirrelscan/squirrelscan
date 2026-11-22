@@ -64,6 +64,29 @@ export const entityPublisherMismatchRule: Rule = {
       // One publisher across the whole site. Still worth saying when it is not
       // the organization the site otherwise presents as itself.
       if (primary && canonical !== primary.key) {
+        // Same name on both: one business declared twice, not a stranger. Name
+        // both ids so the fix (merge, or repoint publisher) is obvious.
+        const publisherNode = byKey.get(canonical);
+        const sameName =
+          publisherNode?.name &&
+          primary.name &&
+          publisherNode.name.trim().toLowerCase() ===
+            primary.name.trim().toLowerCase();
+        if (sameName) {
+          const idOf = (key: string, id: string | null): string =>
+            id ?? key.replace(/^id:/, "");
+          return {
+            checks: [
+              {
+                name: CHECK,
+                status: "warn",
+                message: `Two entities share the name ${label(canonical)} (${idOf(primary.key, primary.id)} and ${idOf(canonical, publisherNode.id)}); merge them or point publisher at the primary one (${idOf(primary.key, primary.id)})`,
+                value: idOf(canonical, publisherNode.id),
+                expected: idOf(primary.key, primary.id),
+              },
+            ],
+          };
+        }
         return {
           checks: [
             {

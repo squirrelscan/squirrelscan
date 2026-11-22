@@ -854,6 +854,70 @@ describe("schema/entity-publisher-mismatch", () => {
     expect(check.items?.[0]?.id).toBe("id:https://example.com/#org-b");
   });
 
+  test("two same-name entities with publisher on the non-primary one name both ids", async () => {
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/#business",
+          id: "https://example.com/#business",
+          types: ["LocalBusiness"],
+          name: "Popwall",
+          occurrences: 5,
+          pages: ["https://example.com/", "https://example.com/a"],
+        }),
+        node({
+          key: "id:https://example.com/#organization",
+          id: "https://example.com/#organization",
+          types: ["Organization"],
+          name: "Popwall",
+          occurrences: 1,
+        }),
+      ],
+      edges: [
+        edge({
+          target: "id:https://example.com/#organization",
+          occurrences: 3,
+        }),
+      ],
+    });
+    const check = await oneCheck(entityPublisherMismatchRule, map);
+    expect(check.status).toBe("warn");
+    expect(check.message).toContain("Two entities share the name Popwall");
+    expect(check.message).toContain("https://example.com/#business");
+    expect(check.message).toContain("https://example.com/#organization");
+    expect(check.message).not.toContain("not this site's primary");
+  });
+
+  test("a genuinely different publisher keeps the not-primary wording", async () => {
+    const map = entityMap({
+      nodes: [
+        node({
+          key: "id:https://example.com/#business",
+          id: "https://example.com/#business",
+          types: ["LocalBusiness"],
+          name: "Popwall",
+          occurrences: 5,
+          pages: ["https://example.com/", "https://example.com/a"],
+        }),
+        node({
+          key: "id:https://example.com/#other",
+          id: "https://example.com/#other",
+          types: ["Organization"],
+          name: "Someone Else",
+          occurrences: 1,
+        }),
+      ],
+      edges: [
+        edge({ target: "id:https://example.com/#other", occurrences: 3 }),
+      ],
+    });
+    const check = await oneCheck(entityPublisherMismatchRule, map);
+    expect(check.status).toBe("warn");
+    expect(check.message).toBe(
+      "Every publisher reference points at Someone Else, which is not this site's primary organization"
+    );
+  });
+
   test("an evenly split site is described, not accused", async () => {
     // A syndicating news site or a multi-brand publisher legitimately names
     // several publishers. Drift looks like a majority and a few strays; an
