@@ -67,7 +67,23 @@ import {
 
 const originalEnv = { ...process.env };
 
-const originalFetch = globalThis.fetch;
+/**
+ * pub#2249: URLs that reached the REAL fetch slot, i.e. calls no test stub
+ * handled. Installed once at file load, independent of the default stub, so
+ * deleting the stub (or a test restoring the real fetch) is caught. It never
+ * touches the network.
+ */
+const realFetchCalls: string[] = [];
+
+const realFetch = globalThis.fetch;
+
+const originalFetch = (async (url: string | URL | Request) => {
+  realFetchCalls.push(
+    typeof url === "string" ? url : url instanceof URL ? url.href : url.url
+  );
+  throw new Error("updater.test: real fetch reached, a stub is missing");
+}) as unknown as typeof fetch;
+globalThis.fetch = originalFetch;
 
 const CI_VARS = [
   "CI",
@@ -153,7 +169,9 @@ describe("updater", () => {
     // a dead local endpoint through a recording stub, never api.squirrelscan.com.
     process.env.SQUIRREL_API_SERVER = DEAD_API_URL;
     requestedUrls.length = 0;
+    realFetchCalls.length = 0;
     installDefaultFetchStub();
+    expect(globalThis.fetch).not.toBe(originalFetch);
     resetUpdaterStateForTests();
     // CRITICAL: homedir() ignores $HOME, so the settings/lock path helpers
     // resolve to the developer's REAL ~/.squirrel (or a fake ~/AppData/Local/
@@ -192,6 +210,7 @@ describe("updater", () => {
     await finishInlineAutoUpdate(0);
     // pub#2249 guard: no request in this file may leave the machine.
     expect(requestedUrls.filter((u) => !isLocalUrl(u))).toEqual([]);
+    expect(realFetchCalls).toEqual([]);
     // Restore any spyOn (isManagedInstall, os.platform, child_process.spawn)
     // so later tests see the real implementations again.
     mock.restore();
@@ -201,6 +220,9 @@ describe("updater", () => {
   });
 
   afterAll(() => {
+    expect(globalThis.fetch).toBe(originalFetch);
+    // Bun shares globals across files: hand the real fetch back.
+    globalThis.fetch = realFetch;
     expect(requestedUrls.filter((u) => !isLocalUrl(u))).toEqual([]);
   });
 
