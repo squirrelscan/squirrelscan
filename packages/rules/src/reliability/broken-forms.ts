@@ -1008,7 +1008,7 @@ async function verdictFor(
   if (target.plainHttp) return { kind: "unchecked", reason: REASON_PLAIN_HTTP };
 
   // Third-party: only when external link checking ran for this audit.
-  if (site.externalLinks === undefined)
+  if (site.mayRequestOtherHosts !== true)
     return { kind: "unchecked", reason: REASON_EXTERNAL_OFF };
   const link = external.get(normalized);
   if (link) {

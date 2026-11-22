@@ -233,7 +233,9 @@ function ctx(opts: {
       robotsTxt: null,
       sitemaps: null,
       scripts: opts.scripts ?? [],
-      ...(opts.externalOff ? {} : { externalLinks: [] }),
+      ...(opts.externalOff
+        ? {}
+        : { externalLinks: [], mayRequestOtherHosts: true }),
     },
     probe: opts.noProbe
       ? undefined
@@ -835,8 +837,28 @@ describe("security/supabase-rls", () => {
     });
   });
 
+  test("reads mayRequestOtherHosts, not externalLinks: verdicts bound but the flag false is off", async () => {
+    const sent = stubFetch({ [`${HOST}/rest/v1/todos`]: () => answer(401) });
+    const c = ctx({ scripts: [script(bundle(`sb.from("todos").select()`))] });
+    c.site = { ...c.site!, mayRequestOtherHosts: false };
+    const checks = await run(c);
+    expect(sent).toHaveLength(0);
+    expect(checks[0]).toMatchObject({
+      status: "skipped",
+      skipReason: "external-requests-off",
+    });
+  });
+
+  test("flag true with externalLinks still unfilled is on: the table is probed", async () => {
+    const sent = stubFetch({ [`${HOST}/rest/v1/todos`]: () => answer(401) });
+    const c = ctx({ scripts: [script(bundle(`sb.from("todos").select()`))] });
+    c.site = { ...c.site!, externalLinks: undefined };
+    await run(c);
+    expect(sent).toHaveLength(1);
+  });
+
   test("external link checking on with zero external links is not off: the table is probed", async () => {
-    // `ctx()` gives `externalLinks: []`, what the engine binds when checking ran and the pages link nowhere outside.
+    // `ctx()` gives `externalLinks: []` and `mayRequestOtherHosts: true`, what the engine binds when checking ran and the pages link nowhere outside.
     const sent = stubFetch({ [`${HOST}/rest/v1/todos`]: () => answer(401) });
     const checks = await run(
       ctx({ scripts: [script(bundle(`sb.from("todos").select()`))] })

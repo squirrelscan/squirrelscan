@@ -1945,6 +1945,14 @@ export function crawlRobotsUserAgent(
   return robotsGroupToken(agent) || undefined;
 }
 
+/**
+ * Whether this run may request hosts other than the audited site. Derived from
+ * external_links.enabled, so any run kind that must stay on one host switches it off.
+ */
+export function mayRequestOtherHosts(config: Config): boolean {
+  return config.external_links?.enabled !== false;
+}
+
 export function runRulesOnStorage(
   storage: CrawlStorage,
   crawlId: string,
@@ -2450,6 +2458,7 @@ export function runRulesOnStorage(
         config.external_links?.enabled === false
           ? undefined
           : externalLinksData,
+      mayRequestOtherHosts: mayRequestOtherHosts(config),
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
@@ -3519,6 +3528,7 @@ function buildStreamingSiteData(
         config.external_links?.enabled === false
           ? undefined
           : externalLinksData,
+      mayRequestOtherHosts: mayRequestOtherHosts(config),
       linkDiscoveryOff: crawl?.stats?.linkDiscoveryOff === true,
       robotsUserAgent: crawlRobotsUserAgent(crawl, config),
       ...(crawl?.stats?.targetedRun === true ? { targetedRun: true } : {}),
