@@ -43,6 +43,7 @@ interface TelemetryPayload {
   install_id?: string;
   version: string;
   error_type?: string;
+  error_message?: string;
 }
 
 /** DO_NOT_TRACK (consoledonottrack.com): "1" or "true" turns telemetry off. */
@@ -107,7 +108,7 @@ export function showTelemetryNotice(settings: UserSettings): void {
 export function trackTelemetryEvent(
   event: TelemetryEvent,
   settings?: UserSettings,
-  detail?: { error_type?: string }
+  detail?: { error_type?: string; error_message?: string }
 ): void {
   if (isTelemetryDisabled(settings)) return;
 
@@ -115,6 +116,63 @@ export function trackTelemetryEvent(
     event,
     version,
     ...(detail?.error_type && { error_type: detail.error_type.slice(0, 128) }),
+    ...(detail?.error_message && {
+      error_message: detail.error_message.slice(0, 256),
+    }),
+  });
+}
+
+/**
+ * Fixed, short description per bounded update failure code. Never raw output,
+ * so no URL, host, path, email or token can ride along. Any code not listed
+ * here is reported as UNKNOWN.
+ */
+const SELF_UPDATE_FAILURES = {
+  ATTESTATION_FAILED: "Release attestation check failed",
+  SIGNATURE_FAILED: "Release signature check failed",
+  SIGNATURE_REQUIRED: "A release signature was required but missing",
+  CHECKSUM_MISMATCH: "Downloaded binary checksum did not match",
+  DOWNLOAD_FAILED: "Release download failed",
+  DOWNLOAD_ABORTED: "Release download was aborted",
+  DOWNLOAD_TIMEOUT: "Release download timed out",
+  NETWORK_ERROR: "Network request failed",
+  UPDATE_IN_PROGRESS: "Another update was already in progress",
+  UNMANAGED_INSTALL: "Install is not managed by self update",
+  UNSUPPORTED_PLATFORM: "Platform is not supported",
+  MANIFEST_NOT_FOUND: "Release manifest was not found",
+  NO_MANIFEST: "Update was available but had no manifest",
+  INVALID_RELEASE: "Release data was invalid",
+  INVALID_JSON: "Release data was not valid JSON",
+  INVALID_KEY: "Release key was invalid",
+  INVALID_BIN_DIR: "Install directory was invalid",
+  INSTALL_FAILED: "Writing the new binary failed",
+  SYMLINK_FAILED: "Linking the new binary failed",
+  UNKNOWN: "Update failed for an unrecognised reason",
+} as const;
+
+export type SelfUpdateFailureCode = keyof typeof SELF_UPDATE_FAILURES;
+
+/** Which flow ran the update: the command, or the startup banner prompt. */
+export type SelfUpdateSource = "self_update" | "self_update_prompt";
+
+/**
+ * Report ONE failed foreground update as an `error` event
+ * (`<source>:<CODE>`), sent with the running (pre-update) version. A success
+ * sends nothing: recovery is visible as the install's next event carrying the
+ * new version. Same opt-out gate as every other event.
+ */
+export function trackSelfUpdateFailure(
+  source: SelfUpdateSource,
+  rawCode: string | undefined,
+  settings?: UserSettings
+): void {
+  const code: SelfUpdateFailureCode =
+    rawCode && Object.hasOwn(SELF_UPDATE_FAILURES, rawCode)
+      ? (rawCode as SelfUpdateFailureCode)
+      : "UNKNOWN";
+  trackTelemetryEvent("error", settings, {
+    error_type: `${source}:${code}`,
+    error_message: SELF_UPDATE_FAILURES[code],
   });
 }
 

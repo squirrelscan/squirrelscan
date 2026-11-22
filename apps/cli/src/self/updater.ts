@@ -54,7 +54,11 @@ import {
   updateSettings,
   shouldCheckForUpdates,
 } from "./settings";
-import { trackTelemetryEvent } from "./telemetry";
+import {
+  trackSelfUpdateFailure,
+  trackTelemetryEvent,
+  type SelfUpdateSource,
+} from "./telemetry";
 import {
   isAttemptThrottled,
   isVersionDismissed,
@@ -1285,11 +1289,32 @@ async function performUpdate(
  * Run interactive update with console output
  */
 export async function runInteractiveUpdate(options?: {
+  /** Flow reporting a failure to telemetry; the banner prompt passes its own. */
+  telemetrySource?: SelfUpdateSource;
   /** Update even when the running binary isn't the managed install */
   force?: boolean;
   /** Test seam for the PATH/bin-dir landing check. */
   landingDeps?: LandingDeps;
   /** Test seam for the provenance step: gh (#169) and release keys (repo#5032). */
+  attestation?: ProvenanceDeps;
+}): Promise<Result<UpdateResult>> {
+  const source = options?.telemetrySource ?? "self_update";
+  // Exactly one `error` event per failed update, whichever way it fails. A
+  // success sends nothing new: recovery is the install's next event carrying
+  // the new version.
+  try {
+    const result = await runInteractiveUpdateInner(options);
+    if (!result.ok) trackSelfUpdateFailure(source, result.error.code);
+    return result;
+  } catch (error) {
+    trackSelfUpdateFailure(source, undefined);
+    throw error;
+  }
+}
+
+async function runInteractiveUpdateInner(options?: {
+  force?: boolean;
+  landingDeps?: LandingDeps;
   attestation?: ProvenanceDeps;
 }): Promise<Result<UpdateResult>> {
   const settingsResult = loadSettings();
