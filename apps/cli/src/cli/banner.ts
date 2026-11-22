@@ -371,7 +371,9 @@ export async function promptForUpdate(
 
     try {
       const { runInteractiveUpdate } = await import("@/self/updater");
-      const result = await runInteractiveUpdate();
+      const result = await runInteractiveUpdate({
+        telemetrySource: "self_update_prompt",
+      });
 
       if (result.ok && result.data.updated) {
         console.error(

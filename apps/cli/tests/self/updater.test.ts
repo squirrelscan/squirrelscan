@@ -39,6 +39,7 @@ import {
   loadUserSettings,
   updateSettings,
 } from "@/self/settings";
+import { SELF_UPDATE_TELEMETRY_CAP_MS } from "@/self/telemetry";
 import {
   applyPendingUpdateInForeground,
   classifyBinDir,
@@ -57,6 +58,7 @@ import {
   updateLandingWarnings,
 } from "@/self/updater";
 
+import { version as currentVersion } from "../../package.json";
 import {
   makeTestReleaseKey,
   type TestReleaseKey,
@@ -847,6 +849,155 @@ describe("updater", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.code).toBe("SIGNATURE_FAILED");
       expect(existsSync(join(tempHome, "releases"))).toBe(false);
+    });
+
+    describe("failure telemetry (pub#2243)", () => {
+      const failingAttestation = { runGh: ghNeverVerifies };
+      const landingDeps = { which: () => null, isWindows: false };
+
+      test("a failed manual update sends one error event with the code and the pre-update version", async () => {
+        stubInteractiveUpdate();
+        const captured = captureTelemetry();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        const errors = captured.events.filter((e) => e.event === "error");
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.error_type).toBe("self_update:ATTESTATION_FAILED");
+        expect(errors[0]?.version).toBe(currentVersion);
+        const message = String(errors[0]?.error_message);
+        expect(message.length).toBeGreaterThan(0);
+        expect(message.length).toBeLessThanOrEqual(256);
+        expect(message).not.toMatch(/https?:|\/|@|\.com/i);
+      });
+
+      test("the error event has fully left when a failed manual update resolves (no wait)", async () => {
+        stubInteractiveUpdate();
+        // A transport that takes a real moment, like DNS + TLS + POST: the
+        // event only counts as sent once the response has completed.
+        const delivered: Array<Record<string, unknown>> = [];
+        globalThis.fetch = (async (
+          _url: string | URL | Request,
+          init?: RequestInit
+        ) => {
+          const body = JSON.parse(init?.body as string) as Record<
+            string,
+            unknown
+          >;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          delivered.push(body);
+          return new Response("{}", { status: 200 });
+        }) as unknown as typeof fetch;
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        const errors = delivered.filter((e) => e.event === "error");
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.error_type).toBe("self_update:ATTESTATION_FAILED");
+      });
+
+      test("a telemetry transport that never resolves delays the failure by at most the cap", async () => {
+        stubInteractiveUpdate();
+        globalThis.fetch = ((_url: string | URL | Request) =>
+          new Promise<Response>(() => {})) as unknown as typeof fetch;
+        const start = Date.now();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        const elapsed = Date.now() - start;
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.code).toBe("ATTESTATION_FAILED");
+        expect(elapsed).toBeLessThan(SELF_UPDATE_TELEMETRY_CAP_MS + 1_000);
+      }, 10_000);
+
+      test("opted out, a failed update resolves without waiting on the transport", async () => {
+        stubInteractiveUpdate();
+        process.env.NO_TELEMETRY = "1";
+        let calls = 0;
+        globalThis.fetch = ((_url: string | URL | Request) => {
+          calls++;
+          return new Promise<Response>(() => {});
+        }) as unknown as typeof fetch;
+        const start = Date.now();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        expect(Date.now() - start).toBeLessThan(500);
+        expect(calls).toBe(0);
+      });
+
+      test("the banner prompt flow reports with the prompt prefix", async () => {
+        stubInteractiveUpdate();
+        const captured = captureTelemetry();
+        await runInteractiveUpdate({
+          telemetrySource: "self_update_prompt",
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        const errors = captured.events.filter((e) => e.event === "error");
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.error_type).toBe(
+          "self_update_prompt:ATTESTATION_FAILED"
+        );
+      });
+
+      test("an unrecognised failure code is reported as UNKNOWN", async () => {
+        stubInteractiveUpdate();
+        spyOn(releasesModule, "downloadBinary").mockResolvedValue({
+          ok: false,
+          error: { code: "SOMETHING_NEW", message: "boom at https://x.test/a" },
+        });
+        const captured = captureTelemetry();
+        await runInteractiveUpdate({ landingDeps });
+        const errors = captured.events.filter((e) => e.event === "error");
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.error_type).toBe("self_update:UNKNOWN");
+        expect(String(errors[0]?.error_message)).not.toContain("x.test");
+      });
+
+      test("a successful update sends no error event", async () => {
+        stubInteractiveUpdate();
+        const captured = captureTelemetry();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: { runGh: async () => ({ code: 0, output: "" }) },
+        });
+        expect(result.ok).toBe(true);
+        await waitForTelemetry();
+        expect(captured.events.filter((e) => e.event === "error")).toHaveLength(
+          0
+        );
+      });
+
+      test("NO_TELEMETRY sends nothing on failure", async () => {
+        stubInteractiveUpdate();
+        process.env.NO_TELEMETRY = "1";
+        const captured = captureTelemetry();
+        const result = await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(result.ok).toBe(false);
+        expect(captured.events).toHaveLength(0);
+      });
+
+      test("telemetry=false in user settings sends nothing on failure", async () => {
+        stubInteractiveUpdate();
+        updateSettings({ telemetry: false });
+        const captured = captureTelemetry();
+        await runInteractiveUpdate({
+          landingDeps,
+          attestation: failingAttestation,
+        });
+        expect(captured.events).toHaveLength(0);
+      });
     });
 
     // The signed era: the target version is at or after first_signed_version.

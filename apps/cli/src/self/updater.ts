@@ -54,7 +54,12 @@ import {
   updateSettings,
   shouldCheckForUpdates,
 } from "./settings";
-import { trackTelemetryEvent } from "./telemetry";
+import {
+  SELF_UPDATE_TELEMETRY_CAP_MS,
+  trackSelfUpdateFailure,
+  trackTelemetryEvent,
+  type SelfUpdateSource,
+} from "./telemetry";
 import {
   isAttemptThrottled,
   isVersionDismissed,
@@ -1285,11 +1290,57 @@ async function performUpdate(
  * Run interactive update with console output
  */
 export async function runInteractiveUpdate(options?: {
+  /** Flow reporting a failure to telemetry; the banner prompt passes its own. */
+  telemetrySource?: SelfUpdateSource;
   /** Update even when the running binary isn't the managed install */
   force?: boolean;
   /** Test seam for the PATH/bin-dir landing check. */
   landingDeps?: LandingDeps;
   /** Test seam for the provenance step: gh (#169) and release keys (repo#5032). */
+  attestation?: ProvenanceDeps;
+}): Promise<Result<UpdateResult>> {
+  const source = options?.telemetrySource ?? "self_update";
+  // Exactly one `error` event per failed update, whichever way it fails. A
+  // success sends nothing new: recovery is the install's next event carrying
+  // the new version.
+  try {
+    const result = await runInteractiveUpdateInner(options);
+    if (!result.ok) await sendFailureBounded(source, result.error.code);
+    return result;
+  } catch (error) {
+    await sendFailureBounded(source, undefined);
+    throw error;
+  }
+}
+
+/**
+ * Await the failure event so a caller that exits right after (the manual
+ * `update` command) does not kill the in-flight POST, but never longer than
+ * the cap. Never throws.
+ */
+async function sendFailureBounded(
+  source: SelfUpdateSource,
+  code: string | undefined
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      trackSelfUpdateFailure(source, code),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, SELF_UPDATE_TELEMETRY_CAP_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } catch {
+    // Telemetry must never change the update's outcome.
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function runInteractiveUpdateInner(options?: {
+  force?: boolean;
+  landingDeps?: LandingDeps;
   attestation?: ProvenanceDeps;
 }): Promise<Result<UpdateResult>> {
   const settingsResult = loadSettings();
