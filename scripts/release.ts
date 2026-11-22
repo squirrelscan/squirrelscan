@@ -4,6 +4,7 @@ import { $ } from "bun";
 import { inc, rcompare, valid, type ReleaseType } from "semver";
 import { createInterface } from "node:readline";
 import { ENTRY_DIR, readEntries, release as assembleChangelog } from "./changelog";
+import { describeDrift, LOCKFILE, lockVersionDrift } from "./lockfile-versions";
 
 const PACKAGE_JSON = "apps/cli/package.json";
 
@@ -176,6 +177,15 @@ export async function manifestsCarry(version: string, root = "."): Promise<boole
   return carried;
 }
 
+// Fails the bump, naming each package and both versions, when bun.lock and a
+// workspace package.json disagree after the stamp.
+export async function assertLockMatches(root: string): Promise<void> {
+  const drift = await lockVersionDrift(root);
+  if (drift.length) {
+    error(`${LOCKFILE} disagrees with package.json:\n  ${drift.map(describeDrift).join("\n  ")}`);
+  }
+}
+
 // The release workflow used to stamp the version itself, commit it on a
 // detached checkout and push only the tag — so the bump was reachable from the
 // tag and nowhere else, and main sat a full release behind forever (0.0.82
@@ -222,7 +232,7 @@ async function ensureVersionLanded(version: string, assembleNotes: boolean): Pro
   log("Opening the version bump PR:");
   info(`Branch: ${branch}`);
   info(
-    `Files:  ${SYNCED_MANIFESTS.join(", ")}${assembleNotes ? `, CHANGELOG.md, ${ENTRY_DIR}/` : ""}`,
+    `Files:  ${SYNCED_MANIFESTS.join(", ")}, ${LOCKFILE}${assembleNotes ? `, CHANGELOG.md, ${ENTRY_DIR}/` : ""}`,
   );
   const answer = await prompt("Create and push it? [y/N] ");
   if (answer.toLowerCase() !== "y") {
@@ -233,10 +243,13 @@ async function ensureVersionLanded(version: string, assembleNotes: boolean): Pro
   const pkg = await readPackageJson();
   // Spread keeps `version` in its original position, so the diff stays 1 line.
   await Bun.write(PACKAGE_JSON, JSON.stringify({ ...pkg, version }, null, 2) + "\n");
+  // Also stamps bun.lock's workspace versions; bun install --frozen-lockfile
+  // never compares them, so a bump that skips the lock goes unnoticed (#2247).
   await $`bun run scripts/sync-plugin-manifests.ts --version ${version}`;
+  await assertLockMatches(".");
 
   const title = `chore(release): v${version}`;
-  await $`git add ${SYNCED_MANIFESTS}`;
+  await $`git add ${SYNCED_MANIFESTS} ${LOCKFILE}`;
   if (assembleNotes) {
     // Writes `## v<version> (date)` from changelog.d/ and deletes the entry files.
     const moved = assembleChangelog(".", version, new Date().toISOString().slice(0, 10));
