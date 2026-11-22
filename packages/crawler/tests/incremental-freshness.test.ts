@@ -180,23 +180,36 @@ describe("calculateFreshness", () => {
     expect(r.reason).toBe("immutable");
   });
 
-  test("s-maxage takes precedence over max-age", () => {
-    // max-age=10 (stale), s-maxage=10000 (fresh) → fresh via s-maxage.
+  test("s-maxage is ignored: max-age sets the lifetime (#2229)", () => {
     const r = calculateFreshness(
       {
-        cacheControl: "max-age=10, s-maxage=10000",
+        cacheControl: "max-age=300, s-maxage=3600",
         expires: null,
         age: null,
-        fetchedAt: now - 100 * SEC,
+        fetchedAt: now - 301 * SEC,
       },
       { now }
     );
-    expect(r.state).toBe("fresh");
-    expect(r.reason).toBe("s-maxage");
+    expect(r.state).toBe("stale");
+    expect(r.lifetimeSeconds).toBe(300);
   });
 
-  test("stale-while-revalidate: serve stale + revalidate", () => {
-    // max-age=60, swr=600, stored 120s ago → 60s stale, within swr window.
+  test("s-maxage alone gives no lifetime (#2229)", () => {
+    const r = calculateFreshness(
+      {
+        cacheControl: "s-maxage=3600",
+        expires: null,
+        age: null,
+        fetchedAt: now - 10 * SEC,
+      },
+      { now }
+    );
+    expect(r.state).toBe("stale");
+    expect(r.reason).toBe("no-cache-header");
+  });
+
+  test("stale-while-revalidate is never reuse: stale entry is revalidated (#2229)", () => {
+    // max-age=60, swr=600, stored 120s ago → inside the swr window, still "stale".
     const r = calculateFreshness(
       {
         cacheControl: "max-age=60, stale-while-revalidate=600",
@@ -206,8 +219,7 @@ describe("calculateFreshness", () => {
       },
       { now }
     );
-    expect(r.state).toBe("revalidate");
-    expect(r.reason).toBe("stale-while-revalidate");
+    expect(r.state).toBe("stale");
   });
 
   test("swr suppressed by must-revalidate", () => {

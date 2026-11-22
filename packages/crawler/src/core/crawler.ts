@@ -1844,16 +1844,17 @@ export function createCrawler(
               // Browser-like freshness: if the origin says the entry is still
               // fresh (Cache-Control max-age / Expires / immutable), skip the
               // request ENTIRELY — bounded by maxStalenessSeconds so an absurd
-              // max-age can't silently freeze a whole audit. SWR serves stale
-              // now and revalidates in the background. A no-cache crawl skips
-              // both shortcuts (#2032): it exists to see the post-deploy copy,
-              // so every cached page is revalidated with a conditional GET below.
+              // max-age can't silently freeze a whole audit. s-maxage is ignored
+              // (shared-cache directive) and a stale-while-revalidate window is
+              // never reuse (#2229): both fall through to the conditional GET
+              // below. A no-cache crawl skips the shortcut (#2032): it exists to
+              // see the post-deploy copy, so every cached page is revalidated.
               if (config.useCacheControl && !config.noCache) {
                 const freshness = cacheLookup.freshness;
 
                 if (freshness.state === "fresh") {
                   // For state === "fresh", calculateFreshness only emits a
-                  // FreshReason (max-age/s-maxage/expires/immutable); the cast
+                  // FreshReason (max-age/expires/immutable); the cast
                   // bridges the independent state/reason fields.
                   const reason = freshnessReasonToEvent(
                     freshness.reason as FreshReason
@@ -1861,30 +1862,6 @@ export function createCrawler(
                   yield* reuseCachedPage(crawlId, entry, cachedPage, reason, {
                     cacheFresh: true,
                   });
-                  return;
-                }
-
-                if (freshness.state === "revalidate") {
-                  // stale-while-revalidate: serve the stale copy immediately
-                  // without blocking on a request. We deliberately do NOT write
-                  // a background refresh into THIS crawl — the page row is the
-                  // report row for the current audit (keyed by crawl_id +
-                  // normalized_url) and was not re-parsed for links/images/
-                  // rules, so overwriting it mid-audit would corrupt the report.
-                  // The next audit revalidates it cheaply via conditional GET.
-                  //
-                  // cacheFresh:false — the content is STALE (past max-age), so
-                  // it must not inflate pagesCacheFresh/bytesCacheSaved (which
-                  // mean "origin said fresh"). It still counts in pagesUnchanged.
-                  yield* reuseCachedPage(
-                    crawlId,
-                    entry,
-                    cachedPage,
-                    "stale-while-revalidate",
-                    {
-                      cacheFresh: false,
-                    }
-                  );
                   return;
                 }
               }
@@ -4570,8 +4547,6 @@ function freshnessReasonToEvent(
   switch (reason) {
     case "max-age":
       return "max-age";
-    case "s-maxage":
-      return "s-maxage";
     case "expires":
       return "expires";
     case "immutable":

@@ -1,0 +1,1 @@
+- Re-audits no longer reuse stored pages on shared-cache rules: `s-maxage` is ignored (`max-age`, then `Expires`, set the lifetime) and a page inside a `stale-while-revalidate` window is revalidated with a conditional request instead of reused, so a re-audit after a deploy grades the live page (#2229)

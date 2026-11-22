@@ -199,9 +199,11 @@ any request headers the response's `Vary` header depends on.
 When re-fetching a URL, the crawler walks three levels, cheapest first:
 
 1. **Freshness skip (no request at all).** If the origin's `Cache-Control: max-age`
-   (or `s-maxage`, or a future `Expires` date) says the cached copy is still
-   fresh, SquirrelScan reuses it **without making any HTTP request**. `immutable`
-   and `stale-while-revalidate` are honored too. A configurable **staleness cap**
+   (or a future `Expires` date) says the cached copy is still fresh, SquirrelScan
+   reuses it **without making any HTTP request**. `immutable` is honored too.
+   The crawler is a private client, so `s-maxage` (a shared-cache directive) is
+   ignored, and a page inside a `stale-while-revalidate` window is revalidated
+   with a conditional request rather than reused. A configurable **staleness cap**
    (`max_staleness_seconds`, default 24h) bounds how long an absurd `max-age` can
    keep a page out of revalidation within a single audit.
 2. **Conditional GET (304).** If the cached copy is stale, the crawler sends

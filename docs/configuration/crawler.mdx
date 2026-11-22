@@ -927,7 +927,7 @@ CDN or proxy revalidates with your origin instead of serving a copy from before 
 deploy. Use it for audits that start right after a deploy. A custom
 [header](#headers) with the same name wins. It also turns off the local cache
 shortcuts for the run: a page cached by an earlier audit is never reused on the
-strength of its `max-age` or `stale-while-revalidate`, it is revalidated with a
+strength of its `max-age`, it is revalidated with a
 conditional request, so only a page the origin confirms unchanged (`304`) is reused.
 
 ```toml
