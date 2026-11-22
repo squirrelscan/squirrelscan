@@ -38,7 +38,7 @@ export interface CacheRequestContext {
  * freshness verdict, a miss never does — so consumers can't read freshness
  * without proving there's an entry, and an impl returning an entry without
  * freshness fails typecheck. Freshness: "fresh" = reuse without a request;
- * "revalidate" (SWR) = serve-now + refresh later; "stale" = conditional GET.
+ * "stale" = conditional GET (including inside stale-while-revalidate).
  */
 export type CacheLookup =
   | { entry: null; freshness?: undefined }

@@ -180,22 +180,7 @@ describe("calculateFreshness", () => {
     expect(r.reason).toBe("immutable");
   });
 
-  test("s-maxage takes precedence over max-age", () => {
-    // max-age=10 (stale), s-maxage=10000 (fresh) → fresh via s-maxage.
-    const r = calculateFreshness(
-      {
-        cacheControl: "max-age=10, s-maxage=10000",
-        expires: null,
-        age: null,
-        fetchedAt: now - 100 * SEC,
-      },
-      { now }
-    );
-    expect(r.state).toBe("fresh");
-    expect(r.reason).toBe("s-maxage");
-  });
-
-  test("stale-while-revalidate: serve stale + revalidate", () => {
+  test("stale-while-revalidate: conditional GET, no reuse", () => {
     // max-age=60, swr=600, stored 120s ago → 60s stale, within swr window.
     const r = calculateFreshness(
       {
@@ -206,7 +191,7 @@ describe("calculateFreshness", () => {
       },
       { now }
     );
-    expect(r.state).toBe("revalidate");
+    expect(r.state).toBe("stale");
     expect(r.reason).toBe("stale-while-revalidate");
   });
 

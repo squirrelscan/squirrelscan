@@ -199,9 +199,11 @@ any request headers the response's `Vary` header depends on.
 When re-fetching a URL, the crawler walks three levels, cheapest first:
 
 1. **Freshness skip (no request at all).** If the origin's `Cache-Control: max-age`
-   (or `s-maxage`, or a future `Expires` date) says the cached copy is still
+   (or a future `Expires` date) says the cached copy is still
    fresh, SquirrelScan reuses it **without making any HTTP request**. `immutable`
-   and `stale-while-revalidate` are honored too. A configurable **staleness cap**
+   is honored too. The crawler is a private client, so `s-maxage` (a shared-cache
+   directive) is ignored, and a copy past `max-age` is revalidated with a
+   conditional request even inside a `stale-while-revalidate` window. A configurable **staleness cap**
    (`max_staleness_seconds`, default 24h) bounds how long an absurd `max-age` can
    keep a page out of revalidation within a single audit.
 2. **Conditional GET (304).** If the cached copy is stale, the crawler sends
@@ -242,7 +244,7 @@ can't serve the wrong variant.
 
 The same freshness logic applies to **sub-resources** (CSS, images), not just
 pages. On a re-audit, a sub-resource the origin still declares fresh
-(`Cache-Control: max-age`/`s-maxage`/`immutable`) is reused **without any
+(`Cache-Control: max-age`/`immutable`) is reused **without any
 request**, and one with only a validator is revalidated with a conditional GET
 (a **304** reuses the prior size). Any sub-resource whose response carried a
 content-negotiating `Vary` (e.g. `User-Agent`, `Accept`) is always re-fetched,
