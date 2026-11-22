@@ -2,9 +2,10 @@
 // scriptSrcs, fingerprint and anchors hold attribute values and text cut from the page, and a cut keeps its parent alive.
 // Measured with a forced GC and no timing: the heap kept for N pages' field stays near the heap of parsing alone.
 
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 
-import { parsePage } from "@squirrelscan/parser";
+import type { HreflangPageSignal } from "../src/i18n/hreflang-signal";
 
 import { pageScriptSrcs } from "../src/adblock/blocked-links";
 import {
@@ -13,7 +14,6 @@ import {
   detachFingerprint,
   detachHreflang,
 } from "../src/collected-signals";
-import type { HreflangPageSignal } from "../src/i18n/hreflang-signal";
 import { buildHreflangSignal } from "../src/i18n/hreflang-signal";
 import {
   fingerprintPage,
