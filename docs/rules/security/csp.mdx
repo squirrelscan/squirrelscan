@@ -24,9 +24,13 @@ The rule reads the response headers of the first crawled page and can emit sever
 - `csp-no-object-src` reports info when neither `object-src` nor `default-src` is declared. Message: `CSP missing object-src directive`.
 - `csp-self-proxy-script` reports info when `'self'` is in the effective script list for script elements (`script-src-elem`, else `script-src`, else `default-src`), the policy is enforced, and a crawled script is loaded from a known first-party proxy path. It stays silent when `'strict-dynamic'` is in that list (browsers ignore `'self'` then) and when several comma-joined policies are set (they intersect, so `'self'` may be blocked by another one). It reads only the first-party scripts the crawl fetched, up to the crawl's script fetch limit, so a proxy script past that limit is not seen. A hit is a possible proxy path, not a finding: `/stats` and `/ingest` are also common ordinary app routes. Message: `CSP 'self' allows a possible first-party proxy path <paths>`.
 
+- `csp-connect-unrestricted` warns when the page loads a third-party script and the enforced policy lets script send data to any host: no `connect-src` and no `default-src`, or the one browsers read (`connect-src`, else `default-src`) holds `*`, a host of `*` such as `https://*`, or a network scheme-only source (`https:`, `http:`, `wss:`, `ws:`). A list of hosts, `'self'` or `'none'` does not trigger it, and neither do `data:` or `blob:`, which reach no host. Message: `Script on the page can send data to any host`.
+- `csp-strict-dynamic-third-party` reports info when the page loads a third-party script and the enforced policy's script list for elements (`script-src-elem`, else `script-src`, else `default-src`) holds `'strict-dynamic'`. Message: `CSP 'strict-dynamic' also trusts every script a third-party script inserts`.
+- `csp-no-reporting` reports info when the page loads a third-party script and the enforced policy has neither `report-to` nor `report-uri`. Message: `CSP violations are not being collected`.
+
 On a [targeted audit](/cli/audit#targeted-audits) (`--target-url`) the rule reads each listed page that answered with a status under 400 instead, and each check names the pages it speaks for in `pages` (one row for the pages with the same result).
 
-Every check carries structured evidence beside its message (#1735): `pages` lists the page the header was read from (the first crawled page; on a targeted audit, every listed page with that result), and `details` holds `pageUrl` (left out of a row for several pages) and `header` (`content-security-policy`, or `content-security-policy-report-only` when only that one is set). `csp-unsafe-scripts` and `csp-wildcard` add `directive`, the directive browsers read the weak source from (`script-src-elem`, `script-src-attr`, `script-src`, or `default-src` when neither script directive is set), and its `value` (cut to 300 characters), plus `directives`, every directive carrying a weak source with its `sources`. `csp-self-proxy-script` adds the proxy `paths`. A report, an agent and the cloud issue view read the page and the directive from these fields instead of parsing the message.
+Every check carries structured evidence beside its message (#1735): `pages` lists the page the header was read from (the first crawled page; on a targeted audit, every listed page with that result), and `details` holds `pageUrl` (left out of a row for several pages) and `header` (`content-security-policy`, or `content-security-policy-report-only` when only that one is set). `csp-unsafe-scripts` and `csp-wildcard` add `directive`, the directive browsers read the weak source from (`script-src-elem`, `script-src-attr`, `script-src`, or `default-src` when neither script directive is set), and its `value` (cut to 300 characters), plus `directives`, every directive carrying a weak source with its `sources`. `csp-self-proxy-script` adds the proxy `paths`. The three third-party checks add `thirdPartyHosts`, the third-party script hosts the page loads (up to 20), and `csp-connect-unrestricted` adds the `directive` and `value` that leave connections open when there is one. When the page loads a third-party script, `csp-unsafe-scripts` for `'unsafe-eval'` adds `thirdPartyHosts` too, and its value says that a compromised vendor script could run code it builds from a string. A report, an agent and the cloud issue view read the page and the directive from these fields instead of parsing the message.
 
 The effective script source is `script-src` when it is present and non-empty, otherwise `default-src`. `script-src-elem` overrides it for `<script>` elements, so `'unsafe-inline'` and wildcard sources are judged on `script-src-elem` when it is set, in both directions: a strict `script-src-elem` clears a loose `script-src`, and a loose one is flagged next to a strict `script-src`. Inline event handlers such as `onerror=` are not script elements: `'unsafe-inline'` is also judged on `script-src-attr`, which falls back to `script-src`, then `default-src`, and never to `script-src-elem`, so a strict `script-src-elem` does not clear an `'unsafe-inline'` that still allows handlers through `script-src` unless `script-src-attr` is set as well. `'unsafe-eval'` is still read from `script-src` or `default-src`, because no element or attribute directive controls `eval()`. Its sources are compared as whole tokens, ignoring case, the way browsers read them: `'UNSAFE-INLINE'` is `'unsafe-inline'`, and a host that merely contains one of these strings is not a match. A header that carries several comma-separated policies is read as one list. Severity is warning and the scope is site-wide.
 
@@ -37,6 +41,18 @@ Some sources are ignored by browsers when the same list carries others (CSP Leve
 - Neither changes `'unsafe-eval'`, which always warns.
 
 So a strict policy of the shape Google recommends, such as `script-src 'nonce-r4nd0m' 'strict-dynamic' https: 'unsafe-inline'`, passes: `https:` and `'unsafe-inline'` are only there as a fallback for browsers older than CSP Level 3. Only the directive's own list counts, so a nonce after a comma, in a second policy's other directive, does not switch a warning off.
+
+## Third-party scripts
+
+A vendor script runs with the page's full authority, and if the vendor is compromised, its own host serves the attacker's code. Allowing that host in `script-src` cannot stop it. What still limits the damage is whether the stolen data can leave and whether anyone hears about it. In the November 2026 Optimizely incident analysed by [Report URI](https://blog.report-uri.com/worlds-largest-brands-infected-with-malware-via-optimizely/), sites whose `connect-src` listed only the hosts they needed ran the payload but blocked the data theft, `'strict-dynamic'` let the payload through, and `'unsafe-eval'` let an inline copy of it run.
+
+So when the judged page loads at least one third-party script, squirrel reads the enforced policy for those gaps: `csp-connect-unrestricted`, `csp-strict-dynamic-third-party`, `csp-no-reporting`, and the vendor context on `'unsafe-eval'`. A page that loads no third-party script gets none of them, and neither does a report-only policy (`csp-report-only` already says nothing is enforced). When the header carries several comma-separated policies, each is read on its own, because the browser enforces all of them: one that restricts connections restricts them, and `'strict-dynamic'` counts only when every policy that controls scripts has it.
+
+Limits:
+
+- A third-party script is a `<script src>` in the fetched HTML, outside `<noscript>`, on a host outside the page's own domain. The own domain is the last two labels of the page host, or three when they look like a country suffix such as `co.uk`, so `static.example.com` is first party on `www.example.com`. No public suffix list is loaded, so the guess errs toward first party: a script from another tenant of a shared hosting domain (two `vercel.app` sites, say) is not counted.
+- squirrel reads the header and the fetched HTML. It does not execute the page, so a script that a tag manager or another script inserts at run time is not seen, and a page whose only vendor code arrives that way gets none of these checks.
+- `'strict-dynamic'` is still the right choice for many sites, which is why its check is info: it says what the policy trusts, so you can decide whether you trust everything your vendors load.
 
 ## First-party proxy paths
 
@@ -61,7 +77,14 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-r4nd0m'; o
 
 Set the header at the edge or in the application response, and generate a fresh nonce per response for the inline scripts you cannot remove. Develop the policy under `Content-Security-Policy-Report-Only` first, then move the same value to the enforcing header.
 
-A policy that legitimately allows a wildcard for images or fonts is not flagged. Only the script source list is checked for `*`, `'unsafe-inline'` and `'unsafe-eval'`.
+A policy that legitimately allows a wildcard for images or fonts is not flagged. Only the script source list is checked for `*`, `'unsafe-inline'` and `'unsafe-eval'`, and the connect source list for `*` and scheme-only sources, the latter only on a page that loads a third-party script.
+
+On such a page, also set `connect-src` to the hosts the page needs to reach and add a reporting endpoint, so a compromised vendor script cannot send data out and its blocked attempts reach you:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.vendor.example; connect-src 'self' https://api.example.com; report-to csp-endpoint
+Reporting-Endpoints: csp-endpoint="https://example.com/csp-reports"
+```
 
 | | |
 |---|---|
@@ -112,6 +135,9 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `csp-self-proxy-script` | Problem |  |
 | `csp-no-frame-ancestors` | Problem |  |
 | `csp-no-object-src` | Problem |  |
+| `csp-connect-unrestricted` | Problem |  |
+| `csp-strict-dynamic-third-party` | Problem |  |
+| `csp-no-reporting` | Problem |  |
 | `csp-present` | Clean | `csp-missing`, `csp-report-only` |
 | `csp` | Not checked |  |
 
