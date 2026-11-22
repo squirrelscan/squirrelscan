@@ -29,7 +29,10 @@ import type {
   RenderChargeLine,
   RunPhase,
 } from "@squirrelscan/core-contracts";
-import type { RenderedRequestSink } from "@squirrelscan/core-contracts";
+import type {
+  RenderedRequestSink,
+  RenderRuntimeSink,
+} from "@squirrelscan/core-contracts";
 import type { ParsedPageCache } from "@squirrelscan/parser";
 
 import {
@@ -1330,6 +1333,8 @@ export async function runAudit(
     const parsedPageCache: ParsedPageCache = new Map();
     // XHR and fetch requests rendered pages issue, for endpoint discovery (repo#4188).
     const renderedRequestSink: RenderedRequestSink = new Map();
+    // What the browser recorded while each page rendered, for security/csp-violations (#425).
+    const renderRuntimeSink: RenderRuntimeSink = new Map();
 
     // The page classifier (#2307): on unless [classifier] enabled = false or --no-classifier. The
     // module is imported only here, so a command that never audits never loads it, and the model
@@ -1588,6 +1593,7 @@ export async function runAudit(
           storage,
           parsedPageCache,
           renderedRequestSink,
+          renderRuntimeSink,
           ...(classify ? { classify } : {}),
         })
       );
@@ -2497,6 +2503,7 @@ export async function runAudit(
         {
           batchSize: streamBatchSize,
           renderedRequests: renderedRequestSink,
+          renderRuntime: renderRuntimeSink,
           onPhase: streamPhaseHook(streamPhaseMemoryLogger(), heapSnapshot),
           // #1271: no page starts its rules after this.
           ...(durationBudget
@@ -2584,6 +2591,7 @@ export async function runAudit(
       // these requests into the surface as `render` candidates (repo#4188). Drop
       // them only now; clearing with the crawl-time DOMs left the map empty.
       renderedRequestSink.clear();
+      renderRuntimeSink.clear();
 
       // Page results already went to `rule_results` batch by batch through the
       // sink above (#2343); only the site pass is left, and it is bounded by the

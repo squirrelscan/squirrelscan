@@ -27,6 +27,7 @@ import type {
   AuditFailureDetail,
   RedirectChain,
   RefusedFetch,
+  RenderRuntimeDiagnostics,
   RobotsTxtData,
   ResourceSizeData,
   SchemaData,
@@ -428,6 +429,12 @@ export interface PageData {
    * treat as raw HTML (rule runs as today).
    */
   rendered?: boolean;
+  /**
+   * What the browser recorded while this page rendered during the crawl (page errors, failed requests,
+   * CSP violations), held in memory from the crawl (#425). Absent on a raw page, on a renderer that does
+   * not record it, and on a re-analysis of a stored crawl: rules read absence as "not recorded".
+   */
+  renderRuntime?: RenderRuntimeDiagnostics;
 }
 
 // Parsed page content - extracted by core modules

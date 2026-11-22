@@ -40,15 +40,22 @@
 
 import type {
   RenderChargeLine,
+  RenderCspViolation,
+  RenderFailedRequest,
   RenderJobResponse,
   RenderResultItem,
+  RenderRuntimeDiagnostics,
+  RenderRuntimeError,
 } from "@squirrelscan/core-contracts";
 
 import {
   CloudClientError,
   type CloudServicesClient,
 } from "@squirrelscan/cloud-client";
-import { MAX_RENDERED_REQUESTS_PER_PAGE } from "@squirrelscan/core-contracts";
+import {
+  MAX_CSP_VIOLATIONS_PER_PAGE,
+  MAX_RENDERED_REQUESTS_PER_PAGE,
+} from "@squirrelscan/core-contracts";
 import { CREDIT_COSTS } from "@squirrelscan/core-contracts/credits";
 import {
   CLOUD_CRAWLER,
@@ -218,6 +225,113 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Page errors, console errors and failed requests kept per page, like the rendered requests. */
+const MAX_RUNTIME_ENTRIES_PER_PAGE = 100;
+/** Longest string field kept on a runtime entry: messages and URLs past this are cut. */
+const MAX_RUNTIME_STRING = 1024;
+/**
+ * String characters kept across one page's whole runtime block. The crawler holds every rendered page's
+ * block in memory until the rules run, so a site that raises hundreds of long violations on every page
+ * must not grow it without bound. CSP violations are copied first, since security/csp-violations reads them.
+ */
+const MAX_RUNTIME_CHARS_PER_PAGE = 64 * 1024;
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** A flat copy of `v`: strings clamped, numbers, booleans and null kept, anything nested dropped. */
+function flatCopy(v: Record<string, unknown>): {
+  entry: Record<string, unknown>;
+  chars: number;
+} {
+  const entry: Record<string, unknown> = Object.create(null);
+  let chars = 0;
+  for (const [key, value] of Object.entries(v)) {
+    if (typeof value === "string") {
+      const kept = value.slice(0, MAX_RUNTIME_STRING);
+      entry[key] = kept;
+      chars += kept.length;
+    } else if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    )
+      entry[key] = value;
+  }
+  return { entry, chars };
+}
+
+/**
+ * The entries of `list` that pass `keep`, copied and capped by count and by the page's shared character
+ * budget; undefined when `list` is not an array (not recorded).
+ */
+function boundList<T>(
+  list: unknown,
+  keep: (v: Record<string, unknown>) => boolean,
+  max: number,
+  budget: { chars: number }
+): T[] | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const out: T[] = [];
+  for (const v of list) {
+    if (out.length >= max) break;
+    if (!isObject(v) || !keep(v)) continue;
+    const { entry, chars } = flatCopy(v);
+    if (chars > budget.chars) break;
+    budget.chars -= chars;
+    out.push(entry as T);
+  }
+  return out;
+}
+
+const hasString = (key: string) => (v: Record<string, unknown>) =>
+  typeof v[key] === "string";
+
+/**
+ * The runtime block of a render item, shape-checked and capped (#425). The service already caps it, but
+ * the crawler keeps it in memory for every page until the rules run, so the bound is enforced here too. A
+ * list the service did not send stays absent: "not recorded" must not turn into "none seen".
+ */
+export function boundRenderRuntime(
+  runtime: unknown
+): RenderRuntimeDiagnostics | undefined {
+  if (!isObject(runtime)) return undefined;
+  const budget = { chars: MAX_RUNTIME_CHARS_PER_PAGE };
+  const out: RenderRuntimeDiagnostics = {};
+  const cspViolations = boundList<RenderCspViolation>(
+    runtime.cspViolations,
+    (v) =>
+      typeof v.effectiveDirective === "string" &&
+      typeof v.blockedURI === "string",
+    MAX_CSP_VIOLATIONS_PER_PAGE,
+    budget
+  );
+  if (cspViolations) out.cspViolations = cspViolations;
+  const pageErrors = boundList<RenderRuntimeError>(
+    runtime.pageErrors,
+    hasString("message"),
+    MAX_RUNTIME_ENTRIES_PER_PAGE,
+    budget
+  );
+  if (pageErrors) out.pageErrors = pageErrors;
+  const consoleErrors = boundList<RenderRuntimeError>(
+    runtime.consoleErrors,
+    hasString("message"),
+    MAX_RUNTIME_ENTRIES_PER_PAGE,
+    budget
+  );
+  if (consoleErrors) out.consoleErrors = consoleErrors;
+  const failedRequests = boundList<RenderFailedRequest>(
+    runtime.failedRequests,
+    hasString("url"),
+    MAX_RUNTIME_ENTRIES_PER_PAGE,
+    budget
+  );
+  if (failedRequests) out.failedRequests = failedRequests;
+  return out;
+}
+
 /**
  * Map a completed RenderResultItem to the DocumentFetcher response shape.
  * Exported for tests. Browser-rendered pages carry their real response headers
@@ -295,6 +409,10 @@ export function mapRenderItemToResponse(
             MAX_RENDERED_REQUESTS_PER_PAGE
           ),
         }
+      : {}),
+    // What the browser saw while the page ran (#704, #425). Absent when the service did not record it.
+    ...(isObject(item.runtime)
+      ? { renderRuntime: boundRenderRuntime(item.runtime) }
       : {}),
     // Queue-wait vs render-time breakdown, absent on a render-cache hit (#826).
     renderTimeMs: item.renderTimeMs,

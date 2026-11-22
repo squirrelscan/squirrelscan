@@ -7,6 +7,7 @@ import { clientSideAuthzRule } from "./client-side-authz";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
+import { cspViolationsRule } from "./csp-violations";
 import { exposedActuatorRule } from "./exposed-actuator";
 import { exposedFilesRule } from "./exposed-files";
 import { formCaptchaRule } from "./form-captcha";
@@ -42,6 +43,7 @@ export const rules: Rule[] = [
   tlsCertificateRule,
   cspRule,
   cspBlocksOwnResourcesRule,
+  cspViolationsRule,
   xFrameOptionsRule,
   xContentTypeRule,
   referrerPolicyRule,
@@ -76,6 +78,7 @@ export {
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
   cspRule,
+  cspViolationsRule,
   exposedFilesRule,
   exposedActuatorRule,
   formCaptchaRule,

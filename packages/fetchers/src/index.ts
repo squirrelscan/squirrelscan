@@ -1,6 +1,7 @@
 import type {
   RedirectChain,
   RenderedRequest,
+  RenderRuntimeDiagnostics,
 } from "@squirrelscan/core-contracts";
 
 import {
@@ -118,6 +119,8 @@ export interface FetchResponse {
   serverHtml?: string;
   /** XHR and fetch requests the rendered page issued, when the render service reported them. */
   renderedRequests?: RenderedRequest[];
+  /** Page errors, failed requests and CSP violations the render recorded (#704, #425). Absent when not recorded. */
+  renderRuntime?: RenderRuntimeDiagnostics;
   /**
    * Set on a 304 the conditional-render gate made from a 200 whose source was
    * unchanged (repo#4765). Its headers are that 200's full set, so the crawler

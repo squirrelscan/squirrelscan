@@ -28,6 +28,7 @@ CSP is a defence against cross-site scripting. If an attacker gets markup into a
 |---|---|---|
 | [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning |
 | [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources) | A Content-Security-Policy that leaves out a host your page depends on breaks a widget or a tracker silently. squirrel matches each page's policy against what the page loads. | warning |
+| [CSP violations: what the browser blocked while the page rendered](/rules/security/csp-violations) | A Content-Security-Policy that blocks a widget or an analytics endpoint leaves the page answering 200. On a rendered crawl, squirrel reports each load the browser refused, by host and directive. | error |
 
 {/* glossary:rules:end */}
 
@@ -46,7 +47,7 @@ Generate a fresh nonce for each response and put it on the inline scripts you ca
 {/* glossary:run:start */}
 
 ```bash
-squirrel audit https://nutshop.squirrelscan.com --rule-include security/csp,security/csp-blocks-own-resources
+squirrel audit https://nutshop.squirrelscan.com --rule-include security/csp,security/csp-blocks-own-resources,security/csp-violations
 ```
 
 {/* glossary:run:end */}

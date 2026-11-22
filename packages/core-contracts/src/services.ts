@@ -665,6 +665,32 @@ export interface RenderFailedRequest {
 }
 
 /**
+ * One `securitypolicyviolation` event the page's Content-Security-Policy raised while it ran (#425). Field
+ * names follow the browser's `SecurityPolicyViolationEvent`. The renderer registers the listener before any
+ * page script runs, so blocks during hydration and in the few seconds after `load` are included.
+ */
+export interface RenderCspViolation {
+  /** The directive the browser enforced (`script-src-elem`, `connect-src`, ...). */
+  effectiveDirective: string;
+  /** The directive as written in the policy that matched, when it differs (`script-src` for `script-src-elem`). */
+  violatedDirective?: string;
+  /** The blocked URL, or a keyword such as `inline`, `eval`, `data` or `blob`. Site-chosen: clamp before printing. */
+  blockedURI: string;
+  /** Script that triggered the load, when the browser reported one. */
+  sourceFile?: string;
+  lineNumber?: number;
+  columnNumber?: number;
+  /** `enforce` blocked the resource. `report` came from a report-only policy and blocked nothing. */
+  disposition?: "enforce" | "report";
+}
+
+/** CSP violations retained per page; the rule groups them, so more adds nothing. */
+export const MAX_CSP_VIOLATIONS_PER_PAGE = 200;
+
+/** Runtime diagnostics of the crawl's own rendered pages, keyed by the page's normalized URL (#425). In memory only. */
+export type RenderRuntimeSink = Map<string, RenderRuntimeDiagnostics>;
+
+/**
  * What the browser saw while the page ran, kept listening after `load` (#704; the renderer side is tracked privately).
  * Absent from renderers that do not record it; reliability/js-errors then reports the coded gap
  * `runtime-not-recorded` for that page, never "clean".
@@ -673,6 +699,11 @@ export interface RenderRuntimeDiagnostics {
   pageErrors?: RenderRuntimeError[];
   consoleErrors?: RenderRuntimeError[];
   failedRequests?: RenderFailedRequest[];
+  /**
+   * CSP violations (#425). Absent when the renderer did not listen for them, which is not "none": an empty
+   * array is a page that raised none.
+   */
+  cspViolations?: RenderCspViolation[];
 }
 
 export interface RenderResultItem {

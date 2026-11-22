@@ -341,3 +341,32 @@ export function hostCategory(host: string): VendorCategory | undefined {
     (e) => h === e.suffix || h.endsWith(`.${e.suffix}`)
   )?.category;
 }
+
+/**
+ * Vendor endpoints on hosts that serve much more than the vendor (www.google.com
+ * serves search, maps and fonts too), so the path decides. Only the severity of
+ * a blocked URL reads this. Checked 2026-11-22 against the Google tag platform
+ * CSP guide: an Ads-linked GA4 property posts to www.google.com/g/collect, and
+ * the Ads tag loads www.google.com/pagead/ and /ads/ paths.
+ */
+const PATH_CATEGORIES: ReadonlyArray<{
+  host: string;
+  pathPrefix: string;
+  category: VendorCategory;
+}> = [
+  { host: "www.google.com", pathPrefix: "/g/collect", category: "analytics" },
+  { host: "www.google.com", pathPrefix: "/pagead/", category: "ads" },
+  { host: "www.google.com", pathPrefix: "/ads/", category: "ads" },
+  { host: "www.google.com", pathPrefix: "/recaptcha/", category: "captcha" },
+];
+
+/** The vendor category of a blocked URL: its host when the host is the vendor's, else a known vendor path. */
+export function blockedUrlCategory(url: URL): VendorCategory | undefined {
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const byHost = hostCategory(host);
+  if (byHost) return byHost;
+  const path = url.pathname;
+  return PATH_CATEGORIES.find(
+    (e) => e.host === host && path.startsWith(e.pathPrefix)
+  )?.category;
+}

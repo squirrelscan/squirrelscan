@@ -536,7 +536,7 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // packages/rules/tests/rule-count-docs-2139.test.ts, private
 // rule-count-consistency) derive the floor from the registry and fail when this
 // constant, or any copy, disagrees. #1019 #986 #981
-// Currently 358 enabled rules.
+// Currently 359 enabled rules.
 export const PUBLIC_RULE_COUNT_FLOOR = 350;
 export const PUBLIC_CATEGORY_COUNT = 22;
 

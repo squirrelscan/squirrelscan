@@ -3920,6 +3920,12 @@
    "csp-blocks-own-resources|pass|No enforced Content-Security-Policy to check (security/csp covers a missing policy)||"
   ]
  },
+ "security/csp-violations": {
+  "digest": "105653254560301",
+  "lines": [
+   "csp-violations|skipped|CSP violations were not checked: the page was fetched as plain HTML, not rendered in a browser||"
+  ]
+ },
  "security/exposed-actuator": {
   "digest": "111694927425978",
   "lines": [
