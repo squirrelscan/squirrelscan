@@ -1,4 +1,5 @@
 import {
+  afterAll,
   afterEach,
   beforeEach,
   describe,
@@ -88,13 +89,43 @@ function settingsWith(overrides: Partial<UserSettings>): UserSettings {
   return { ...DEFAULT_SETTINGS, ...overrides } as UserSettings;
 }
 
+/** Dead local endpoint: unstubbed telemetry sends resolve here, never to prod. */
+const DEAD_API_URL = "http://127.0.0.1:9";
+
+/** Every URL requested through globalThis.fetch during this file (pub#2249). */
+const requestedUrls: string[] = [];
+
+function recordRequest(url: string | URL | Request): void {
+  requestedUrls.push(
+    typeof url === "string" ? url : url instanceof URL ? url.href : url.url
+  );
+}
+
+function isLocalUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+/** Default transport for every test: records the call, never touches the network. */
+function installDefaultFetchStub(): void {
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    recordRequest(url);
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+}
+
 /** Captures telemetry POST bodies sent through the stubbed global fetch. */
 function captureTelemetry(): { events: Array<Record<string, unknown>> } {
   const captured: { events: Array<Record<string, unknown>> } = { events: [] };
   globalThis.fetch = (async (
-    _url: string | URL | Request,
+    url: string | URL | Request,
     init?: RequestInit
   ) => {
+    recordRequest(url);
     if (init?.body) {
       captured.events.push(
         JSON.parse(init.body as string) as Record<string, unknown>
@@ -118,6 +149,11 @@ describe("updater", () => {
     process.env = { ...originalEnv, HOME: tempHome };
     for (const v of CI_VARS) delete process.env[v];
     delete process.env.NO_TELEMETRY;
+    // pub#2249: telemetry stays enabled here, so every unstubbed send must hit
+    // a dead local endpoint through a recording stub, never api.squirrelscan.com.
+    process.env.SQUIRREL_API_SERVER = DEAD_API_URL;
+    requestedUrls.length = 0;
+    installDefaultFetchStub();
     resetUpdaterStateForTests();
     // CRITICAL: homedir() ignores $HOME, so the settings/lock path helpers
     // resolve to the developer's REAL ~/.squirrel (or a fake ~/AppData/Local/
@@ -154,12 +190,18 @@ describe("updater", () => {
   afterEach(async () => {
     // Drain any inline updater a test left behind before restoring globals.
     await finishInlineAutoUpdate(0);
+    // pub#2249 guard: no request in this file may leave the machine.
+    expect(requestedUrls.filter((u) => !isLocalUrl(u))).toEqual([]);
     // Restore any spyOn (isManagedInstall, os.platform, child_process.spawn)
     // so later tests see the real implementations again.
     mock.restore();
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
     rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  afterAll(() => {
+    expect(requestedUrls.filter((u) => !isLocalUrl(u))).toEqual([]);
   });
 
   describe("inline auto-update lifecycle", () => {
