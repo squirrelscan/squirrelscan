@@ -1,8 +1,7 @@
 // Tests for CLI option merging into config
 
-import { describe, expect, test } from "bun:test";
-
 import { mayRequestOtherHosts } from "@squirrelscan/audit-engine";
+import { describe, expect, test } from "bun:test";
 
 import { getDefaultConfig } from "../src/config";
 import {
