@@ -1,0 +1,1 @@
+- The telemetry FAQ and `self` docs now say a failed `squirrel self update` also sends the error category's fixed one-line description, never the raw error text. (#2243)
