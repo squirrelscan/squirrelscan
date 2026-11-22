@@ -39,6 +39,20 @@ export interface Generator {
   /** Object key a `keyed` value is assigned to. Ignored for the other tiers. */
   keyName?: string;
   /**
+   * The key the look-behind probes assign a `keyed` value to, for a pattern
+   * that reads its key's name (`keyName` in CONTEXT_PATTERNS, #359): the
+   * default `credential` names neither half of a public/secret pair. Must
+   * not contain the brand keyword, or the keyword would always be in reach.
+   */
+  gapKey?: string;
+  /**
+   * The match opens inside the value, not at its start: a SAS URL's query
+   * string, a member of a JSON object. A word glued to the front of such a
+   * value is not the prefix mid-token, so the `foo…` near-miss does not
+   * apply; the corrupted-keyword near-miss still does.
+   */
+  anchoredInside?: boolean;
+  /**
    * The check the finding lands in when the detector's decoders (#361) move
    * it off the pattern's own tier. Absent = the table's confidence.
    */
@@ -231,6 +245,9 @@ function mapboxToken(r: Rng, kind: "pk" | "sk"): string {
 }
 
 const NOT_A_BEARER = ["fetch-bearer-header", "sourcemap-comment"];
+// A Pusher or Uploadcare key is sent as a parameter, never as a bearer token,
+// and 20 hex is under the Bearer pattern's entropy floor anyway.
+const NOT_A_PAIR_BEARER = ["fetch-bearer-header"];
 
 const value = (secret: string, text = secret): Generated => ({ text, secret });
 const entry = (
@@ -286,6 +303,22 @@ const P = {
   shpat: ["sh", "pat_"].join(""),
   gocspx: ["GOC", "SPX-"].join(""),
   eaac: ["EAACEd", "Eose0cBA"].join(""),
+  pkTest: ["p", "k_te", "st_"].join(""),
+  cfpat: ["CF", "PAT-"].join(""),
+  ntn: ["nt", "n_"].join(""),
+  notionSecret: ["sec", "ret_"].join(""),
+  cloudinary: ["cloud", "inary://"].join(""),
+  osV2: ["os_", "v2_app_"].join(""),
+  secC: ["se", "c-c-"].join(""),
+  pubC: ["pu", "b-c-"].join(""),
+  subC: ["su", "b-c-"].join(""),
+  zapier: ["https://hooks.", "zapier.com/hooks/catch/"].join(""),
+  sntrys: ["snt", "rys_"].join(""),
+  sntryu: ["snt", "ryu_"].join(""),
+  tfp: ["tf", "p_"].join(""),
+  sdk: ["sd", "k-"].join(""),
+  mob: ["mo", "b-"].join(""),
+  nrjs: ["NR", "JS-"].join(""),
   pem: (kind: string, suffix = "") =>
     ["-----BEGIN ", kind, " PRIVATE KEY", suffix, "-----"].join(""),
 };
@@ -487,6 +520,11 @@ export const GENERATORS: Generator[] = [
     pattern: "Stripe Publishable Key",
     tier: "prefixed",
     make: (r) => value(P.pkLive + runOf(r, ALNUM, 24)),
+  },
+  {
+    pattern: "Stripe Publishable Test Key",
+    tier: "prefixed",
+    make: (r) => value(P.pkTest + runOf(r, ALNUM, 24)),
   },
   {
     pattern: "PayPal Client ID",
@@ -756,6 +794,190 @@ export const GENERATORS: Generator[] = [
     make: (r) => value(upperNoDo(r, 40) + P.nral),
   },
 
+  // ── Browser-exposed services (#359) ───────────────────────────────────
+  {
+    pattern: "Contentful Management Token",
+    tier: "prefixed",
+    make: (r) => value(P.cfpat + mixedRun(r, 43, B64URL)),
+  },
+  {
+    pattern: "Airtable Personal Access Token",
+    tier: "prefixed",
+    make: (r) =>
+      value(
+        `${["p", "at"].join("")}${runOf(r, ALNUM, 14)}.${runOf(r, HEX, 64)}`
+      ),
+  },
+  {
+    pattern: "Notion Integration Token",
+    tier: "prefixed",
+    make: (r) => value(P.ntn + runOf(r, DIGIT, 11) + mixedRun(r, 35)),
+  },
+  {
+    // Upper case, lower case and a digit, as the pattern requires: the
+    // three leading characters guarantee them, the rest is random.
+    pattern: "Notion Integration Token (legacy)",
+    tier: "prefixed",
+    make: (r) =>
+      value(
+        P.notionSecret +
+          runOf(r, DIGIT, 1) +
+          runOf(r, UPPER, 1) +
+          runOf(r, LOWER, 1) +
+          mixedRun(r, 40)
+      ),
+  },
+  {
+    pattern: "Cloudinary URL",
+    tier: "prefixed",
+    notIn: NOT_A_BEARER,
+    make: (r) => {
+      const secret = mixedRun(r, 27, B64URL);
+      return {
+        text: `${P.cloudinary}${runOf(r, DIGIT, 15)}:${secret}@acme-media`,
+        secret,
+      };
+    },
+  },
+  {
+    pattern: "OneSignal REST API Key",
+    tier: "prefixed",
+    make: (r) => value(P.osV2 + runOf(r, LOWER + DIGIT, 113)),
+  },
+  {
+    pattern: "PubNub Secret Key",
+    tier: "prefixed",
+    make: (r) => value(P.secC + mixedRun(r, 48)),
+  },
+  {
+    pattern: "PubNub Publish Key",
+    tier: "prefixed",
+    make: (r) => value(P.pubC + uuid(r)),
+  },
+  {
+    pattern: "PubNub Subscribe Key",
+    tier: "prefixed",
+    make: (r) => value(P.subC + uuid(r)),
+  },
+  {
+    pattern: "Zapier Webhook URL",
+    tier: "prefixed",
+    notIn: NOT_A_BEARER,
+    make: (r) => {
+      const secret = runOf(r, LOWER + DIGIT, 7);
+      return {
+        text: `${P.zapier}${runOf(r, "123456789", 1)}${runOf(r, DIGIT, 6)}/${secret}/`,
+        secret,
+      };
+    },
+  },
+  {
+    // A service-account key file as it reaches a page: one JSON string.
+    pattern: "GCP Service Account Key",
+    tier: "prefixed",
+    anchoredInside: true,
+    // The two attribute contexts embed the value unescaped, and raw JSON
+    // quotes inside an attribute end it: the escaped form is the
+    // entity-encoded-attribute context.
+    notIn: [...NOT_A_BEARER, "meta-content", "data-attribute"],
+    make: (r) => {
+      const secret = runOf(r, HEX, 40);
+      return {
+        text: JSON.stringify({
+          type: ["service", "_account"].join(""),
+          project_id: "acme-prod",
+          private_key_id: secret,
+          client_email: "svc@acme-prod.iam.gserviceaccount.com",
+        }),
+        secret,
+      };
+    },
+  },
+  {
+    // A write-capable account SAS: high. The read-only single-blob and the
+    // expired shapes are probes in cases.ts.
+    pattern: "Azure SAS Token",
+    tier: "prefixed",
+    anchoredInside: true,
+    notIn: NOT_A_BEARER,
+    make: (r) => {
+      const secret = encodeURIComponent(bytes(r, 32).toString("base64"));
+      return {
+        text: `https://acmeprod.blob.core.windows.net/uploads/report.pdf?sv=2022-11-02&ss=b&srt=co&sp=rwdlac&se=2031-01-01T00:00:00Z&st=2024-01-01T00:00:00Z&spr=https&sig=${secret}`,
+        secret,
+      };
+    },
+  },
+  {
+    pattern: "Azure Function Key",
+    tier: "prefixed",
+    notIn: NOT_A_BEARER,
+    make: (r) => {
+      const secret = mixedRun(r, 54, B64URL);
+      return {
+        text: `https://acme-api.azurewebsites.net/api/contact?code=${secret}==`,
+        secret,
+      };
+    },
+  },
+  {
+    pattern: "Sentry Organization Token",
+    tier: "prefixed",
+    make: (r) =>
+      value(
+        P.sntrys +
+          b64url(
+            JSON.stringify({
+              iat: 1700000000,
+              url: "https://sentry.io",
+              region_url: "https://us.sentry.io",
+              org: "acme",
+            })
+          ) +
+          "_" +
+          mixedRun(r, 43)
+      ),
+  },
+  {
+    pattern: "Sentry User Token",
+    tier: "prefixed",
+    make: (r) => value(P.sntryu + runOf(r, HEX, 64)),
+  },
+  {
+    pattern: "Typeform Personal Access Token",
+    tier: "prefixed",
+    make: (r) => value(`${P.tfp}${mixedRun(r, 44)}_${runOf(r, ALNUM, 14)}`),
+  },
+  {
+    // base64 of `tok:<id>:1:0`, which is what opens every one with `dG9rO`.
+    pattern: "Intercom Access Token",
+    tier: "prefixed",
+    make: (r) =>
+      value(
+        Buffer.from(`tok:${uuid(r).replace(/-/g, "_")}:1:0`).toString("base64")
+      ),
+  },
+  {
+    pattern: "LaunchDarkly SDK Key",
+    tier: "prefixed",
+    make: (r) => value(P.sdk + uuid(r)),
+  },
+  {
+    pattern: "LaunchDarkly Mobile Key",
+    tier: "prefixed",
+    make: (r) => value(P.mob + uuid(r)),
+  },
+  {
+    pattern: "LaunchDarkly Client-side ID",
+    tier: "assignment",
+    make: (r) => entry("clientSideID", runOf(r, HEX, 24)),
+  },
+  {
+    pattern: "New Relic Browser Key",
+    tier: "prefixed",
+    make: (r) => value(P.nrjs + runOf(r, HEX, 19)),
+  },
+
   // ── Auth ──────────────────────────────────────────────────────────────
   {
     pattern: "Clerk Secret Key",
@@ -961,10 +1183,93 @@ export const GENERATORS: Generator[] = [
     make: (r) => value("sk" + runOf(r, DIGIT, 1) + runOf(r, ALNUM, 47)),
   },
   {
+    pattern: "Algolia Search-Only API Key",
+    tier: "keyed",
+    keyName: "algoliaSearchKey",
+    gapKey: "searchKey",
+    make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  {
     pattern: "Algolia API Key",
     tier: "keyed",
     keyName: "algoliaKey",
     make: (r) => value(keyedRun(r, HEX, 32)),
+  },
+  // ── Context tier, browser-exposed services (#359) ─────────────────────
+  {
+    pattern: "Storyblok Access Token",
+    tier: "keyed",
+    keyName: "storyblokToken",
+    make: (r) => value(keyedRun(r, ALNUM, 22) + "tt"),
+  },
+  {
+    pattern: "Webflow API Token",
+    tier: "keyed",
+    keyName: "webflowToken",
+    make: (r) => value(keyedRun(r, HEX, 64)),
+  },
+  {
+    pattern: "Squarespace API Key",
+    tier: "keyed",
+    keyName: "squarespaceKey",
+    make: (r) => value(uuid(r)),
+  },
+  {
+    // Under `MUX_TOKEN_SECRET` the generic secret assignment claims the
+    // value first (the documented tier order: generic FAST before context),
+    // still at medium. This key reaches the Mux pattern itself.
+    pattern: "Mux Token Secret",
+    tier: "keyed",
+    keyName: "muxToken",
+    make: (r) => value(keyedRun(r, ALNUM, 75)),
+  },
+  {
+    pattern: "OneSignal REST API Key (legacy)",
+    tier: "keyed",
+    keyName: "onesignalRestKey",
+    make: (r) => value(keyedRun(r, ALNUM, 48)),
+  },
+  {
+    pattern: "Pusher App Key",
+    tier: "keyed",
+    notIn: NOT_A_PAIR_BEARER,
+    keyName: "pusherKey",
+    gapKey: "appKey",
+    make: (r) => value(keyedRun(r, HEX, 20)),
+  },
+  {
+    pattern: "Pusher App Secret",
+    tier: "keyed",
+    notIn: NOT_A_PAIR_BEARER,
+    keyName: "pusherSecret",
+    make: (r) => value(keyedRun(r, HEX, 20)),
+  },
+  {
+    pattern: "Uploadcare Public Key",
+    tier: "keyed",
+    notIn: NOT_A_PAIR_BEARER,
+    keyName: "uploadcarePublicKey",
+    gapKey: "publicKey",
+    make: (r) => value(keyedRun(r, HEX, 20)),
+  },
+  {
+    pattern: "Uploadcare Secret Key",
+    tier: "keyed",
+    notIn: NOT_A_PAIR_BEARER,
+    keyName: "uploadcareSecretKey",
+    make: (r) => value(keyedRun(r, HEX, 20)),
+  },
+  {
+    pattern: "Unsplash Access Key",
+    tier: "keyed",
+    keyName: "unsplashAccessKey",
+    make: (r) => value(keyedRun(r, ALNUM, 43)),
+  },
+  {
+    pattern: "Cloudflare Global API Key",
+    tier: "keyed",
+    keyName: "cloudflareGlobalKey",
+    make: (r) => value(keyedRun(r, HEX, 37)),
   },
   {
     // Decoded by the detector (#361): with restrictions it is a scoped search

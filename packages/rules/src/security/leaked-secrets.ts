@@ -135,6 +135,16 @@ type ContextPattern = {
    * would otherwise read `storefrontAccessToken:"…"` as a medium leak.
    */
   publicByDesign?: boolean;
+  /**
+   * The provider issues two keys of one shape, one public and one secret
+   * (Pusher's app key and secret, Uploadcare's public and secret keys,
+   * Algolia's search-only and admin keys), and only the key the value is
+   * assigned to tells them apart (#359). Gets that key's name, or undefined
+   * when none can be read; a pattern with this set reports only when it
+   * returns true. Pusher's and Uploadcare's pairs are a predicate and its
+   * complement, so the two never both claim, nor both miss, a value.
+   */
+  keyName?: (key: string | undefined) => boolean;
 };
 
 // Fast patterns - have distinctive prefixes, safe to run on all content
@@ -340,6 +350,15 @@ export const FAST_PATTERNS: FastPattern[] = [
     name: "Stripe Publishable Key",
     pattern: /pk_live_[0-9a-zA-Z]{24,}/g,
     keywords: ["pk_live_"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // The test-mode publishable key: public like its live twin, and it can
+    // only create test-mode tokens (#359).
+    name: "Stripe Publishable Test Key",
+    pattern: /pk_test_[0-9a-zA-Z]{24,}/g,
+    keywords: ["pk_test_"],
     confidence: "medium",
     publicByDesign: true,
   },
@@ -728,6 +747,186 @@ export const FAST_PATTERNS: FastPattern[] = [
     accept: plausibleTwitterBearer,
   },
 
+  // Browser-exposed services with a prefix of their own (#359, parity with
+  // trufflehog's detectors for the services a website ships to its visitors).
+  {
+    // Contentful's Content Management API personal access token. The
+    // delivery token (CDA) has no prefix and stays in the context tier.
+    name: "Contentful Management Token",
+    pattern: /CFPAT-[A-Za-z0-9_-]{43}/g,
+    keywords: ["cfpat-"],
+    confidence: "high",
+  },
+  {
+    // `pat` + 14 + `.` + 64 hex. `pat` is also a word, so the declared
+    // literal is the separator: the dot and the 64-hex tail are what make
+    // this a token, and a pattern with a sub-four-character keyword always
+    // runs, exactly as before the prefilter.
+    name: "Airtable Personal Access Token",
+    pattern: /pat[A-Za-z0-9]{14}\.[a-f0-9]{64}/g,
+    keywords: ["."],
+    confidence: "high",
+  },
+  {
+    // Notion's current integration token: `ntn_` + 11 digits + 35
+    // alphanumerics.
+    name: "Notion Integration Token",
+    pattern: /ntn_[0-9]{11}[A-Za-z0-9]{35}/g,
+    keywords: ["ntn_"],
+    confidence: "high",
+  },
+  {
+    // Notion's older integration token: `secret_` + 43 alphanumerics. The
+    // prefix is a word, so the tail carries the proof: exactly 43
+    // characters, upper case, lower case and a digit all present, and not a
+    // camelCase identifier (`secret_handleTokenRefreshForUser2Callback…`).
+    name: "Notion Integration Token (legacy)",
+    pattern:
+      /secret_(?=[A-Za-z0-9]{0,42}[A-Z])(?=[A-Za-z0-9]{0,42}[a-z])(?=[A-Za-z0-9]{0,42}[0-9])[A-Za-z0-9]{43}(?![A-Za-z0-9_])/g,
+    keywords: ["secret_"],
+    confidence: "medium",
+    accept: (value) => !CAMEL_CASE_WORDS_RE.test(value.slice(7)),
+  },
+  {
+    // The API environment variable Cloudinary prints: key and secret in one
+    // URL, `cloudinary://<api_key>:<api_secret>@<cloud_name>`.
+    name: "Cloudinary URL",
+    pattern: /cloudinary:\/\/[0-9]{6,20}:[A-Za-z0-9_-]{20,40}@[A-Za-z0-9_-]+/g,
+    keywords: ["cloudinary://"],
+    confidence: "high",
+  },
+  {
+    // OneSignal's v2 REST API keys (app and organization). The legacy
+    // 48-character key has no prefix and is in the context tier.
+    name: "OneSignal REST API Key",
+    pattern: /os_v2_(?:app|org)_[a-z0-9]{56,}/g,
+    keywords: ["os_v2_"],
+    confidence: "high",
+  },
+  {
+    // PubNub's secret key: server-side only, it signs access grants.
+    name: "PubNub Secret Key",
+    pattern: /sec-c-[A-Za-z0-9]{40,60}/g,
+    keywords: ["sec-c-"],
+    confidence: "high",
+  },
+  {
+    // The publish key lets anyone publish to the app's channels. Apps that
+    // publish from the browser ship it, so it is a review item, not high.
+    name: "PubNub Publish Key",
+    pattern:
+      /pub-c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+    keywords: ["pub-c-"],
+    confidence: "medium",
+  },
+  {
+    // The subscribe key is what every PubNub client reads with: public.
+    name: "PubNub Subscribe Key",
+    pattern:
+      /sub-c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+    keywords: ["sub-c-"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // A Zapier "Catch Hook" URL: anyone holding it can post into the Zap.
+    // Forms do post to these from the browser, so medium, not high.
+    name: "Zapier Webhook URL",
+    pattern:
+      /https:\/\/hooks\.zapier\.com\/hooks\/catch\/[0-9]+\/[A-Za-z0-9]+\/?/g,
+    keywords: ["hooks.zapier.com"],
+    confidence: "medium",
+  },
+  {
+    // A Google Cloud service-account key file: the `private_key_id` of a JSON
+    // object whose `type` is `service_account`. The quotes may be escaped
+    // (`\"`), since the file usually reaches a page as a JSON string.
+    name: "GCP Service Account Key",
+    pattern: /\\?"private_key_id\\?"\s*:\s*\\?"[a-f0-9]{40}\\?"/g,
+    keywords: ["private_key_id"],
+    confidence: "high",
+    accept: (value, content, index) =>
+      SERVICE_ACCOUNT_TYPE_RE.test(
+        content.slice(
+          Math.max(0, index - SERVICE_ACCOUNT_REACH),
+          index + value.length + SERVICE_ACCOUNT_REACH
+        )
+      ),
+  },
+  {
+    // An Azure Storage shared access signature: the query string of a SAS
+    // URL, every parameter of which starts with `s` (`sv`, `ss`, `srt`,
+    // `sp`, `se`, `st`, `spr`, `sr`, `sig`). It needs a version and an
+    // expiry beside the signature. What the signature grants decides the
+    // tier (secrets/confidence.ts): a read-only grant on one blob is the
+    // storage service's capability URL and informational, a grant that can
+    // write or delete is high.
+    name: "Azure SAS Token",
+    pattern:
+      /(?<=[?&])(?:s[a-z]{1,4}=[^&\s"'<>]{1,128}&){1,12}sig=[A-Za-z0-9%+/]{40,}(?:=|%3D){0,2}(?:&s[a-z]{1,4}=[^&\s"'<>]{1,128}){0,12}/gi,
+    keywords: ["sig="],
+    confidence: "high",
+    // The match opens on the first parameter, after the `?` or `&`: a URL's
+    // path ends on a word character, and the prefix guard would read the
+    // query string as the tail of a longer token.
+    accept: (value) => /(?:^|&)sv=/i.test(value) && /(?:^|&)se=/i.test(value),
+  },
+  {
+    // An Azure Functions key in the `code` query parameter of a function URL:
+    // the function's whole authorization. A page that calls one from the
+    // browser hands the key to every visitor.
+    name: "Azure Function Key",
+    pattern:
+      /https:\/\/[a-z0-9-]+\.azurewebsites\.net\/api\/[^\s"'<>?]*\?(?:[^\s"'<>&]*&){0,10}code=[A-Za-z0-9_-]{40,}(?:=|%3D){0,2}/gi,
+    keywords: [".azurewebsites.net/api/"],
+    confidence: "medium",
+  },
+  {
+    // Sentry organization auth token: `sntrys_` + base64 JSON + secret.
+    name: "Sentry Organization Token",
+    pattern: /sntrys_[A-Za-z0-9_+/=-]{60,}/g,
+    keywords: ["sntrys_"],
+    confidence: "high",
+  },
+  {
+    name: "Sentry User Token",
+    pattern: /sntryu_[a-f0-9]{64}/g,
+    keywords: ["sntryu_"],
+    confidence: "high",
+  },
+  {
+    name: "Typeform Personal Access Token",
+    pattern: /tfp_[A-Za-z0-9_-]{40,70}/g,
+    keywords: ["tfp_"],
+    confidence: "high",
+  },
+  {
+    // An Intercom access token is base64 of `tok:<id>:<n>:<n>`, so it opens
+    // `dG9rO` whatever the id.
+    name: "Intercom Access Token",
+    pattern: /dG9rO[A-Za-z0-9+/]{50,}={0,2}/g,
+    keywords: ["dg9ro"],
+    confidence: "high",
+  },
+  {
+    // LaunchDarkly's server-side SDK key: full read of every flag and
+    // segment rule, never meant for a browser.
+    name: "LaunchDarkly SDK Key",
+    pattern:
+      /sdk-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+    keywords: ["sdk-"],
+    confidence: "high",
+  },
+  {
+    // The mobile key ships inside mobile apps; on a website it is a key
+    // nobody meant to publish there.
+    name: "LaunchDarkly Mobile Key",
+    pattern:
+      /mob-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+    keywords: ["mob-"],
+    confidence: "medium",
+  },
+
   // Public client keys with their own prefix or key, ahead of the generic
   // assignments so the specific pattern claims the value first (#357 r3).
   {
@@ -744,6 +943,25 @@ export const FAST_PATTERNS: FastPattern[] = [
     pattern:
       /storefrontAccessToken['"]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-f0-9]{32}['"]/g,
     keywords: ["storefrontaccesstoken"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // LaunchDarkly's client-side ID: 24 hex under the key its JavaScript SDK
+    // documents. Public by design: the browser SDK sends it on every request.
+    name: "LaunchDarkly Client-side ID",
+    pattern:
+      /clientSideI[Dd]['"]?\s*(?:[:=]|\|\|=?|\?\?=?)\s*['"][a-f0-9]{24}['"]/g,
+    keywords: ["clientsideid"],
+    confidence: "medium",
+    publicByDesign: true,
+  },
+  {
+    // The New Relic browser agent's license key, inlined by its loader
+    // snippet on every page it monitors: ingest-only and public by design.
+    name: "New Relic Browser Key",
+    pattern: /NRJS-[a-f0-9]{19}/g,
+    keywords: ["nrjs-"],
     confidence: "medium",
     publicByDesign: true,
   },
@@ -839,6 +1057,33 @@ export const FAST_PATTERNS: FastPattern[] = [
     keywords: ["basic"],
   },
 ];
+
+// Key names for the providers that issue a public and a secret key of one
+// shape (#359). Function declarations, so the table below can use them.
+const PRIVILEGED_KEY_NAME_RE = /secret|private|admin|master|write|server/i;
+
+/** `pusherKey`, `PUSHER_APP_KEY`, `key`: says key, and nothing privileged. */
+function isPublicKeyNamed(key: string | undefined): boolean {
+  return (
+    key !== undefined && /key/i.test(key) && !PRIVILEGED_KEY_NAME_RE.test(key)
+  );
+}
+
+/** `UPLOADCARE_PUBLIC_KEY`, `data-public-key`, `pubkey`. */
+function isUploadcarePublicKeyName(key: string | undefined): boolean {
+  return (
+    key !== undefined && /pub/i.test(key) && !PRIVILEGED_KEY_NAME_RE.test(key)
+  );
+}
+
+/** `searchKey`, `ALGOLIA_SEARCH_API_KEY`, `searchOnlyApiKey`. */
+function isAlgoliaSearchKeyName(key: string | undefined): boolean {
+  return (
+    key !== undefined &&
+    /search/i.test(key) &&
+    !PRIVILEGED_KEY_NAME_RE.test(key)
+  );
+}
 
 // Context patterns - generic patterns that need keyword presence check first
 // These previously used (?=.*keyword) lookaheads which caused O(n²) backtracking
@@ -991,6 +1236,21 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     confidence: "medium",
   },
   {
+    // The search-only key is the one InstantSearch and every Algolia front
+    // end ship to the browser. Same shape as the admin key, so only a key
+    // that says search, and nothing privileged, is read as it (#359).
+    name: "Algolia Search-Only API Key",
+    keyword: "algolia",
+    pattern: /[a-f0-9]{32}/gi,
+    confidence: "medium",
+    publicByDesign: true,
+    keyName: isAlgoliaSearchKeyName,
+  },
+  {
+    // After the search-only pattern on purpose: that one claims a
+    // search-named key first. No key predicate here, so this one stays out
+    // of the generic assignments' claim set, and `algoliaAdminKey` keeps the
+    // generic tier's admin-named escalation.
     name: "Algolia API Key",
     keyword: "algolia",
     pattern: /[a-f0-9]{32}/gi,
@@ -1002,6 +1262,96 @@ export const CONTEXT_PATTERNS: ContextPattern[] = [
     name: "LinkedIn Client Secret",
     keyword: "linkedin",
     pattern: /[a-zA-Z0-9]{16}/gi,
+    confidence: "medium",
+  },
+  // Browser-exposed services with no prefix of their own (#359): each needs
+  // its brand word within the look-behind and a credential key, like every
+  // other bare shape here.
+  {
+    // A Storyblok access token ends in `tt`. The public token is meant for
+    // the browser and the preview token is not, and nothing in the value
+    // says which, so it is a review item.
+    name: "Storyblok Access Token",
+    keyword: "storyblok",
+    pattern: /[A-Za-z0-9]{22}tt/g,
+    confidence: "medium",
+  },
+  {
+    name: "Webflow API Token",
+    keyword: "webflow",
+    pattern: /[a-f0-9]{64}/gi,
+    confidence: "medium",
+  },
+  {
+    name: "Squarespace API Key",
+    keyword: "squarespace",
+    pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    confidence: "medium",
+  },
+  {
+    // The secret half of a Mux access token pair (the id is a UUID and
+    // proves nothing alone).
+    name: "Mux Token Secret",
+    keyword: "mux",
+    pattern: /[A-Za-z0-9+/]{75}/g,
+    confidence: "medium",
+  },
+  {
+    // OneSignal's legacy REST API key. The v2 keys carry `os_v2_` and are a
+    // FAST pattern; the app id beside either is a public UUID.
+    name: "OneSignal REST API Key (legacy)",
+    keyword: "onesignal",
+    pattern: /[A-Za-z0-9]{48}/g,
+    confidence: "medium",
+  },
+  {
+    // `new Pusher("<key>", {cluster})`: the app key is the browser's half.
+    name: "Pusher App Key",
+    keyword: "pusher",
+    pattern: /[a-f0-9]{20}/gi,
+    confidence: "medium",
+    publicByDesign: true,
+    keyName: isPublicKeyNamed,
+  },
+  {
+    // The same shape under any other credential key is the app secret,
+    // which signs private-channel auth on the server.
+    name: "Pusher App Secret",
+    keyword: "pusher",
+    pattern: /[a-f0-9]{20}/gi,
+    confidence: "medium",
+    keyName: (key) => !isPublicKeyNamed(key),
+  },
+  {
+    // The upload widget's public key ships in the page by design.
+    name: "Uploadcare Public Key",
+    keyword: "uploadcare",
+    pattern: /[a-f0-9]{20}/gi,
+    confidence: "medium",
+    publicByDesign: true,
+    keyName: isUploadcarePublicKeyName,
+  },
+  {
+    name: "Uploadcare Secret Key",
+    keyword: "uploadcare",
+    pattern: /[a-f0-9]{20}/gi,
+    confidence: "medium",
+    keyName: (key) => !isUploadcarePublicKeyName(key),
+  },
+  {
+    // The access key goes out as `Client-ID <key>`; Unsplash's guidelines
+    // ask that it stay private, behind a proxy.
+    name: "Unsplash Access Key",
+    keyword: "unsplash",
+    pattern: /[A-Za-z0-9_-]{43}/g,
+    confidence: "medium",
+  },
+  {
+    // The Global API Key: 37 hex, account-wide, paired with the account's
+    // email. The 40-character API token above is a different shape.
+    name: "Cloudflare Global API Key",
+    keyword: "cloudflare",
+    pattern: /[a-f0-9]{37}/gi,
     confidence: "medium",
   },
   {
@@ -1344,6 +1694,22 @@ function classifyKeyName(key: string, keyword: string): KeyContext | "unknown" {
   // credential: `data-heroku-dyno`, `herokuAppName`, `segmentId` (#357).
   if (words.length === 1 && words[0] === keyword) return "credential";
   return "unknown";
+}
+
+/**
+ * The name of the key a value is assigned to, read off its look-behind. Inside
+ * a tag the attribute holding the value is `content` or `value`, and the name
+ * is on the tag (`<meta name="pusher-key" content="…">`): the tag's naming
+ * attributes are appended, so a predicate reads both.
+ */
+function assignedKeyName(before: string, tag?: string): string | undefined {
+  const key = (BRACKET_KEY_RE.exec(before) ??
+    PRECEDING_KEY_RE.exec(before))?.[1];
+  if (tag === undefined) return key;
+  const names: string[] = key === undefined ? [] : [key];
+  TAG_NAMING_ATTR_RE.lastIndex = 0;
+  for (const attr of tag.matchAll(TAG_NAMING_ATTR_RE)) names.push(attr[1]!);
+  return names.length === 0 ? undefined : names.join(" ");
 }
 
 /** The whole tag a value sits inside, or undefined if it sits between tags. */
@@ -3215,6 +3581,11 @@ function sdkInitBrandOf(content: string, keyAt: number): string | undefined {
 const REVENUECAT_CONTEXT_RE = /purchases|revenuecat/i;
 const REVENUECAT_CONTEXT_REACH = 200;
 
+// A `private_key_id` is a service-account key file's only when the object it
+// sits in says so: `"type": "service_account"` (quotes possibly escaped).
+const SERVICE_ACCOUNT_TYPE_RE = /\\?"type\\?"\s*:\s*\\?"service_account\\?"/;
+const SERVICE_ACCOUNT_REACH = 600;
+
 /** Characters of source text kept on each side of a match in a finding's `context`. */
 export const EVIDENCE_CONTEXT_RADIUS = 120;
 
@@ -3946,18 +4317,22 @@ function fastPatternMayFire(
 // whole value: a generic assignment yields to one of these only when its
 // keyword is in front of the value AND the value IS that shape. Proximity
 // alone would let `shopify: {password: "…"}` hide a real password.
-const PUBLIC_CONTEXT = CONTEXT_PATTERNS.filter((p) => p.publicByDesign).map(
-  (p) => ({
-    keyword: p.keyword,
-    whole: new RegExp(
-      `^(?:${p.pattern.source})$`,
-      p.pattern.flags.replace("g", "")
-    ),
-  })
-);
-const PUBLIC_KEYWORD_MAX = Math.max(
+// The pair patterns that read their key's name (#359) claim the same way: the
+// key already said which half of the pair the value is, so `PUSHER_SECRET`
+// reports as the Pusher app secret rather than as a generic secret.
+const CLAIMING_CONTEXT = CONTEXT_PATTERNS.filter(
+  (p) => p.publicByDesign || p.keyName
+).map((p) => ({
+  keyword: p.keyword,
+  keyName: p.keyName,
+  whole: new RegExp(
+    `^(?:${p.pattern.source})$`,
+    p.pattern.flags.replace("g", "")
+  ),
+}));
+const CLAIMING_KEYWORD_MAX = Math.max(
   0,
-  ...PUBLIC_CONTEXT.map((p) => p.keyword.length)
+  ...CLAIMING_CONTEXT.map((p) => p.keyword.length)
 );
 
 /**
@@ -3965,8 +4340,10 @@ const PUBLIC_KEYWORD_MAX = Math.max(
  * that is public by design. A generic assignment under one of these — the
  * brand as the parent key (`raygun:{apiKey:"…"}`), as the tag name
  * (`<builder-component api-key="…">`) or within the look-behind — reports at
- * the public tier under the brand's name (#357 r3). Deliberately short; the
- * rest of the brands are pub#359's job.
+ * the public tier under the brand's name (#357 r3). Deliberately short:
+ * the public keys pub#359 added carry a shape of their own (`sub-c-`,
+ * `NRJS-`, `pk_test_`) or a key-name rule in CONTEXT_PATTERNS (Pusher,
+ * Uploadcare, Algolia search-only), which a brand word alone cannot give.
  */
 const PUBLIC_BRANDS: ReadonlyArray<readonly [brand: string, type: string]> = [
   ["raygun", "Raygun API Key"],
@@ -4977,7 +5354,7 @@ function scanInto(
         // The same rule the context pass applies: the keyword has to sit in
         // a NAMING attribute (`id="shopify-features"`), not in a `src`.
         const tagText = open[0];
-        const named = PUBLIC_CONTEXT.filter((p) =>
+        const named = CLAIMING_CONTEXT.filter((p) =>
           tagNamesKeyword(tagText, p.keyword)
         ).map((p) => p.keyword);
         if (named.length === 0) continue;
@@ -4992,20 +5369,26 @@ function scanInto(
     return scriptBlocks;
   };
 
-  const publicContextClaims = (valueAt: number, body: string): boolean => {
-    if (PUBLIC_CONTEXT.length === 0) return false;
+  const publicContextClaims = (
+    valueAt: number,
+    body: string,
+    key: string
+  ): boolean => {
+    if (CLAIMING_CONTEXT.length === 0) return false;
     if (
       keywordFilter &&
-      !PUBLIC_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword))
+      !CLAIMING_CONTEXT.some((p) => mayContain(keywordFilter, p.keyword))
     )
       return false;
     const from = Math.max(
       0,
-      valueAt - CONTEXT_KEYWORD_GAP - PUBLIC_KEYWORD_MAX
+      valueAt - CONTEXT_KEYWORD_GAP - CLAIMING_KEYWORD_MAX
     );
     const window = content.slice(from, valueAt).toLowerCase();
-    return PUBLIC_CONTEXT.some(({ keyword, whole }) => {
+    return CLAIMING_CONTEXT.some(({ keyword, whole, keyName }) => {
       if (!whole.test(body)) return false;
+      // `algoliaAdminKey` is not the search-only key's, whatever its shape.
+      if (keyName && !keyName(key)) return false;
       const at = window.lastIndexOf(keyword);
       if (
         at !== -1 &&
@@ -5315,7 +5698,13 @@ function scanInto(
         // A value the public tier claims under a brand keyword in front of
         // it (`storefrontAccessToken:"…"` after `shopify`) is that tier's:
         // the context pass reports it as informational, not as a leak.
-        if (publicContextClaims(match.index + value.lastIndexOf(body), body))
+        if (
+          publicContextClaims(
+            match.index + value.lastIndexOf(body),
+            body,
+            completeKeyOf(content, match.index, value)
+          )
+        )
           continue;
         // A Bearer whose value is a JWT that a JWT pattern already claimed
         // belongs to that pattern: the three-segment token is one credential,
@@ -5572,6 +5961,7 @@ function scanInto(
     pattern,
     confidence,
     publicByDesign,
+    keyName,
   } of CONTEXT_PATTERNS) {
     if (keywordFilter && !mayContain(keywordFilter, keyword)) continue;
     contentLower ??= content.toLowerCase();
@@ -5660,6 +6050,14 @@ function scanInto(
         if (keyContext === "digest" || keyContext === "none") {
           continue;
         }
+
+        // A provider with a public and a secret key of this one shape: the
+        // key's name says which this is.
+        if (
+          keyName &&
+          !keyName(assignedKeyName(back.before, enclosingTag(local, localAt)))
+        )
+          continue;
 
         // Skip values that look like code identifiers (function/variable
         // names): `apiKey: getSegmentKey` assigns a call, not a key. A QUOTED

@@ -113,14 +113,29 @@ Needed no new rule: Next.js's `password="%filtered%"`, which
 `isPercentEncodedLabel` already reads as the label it is. Pinned so it stays
 that way.
 
-### Remaining (8 distinct)
+### Closed by pub#359 (browser-exposed services)
+
+33 patterns for the services a website ships keys for, each with a generator,
+so every one gets the meta-tests' positive, prefilter assertion, corrupted-
+keyword near-miss, mid-token near-miss (prefixed tier) and the keyword-gap
+directions (context tier). Two generator fields are new: `anchoredInside`
+(a SAS query string or a JSON member matches from inside the value, so the
+`foo…` probe does not apply to it) and `gapKey` (the key-gap probes for a
+pattern that reads its key's name). Pusher, Uploadcare and Algolia issue a
+public and a secret key of one shape; `keyName` on the context pattern reads
+the assigned key (or the tag's naming attribute) to tell them apart, and the
+generic assignments yield to those patterns as they do to the public ones.
+Calendly tokens are JWTs and are named by the decoder; Azure SAS tokens are
+tiered by their own `sp`, `sr` and `se`. Both are probes in `cases.ts`.
+
+### Remaining (7 distinct)
 
 1. Clerk `sk_live_[a-zA-Z0-9]{40,}` can never fire: Stripe Live runs first and the overlap dedup drops it.
 2. `Authorization: Bearer <value>` with a value under 20 chars is reported by neither tier.
 3. PayPal's class omits uppercase B–Y, so a real mixed-case client id never fires.
 4. Neon `neon_[\w-]{32,}` matches a `neon_`-prefixed hyphenated URL slug (a left boundary does not help: `/` precedes it).
 5. ~~The "Supabase Anon Key" pattern is the generic HS256 JWT header: any session JWT with a 100+ char payload reports as Supabase anon, and a `service_role` JWT reports as public.~~ Closed by pub#361 (see above): the pattern is the general `JSON Web Token` now, any algorithm, named from the decoded claims.
-6. Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.
+6. ~~Stripe `pk_test_` has no pattern; under `apiKey:` the generic assignment warns on a public test key.~~ Closed by pub#359: `Stripe Publishable Test Key`, public.
 7. Railway API tokens are plain UUIDs; the `railway_…` pattern matches a shape Railway does not issue.
 8. No size cap: a 5 MB external script is scanned in full (cost, not a wrong result).
 9. A call argument is not a value position: `rg4js('apiKey', '…')`, `mixpanel.init("…")` and `posthog.init("…")` report only when the argument's own shape is a pattern (PostHog's `phc_` is; Raygun's and Mixpanel's are not).

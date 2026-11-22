@@ -1535,6 +1535,60 @@
   "stripe-publishable-key@url-encoded-inline-settings": [
     {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_liv********************DmA4","extra":{"kind":"publishable","mode":"live"}}
   ],
+  "stripe-publishable-test-key@inline-config-object": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************HpNA","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@window-env": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************u57O","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@next-data": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************j0r1","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@nuxt-payload": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************9KMP","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@html-comment": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************QJWN","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@meta-content": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************ii1W","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@data-attribute": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************el6N","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@json-ld": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************cEzt","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@external-bundle": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"pk_tes********************mkgk","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@fetch-bearer-header": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"pk_tes********************nS3M","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@pre-env-dump": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************97ej","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@sourcemap-comment": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"pk_tes********************3tok","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@entity-encoded-attribute": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************R7Xx","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@unicode-escaped-script-string": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************Jkq9","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@base64-data-attribute": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"pk_tes********************eTRb","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@base64-global": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"pk_tes********************hc76","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@url-encoded-data-attribute": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************yUuP","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@url-encoded-inline-settings": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************rCIo","extra":{"kind":"publishable","mode":"test"}}
+  ],
   "paypal-client-id@inline-config-object": [
     {"type":"PayPal Client ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"AZ7mf3********************dzsp"}
   ],
@@ -3854,6 +3908,1086 @@
   "new-relic-license-key@url-encoded-inline-settings": [
     {"type":"New Relic License Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"EB07WH********************NRAL"}
   ],
+  "contentful-management-token@inline-config-object": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************KuOI"}
+  ],
+  "contentful-management-token@window-env": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************JEDQ"}
+  ],
+  "contentful-management-token@next-data": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************1nEk"}
+  ],
+  "contentful-management-token@nuxt-payload": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************FRHp"}
+  ],
+  "contentful-management-token@html-comment": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************WUBX"}
+  ],
+  "contentful-management-token@meta-content": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************8ez-"}
+  ],
+  "contentful-management-token@data-attribute": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************mXBI"}
+  ],
+  "contentful-management-token@json-ld": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************07gC"}
+  ],
+  "contentful-management-token@external-bundle": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"CFPAT-********************K7Np"}
+  ],
+  "contentful-management-token@fetch-bearer-header": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"CFPAT-********************xmN7"}
+  ],
+  "contentful-management-token@pre-env-dump": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************tnqp"}
+  ],
+  "contentful-management-token@sourcemap-comment": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"CFPAT-********************kFK6"}
+  ],
+  "contentful-management-token@entity-encoded-attribute": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************yKps"}
+  ],
+  "contentful-management-token@unicode-escaped-script-string": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************MOqJ"}
+  ],
+  "contentful-management-token@base64-data-attribute": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"CFPAT-********************ZI2B"}
+  ],
+  "contentful-management-token@base64-global": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"CFPAT-********************5LY9"}
+  ],
+  "contentful-management-token@url-encoded-data-attribute": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************g9qw"}
+  ],
+  "contentful-management-token@url-encoded-inline-settings": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************XpNx"}
+  ],
+  "airtable-personal-access-token@inline-config-object": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pat8QO********************df62"}
+  ],
+  "airtable-personal-access-token@window-env": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pathPv********************ed82"}
+  ],
+  "airtable-personal-access-token@next-data": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"patAtS********************8818"}
+  ],
+  "airtable-personal-access-token@nuxt-payload": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"patdb3********************abb2"}
+  ],
+  "airtable-personal-access-token@html-comment": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"pat7Aq********************5c32"}
+  ],
+  "airtable-personal-access-token@meta-content": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patgMu********************fa37"}
+  ],
+  "airtable-personal-access-token@data-attribute": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"pat3sl********************78d4"}
+  ],
+  "airtable-personal-access-token@json-ld": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pat3nI********************a5ee"}
+  ],
+  "airtable-personal-access-token@external-bundle": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"patMYB********************ef29"}
+  ],
+  "airtable-personal-access-token@fetch-bearer-header": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"patt3f********************d6c5"}
+  ],
+  "airtable-personal-access-token@pre-env-dump": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patNV2********************a9f2"}
+  ],
+  "airtable-personal-access-token@sourcemap-comment": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"patPPQ********************bb39"}
+  ],
+  "airtable-personal-access-token@entity-encoded-attribute": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patmZP********************160c"}
+  ],
+  "airtable-personal-access-token@unicode-escaped-script-string": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pat18p********************c2e5"}
+  ],
+  "airtable-personal-access-token@base64-data-attribute": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"patuko********************e8db"}
+  ],
+  "airtable-personal-access-token@base64-global": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"patEi4********************171b"}
+  ],
+  "airtable-personal-access-token@url-encoded-data-attribute": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patyYU********************6922"}
+  ],
+  "airtable-personal-access-token@url-encoded-inline-settings": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"patzed********************715b"}
+  ],
+  "notion-integration-token@inline-config-object": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_14********************gNtf"}
+  ],
+  "notion-integration-token@window-env": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_47********************ZTRB"}
+  ],
+  "notion-integration-token@next-data": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_64********************fw0h"}
+  ],
+  "notion-integration-token@nuxt-payload": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_62********************dwuL"}
+  ],
+  "notion-integration-token@html-comment": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_99********************zFpg"}
+  ],
+  "notion-integration-token@meta-content": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_69********************TPIK"}
+  ],
+  "notion-integration-token@data-attribute": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_38********************2GBI"}
+  ],
+  "notion-integration-token@json-ld": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_98********************xZ54"}
+  ],
+  "notion-integration-token@external-bundle": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"ntn_14********************O7pp"}
+  ],
+  "notion-integration-token@fetch-bearer-header": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"ntn_77********************sAaE"}
+  ],
+  "notion-integration-token@pre-env-dump": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_75********************K1Uy"}
+  ],
+  "notion-integration-token@sourcemap-comment": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"ntn_22********************hJ4r"}
+  ],
+  "notion-integration-token@entity-encoded-attribute": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_54********************zdjE"}
+  ],
+  "notion-integration-token@unicode-escaped-script-string": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_71********************DMAn"}
+  ],
+  "notion-integration-token@base64-data-attribute": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"ntn_90********************YWEs"}
+  ],
+  "notion-integration-token@base64-global": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"ntn_33********************qZP2"}
+  ],
+  "notion-integration-token@url-encoded-data-attribute": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_17********************YC4r"}
+  ],
+  "notion-integration-token@url-encoded-inline-settings": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_40********************4E3a"}
+  ],
+  "notion-integration-token-legacy@inline-config-object": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************hgoP"}
+  ],
+  "notion-integration-token-legacy@window-env": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************ae3D"}
+  ],
+  "notion-integration-token-legacy@next-data": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************Vt1P"}
+  ],
+  "notion-integration-token-legacy@nuxt-payload": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************ifZ8"}
+  ],
+  "notion-integration-token-legacy@html-comment": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************5UFF"}
+  ],
+  "notion-integration-token-legacy@meta-content": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************XqU9"}
+  ],
+  "notion-integration-token-legacy@data-attribute": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************X6mp"}
+  ],
+  "notion-integration-token-legacy@json-ld": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************wjQv"}
+  ],
+  "notion-integration-token-legacy@external-bundle": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"secret********************BwrQ"}
+  ],
+  "notion-integration-token-legacy@fetch-bearer-header": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"secret********************YvGw"}
+  ],
+  "notion-integration-token-legacy@pre-env-dump": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************De8c"}
+  ],
+  "notion-integration-token-legacy@sourcemap-comment": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"secret********************XaQ2"}
+  ],
+  "notion-integration-token-legacy@entity-encoded-attribute": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************y49t"}
+  ],
+  "notion-integration-token-legacy@unicode-escaped-script-string": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************2yfL"}
+  ],
+  "notion-integration-token-legacy@base64-data-attribute": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"secret********************tcG3"}
+  ],
+  "notion-integration-token-legacy@base64-global": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"secret********************ZJKM"}
+  ],
+  "notion-integration-token-legacy@url-encoded-data-attribute": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************fGEb"}
+  ],
+  "notion-integration-token-legacy@url-encoded-inline-settings": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************DdxE"}
+  ],
+  "cloudinary-url@inline-config-object": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@window-env": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@next-data": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@nuxt-payload": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@html-comment": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@meta-content": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@data-attribute": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@json-ld": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@external-bundle": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"external-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@pre-env-dump": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@entity-encoded-attribute": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@unicode-escaped-script-string": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@base64-data-attribute": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@base64-global": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@url-encoded-data-attribute": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@url-encoded-inline-settings": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+  ],
+  "onesignal-rest-api-key@inline-config-object": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************gso6"}
+  ],
+  "onesignal-rest-api-key@window-env": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************rsx4"}
+  ],
+  "onesignal-rest-api-key@next-data": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************icsv"}
+  ],
+  "onesignal-rest-api-key@nuxt-payload": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************k5ro"}
+  ],
+  "onesignal-rest-api-key@html-comment": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************v7uw"}
+  ],
+  "onesignal-rest-api-key@meta-content": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************rfka"}
+  ],
+  "onesignal-rest-api-key@data-attribute": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************iop0"}
+  ],
+  "onesignal-rest-api-key@json-ld": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************oe7u"}
+  ],
+  "onesignal-rest-api-key@external-bundle": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"os_v2_********************pday"}
+  ],
+  "onesignal-rest-api-key@fetch-bearer-header": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"os_v2_********************xlcx"}
+  ],
+  "onesignal-rest-api-key@pre-env-dump": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************aflp"}
+  ],
+  "onesignal-rest-api-key@sourcemap-comment": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"os_v2_********************b85a"}
+  ],
+  "onesignal-rest-api-key@entity-encoded-attribute": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************evhw"}
+  ],
+  "onesignal-rest-api-key@unicode-escaped-script-string": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************biru"}
+  ],
+  "onesignal-rest-api-key@base64-data-attribute": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"os_v2_********************gjgn"}
+  ],
+  "onesignal-rest-api-key@base64-global": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"os_v2_********************xv42"}
+  ],
+  "onesignal-rest-api-key@url-encoded-data-attribute": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************n89p"}
+  ],
+  "onesignal-rest-api-key@url-encoded-inline-settings": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************ak1p"}
+  ],
+  "pubnub-secret-key@inline-config-object": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************oY3D"}
+  ],
+  "pubnub-secret-key@window-env": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************fiVE"}
+  ],
+  "pubnub-secret-key@next-data": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************PMwC"}
+  ],
+  "pubnub-secret-key@nuxt-payload": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************P4t0"}
+  ],
+  "pubnub-secret-key@html-comment": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************4vFH"}
+  ],
+  "pubnub-secret-key@meta-content": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************aLap"}
+  ],
+  "pubnub-secret-key@data-attribute": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************3I5s"}
+  ],
+  "pubnub-secret-key@json-ld": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************bRnu"}
+  ],
+  "pubnub-secret-key@external-bundle": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sec-c-********************XUfv"}
+  ],
+  "pubnub-secret-key@fetch-bearer-header": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sec-c-********************G9aX"}
+  ],
+  "pubnub-secret-key@pre-env-dump": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************T0WY"}
+  ],
+  "pubnub-secret-key@sourcemap-comment": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sec-c-********************M0SI"}
+  ],
+  "pubnub-secret-key@entity-encoded-attribute": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************9Qm9"}
+  ],
+  "pubnub-secret-key@unicode-escaped-script-string": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************BfK8"}
+  ],
+  "pubnub-secret-key@base64-data-attribute": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sec-c-********************oVtC"}
+  ],
+  "pubnub-secret-key@base64-global": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sec-c-********************75Po"}
+  ],
+  "pubnub-secret-key@url-encoded-data-attribute": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************ai5A"}
+  ],
+  "pubnub-secret-key@url-encoded-inline-settings": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************BaKw"}
+  ],
+  "pubnub-publish-key@inline-config-object": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************1673"}
+  ],
+  "pubnub-publish-key@window-env": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************ba2e"}
+  ],
+  "pubnub-publish-key@next-data": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************6b87"}
+  ],
+  "pubnub-publish-key@nuxt-payload": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************65f0"}
+  ],
+  "pubnub-publish-key@html-comment": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************5d13"}
+  ],
+  "pubnub-publish-key@meta-content": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************f5be"}
+  ],
+  "pubnub-publish-key@data-attribute": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************4073"}
+  ],
+  "pubnub-publish-key@json-ld": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************d778"}
+  ],
+  "pubnub-publish-key@external-bundle": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"pub-c-********************c372"}
+  ],
+  "pubnub-publish-key@fetch-bearer-header": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"pub-c-********************cd98"}
+  ],
+  "pubnub-publish-key@pre-env-dump": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************2947"}
+  ],
+  "pubnub-publish-key@sourcemap-comment": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"pub-c-********************312d"}
+  ],
+  "pubnub-publish-key@entity-encoded-attribute": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************6b9d"}
+  ],
+  "pubnub-publish-key@unicode-escaped-script-string": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************b323"}
+  ],
+  "pubnub-publish-key@base64-data-attribute": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"pub-c-********************88c7"}
+  ],
+  "pubnub-publish-key@base64-global": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"pub-c-********************6eb2"}
+  ],
+  "pubnub-publish-key@url-encoded-data-attribute": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************bb0b"}
+  ],
+  "pubnub-publish-key@url-encoded-inline-settings": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************c5fc"}
+  ],
+  "pubnub-subscribe-key@inline-config-object": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************be56"}
+  ],
+  "pubnub-subscribe-key@window-env": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************7a7c"}
+  ],
+  "pubnub-subscribe-key@next-data": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************afbf"}
+  ],
+  "pubnub-subscribe-key@nuxt-payload": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************5d1d"}
+  ],
+  "pubnub-subscribe-key@html-comment": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************6c14"}
+  ],
+  "pubnub-subscribe-key@meta-content": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************c6ff"}
+  ],
+  "pubnub-subscribe-key@data-attribute": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************4ee3"}
+  ],
+  "pubnub-subscribe-key@json-ld": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************55b4"}
+  ],
+  "pubnub-subscribe-key@external-bundle": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sub-c-********************7dcf"}
+  ],
+  "pubnub-subscribe-key@fetch-bearer-header": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sub-c-********************e33d"}
+  ],
+  "pubnub-subscribe-key@pre-env-dump": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************4b40"}
+  ],
+  "pubnub-subscribe-key@sourcemap-comment": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sub-c-********************c6db"}
+  ],
+  "pubnub-subscribe-key@entity-encoded-attribute": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************3443"}
+  ],
+  "pubnub-subscribe-key@unicode-escaped-script-string": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************c143"}
+  ],
+  "pubnub-subscribe-key@base64-data-attribute": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"sub-c-********************193a"}
+  ],
+  "pubnub-subscribe-key@base64-global": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"sub-c-********************2964"}
+  ],
+  "pubnub-subscribe-key@url-encoded-data-attribute": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************16ce"}
+  ],
+  "pubnub-subscribe-key@url-encoded-inline-settings": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************d7e3"}
+  ],
+  "zapier-webhook-url@inline-config-object": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************xp1/"}
+  ],
+  "zapier-webhook-url@window-env": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************a00/"}
+  ],
+  "zapier-webhook-url@next-data": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************jzo/"}
+  ],
+  "zapier-webhook-url@nuxt-payload": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************ndl/"}
+  ],
+  "zapier-webhook-url@html-comment": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************uk7/"}
+  ],
+  "zapier-webhook-url@meta-content": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************pta/"}
+  ],
+  "zapier-webhook-url@data-attribute": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************mxd/"}
+  ],
+  "zapier-webhook-url@json-ld": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************6z9/"}
+  ],
+  "zapier-webhook-url@external-bundle": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"https:********************o3q/"}
+  ],
+  "zapier-webhook-url@pre-env-dump": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************6wb/"}
+  ],
+  "zapier-webhook-url@entity-encoded-attribute": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************001/"}
+  ],
+  "zapier-webhook-url@unicode-escaped-script-string": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************cym/"}
+  ],
+  "zapier-webhook-url@base64-data-attribute": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"https:********************ym4/"}
+  ],
+  "zapier-webhook-url@base64-global": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"https:********************vsp/"}
+  ],
+  "zapier-webhook-url@url-encoded-data-attribute": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************tug/"}
+  ],
+  "zapier-webhook-url@url-encoded-inline-settings": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************0tl/"}
+  ],
+  "gcp-service-account-key@inline-config-object": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************67\\\""}
+  ],
+  "gcp-service-account-key@window-env": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************64\\\""}
+  ],
+  "gcp-service-account-key@next-data": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************c1\\\""}
+  ],
+  "gcp-service-account-key@nuxt-payload": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************08\\\""}
+  ],
+  "gcp-service-account-key@html-comment": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\"priva********************c43\""}
+  ],
+  "gcp-service-account-key@json-ld": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************75\\\""}
+  ],
+  "gcp-service-account-key@external-bundle": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"\\\"priv********************2b\\\""}
+  ],
+  "gcp-service-account-key@pre-env-dump": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\"priva********************587\""}
+  ],
+  "gcp-service-account-key@entity-encoded-attribute": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\\\"priv********************23\\\""}
+  ],
+  "gcp-service-account-key@unicode-escaped-script-string": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************63\\\""}
+  ],
+  "gcp-service-account-key@base64-data-attribute": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"\\\"priv********************fb\\\""}
+  ],
+  "gcp-service-account-key@base64-global": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"\\\"priv********************8a\\\""}
+  ],
+  "gcp-service-account-key@url-encoded-data-attribute": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\\\"priv********************bb\\\""}
+  ],
+  "gcp-service-account-key@url-encoded-inline-settings": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************e1\\\""}
+  ],
+  "azure-sas-token@inline-config-object": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************s%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@window-env": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************o%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@next-data": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************Lh4=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@nuxt-payload": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************0%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@html-comment": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************+ig=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@meta-content": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************w%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@data-attribute": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************A%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@json-ld": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************GMU=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@external-bundle": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sv=202********************/hU=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@pre-env-dump": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************Ijw=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@entity-encoded-attribute": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************M%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@unicode-escaped-script-string": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************I%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@base64-data-attribute": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sv=202********************3mE=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@base64-global": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sv=202********************s%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@url-encoded-data-attribute": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************w%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@url-encoded-inline-settings": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************w%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-function-key@inline-config-object": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************kO=="}
+  ],
+  "azure-function-key@window-env": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************3r=="}
+  ],
+  "azure-function-key@next-data": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************GS=="}
+  ],
+  "azure-function-key@nuxt-payload": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************vo=="}
+  ],
+  "azure-function-key@html-comment": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************Jd=="}
+  ],
+  "azure-function-key@meta-content": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************8C=="}
+  ],
+  "azure-function-key@data-attribute": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************xP=="}
+  ],
+  "azure-function-key@json-ld": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************uQ=="}
+  ],
+  "azure-function-key@external-bundle": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"https:********************dP=="}
+  ],
+  "azure-function-key@pre-env-dump": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************hq=="}
+  ],
+  "azure-function-key@entity-encoded-attribute": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************s1=="}
+  ],
+  "azure-function-key@unicode-escaped-script-string": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************RF=="}
+  ],
+  "azure-function-key@base64-data-attribute": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"https:********************0M=="}
+  ],
+  "azure-function-key@base64-global": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"https:********************73=="}
+  ],
+  "azure-function-key@url-encoded-data-attribute": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************KA=="}
+  ],
+  "azure-function-key@url-encoded-inline-settings": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************hW=="}
+  ],
+  "sentry-organization-token@inline-config-object": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************vMjk"}
+  ],
+  "sentry-organization-token@window-env": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************eFOR"}
+  ],
+  "sentry-organization-token@next-data": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************Q9jt"}
+  ],
+  "sentry-organization-token@nuxt-payload": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************U8yo"}
+  ],
+  "sentry-organization-token@html-comment": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************oklj"}
+  ],
+  "sentry-organization-token@meta-content": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************92J1"}
+  ],
+  "sentry-organization-token@data-attribute": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************d0lX"}
+  ],
+  "sentry-organization-token@json-ld": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************ECAi"}
+  ],
+  "sentry-organization-token@external-bundle": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntrys********************olV5"}
+  ],
+  "sentry-organization-token@fetch-bearer-header": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntrys********************cYDQ"}
+  ],
+  "sentry-organization-token@pre-env-dump": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************ddgT"}
+  ],
+  "sentry-organization-token@sourcemap-comment": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntrys********************yNRF"}
+  ],
+  "sentry-organization-token@entity-encoded-attribute": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************JV9K"}
+  ],
+  "sentry-organization-token@unicode-escaped-script-string": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************QkI6"}
+  ],
+  "sentry-organization-token@base64-data-attribute": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sntrys********************te8s"}
+  ],
+  "sentry-organization-token@base64-global": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sntrys********************SkuD"}
+  ],
+  "sentry-organization-token@url-encoded-data-attribute": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************Auv0"}
+  ],
+  "sentry-organization-token@url-encoded-inline-settings": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************fpk1"}
+  ],
+  "sentry-user-token@inline-config-object": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************2474"}
+  ],
+  "sentry-user-token@window-env": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************578a"}
+  ],
+  "sentry-user-token@next-data": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************3f04"}
+  ],
+  "sentry-user-token@nuxt-payload": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************9d7e"}
+  ],
+  "sentry-user-token@html-comment": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************5a90"}
+  ],
+  "sentry-user-token@meta-content": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************7805"}
+  ],
+  "sentry-user-token@data-attribute": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************8104"}
+  ],
+  "sentry-user-token@json-ld": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************158e"}
+  ],
+  "sentry-user-token@external-bundle": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntryu********************1174"}
+  ],
+  "sentry-user-token@fetch-bearer-header": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntryu********************1826"}
+  ],
+  "sentry-user-token@pre-env-dump": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************05e9"}
+  ],
+  "sentry-user-token@sourcemap-comment": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntryu********************e761"}
+  ],
+  "sentry-user-token@entity-encoded-attribute": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************4104"}
+  ],
+  "sentry-user-token@unicode-escaped-script-string": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************859b"}
+  ],
+  "sentry-user-token@base64-data-attribute": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sntryu********************22de"}
+  ],
+  "sentry-user-token@base64-global": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sntryu********************6f06"}
+  ],
+  "sentry-user-token@url-encoded-data-attribute": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************460c"}
+  ],
+  "sentry-user-token@url-encoded-inline-settings": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************f54b"}
+  ],
+  "typeform-personal-access-token@inline-config-object": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_Kr********************R8fx"}
+  ],
+  "typeform-personal-access-token@window-env": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_yB********************QuPK"}
+  ],
+  "typeform-personal-access-token@next-data": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_QM********************Omuh"}
+  ],
+  "typeform-personal-access-token@nuxt-payload": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_fi********************ubFh"}
+  ],
+  "typeform-personal-access-token@html-comment": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_Nx********************oXiS"}
+  ],
+  "typeform-personal-access-token@meta-content": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_rA********************OIZB"}
+  ],
+  "typeform-personal-access-token@data-attribute": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_bx********************ZQiA"}
+  ],
+  "typeform-personal-access-token@json-ld": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_Xn********************w1WE"}
+  ],
+  "typeform-personal-access-token@external-bundle": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"tfp_9Z********************WGwr"}
+  ],
+  "typeform-personal-access-token@fetch-bearer-header": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"tfp_nJ********************UvD6"}
+  ],
+  "typeform-personal-access-token@pre-env-dump": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_F5********************4Im9"}
+  ],
+  "typeform-personal-access-token@sourcemap-comment": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"tfp_9G********************nUSr"}
+  ],
+  "typeform-personal-access-token@entity-encoded-attribute": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_Va********************jx1u"}
+  ],
+  "typeform-personal-access-token@unicode-escaped-script-string": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_po********************g4Ik"}
+  ],
+  "typeform-personal-access-token@base64-data-attribute": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"tfp_3t********************RgTQ"}
+  ],
+  "typeform-personal-access-token@base64-global": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"tfp_QA********************YjB0"}
+  ],
+  "typeform-personal-access-token@url-encoded-data-attribute": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_G1********************WV5r"}
+  ],
+  "typeform-personal-access-token@url-encoded-inline-settings": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_3E********************KgqX"}
+  ],
+  "intercom-access-token@inline-config-object": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@window-env": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@next-data": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@nuxt-payload": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@html-comment": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@meta-content": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@data-attribute": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@json-ld": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@external-bundle": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@fetch-bearer-header": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@pre-env-dump": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@sourcemap-comment": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@entity-encoded-attribute": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@unicode-escaped-script-string": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@base64-data-attribute": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@base64-global": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@url-encoded-data-attribute": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@url-encoded-inline-settings": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+  ],
+  "launchdarkly-sdk-key@inline-config-object": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-8d********************7e59"}
+  ],
+  "launchdarkly-sdk-key@window-env": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-24********************52f3"}
+  ],
+  "launchdarkly-sdk-key@next-data": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-51********************0a37"}
+  ],
+  "launchdarkly-sdk-key@nuxt-payload": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-60********************daed"}
+  ],
+  "launchdarkly-sdk-key@html-comment": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-12********************7642"}
+  ],
+  "launchdarkly-sdk-key@meta-content": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-75********************460a"}
+  ],
+  "launchdarkly-sdk-key@data-attribute": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-54********************ff80"}
+  ],
+  "launchdarkly-sdk-key@json-ld": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-30********************da7b"}
+  ],
+  "launchdarkly-sdk-key@external-bundle": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sdk-8a********************dfc4"}
+  ],
+  "launchdarkly-sdk-key@fetch-bearer-header": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sdk-82********************aa29"}
+  ],
+  "launchdarkly-sdk-key@pre-env-dump": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-35********************3f01"}
+  ],
+  "launchdarkly-sdk-key@sourcemap-comment": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sdk-fa********************c6ba"}
+  ],
+  "launchdarkly-sdk-key@entity-encoded-attribute": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-cc********************272c"}
+  ],
+  "launchdarkly-sdk-key@unicode-escaped-script-string": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-fb********************a637"}
+  ],
+  "launchdarkly-sdk-key@base64-data-attribute": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html (base64)","masked":"sdk-2d********************7ea4"}
+  ],
+  "launchdarkly-sdk-key@base64-global": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script (base64)","masked":"sdk-0a********************3722"}
+  ],
+  "launchdarkly-sdk-key@url-encoded-data-attribute": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-0a********************50c1"}
+  ],
+  "launchdarkly-sdk-key@url-encoded-inline-settings": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-ae********************8595"}
+  ],
+  "launchdarkly-mobile-key@inline-config-object": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-c5********************0f21"}
+  ],
+  "launchdarkly-mobile-key@window-env": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-c8********************d310"}
+  ],
+  "launchdarkly-mobile-key@next-data": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-75********************7d47"}
+  ],
+  "launchdarkly-mobile-key@nuxt-payload": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-6d********************e0e3"}
+  ],
+  "launchdarkly-mobile-key@html-comment": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-73********************4aa0"}
+  ],
+  "launchdarkly-mobile-key@meta-content": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-09********************3d25"}
+  ],
+  "launchdarkly-mobile-key@data-attribute": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-14********************7f78"}
+  ],
+  "launchdarkly-mobile-key@json-ld": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-04********************8227"}
+  ],
+  "launchdarkly-mobile-key@external-bundle": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"mob-a6********************7adc"}
+  ],
+  "launchdarkly-mobile-key@fetch-bearer-header": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"mob-87********************de09"}
+  ],
+  "launchdarkly-mobile-key@pre-env-dump": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-1f********************6a16"}
+  ],
+  "launchdarkly-mobile-key@sourcemap-comment": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"mob-cd********************94cf"}
+  ],
+  "launchdarkly-mobile-key@entity-encoded-attribute": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-ad********************4e6b"}
+  ],
+  "launchdarkly-mobile-key@unicode-escaped-script-string": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-a5********************1fd0"}
+  ],
+  "launchdarkly-mobile-key@base64-data-attribute": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"mob-cb********************ced3"}
+  ],
+  "launchdarkly-mobile-key@base64-global": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"mob-7b********************e584"}
+  ],
+  "launchdarkly-mobile-key@url-encoded-data-attribute": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-df********************ce8f"}
+  ],
+  "launchdarkly-mobile-key@url-encoded-inline-settings": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-08********************fd4b"}
+  ],
+  "launchdarkly-client-side-id@inline-config-object": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************2f8\""}
+  ],
+  "launchdarkly-client-side-id@window-env": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************3a1\""}
+  ],
+  "launchdarkly-client-side-id@next-data": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************92d\""}
+  ],
+  "launchdarkly-client-side-id@nuxt-payload": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************45c\""}
+  ],
+  "launchdarkly-client-side-id@html-comment": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"client********************1b2\""}
+  ],
+  "launchdarkly-client-side-id@external-bundle": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"client********************c38\""}
+  ],
+  "launchdarkly-client-side-id@entity-encoded-attribute": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"client********************5f8\""}
+  ],
+  "launchdarkly-client-side-id@unicode-escaped-script-string": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************eea\""}
+  ],
+  "launchdarkly-client-side-id@base64-data-attribute": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"client********************63d\""}
+  ],
+  "launchdarkly-client-side-id@base64-global": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"client********************67b\""}
+  ],
+  "launchdarkly-client-side-id@url-encoded-data-attribute": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"client********************0a0\""}
+  ],
+  "launchdarkly-client-side-id@url-encoded-inline-settings": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************63b\""}
+  ],
+  "new-relic-browser-key@inline-config-object": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-a**************4e07"}
+  ],
+  "new-relic-browser-key@window-env": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-9**************f695"}
+  ],
+  "new-relic-browser-key@next-data": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-9**************959e"}
+  ],
+  "new-relic-browser-key@nuxt-payload": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-4**************6514"}
+  ],
+  "new-relic-browser-key@html-comment": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-0**************5080"}
+  ],
+  "new-relic-browser-key@meta-content": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-e**************d8a1"}
+  ],
+  "new-relic-browser-key@data-attribute": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-7**************becc"}
+  ],
+  "new-relic-browser-key@json-ld": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-1**************8aeb"}
+  ],
+  "new-relic-browser-key@external-bundle": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"NRJS-4**************1bb1"}
+  ],
+  "new-relic-browser-key@fetch-bearer-header": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"NRJS-f**************c90d"}
+  ],
+  "new-relic-browser-key@pre-env-dump": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-3**************d23b"}
+  ],
+  "new-relic-browser-key@sourcemap-comment": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"NRJS-e**************a599"}
+  ],
+  "new-relic-browser-key@entity-encoded-attribute": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-c**************4077"}
+  ],
+  "new-relic-browser-key@unicode-escaped-script-string": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-8**************61a2"}
+  ],
+  "new-relic-browser-key@base64-data-attribute": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"NRJS-4**************47c0"}
+  ],
+  "new-relic-browser-key@base64-global": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"NRJS-9**************3ad7"}
+  ],
+  "new-relic-browser-key@url-encoded-data-attribute": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-e**************70ae"}
+  ],
+  "new-relic-browser-key@url-encoded-inline-settings": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-8**************b3c4"}
+  ],
   "clerk-secret-key@inline-config-object": [
     {"type":"Stripe Live Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sk_liv********************XlBQ","extra":{"kind":"secret","mode":"live"}}
   ],
@@ -5660,6 +6794,57 @@
   "sanity-token@url-encoded-inline-settings": [
     {"type":"Sanity Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sk0Ujm********************5hbQ"}
   ],
+  "algolia-search-only-api-key@inline-config-object": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"7bc444********************f3ba"}
+  ],
+  "algolia-search-only-api-key@window-env": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"992807********************8e6a"}
+  ],
+  "algolia-search-only-api-key@next-data": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6a13c2********************9360"}
+  ],
+  "algolia-search-only-api-key@nuxt-payload": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"51f802********************1f3f"}
+  ],
+  "algolia-search-only-api-key@html-comment": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"0e6e49********************755e"}
+  ],
+  "algolia-search-only-api-key@meta-content": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"974038********************365f"}
+  ],
+  "algolia-search-only-api-key@data-attribute": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"047046********************cad9"}
+  ],
+  "algolia-search-only-api-key@external-bundle": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"3ccabf********************c7ae"}
+  ],
+  "algolia-search-only-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************eab7"}
+  ],
+  "algolia-search-only-api-key@pre-env-dump": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9ddc06********************46b8"}
+  ],
+  "algolia-search-only-api-key@sourcemap-comment": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"959f97********************f075"}
+  ],
+  "algolia-search-only-api-key@entity-encoded-attribute": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"51500f********************1451"}
+  ],
+  "algolia-search-only-api-key@unicode-escaped-script-string": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"7ca2b8********************4a09"}
+  ],
+  "algolia-search-only-api-key@base64-data-attribute": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"585d67********************524d"}
+  ],
+  "algolia-search-only-api-key@base64-global": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"55da2b********************d4f8"}
+  ],
+  "algolia-search-only-api-key@url-encoded-data-attribute": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"169bbf********************abf3"}
+  ],
+  "algolia-search-only-api-key@url-encoded-inline-settings": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"77c354********************d578"}
+  ],
   "algolia-api-key@inline-config-object": [
     {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8248a8********************3526","extra":{"keyType":"admin-or-search-shaped","restrictions":"unknown"}}
   ],
@@ -5716,6 +6901,555 @@
   ],
   "algolia-api-key@url-encoded-inline-settings": [
     {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"443c2e********************10c4","extra":{"keyType":"admin-or-search-shaped","restrictions":"unknown"}}
+  ],
+  "storyblok-access-token@inline-config-object": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"9m8oho**************Hrtt"}
+  ],
+  "storyblok-access-token@window-env": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8jzfK3**************A7tt"}
+  ],
+  "storyblok-access-token@next-data": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"9lcJeZ**************5ztt"}
+  ],
+  "storyblok-access-token@nuxt-payload": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7i91DL**************zxtt"}
+  ],
+  "storyblok-access-token@html-comment": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9NklIp**************oItt"}
+  ],
+  "storyblok-access-token@meta-content": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"8OzrwF**************uxtt"}
+  ],
+  "storyblok-access-token@data-attribute": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"0QHzLE**************Hitt"}
+  ],
+  "storyblok-access-token@external-bundle": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"5Gtgvc**************Kott"}
+  ],
+  "storyblok-access-token@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************4ftt"}
+  ],
+  "storyblok-access-token@pre-env-dump": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"7nCzY7**************Jott"}
+  ],
+  "storyblok-access-token@sourcemap-comment": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"1iaz2q**************xett"}
+  ],
+  "storyblok-access-token@entity-encoded-attribute": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"67R9EC**************a6tt"}
+  ],
+  "storyblok-access-token@unicode-escaped-script-string": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3ny0Ar**************pCtt"}
+  ],
+  "storyblok-access-token@base64-data-attribute": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"4A00Lg**************OPtt"}
+  ],
+  "storyblok-access-token@base64-global": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"0zlq4c**************iUtt"}
+  ],
+  "storyblok-access-token@url-encoded-data-attribute": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"7mMHGp**************1Ett"}
+  ],
+  "storyblok-access-token@url-encoded-inline-settings": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8yLPCR**************Lmtt"}
+  ],
+  "webflow-api-token@inline-config-object": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"607595********************c09d"}
+  ],
+  "webflow-api-token@window-env": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"9a0b4a********************1f2f"}
+  ],
+  "webflow-api-token@next-data": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"03fa0c********************f9aa"}
+  ],
+  "webflow-api-token@nuxt-payload": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"255898********************f6f4"}
+  ],
+  "webflow-api-token@html-comment": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9ad561********************a35a"}
+  ],
+  "webflow-api-token@meta-content": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9f4130********************56e4"}
+  ],
+  "webflow-api-token@data-attribute": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"80c586********************7107"}
+  ],
+  "webflow-api-token@external-bundle": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"48f1f2********************a765"}
+  ],
+  "webflow-api-token@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************97ba"}
+  ],
+  "webflow-api-token@pre-env-dump": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"93d795********************7027"}
+  ],
+  "webflow-api-token@sourcemap-comment": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"2c84cd********************5501"}
+  ],
+  "webflow-api-token@entity-encoded-attribute": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"4b5a57********************9c40"}
+  ],
+  "webflow-api-token@unicode-escaped-script-string": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"05fac0********************9c77"}
+  ],
+  "webflow-api-token@base64-data-attribute": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"0d388a********************1ec2"}
+  ],
+  "webflow-api-token@base64-global": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"88273f********************3146"}
+  ],
+  "webflow-api-token@url-encoded-data-attribute": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"35c98b********************35ec"}
+  ],
+  "webflow-api-token@url-encoded-inline-settings": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4482f0********************b80b"}
+  ],
+  "squarespace-api-key@inline-config-object": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0cc944********************f1e5"}
+  ],
+  "squarespace-api-key@window-env": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"89b53b********************ea0e"}
+  ],
+  "squarespace-api-key@next-data": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"e8aa91********************ce33"}
+  ],
+  "squarespace-api-key@nuxt-payload": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"b7ffd7********************95fb"}
+  ],
+  "squarespace-api-key@html-comment": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"7f7e07********************d0e3"}
+  ],
+  "squarespace-api-key@meta-content": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"eeccba********************8339"}
+  ],
+  "squarespace-api-key@data-attribute": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"f0776a********************b5c5"}
+  ],
+  "squarespace-api-key@external-bundle": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"c8d902********************6c54"}
+  ],
+  "squarespace-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************8306"}
+  ],
+  "squarespace-api-key@pre-env-dump": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"86a830********************4429"}
+  ],
+  "squarespace-api-key@sourcemap-comment": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"ed3238********************ebee"}
+  ],
+  "squarespace-api-key@entity-encoded-attribute": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"1f28ba********************cfaf"}
+  ],
+  "squarespace-api-key@unicode-escaped-script-string": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"50540a********************1849"}
+  ],
+  "squarespace-api-key@base64-data-attribute": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"f8f7b8********************07dc"}
+  ],
+  "squarespace-api-key@base64-global": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"aab93e********************e1be"}
+  ],
+  "squarespace-api-key@url-encoded-data-attribute": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"f947e9********************bebb"}
+  ],
+  "squarespace-api-key@url-encoded-inline-settings": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"06397f********************0153"}
+  ],
+  "mux-token-secret@inline-config-object": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6x3oXv********************3U2p"}
+  ],
+  "mux-token-secret@window-env": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"61mLOW********************Srru"}
+  ],
+  "mux-token-secret@next-data": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3Pk1GP********************LJTE"}
+  ],
+  "mux-token-secret@nuxt-payload": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4bJOZX********************nHEP"}
+  ],
+  "mux-token-secret@html-comment": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"6pl60F********************k3wr"}
+  ],
+  "mux-token-secret@meta-content": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"4w6Hi7********************bu5Y"}
+  ],
+  "mux-token-secret@data-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"1NwNls********************tkZV"}
+  ],
+  "mux-token-secret@external-bundle": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"9F4OVj********************K62R"}
+  ],
+  "mux-token-secret@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************BVWt"}
+  ],
+  "mux-token-secret@pre-env-dump": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"7X9byh********************fnOy"}
+  ],
+  "mux-token-secret@sourcemap-comment": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"1vshvq********************TYll"}
+  ],
+  "mux-token-secret@entity-encoded-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"9LzCLF********************yoJM"}
+  ],
+  "mux-token-secret@unicode-escaped-script-string": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5rrpZN********************HKAg"}
+  ],
+  "mux-token-secret@base64-data-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"4fKGRm********************zQIu"}
+  ],
+  "mux-token-secret@base64-global": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"5jfjBc********************cGDx"}
+  ],
+  "mux-token-secret@url-encoded-data-attribute": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"6xubpZ********************9KLr"}
+  ],
+  "mux-token-secret@url-encoded-inline-settings": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0eDwqj********************l3Dl"}
+  ],
+  "onesignal-rest-api-key-legacy@inline-config-object": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0AXsBo********************qUOV"}
+  ],
+  "onesignal-rest-api-key-legacy@window-env": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7eyQjH********************aOF6"}
+  ],
+  "onesignal-rest-api-key-legacy@next-data": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6w0UDr********************ycL9"}
+  ],
+  "onesignal-rest-api-key-legacy@nuxt-payload": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7mOU6V********************POwt"}
+  ],
+  "onesignal-rest-api-key-legacy@html-comment": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"8qiyXl********************sjjS"}
+  ],
+  "onesignal-rest-api-key-legacy@meta-content": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"83q301********************UXe6"}
+  ],
+  "onesignal-rest-api-key-legacy@data-attribute": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"7QAcqK********************xKmT"}
+  ],
+  "onesignal-rest-api-key-legacy@external-bundle": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"82At2D********************OzHI"}
+  ],
+  "onesignal-rest-api-key-legacy@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************NPAI"}
+  ],
+  "onesignal-rest-api-key-legacy@pre-env-dump": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"7gBKBl********************rJ7v"}
+  ],
+  "onesignal-rest-api-key-legacy@sourcemap-comment": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"3zxC5i********************s7LB"}
+  ],
+  "onesignal-rest-api-key-legacy@entity-encoded-attribute": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"03oqYU********************N8en"}
+  ],
+  "onesignal-rest-api-key-legacy@unicode-escaped-script-string": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5yAh07********************19to"}
+  ],
+  "onesignal-rest-api-key-legacy@base64-data-attribute": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"5jvoOm********************OmoK"}
+  ],
+  "onesignal-rest-api-key-legacy@base64-global": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"21r9lj********************CPag"}
+  ],
+  "onesignal-rest-api-key-legacy@url-encoded-data-attribute": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"8bxPcT********************MGKF"}
+  ],
+  "onesignal-rest-api-key-legacy@url-encoded-inline-settings": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2KoeAB********************rzCW"}
+  ],
+  "pusher-app-key@inline-config-object": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"44457d**********9436"}
+  ],
+  "pusher-app-key@window-env": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"492650**********3a25"}
+  ],
+  "pusher-app-key@next-data": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"512652**********31f6"}
+  ],
+  "pusher-app-key@nuxt-payload": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"5d9eb8**********aa51"}
+  ],
+  "pusher-app-key@html-comment": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"522865**********5304"}
+  ],
+  "pusher-app-key@meta-content": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9b7f81**********b822"}
+  ],
+  "pusher-app-key@data-attribute": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"1b7d90**********bc57"}
+  ],
+  "pusher-app-key@external-bundle": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"8a52d1**********19a1"}
+  ],
+  "pusher-app-key@pre-env-dump": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"01dd83**********e26e"}
+  ],
+  "pusher-app-key@sourcemap-comment": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"5a9f89**********1725"}
+  ],
+  "pusher-app-key@entity-encoded-attribute": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"4743fa**********bfe1"}
+  ],
+  "pusher-app-key@unicode-escaped-script-string": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"8efbe5**********0053"}
+  ],
+  "pusher-app-key@base64-data-attribute": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"448c26**********6bd5"}
+  ],
+  "pusher-app-key@base64-global": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"4c9490**********9c61"}
+  ],
+  "pusher-app-key@url-encoded-data-attribute": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"69b665**********6e72"}
+  ],
+  "pusher-app-key@url-encoded-inline-settings": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"1d1673**********6be9"}
+  ],
+  "pusher-app-secret@inline-config-object": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0c48b8**********138f"}
+  ],
+  "pusher-app-secret@window-env": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"99a1bc**********d363"}
+  ],
+  "pusher-app-secret@next-data": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0d1022**********b1f1"}
+  ],
+  "pusher-app-secret@nuxt-payload": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2fbeb6**********4bdc"}
+  ],
+  "pusher-app-secret@html-comment": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"129339**********aa36"}
+  ],
+  "pusher-app-secret@meta-content": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"5c472a**********0568"}
+  ],
+  "pusher-app-secret@data-attribute": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"3f09a8**********de61"}
+  ],
+  "pusher-app-secret@external-bundle": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"300baf**********18e1"}
+  ],
+  "pusher-app-secret@pre-env-dump": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"35e814**********fe3c"}
+  ],
+  "pusher-app-secret@sourcemap-comment": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"31acd7**********09dc"}
+  ],
+  "pusher-app-secret@entity-encoded-attribute": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"05fe03**********6a38"}
+  ],
+  "pusher-app-secret@unicode-escaped-script-string": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8e5a71**********e02e"}
+  ],
+  "pusher-app-secret@base64-data-attribute": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"7d5bc6**********40ab"}
+  ],
+  "pusher-app-secret@base64-global": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"283401**********d6cf"}
+  ],
+  "pusher-app-secret@url-encoded-data-attribute": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"37c90b**********5d7a"}
+  ],
+  "pusher-app-secret@url-encoded-inline-settings": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3ceadc**********8767"}
+  ],
+  "uploadcare-public-key@inline-config-object": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"622629**********f838"}
+  ],
+  "uploadcare-public-key@window-env": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"61c267**********05a0"}
+  ],
+  "uploadcare-public-key@next-data": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"2d75b5**********1d84"}
+  ],
+  "uploadcare-public-key@nuxt-payload": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3236ff**********ae5e"}
+  ],
+  "uploadcare-public-key@html-comment": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"508626**********9af2"}
+  ],
+  "uploadcare-public-key@meta-content": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"81677f**********8851"}
+  ],
+  "uploadcare-public-key@data-attribute": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"2932ec**********67fc"}
+  ],
+  "uploadcare-public-key@external-bundle": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"0a5ebd**********53ce"}
+  ],
+  "uploadcare-public-key@pre-env-dump": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5cd82e**********c4dd"}
+  ],
+  "uploadcare-public-key@sourcemap-comment": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"781217**********f011"}
+  ],
+  "uploadcare-public-key@entity-encoded-attribute": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5a0b78**********7216"}
+  ],
+  "uploadcare-public-key@unicode-escaped-script-string": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"4b1a03**********3e1b"}
+  ],
+  "uploadcare-public-key@base64-data-attribute": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html (base64)","masked":"85f88a**********b6c6"}
+  ],
+  "uploadcare-public-key@base64-global": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script (base64)","masked":"3f0f51**********0818"}
+  ],
+  "uploadcare-public-key@url-encoded-data-attribute": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"36c840**********bf53"}
+  ],
+  "uploadcare-public-key@url-encoded-inline-settings": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6b8721**********c01f"}
+  ],
+  "uploadcare-secret-key@inline-config-object": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6f0f48**********1d43"}
+  ],
+  "uploadcare-secret-key@window-env": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"57f0a2**********4411"}
+  ],
+  "uploadcare-secret-key@next-data": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"07ca90**********be7c"}
+  ],
+  "uploadcare-secret-key@nuxt-payload": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5ebce1**********501f"}
+  ],
+  "uploadcare-secret-key@html-comment": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"40e0e7**********26bf"}
+  ],
+  "uploadcare-secret-key@meta-content": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"01bc22**********8602"}
+  ],
+  "uploadcare-secret-key@data-attribute": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"0773bb**********64a8"}
+  ],
+  "uploadcare-secret-key@external-bundle": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"10bbfa**********2d47"}
+  ],
+  "uploadcare-secret-key@pre-env-dump": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"95f103**********74f5"}
+  ],
+  "uploadcare-secret-key@sourcemap-comment": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"63a685**********2cc0"}
+  ],
+  "uploadcare-secret-key@entity-encoded-attribute": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5fa386**********07bd"}
+  ],
+  "uploadcare-secret-key@unicode-escaped-script-string": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6b0469**********7a45"}
+  ],
+  "uploadcare-secret-key@base64-data-attribute": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"7e23b6**********e084"}
+  ],
+  "uploadcare-secret-key@base64-global": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"1068cd**********cd54"}
+  ],
+  "uploadcare-secret-key@url-encoded-data-attribute": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"32c51a**********9770"}
+  ],
+  "uploadcare-secret-key@url-encoded-inline-settings": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"1e6432**********d66f"}
+  ],
+  "unsplash-access-key@inline-config-object": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"61AcaI********************JHHp"}
+  ],
+  "unsplash-access-key@window-env": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4AQia5********************WQda"}
+  ],
+  "unsplash-access-key@next-data": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8Eabfv********************Cmiu"}
+  ],
+  "unsplash-access-key@nuxt-payload": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0wkEvR********************zomC"}
+  ],
+  "unsplash-access-key@html-comment": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"4PqVfN********************cmgJ"}
+  ],
+  "unsplash-access-key@meta-content": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"90Xf2p********************3N5f"}
+  ],
+  "unsplash-access-key@data-attribute": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"9LfV0D********************6mAr"}
+  ],
+  "unsplash-access-key@external-bundle": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"2tKOgu********************CHfx"}
+  ],
+  "unsplash-access-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************TG9i"}
+  ],
+  "unsplash-access-key@pre-env-dump": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"0E6ahI********************nhv2"}
+  ],
+  "unsplash-access-key@sourcemap-comment": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"9Xz72a********************feI1"}
+  ],
+  "unsplash-access-key@entity-encoded-attribute": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8xmWIB********************hAZ4"}
+  ],
+  "unsplash-access-key@unicode-escaped-script-string": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"3hkvEv********************0rxZ"}
+  ],
+  "unsplash-access-key@base64-data-attribute": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"8dtaDe********************xm9L"}
+  ],
+  "unsplash-access-key@base64-global": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"61ByuP********************OwiT"}
+  ],
+  "unsplash-access-key@url-encoded-data-attribute": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"2xIOu8********************gz7T"}
+  ],
+  "unsplash-access-key@url-encoded-inline-settings": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2Jiu1h********************3r0G"}
+  ],
+  "cloudflare-global-api-key@inline-config-object": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0b5666********************ea5d"}
+  ],
+  "cloudflare-global-api-key@window-env": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5124de********************aac1"}
+  ],
+  "cloudflare-global-api-key@next-data": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"57f7c5********************58ce"}
+  ],
+  "cloudflare-global-api-key@nuxt-payload": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7a5d45********************5eaf"}
+  ],
+  "cloudflare-global-api-key@html-comment": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"03222a********************3d32"}
+  ],
+  "cloudflare-global-api-key@meta-content": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"40728e********************debc"}
+  ],
+  "cloudflare-global-api-key@data-attribute": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"9a0d36********************1098"}
+  ],
+  "cloudflare-global-api-key@external-bundle": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"875ea4********************0f55"}
+  ],
+  "cloudflare-global-api-key@fetch-bearer-header": [
+    {"type":"Bearer Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"Bearer********************84e2"}
+  ],
+  "cloudflare-global-api-key@pre-env-dump": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"3e292e********************3ffb"}
+  ],
+  "cloudflare-global-api-key@sourcemap-comment": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"17fa15********************c413"}
+  ],
+  "cloudflare-global-api-key@entity-encoded-attribute": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"61da79********************990e"}
+  ],
+  "cloudflare-global-api-key@unicode-escaped-script-string": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8e0e2c********************3325"}
+  ],
+  "cloudflare-global-api-key@base64-data-attribute": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html (base64)","masked":"337d52********************0a55"}
+  ],
+  "cloudflare-global-api-key@base64-global": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script (base64)","masked":"4956c3********************d64f"}
+  ],
+  "cloudflare-global-api-key@url-encoded-data-attribute": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"016e40********************20d4"}
+  ],
+  "cloudflare-global-api-key@url-encoded-inline-settings": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2d78be********************c7b1"}
   ],
   "algolia-secured-api-key@inline-config-object": [
     {"type":"Algolia Secured API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"MTE2OT********************OQ==","extra":{"keyType":"secured","restrictIndices":"products_lgyu","validUntil":"1900449999"}}
@@ -5833,9 +7567,11 @@
   "neg:stripe-publishable-live": [
     {"type":"Stripe Publishable Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_liv********************5b8e","extra":{"kind":"publishable","mode":"live"}}
   ],
-  "neg:stripe-publishable-test": [],
+  "neg:stripe-publishable-test": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************q905","extra":{"kind":"publishable","mode":"test"}}
+  ],
   "neg:stripe-publishable-test-under-apikey": [
-    {"type":"Generic API Key Assignment","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"apiKey********************qfb\""}
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************sqfb","extra":{"kind":"publishable","mode":"test"}}
   ],
   "neg:google-maps-browser-key": [
     {"type":"Google API Key (browser)","confidence":"high","publicByDesign":true,"location":"html","masked":"AIzauK********************unan"}
@@ -6119,7 +7855,7 @@
     {"type":"Mistral API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"on7813********************6447"}
   ],
   "probe:naming-attribute-after-the-value-in-the-same-tag": [
-    {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"6d7a26********************6435","extra":{"keyType":"admin-or-search-shaped","restrictions":"unknown"}}
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"6d7a26********************6435"}
   ],
   "probe:keyed-identifier-unquoted-is-still-dropped": [],
   "probe:digitalocean-spaces-eats-new-relic": [
@@ -6244,5 +7980,36 @@
     {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ghp_0F********************zFwS","extra":{"checksum":"valid"}},
     {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ghp_0F********************zFwS","extra":{"checksum":"valid"}},
     {"type":"GitHub Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"ghp_0F********************zFwS","extra":{"checksum":"valid"}}
+  ],
+  "probe:calendly-token-inline": [
+    {"type":"Calendly API Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"eyJhbG********************6MYI","extra":{"issuer":"https://auth.calendly.com","expiresAt":"2033-05-18T03:33:20.000Z","expired":false,"provider":"Calendly"}}
+  ],
+  "probe:calendly-token-external-bundle": [
+    {"type":"Calendly API Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"eyJhbG********************jtbs","extra":{"issuer":"https://auth.calendly.com","provider":"Calendly"}}
+  ],
+  "probe:calendly-issuer-look-alike-is-a-plain-jwt": [
+    {"type":"JSON Web Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"eyJhbG********************Aayo","extra":{"issuer":"https://auth.calendly.com.evil.test"}}
+  ],
+  "probe:azure-sas-read-one-blob-is-info": [
+    {"type":"Azure SAS Token","confidence":"info","publicByDesign":false,"location":"html","masked":"sp=r&s********************w%3D","extra":{"permissions":"r","resource":"b","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"read-one-object","hint":"a read-only grant on one blob or file, valid until expiresAt: a storage service issues these so the browser can fetch the object"}}
+  ],
+  "probe:azure-sas-expired-is-info": [
+    {"type":"Azure SAS Token (expired)","confidence":"info","publicByDesign":false,"location":"inline-script","masked":"sv=202********************o%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2021-01-01T00:00:00.000Z","expired":true}}
+  ],
+  "probe:azure-sas-container-read-is-medium": [
+    {"type":"Azure SAS Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"sv=202********************0%3D","extra":{"permissions":"rl","resource":"c","expiresAt":"2031-01-01T00:00:00.000Z","expired":false}}
+  ],
+  "probe:azure-sas-without-expiry-does-not-fire": [],
+  "probe:pusher-key-and-secret-side-by-side": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"617a10**********cbaa"},
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"559ee6**********93ae"}
+  ],
+  "probe:uploadcare-public-key-attribute": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9ba8d5**********8895"}
+  ],
+  "probe:algolia-admin-key-is-not-search-only": [
+    {"type":"Generic API Key Assignment","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ApiKey********************4a4\"","extra":{"keyKind":"admin-named","hint":"the key name says admin or master: an admin key can write and delete an index, so a copy in a script that ships to browsers lets anyone change it"}},
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"5f7cd4********************6b20"},
+    {"type":"Algolia API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"93405b********************7e7b","extra":{"keyType":"admin-or-search-shaped","restrictions":"unknown"}}
   ]
 }
