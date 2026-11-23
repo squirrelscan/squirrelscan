@@ -5958,15 +5958,124 @@ function noteOrigin(
 
 /** The `meta` for an item's places. Only URLs and counts, never the value. */
 function occurrencesMeta(
-  entry: ValueOrigins | undefined
+  entry: ValueOrigins | undefined,
+  redact: (url: string) => string
 ): Record<string, unknown> {
   if (!entry || entry.occurrences.size === 0) return {};
   return {
-    occurrences: [...entry.occurrences.values()],
+    occurrences: [...entry.occurrences.values()].map((o) => ({
+      ...o,
+      ...(o.page !== undefined ? { page: redact(o.page) } : {}),
+      ...(o.script !== undefined ? { script: redact(o.script) } : {}),
+    })),
     ...(entry.occurrencesTruncated || entry.pagesTruncated
       ? { occurrencesTruncated: true }
       : {}),
   };
+}
+
+/**
+ * A secret found in a URL, shown with only a short prefix and suffix around an ellipsis (#2270): `sk_liv…tU7x`. It keeps
+ * no more of the value than the item id's mask (see maskSecret) does.
+ */
+export function maskUrlSecret(value: string): string {
+  if (value.length <= 12)
+    return `${value.slice(0, Math.min(4, value.length - 1))}…`;
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+// `scheme://user:` and the password up to the `@` that ends the authority.
+const USERINFO_PASSWORD_RE = /^([a-z][a-z0-9+.-]*:\/\/[^/?#@:]*:)([^/?#@]*)@/i;
+
+/**
+ * Percent-decoded, or the text as it was when it is not valid percent-encoding. `plusIsSpace` reads `+` the way a form
+ * query does; without it a literal `+` stays, as it does in a base64 secret.
+ */
+function decodeUrlPart(part: string, plusIsSpace = true): string {
+  try {
+    return decodeURIComponent(plusIsSpace ? part.replace(/\+/g, " ") : part);
+  } catch {
+    return part;
+  }
+}
+
+/** The secret each finding in `text` points at: the matched value without the key or quotes a generic match carries. */
+function secretsIn(text: string, into: Set<string>): void {
+  if (text.length === 0) return;
+  for (const s of scanContent(text, "external-script")) {
+    const at = text.slice(s.offset, s.offset + s.length);
+    const secret =
+      at.length === s.length && at.length > 0 ? at : quotedBodyOf(s.value);
+    if (secret.length > 0) into.add(secret);
+  }
+}
+
+/** `k=v` pairs as the scanner reads an assignment: the value quoted, so the generic key patterns apply. */
+function scanPairs(raw: string, into: Set<string>): void {
+  for (const pair of raw.split(/[&;]/)) {
+    if (pair.length === 0) continue;
+    const eq = pair.indexOf("=");
+    const rawKey = eq < 0 ? "" : pair.slice(0, eq);
+    const rawValue = eq < 0 ? pair : pair.slice(eq + 1);
+    // A `+` is a space in a form query but a literal character in a base64 secret (an AWS secret key often has one),
+    // so the value is read both ways and a secret either reading finds is masked (#2270).
+    const values = new Set([
+      decodeUrlPart(rawValue),
+      decodeUrlPart(rawValue, false),
+    ]);
+    const key = decodeUrlPart(rawKey);
+    for (const value of values) {
+      secretsIn(value, into);
+      if (key.length > 0 && !/["'\s]/.test(key))
+        secretsIn(`${key}="${value.replace(/"/g, "")}"`, into);
+    }
+  }
+}
+
+/**
+ * `url` with every secret in it masked (#2270): a query or fragment value, a path segment or the password of its
+ * credentials that the rule's own detector patterns call a secret becomes `prefix…suffix`. A URL with no secret in it
+ * comes back unchanged, character for character. Text that is not a URL is scanned whole.
+ */
+export function redactSecretsInUrl(url: string): string {
+  const secrets = new Set<string>();
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(url);
+  } catch {
+    parsed = null;
+  }
+  if (parsed) {
+    secretsIn(decodeUrlPart(parsed.username), secrets);
+    for (const segment of parsed.pathname.split("/"))
+      secretsIn(decodeUrlPart(segment), secrets);
+    if (parsed.search.length > 1) scanPairs(parsed.search.slice(1), secrets);
+    if (parsed.hash.length > 1) scanPairs(parsed.hash.slice(1), secrets);
+  } else {
+    secretsIn(decodeUrlPart(url), secrets);
+  }
+  // A login's password is a credential whatever its shape, and may be short, so it is masked where it sits, never by
+  // matching its text elsewhere in the URL.
+  let out = parsed?.password
+    ? url.replace(
+        USERINFO_PASSWORD_RE,
+        (_whole, head: string, password: string) =>
+          `${head}${maskUrlSecret(decodeUrlPart(password))}@`
+      )
+    : url;
+  if (secrets.size === 0) return out;
+  // Longest first, so a secret that contains another is masked whole.
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) {
+    const mask = maskUrlSecret(secret);
+    const forms = new Set([
+      secret,
+      encodeURIComponent(secret),
+      encodeURI(secret),
+      encodeURIComponent(secret).replace(/%20/g, "+"),
+    ]);
+    for (const form of forms) out = out.split(form).join(mask);
+  }
+  return out;
 }
 
 export const leakedSecretsRule: Rule = {
@@ -6024,6 +6133,17 @@ export const leakedSecretsRule: Rule = {
     // Where each value was seen (#1755): the dedupe below keeps one record per value, so the pages and scripts it sat on are
     // collected here, bounded, and read back by `item`. Pages a script loads count as pages of the finding in that script.
     const origins = new Map<string, ValueOrigins>();
+    // Every URL the result shows goes through this (#2270): a secret in a page or script URL is masked there too, not
+    // repeated in plain text next to the finding that warns about it. One scan per distinct URL.
+    const redactedUrls = new Map<string, string>();
+    const redact = (url: string): string => {
+      let shown = redactedUrls.get(url);
+      if (shown === undefined) {
+        shown = redactSecretsInUrl(url);
+        redactedUrls.set(url, shown);
+      }
+      return shown;
+    };
     const append = (
       found: readonly LeakedSecret[],
       page: string,
@@ -6193,14 +6313,14 @@ export const leakedSecretsRule: Rule = {
     // `meta`, which the JSON, LLM and XML renderers carry through verbatim.
     const item = (s: LeakedSecret): CheckItem => ({
       id: `${s.type}: ${maskSecret(s.value)}`,
-      label: `Found in ${s.location}${s.sourceUrl ? ` (${s.sourceUrl})` : ""}`,
+      label: `Found in ${s.location}${s.sourceUrl ? ` (${redact(s.sourceUrl)})` : ""}`,
       // Each page the value sat on, whether in its HTML or inline script or through a script it loads.
       ...(origins.get(s.value)?.pages.size
-        ? { sourcePages: [...origins.get(s.value)!.pages] }
+        ? { sourcePages: [...origins.get(s.value)!.pages].map(redact) }
         : {}),
       meta: {
         ...(s.extra ?? {}),
-        ...occurrencesMeta(origins.get(s.value)),
+        ...occurrencesMeta(origins.get(s.value), redact),
         length: s.length,
         offset: s.offset,
         ...(s.context !== undefined ? { context: s.context } : {}),
@@ -6297,7 +6417,7 @@ export const leakedSecretsRule: Rule = {
           atLeast: true,
         },
         items: omittedPages.slice(0, 20).map((p) => ({
-          id: p.url,
+          id: redact(p.url),
           label: `${p.omitted} finding(s) not kept`,
         })),
       });
@@ -6326,7 +6446,7 @@ export const leakedSecretsRule: Rule = {
         message: `${unscanned.length} page(s) were not fully scanned for secrets because the scan exceeded its time budget (what was found before it stopped is kept), so no finding on them is not a clean result`,
         items: unscanned
           .slice(0, 20)
-          .map((p) => ({ id: p.url, label: "Not fully scanned" })),
+          .map((p) => ({ id: redact(p.url), label: "Not fully scanned" })),
       });
     }
 
@@ -6344,9 +6464,12 @@ export const leakedSecretsRule: Rule = {
         message: `${parts.join(" and ")}, so a secret in them would not be found: no finding there is not a clean result`,
         details: { unfetched: named, capDropped },
         items: [
-          ...unfetchedScripts.map((u) => ({ id: u.url, label: u.reason })),
+          ...unfetchedScripts.map((u) => ({
+            id: redact(u.url),
+            label: u.reason,
+          })),
           ...heldBackUrls.map((url) => ({
-            id: url,
+            id: redact(url),
             label: "not scanned (script limit)",
           })),
         ].slice(0, 20),
