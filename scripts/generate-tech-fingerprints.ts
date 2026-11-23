@@ -5,7 +5,7 @@
 //
 // Input:  packages/tech-detect/data/research-fingerprints.json
 //           [{ category, fingerprints: [{ id, name, category, website, icon,
-//              detectors: [{ type, name?, pattern?, selector?, caseSensitive? }],
+//              detectors: [{ type, name?, pattern?, tags?, attrs?, caseSensitive? }],
 //              confidence?, versionPattern? }] }]
 // Output: packages/tech-detect/src/fingerprints/generated.ts
 //           export const GENERATED_FINGERPRINTS: TechFingerprint[] = [...]
@@ -44,7 +44,7 @@ const VALID_CATEGORIES = new Set([
   "other",
 ]);
 const DETECTOR_TYPES = new Set([
-  "header", "meta", "script-url", "script-content", "html", "url-path", "url-host",
+  "header", "meta", "script-url", "script-content", "html", "url-path", "url-host", "tag-attr",
 ]);
 
 interface RawDetector {
@@ -52,6 +52,8 @@ interface RawDetector {
   name?: string;
   pattern?: string;
   selector?: string;
+  tags?: string[];
+  attrs?: string[];
   caseSensitive?: boolean;
 }
 interface RawFingerprint {
@@ -90,6 +92,8 @@ function compiles(source: string, flags: string): boolean {
 function regexLiteral(source: string, caseSensitive?: boolean): string {
   // Emit `new RegExp(<json>, <flags>)` — robust against literal-slash escaping.
   const flags = caseSensitive ? "" : "i";
+  // The match-any-value pattern is emitted as a literal.
+  if (source === "^" && flags === "") return "/^/";
   return `new RegExp(${JSON.stringify(source)}, ${JSON.stringify(flags)})`;
 }
 
@@ -98,6 +102,11 @@ function sanitizeDetector(d: RawDetector): string | null {
   if (d.type === "header" || d.type === "meta") {
     if (!d.name || !d.pattern || !compiles(d.pattern, "i")) return null;
     return `{ type: ${JSON.stringify(d.type)}, name: ${JSON.stringify(d.name)}, pattern: ${regexLiteral(d.pattern, d.caseSensitive)} }`;
+  }
+  if (d.type === "tag-attr") {
+    if (!d.pattern || !compiles(d.pattern, d.caseSensitive ? "" : "i")) return null;
+    if (!d.tags?.length || !d.attrs?.length) return null;
+    return `{ type: "tag-attr", tags: ${JSON.stringify(d.tags)}, attrs: ${JSON.stringify(d.attrs)}, pattern: ${regexLiteral(d.pattern, d.caseSensitive)} }`;
   }
   if (!d.pattern || !compiles(d.pattern, "i")) return null;
   return `{ type: ${JSON.stringify(d.type)}, pattern: ${regexLiteral(d.pattern, d.caseSensitive)} }`;

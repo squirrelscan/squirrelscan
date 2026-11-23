@@ -15,6 +15,7 @@ npm/bin/squirrel.exe
 # Local audit state and reports
 .squirrel/
 data/
+!packages/tech-detect/data/
 # Bundled rule data is source, not local state (see packages/rules/src/content/data/README.md).
 !packages/rules/src/content/data/
 *.sqlite
