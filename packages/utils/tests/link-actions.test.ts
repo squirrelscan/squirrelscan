@@ -111,6 +111,14 @@ describe("maskLinkTokens", () => {
     for (const input of ["", "   ", "/a/b", "./a", "?q=1", "//", "a b.example"])
       expect(maskLinkTokens(input)).toBe("…");
   });
+
+  test("a scheme-less token or id is not taken for a host", () => {
+    expect(maskLinkTokens("0123456789abcdef0123456789abcdef")).toBe("…");
+    expect(maskLinkTokens("a1b2c3d4e5")).toBe("…");
+    expect(maskLinkTokens("a1b2c3d4e5/profile")).toBe("…");
+    expect(maskLinkTokens("//0123456789abcdef0123.example.org/a")).toBe("…");
+    expect(maskLinkTokens("cdn.example.org/a")).toBe("cdn.example.org/a");
+  });
 });
 
 describe("the rules moved here unchanged", () => {

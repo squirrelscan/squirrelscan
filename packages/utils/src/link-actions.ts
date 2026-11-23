@@ -576,6 +576,13 @@ export function maskLinkTokens(url: string): string {
   }
   const secret = (piece: string) =>
     looksLikeAToken(piece) || looksLikeAnId(piece) || containsAnEmail(piece);
+  // A scheme-less host is a guess: `a1b2c3d4e5` or a bare hex token parses
+  // as one, so a host with a label that looks secret is not shown (#2281).
+  if (
+    prefix !== `${parsed.protocol}//` &&
+    parsed.hostname.split(".").some(secret)
+  )
+    return "…";
   const path = parsed.pathname
     .split("/")
     .map((segment) => {
