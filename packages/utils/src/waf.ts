@@ -8,6 +8,7 @@ export {
   detectWafChallengePage,
   inspectWafChallengePage,
   classifyWafResponse,
+  detectSoftChallengeEntry,
   WAF_BLOCK_STATUS_CODES,
   WAF_CHALLENGE_STATUS_CODES,
   CHALLENGE_MARKUP_PATTERNS,

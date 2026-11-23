@@ -333,6 +333,8 @@ https://example.com • Site blocked the crawler (bot protection / auth / rate l
 
 `squirrel audit` exits with code `3` for this, so a script can tell a refused front door from an unreachable site (`5`) and a tripped [`--fail-on`](/cli/audit#gate-ci-on-audit-results) gate (`2`). The JSON report carries `status: "blocked"`, `statusReasonCode: "http_4xx"` and a `wafBlocked.seed` object with `code` (`blocked_by_<provider>`, or `blocked_by_waf` when no provider was named), `provider`, `signal`, `status` and `url`.
 
+**A soft challenge on a one-page crawl.** Some interstitials are served with a 2xx status and name no provider. When the crawl fetched exactly one page, the audited page, and it is a tiny document that either has no doctype and no `<html>` element or carries generic challenge wording ("checking your browser", "verifying you are human", "enable JavaScript and cookies to continue"), the audit is `blocked` the same way. The `wafBlocked.seed` signal says the only page fetched looks like a bot challenge, not the site, and `code` is `blocked_by_waf`. A valid small page with a doctype and `<html>` is still scored, a JavaScript-only page shell whose `<noscript>` notice asks for JavaScript is not treated as a challenge, and a crawl that reached more than one page is never treated this way.
+
 **Other pages.** A blocked page that is not the audited one is never audited as the site: it is left out of every rule and of the score, counted, and listed with its provider. The report says `N of M pages blocked by <provider>`, and the JSON report lists them under `wafBlocked.pages` (up to 50, with `wafBlocked.total` counting all of them).
 
 **What is recognised.**

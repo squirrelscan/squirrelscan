@@ -19,6 +19,8 @@ export {
 } from "./detect";
 export { detectWafChallengePage, inspectWafChallengePage } from "./challenge";
 export { classifyWafResponse } from "./classify";
+export { detectSoftChallengeEntry } from "./soft-challenge";
+export type { SoftChallengeResult } from "./soft-challenge";
 export {
   getWafProviderName,
   getWafProviderIcon,

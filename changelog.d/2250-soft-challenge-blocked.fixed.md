@@ -1,0 +1,1 @@
+- A crawl whose only page is a 2xx bot-challenge or empty-shell document (no doctype or `<html>`, or generic "checking your browser" wording) is now reported as `blocked` with no score, the same as a hard block, instead of a normal-looking health score (#2250).
