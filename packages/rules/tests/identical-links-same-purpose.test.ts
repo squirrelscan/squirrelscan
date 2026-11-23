@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult, RuleContext } from "../src/types";
 
 import { identicalLinksSamePurposeRule } from "../src/a11y/identical-links-same-purpose";
+import { labelContentNameMismatchRule } from "../src/a11y/label-content-name-mismatch";
 
 async function run(body: string): Promise<CheckResult | undefined> {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Shop</title></head><body>${body}</body></html>`;
@@ -126,8 +127,8 @@ describe("a11y/identical-links-same-purpose accessible name (#1875)", () => {
 
   test("identical accessible names with different hrefs still warn", async () => {
     const result = await run(`
-      <a href="/a" aria-label="Read more">One</a>
-      <a href="/b" aria-label="Read more">Two</a>
+      <a href="/a" aria-label="Read more">Read</a>
+      <a href="/b" aria-label="Read more">Read</a>
     `);
     expect(result?.status).toBe("warn");
   });
@@ -143,9 +144,46 @@ describe("a11y/identical-links-same-purpose accessible name (#1875)", () => {
 
   test("the reported item uses the accessible name", async () => {
     const result = await run(`
-      <a href="/a" aria-label="Buy now">Shop</a>
-      <a href="/b" aria-label="Buy now">Store</a>
+      <a href="/a" aria-label="Buy now">Buy</a>
+      <a href="/b" aria-label="Buy now">Buy</a>
     `);
     expect(result?.items?.[0]?.id).toBe('"buy now" → 2 different URLs');
+  });
+});
+
+describe("a11y/identical-links-same-purpose and label-content-name-mismatch (#2226)", () => {
+  test("links whose visible text is missing from the aria-label are left to label-content-name-mismatch", async () => {
+    const body = `
+      <a href="/a" aria-label="read the story">Cellmark</a>
+      <a href="/b" aria-label="read the story">Cellmark</a>
+    `;
+    const result = await run(body);
+    expect(result?.status).toBe("pass");
+    expect(result?.items).toBeUndefined();
+  });
+
+  test("the same link is flagged by label-content-name-mismatch exactly once", async () => {
+    const html = `<!doctype html><html lang="en"><body><a href="/a" aria-label="read the story">Cellmark</a><a href="/b" aria-label="read the story">Cellmark</a></body></html>`;
+    const url = "https://example.com/";
+    const ctx = {
+      page: { url, html, statusCode: 200, loadTime: 0, headers: {} },
+      parsed: parsePage(html, url),
+      options: {},
+    } as unknown as RuleContext;
+    const mismatch = await labelContentNameMismatchRule.run(ctx);
+    const identical = await identicalLinksSamePurposeRule.run(ctx);
+    const failing = [...mismatch.checks, ...identical.checks].filter(
+      (c) => c.status === "fail" || c.status === "warn"
+    );
+    expect(failing).toHaveLength(1);
+    expect(failing[0]?.name).toBe("label-content-name-mismatch");
+  });
+
+  test("a visible text inside the accessible name with different targets still warns", async () => {
+    const result = await run(`
+      <a href="/a" aria-label="Read more about plans">Read more</a>
+      <a href="/b" aria-label="Read more about plans">Read more</a>
+    `);
+    expect(result?.status).toBe("warn");
   });
 });
