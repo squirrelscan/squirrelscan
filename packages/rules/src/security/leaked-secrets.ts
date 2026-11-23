@@ -5987,10 +5987,13 @@ export function maskUrlSecret(value: string): string {
 // `scheme://user:` and the password up to the `@` that ends the authority.
 const USERINFO_PASSWORD_RE = /^([a-z][a-z0-9+.-]*:\/\/[^/?#@:]*:)([^/?#@]*)@/i;
 
-/** Percent-decoded, or the text as it was when it is not valid percent-encoding. */
-function decodeUrlPart(part: string): string {
+/**
+ * Percent-decoded, or the text as it was when it is not valid percent-encoding. `plusIsSpace` reads `+` the way a form
+ * query does; without it a literal `+` stays, as it does in a base64 secret.
+ */
+function decodeUrlPart(part: string, plusIsSpace = true): string {
   try {
-    return decodeURIComponent(part.replace(/\+/g, " "));
+    return decodeURIComponent(plusIsSpace ? part.replace(/\+/g, " ") : part);
   } catch {
     return part;
   }
@@ -6012,11 +6015,20 @@ function scanPairs(raw: string, into: Set<string>): void {
   for (const pair of raw.split(/[&;]/)) {
     if (pair.length === 0) continue;
     const eq = pair.indexOf("=");
-    const key = eq < 0 ? "" : decodeUrlPart(pair.slice(0, eq));
-    const value = decodeUrlPart(eq < 0 ? pair : pair.slice(eq + 1));
-    secretsIn(value, into);
-    if (key.length > 0 && !/["'\s]/.test(key))
-      secretsIn(`${key}="${value.replace(/"/g, "")}"`, into);
+    const rawKey = eq < 0 ? "" : pair.slice(0, eq);
+    const rawValue = eq < 0 ? pair : pair.slice(eq + 1);
+    // A `+` is a space in a form query but a literal character in a base64 secret (an AWS secret key often has one),
+    // so the value is read both ways and a secret either reading finds is masked (#2270).
+    const values = new Set([
+      decodeUrlPart(rawValue),
+      decodeUrlPart(rawValue, false),
+    ]);
+    const key = decodeUrlPart(rawKey);
+    for (const value of values) {
+      secretsIn(value, into);
+      if (key.length > 0 && !/["'\s]/.test(key))
+        secretsIn(`${key}="${value.replace(/"/g, "")}"`, into);
+    }
   }
 }
 

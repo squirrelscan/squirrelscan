@@ -129,6 +129,18 @@ describe("leaked-secrets redacts secrets in the URLs it names (#2270)", () => {
       redactSecretsInUrl(`${BASE}/cb#access_token=${generic}&token_type=bearer`)
     ).toBe(`${BASE}/cb#access_token=Zq8vN3…c6Md&token_type=bearer`);
   });
+
+  test("a secret with a literal + in it (base64, as an AWS secret key) is masked whole, in a query and a fragment", () => {
+    const keyId = ["AKIA", "IOSFODNN7Q2B3C4D"].join("");
+    const secret = ["wJalrXUtnFEMI", "K7MDENG+bPxRfiCYzQ9kLm3nOp"].join("/");
+    const query = `id=${keyId}&aws_secret_access_key=${secret}`;
+    expect(redactSecretsInUrl(`${BASE}/page?${query}`)).toBe(
+      `${BASE}/page?id=AKIAIO…3C4D&aws_secret_access_key=wJalrX…3nOp`
+    );
+    expect(redactSecretsInUrl(`${BASE}/page#${query}`)).toBe(
+      `${BASE}/page#id=AKIAIO…3C4D&aws_secret_access_key=wJalrX…3nOp`
+    );
+  });
 });
 
 describe("the password of a login in a URL (#2270)", () => {
