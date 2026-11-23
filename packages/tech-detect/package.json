@@ -19,6 +19,7 @@
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",
+    "generate:fingerprints": "bun run ../../scripts/generate-tech-fingerprints.ts",
     "lint": "oxlint -c oxlint.config.mjs src/ tests/",
     "format": "oxfmt -c ../../.oxfmtrc.jsonc src/ tests/ --write",
     "format:check": "oxfmt -c ../../.oxfmtrc.jsonc src/ tests/ --check"
