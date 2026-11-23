@@ -1,0 +1,1 @@
+- `squirrel auth login` and `squirrel setup` (when signed in) now end with a plain-text pointer to the dashboard at https://app.squirrelscan.com to finish onboarding (#4976)

@@ -7,11 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { agentSetupLines, dashboardHandoffLines } from "@/cli/agent-setup";
-import {
-  AGENT_SETUP_PROMPT,
-  AGENT_SETUP_URL,
-  DASHBOARD_URL,
-} from "@/constants";
+import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
 import {
   AUTH_SUCCESS_PAGE_SCRIPT,
   localApiHint,
@@ -567,8 +563,9 @@ describe("auth login — agent setup in the terminal (#180)", () => {
 describe("auth login: dashboard onboarding hand-off (repo#4976)", () => {
   const output = dashboardHandoffLines().join("\n");
 
-  test("points at the dashboard URL constant", () => {
-    expect(output).toContain(DASHBOARD_URL);
+  // Literal, not DASHBOARD_URL: a changed or broken constant must fail here.
+  test("points at the dashboard at app.squirrelscan.com", () => {
+    expect(output).toContain("https://app.squirrelscan.com");
   });
 
   test("is plain text with no prompt to answer", () => {
