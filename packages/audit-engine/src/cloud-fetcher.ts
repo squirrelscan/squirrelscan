@@ -38,7 +38,6 @@
 // cancels the SUBMIT: the server debits on submit, so the submit runs to its
 // own bound and the debit is recorded whether or not anyone still wants the page.
 
-import { normalizeRenderLayout } from "@squirrelscan/core-contracts";
 import type {
   RenderChargeLine,
   RenderCspViolation,
@@ -53,6 +52,7 @@ import {
   CloudClientError,
   type CloudServicesClient,
 } from "@squirrelscan/cloud-client";
+import { normalizeRenderLayout } from "@squirrelscan/core-contracts";
 import {
   MAX_CSP_VIOLATIONS_PER_PAGE,
   MAX_RENDERED_REQUESTS_PER_PAGE,

@@ -65,20 +65,36 @@ export const RENDER_LAYOUT_LIMITS = {
   maxBytes: 32 * 1024,
 } as const;
 
-const LISTS = ["overflowing", "clippedText", "overlapping", "smallTapTargets"] as const;
+const LISTS = [
+  "overflowing",
+  "clippedText",
+  "overlapping",
+  "smallTapTargets",
+] as const;
 
-const int = (n: unknown): number => (typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0);
+const int = (n: unknown): number =>
+  typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
 
-const cut = (s: unknown, max: number): string => (typeof s === "string" ? s.slice(0, max) : "");
+const cut = (s: unknown, max: number): string =>
+  typeof s === "string" ? s.slice(0, max) : "";
 
 function rect(r: Partial<RenderLayoutRect> | undefined): RenderLayoutRect {
-  return { x: int(r?.x), y: int(r?.y), width: int(r?.width), height: int(r?.height) };
+  return {
+    x: int(r?.x),
+    y: int(r?.y),
+    width: int(r?.width),
+    height: int(r?.height),
+  };
 }
 
 function clampEntry<T extends RenderLayoutElement>(e: T): T {
-  const out: Record<string, unknown> = { selector: cut(e.selector, RENDER_LAYOUT_LIMITS.selectorChars), rect: rect(e.rect) };
+  const out: Record<string, unknown> = {
+    selector: cut(e.selector, RENDER_LAYOUT_LIMITS.selectorChars),
+    rect: rect(e.rect),
+  };
   if ("clippedPx" in e) out.clippedPx = int(e.clippedPx);
-  if ("overlaps" in e) out.overlaps = cut(e.overlaps, RENDER_LAYOUT_LIMITS.selectorChars);
+  if ("overlaps" in e)
+    out.overlaps = cut(e.overlaps, RENDER_LAYOUT_LIMITS.selectorChars);
   return out as unknown as T;
 }
 
@@ -87,8 +103,11 @@ function clampEntry<T extends RenderLayoutElement>(e: T): T {
  * service and a client both run it, so an oversized or sloppy payload degrades to a smaller one. Returns
  * undefined only when the input is not an object (so an older result stays free of a `layout` field).
  */
-export function normalizeRenderLayout(input: unknown): RenderLayout | undefined {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+export function normalizeRenderLayout(
+  input: unknown
+): RenderLayout | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    return undefined;
   const raw = input as Partial<Record<keyof RenderLayout, unknown>>;
   let truncated = raw.truncated === true;
   const layout: RenderLayout = {
@@ -102,14 +121,23 @@ export function normalizeRenderLayout(input: unknown): RenderLayout | undefined 
     textDigest: cut(raw.textDigest, RENDER_LAYOUT_LIMITS.digestChars),
   };
   for (const key of LISTS) {
-    const list = Array.isArray(raw[key]) ? (raw[key] as RenderLayoutElement[]) : [];
-    const kept = list.filter((e) => e && typeof e === "object").slice(0, RENDER_LAYOUT_LIMITS.maxPerList);
+    const list = Array.isArray(raw[key])
+      ? (raw[key] as RenderLayoutElement[])
+      : [];
+    const kept = list
+      .filter((e) => e && typeof e === "object")
+      .slice(0, RENDER_LAYOUT_LIMITS.maxPerList);
     if (kept.length < list.length) truncated = true;
     (layout[key] as RenderLayoutElement[]) = kept.map(clampEntry);
   }
   // Byte cap: drop entries from the tail of the longest list until the payload fits.
-  while (new TextEncoder().encode(JSON.stringify(layout)).length > RENDER_LAYOUT_LIMITS.maxBytes) {
-    const longest = LISTS.reduce((a, b) => (layout[b].length > layout[a].length ? b : a));
+  while (
+    new TextEncoder().encode(JSON.stringify(layout)).length >
+    RENDER_LAYOUT_LIMITS.maxBytes
+  ) {
+    const longest = LISTS.reduce((a, b) =>
+      layout[b].length > layout[a].length ? b : a
+    );
     if (layout[longest].length === 0) break;
     layout[longest].pop();
     truncated = true;
