@@ -4,6 +4,8 @@ import { wcag } from "@squirrelscan/core-contracts/wcag";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { visibleTextMissingFromAriaLabel } from "../shared/visible-label-text";
+
 const MAX_CONTEXT_ANCESTORS = 64;
 const MAX_LABELLED_BY_IDS = 8;
 
@@ -122,6 +124,8 @@ export const identicalLinksSamePurposeRule: Rule = {
       const href = link.getAttribute("href");
 
       if (!text || !href) continue;
+      // One defect, one finding: a11y/label-content-name-mismatch already flags this link.
+      if (visibleTextMissingFromAriaLabel(link)) continue;
       if (text.length < 2) continue; // Skip very short text like "1", "2"
       if (href.startsWith("#")) continue; // Skip anchor links
 
