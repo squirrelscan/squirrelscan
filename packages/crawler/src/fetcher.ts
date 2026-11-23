@@ -3,6 +3,7 @@ import type {
   AuditFailureSource,
   RedirectChain,
   RedirectHop,
+  RenderLayout,
   RenderedRequest,
   RenderRuntimeDiagnostics,
   ResponseHeaders,
@@ -633,6 +634,8 @@ export interface FetchResult {
   sourceHash?: string;
   /** The HTML the server sent, on a rendered page whose probe succeeded (#1769). */
   serverHtml?: string;
+  /** Mobile-viewport layout payload, when the cloud render ran the mobile pass (repo#4218). */
+  layout?: RenderLayout;
   /** A 304 synthesized from a full 200 by the conditional-render gate: its headers are complete (repo#4765). */
   synthesizedNotModified?: boolean;
   /** XHR and fetch requests the rendered page issued, when the render service reported them. */
@@ -1194,6 +1197,7 @@ function fetchWithDocumentFetcher(
       // and rendered — persisted as the page's source_hash for next-run reuse (#839).
       sourceHash: response.sourceHash,
       serverHtml: response.serverHtml,
+      ...(response.layout ? { layout: response.layout } : {}),
       synthesizedNotModified: response.synthesizedNotModified,
       renderedRequests: response.renderedRequests,
       renderRuntime: response.renderRuntime,

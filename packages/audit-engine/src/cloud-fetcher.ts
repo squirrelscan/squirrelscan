@@ -52,6 +52,7 @@ import {
   CloudClientError,
   type CloudServicesClient,
 } from "@squirrelscan/cloud-client";
+import { normalizeRenderLayout } from "@squirrelscan/core-contracts";
 import {
   MAX_CSP_VIOLATIONS_PER_PAGE,
   MAX_RENDERED_REQUESTS_PER_PAGE,
@@ -376,6 +377,7 @@ export function mapRenderItemToResponse(
     item.headers && Object.keys(item.headers).length > 0
       ? item.headers
       : { "content-type": "text/html; charset=utf-8" };
+  const layout = normalizeRenderLayout(item.layout);
   return {
     url: requestUrl,
     finalUrl,
@@ -401,6 +403,8 @@ export function mapRenderItemToResponse(
     ...(typeof item.serverHtml === "string" && item.serverHtml.length > 0
       ? { serverHtml: item.serverHtml }
       : {}),
+    // Mobile layout payload (repo#4218), re-capped here; absent when the render had no mobile pass.
+    ...(layout ? { layout } : {}),
     // XHR and fetch requests the page issued, for endpoint discovery. Absent when the service sent none.
     ...(Array.isArray(item.requests) && item.requests.length > 0
       ? {

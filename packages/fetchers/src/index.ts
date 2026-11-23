@@ -1,6 +1,7 @@
 import type {
   RedirectChain,
   RenderedRequest,
+  RenderLayout,
   RenderRuntimeDiagnostics,
 } from "@squirrelscan/core-contracts";
 
@@ -117,6 +118,8 @@ export interface FetchResponse {
    * the rendered DOM lacks, since client code may remove them after hydration.
    */
   serverHtml?: string;
+  /** Mobile-viewport layout payload from the cloud render, when it ran the mobile pass (repo#4218). */
+  layout?: RenderLayout;
   /** XHR and fetch requests the rendered page issued, when the render service reported them. */
   renderedRequests?: RenderedRequest[];
   /** Page errors, failed requests and CSP violations the render recorded (#704, #425). Absent when not recorded. */

@@ -8,6 +8,7 @@ import type {
   ReportTechnology,
   SoftwareAdvisory,
 } from "./index";
+import type { RenderLayout } from "./render-layout";
 
 export type CloudServiceId =
   | "ai-parse"
@@ -721,6 +722,11 @@ export interface RenderResultItem {
    * code removed after hydration, so the script rules still see them.
    */
   serverHtml?: string;
+  /**
+   * Layout measured at a mobile viewport (repo#4218, prerequisite for repo#1381). Present only when the render
+   * ran the mobile pass; absent on older results and renders without it, and then nothing changes.
+   */
+  layout?: RenderLayout;
   /**
    * The XHR and fetch requests the page issued while it rendered. Absent from services that do not send
    * it, and then nothing changes: endpoint discovery stays static.
