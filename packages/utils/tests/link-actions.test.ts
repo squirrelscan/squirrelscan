@@ -119,6 +119,14 @@ describe("maskLinkTokens", () => {
     expect(maskLinkTokens("//0123456789abcdef0123.example.org/a")).toBe("…");
     expect(maskLinkTokens("cdn.example.org/a")).toBe("cdn.example.org/a");
   });
+
+  test("a scheme-less mixed-case token is masked before the parser lowercases it", () => {
+    expect(maskLinkTokens("sk_live_51HxYzAbCdEfGhIjKlMnOp")).toBe("…");
+    expect(maskLinkTokens("AbCdEfGhIjKlMnOpQrStUv12")).toBe("…");
+    expect(maskLinkTokens("//AbCdEfGhIjKlMnOpQrStUv12/a")).toBe("…");
+    expect(maskLinkTokens("me@AbCdEfGhIjKlMnOpQrStUv12:8080/a")).toBe("…");
+    expect(maskLinkTokens("Docs.Example.org/a")).toBe("docs.example.org/a");
+  });
 });
 
 describe("the rules moved here unchanged", () => {

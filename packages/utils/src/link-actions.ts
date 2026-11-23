@@ -555,6 +555,8 @@ export function maskLinkTokens(url: string): string {
   // Whether the parser's root `/` stays when the path is empty: kept for a
   // URL, and for scheme-less input only when the input wrote it.
   let keepRoot = true;
+  // For scheme-less input only: the host text before the parser normalised it.
+  let inputHost: string | null = null;
   try {
     parsed = new URL(url);
     prefix = `${parsed.protocol}//`;
@@ -573,14 +575,22 @@ export function maskLinkTokens(url: string): string {
     prefix = protocolRelative ? "//" : "";
     const hostEnd = rest.search(/[/?#]/);
     keepRoot = hostEnd !== -1 && rest[hostEnd] === "/";
+    // The host as the input wrote it, userinfo and port left out: the parser
+    // lowercases `parsed.hostname`, which hides a mixed-case token.
+    const authority = hostEnd === -1 ? rest : rest.slice(0, hostEnd);
+    inputHost = authority
+      .slice(authority.lastIndexOf("@") + 1)
+      .replace(/:[^:\]]*$/, "");
   }
   const secret = (piece: string) =>
     looksLikeAToken(piece) || looksLikeAnId(piece) || containsAnEmail(piece);
   // A scheme-less host is a guess: `a1b2c3d4e5` or a bare hex token parses
   // as one, so a host with a label that looks secret is not shown (#2281).
+  // Both the input's own text (its case kept, so the mixed-case base64 check
+  // can fire) and the parsed hostname are checked.
   if (
-    prefix !== `${parsed.protocol}//` &&
-    parsed.hostname.split(".").some(secret)
+    inputHost !== null &&
+    [...inputHost.split("."), ...parsed.hostname.split(".")].some(secret)
   )
     return "…";
   const path = parsed.pathname
