@@ -179,6 +179,11 @@ describe("verifyReleaseProvenance: a pinned key is set", () => {
         `signed with key ${foreign.id}, which this squirrel does not pin`
       );
       expect(r.error.message).toContain("Nothing was installed");
+      // A real mismatch still says plainly that verification failed (#2284).
+      expect(r.error.message).toContain("verification failed");
+      expect(r.error.message).toContain(
+        "curl -fsSL https://install.squirrelscan.com | bash"
+      );
     }
     expect(g.verifyCalls).toBe(0);
   });
@@ -338,6 +343,8 @@ describe("verifyReleaseProvenance: a pinned key is set", () => {
       expect(r.error.message).toContain(
         "The release carries no squirrelscan release-key signature either."
       );
+      expect(r.error.message).not.toMatch(/not built by/i);
+      expect(r.error.message).toContain("install.squirrelscan.com");
     }
   });
 

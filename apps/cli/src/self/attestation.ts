@@ -26,6 +26,23 @@ export const ATTESTATION_REPO = "squirrelscan/squirrelscan";
 export const ATTESTATION_CERT_IDENTITY =
   "https://github.com/squirrelscan/squirrelscan/.github/workflows/release.yml@refs/heads/main";
 
+export const INSTALL_DOCS_URL =
+  "https://docs.squirrelscan.com/install#verifying-a-release";
+
+/**
+ * The recovery step every provenance failure names (#2284): reinstall with the
+ * installer one-liner, which re-fetches and re-verifies the latest release.
+ */
+export function reinstallHint(
+  platform: NodeJS.Platform = process.platform
+): string {
+  const line =
+    platform === "win32"
+      ? "iwr -useb https://install.squirrelscan.com/install.ps1 | iex"
+      : "curl -fsSL https://install.squirrelscan.com | bash";
+  return `To recover, re-run the installer: ${line}\nWhat this means: ${INSTALL_DOCS_URL}`;
+}
+
 export type AttestationOutcome =
   | { status: "verified" }
   | { status: "skipped"; reason: string };
@@ -154,7 +171,7 @@ export async function verifyReleaseAttestation(
       return err(
         commandError(
           "ATTESTATION_FAILED",
-          `gh attestation verify timed out after ${VERIFY_TIMEOUT_S}s, nothing was installed.`
+          `gh attestation verify timed out after ${VERIFY_TIMEOUT_S}s, nothing was installed.\n${reinstallHint()}`
         )
       );
     }
@@ -167,8 +184,9 @@ export async function verifyReleaseAttestation(
       return err(
         commandError(
           "ATTESTATION_FAILED",
-          `Attestation verification failed: this binary was not built by the ${ATTESTATION_REPO} release workflow. Nothing was installed.` +
-            (tail ? `\n${tail}` : "")
+          `Attestation verification failed: gh found no ${ATTESTATION_REPO} release workflow attestation that matches this binary. A release built outside GitHub Actions has none, so this is not by itself proof of tampering. Nothing was installed.` +
+            (tail ? `\n${tail}` : "") +
+            `\n${reinstallHint()}`
         )
       );
     }
