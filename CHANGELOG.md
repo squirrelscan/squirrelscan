@@ -17,6 +17,33 @@ How it works:
   `bun run changelog` prints them as the next release's section, and the release bump PR
   assembles them into a new `## vX.Y.Z` section and deletes them.
 
+## v0.0.191-beta.1 (2026-11-23)
+
+### Added
+
+- `security/csp` now says whether the policy would contain a compromised third-party script on a page that loads one: `csp-connect-unrestricted` warns when script can send data to any host (no restricting `connect-src` or `default-src`, or one with `*` or a scheme such as `https:`), `csp-strict-dynamic-third-party` notes that `'strict-dynamic'` trusts scripts vendors insert, `csp-no-reporting` notes an enforced policy with no `report-to` or `report-uri`, and `csp-unsafe-scripts` names the vendor scripts `'unsafe-eval'` exposes (#2087)
+- A failed `squirrel self update`, or a failed update accepted at the startup prompt, now reports one bounded error code to telemetry (`self_update:<CODE>`, fixed message, no URLs or paths). Telemetry opt-outs apply as before. (#2243)
+- New rule `security/csp-violations` reports what the browser actually blocked under a page's Content-Security-Policy during a rendered crawl, grouped by blocked host and directive, with the host to add. A blocked analytics, ads, payments, captcha, form or booking vendor is an error. Plain HTTP pages are skipped with a reason, and rendered pages whose renderer did not record violations are listed as not checked, never passed. (#425)
+
+### Changed
+
+- Rendered cloud audits now start checking a page as soon as its cloud data is ready, instead of waiting for the cloud step to finish across the whole crawl, so rules run earlier on pages that are already prefetched. (#2121)
+
+### Fixed
+
+- `security/supabase-rls` and `reliability/broken-forms` now read an explicit "this audit may request other hosts" flag instead of inferring it from the external link results, so `security/supabase-rls` runs in the normal pass and is no longer capped by the late link-check deadline on aggressive runs with a time limit (#2109)
+- A crawl whose only page is a 2xx bot-challenge or empty-shell document (no doctype or `<html>`, or generic "checking your browser" wording) is now reported as `blocked` with no score, the same as a hard block, instead of a normal-looking health score (#2250).
+- `squirrel crawl` no longer shows the project-name prompt when stdin or stdout is not a TTY, so piped and scripted runs no longer hang (#2263)
+
+### Security
+
+- `security/cookie-flags` and `security/token-storage` now rate a finding one step higher, from warning to failure, when the page loads scripts from another domain, and name up to five of those script hosts, since any script on the page can read a cookie without `HttpOnly` or a token in web storage. `security/cookie-flags` raises only session-like cookies, in a new `cookie-httponly-third-party-scripts` check. Pages with no third-party script report as before (#2089)
+
+### Docs
+
+- The rule pages for 38 more rules (ax, core and url) list the check names each rule emits and which clean check clears which problem check (#2218).
+- The telemetry FAQ and `self` docs now say a failed `squirrel self update` also sends the error category's fixed one-line description, never the raw error text. (#2243)
+
 ## v0.0.190 (2026-11-22)
 
 This release is signed with the squirrelscan release key, key id 3d10cf3775665622. If `squirrel self update` from 0.0.189 or earlier fails with ATTESTATION_FAILED (only when the GitHub CLI is logged in), re-run the install one-liner once (`curl -fsSL https://install.squirrelscan.com | bash`). It rolls up v0.0.190-beta.1 and v0.0.190-beta.2, with key-signed releases, the stale-HTML re-audit fix and em-dash-free output as the headline changes.

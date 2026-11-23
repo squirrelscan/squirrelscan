@@ -1,1 +1,0 @@
-- A failed `squirrel self update`, or a failed update accepted at the startup prompt, now reports one bounded error code to telemetry (`self_update:<CODE>`, fixed message, no URLs or paths). Telemetry opt-outs apply as before. (#2243)
