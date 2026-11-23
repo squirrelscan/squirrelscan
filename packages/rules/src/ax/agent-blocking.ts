@@ -102,6 +102,15 @@ export const agentBlockingRule: Rule = {
     // report's effective severity automatically downgrades to a warning.
     severity: "error",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "agent-access", outcome: "problem" },
+      { name: "agent-access-payment", outcome: "problem" },
+      { name: "agent-access-probes", outcome: "problem" },
+      { name: "agent-blocking", outcome: "clean", clears: ["agent-access"] },
+      { name: "agent-access", outcome: "skipped" },
+      { name: "agent-blocking", outcome: "skipped" },
+    ],
     discoveryProbes: ["agent-access"],
   },
 

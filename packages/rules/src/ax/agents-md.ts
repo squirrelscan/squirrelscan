@@ -41,6 +41,17 @@ export const agentsMdRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "agents-md-present", outcome: "problem" },
+      {
+        name: "agents-md-present",
+        outcome: "clean",
+        clears: ["agents-md-present"],
+      },
+      { name: "agents-md-present", outcome: "skipped" },
+      { name: "agents-md", outcome: "skipped" },
+    ],
     // llms-txt: publishing llms.txt is what earns a missing AGENTS.md a warning.
     discoveryProbes: [...AGENTS_MD_PATHS, "llms-txt"],
   },

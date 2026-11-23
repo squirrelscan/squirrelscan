@@ -118,6 +118,12 @@ export const titleUniqueRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "title-unique", outcome: "problem" },
+      { name: "title-unique", outcome: "clean", clears: ["title-unique"] },
+      { name: "title-unique", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

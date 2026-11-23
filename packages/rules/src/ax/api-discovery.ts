@@ -127,6 +127,19 @@ export const apiDiscoveryRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "api-discovery", outcome: "problem" },
+      { name: "api-discovery-oauth", outcome: "problem" },
+      { name: "api-discovery", outcome: "clean", clears: ["api-discovery"] },
+      {
+        name: "api-discovery-oauth",
+        outcome: "clean",
+        clears: ["api-discovery-oauth"],
+      },
+      { name: "api-discovery", outcome: "skipped" },
+      { name: "api-discovery-oauth", outcome: "skipped" },
+    ],
     discoveryProbes: [...API_DOC_PATHS, ...OAUTH_PATHS],
   },
 

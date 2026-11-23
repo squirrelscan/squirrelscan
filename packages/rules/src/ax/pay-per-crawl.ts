@@ -37,6 +37,13 @@ export const payPerCrawlRule: Rule = {
     // monetization detection emits only info checks and never becomes an issue.
     severity: "warning",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "pay-per-crawl", outcome: "problem" },
+      { name: "pay-per-crawl-user-action", outcome: "problem" },
+      { name: "pay-per-crawl", outcome: "clean", clears: ["pay-per-crawl"] },
+      { name: "pay-per-crawl", outcome: "skipped" },
+    ],
     discoveryProbes: ["agent-access"],
   },
 

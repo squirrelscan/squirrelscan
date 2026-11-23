@@ -53,6 +53,11 @@ export const stopWordsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "url-stop-words", outcome: "problem" },
+      { name: "url-stop-words", outcome: "clean", clears: ["url-stop-words"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

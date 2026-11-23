@@ -15,6 +15,11 @@ export const urlLowercaseRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "url-lowercase", outcome: "problem" },
+      { name: "url-lowercase", outcome: "clean", clears: ["url-lowercase"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -142,6 +142,11 @@ export const robotsMetaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "robots-meta", outcome: "problem" },
+      { name: "robots-meta", outcome: "clean", clears: ["robots-meta"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

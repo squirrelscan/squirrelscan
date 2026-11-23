@@ -15,6 +15,16 @@ export const specialCharsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "url-special-chars", outcome: "problem" },
+      { name: "url-double-slash", outcome: "problem" },
+      {
+        name: "url-special-chars",
+        outcome: "clean",
+        clears: ["url-special-chars"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

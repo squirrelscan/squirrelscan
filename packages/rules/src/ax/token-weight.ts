@@ -30,6 +30,22 @@ export const tokenWeightRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "token-weight-ratio", outcome: "problem" },
+      { name: "token-weight-budget", outcome: "problem" },
+      {
+        name: "token-weight-ratio",
+        outcome: "clean",
+        clears: ["token-weight-ratio"],
+      },
+      {
+        name: "token-weight-budget",
+        outcome: "clean",
+        clears: ["token-weight-budget"],
+      },
+      { name: "token-weight", outcome: "skipped" },
+    ],
     // A soft-404 error shell's token/ratio numbers describe the error template,
     // not a real page — skip rather than report misleading bloat (#1174).
     skipOnSoft404: true,

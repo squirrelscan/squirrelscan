@@ -21,6 +21,22 @@ export const rslLicenseRule: Rule = {
     // produces only info checks, which never enter the issues list.
     severity: "warning",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "rsl-license-present", outcome: "problem" },
+      { name: "rsl-license-valid", outcome: "problem" },
+      {
+        name: "rsl-license-present",
+        outcome: "clean",
+        clears: ["rsl-license-present"],
+      },
+      {
+        name: "rsl-license-valid",
+        outcome: "clean",
+        clears: ["rsl-license-valid"],
+      },
+      { name: "rsl-license", outcome: "skipped" },
+    ],
     discoveryProbes: ["rsl"],
   },
 

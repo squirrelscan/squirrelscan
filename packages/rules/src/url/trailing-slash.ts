@@ -15,6 +15,11 @@ export const trailingSlashRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "trailing-slash", outcome: "problem" },
+      { name: "trailing-slash", outcome: "clean", clears: ["trailing-slash"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

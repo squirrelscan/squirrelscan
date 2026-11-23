@@ -466,6 +466,16 @@ export const canonicalFormDriftRule: Rule = {
     // Deliberately light, and one site-wide check with capped items rather than a
     // per-page finding, so this rule cannot dominate the core category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "canonical-form-drift", outcome: "problem" },
+      {
+        name: "canonical-form-drift",
+        outcome: "clean",
+        clears: ["canonical-form-drift"],
+      },
+      { name: "canonical-form-drift", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

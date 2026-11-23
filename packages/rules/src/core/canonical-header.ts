@@ -61,6 +61,16 @@ Best practice: Use HTML canonical tag only. Only add Link header if unable to mo
     verdictScope: "page",
     severity: "warning",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "canonical-header", outcome: "problem" },
+      {
+        name: "canonical-header",
+        outcome: "clean",
+        clears: ["canonical-header"],
+      },
+      { name: "canonical-header", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -21,6 +21,11 @@ Note: max-snippet:N where N > 0 is fine (sets snippet character limit).`,
     verdictScope: "page",
     severity: "warning",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "nosnippet", outcome: "problem" },
+      { name: "nosnippet", outcome: "clean", clears: ["nosnippet"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

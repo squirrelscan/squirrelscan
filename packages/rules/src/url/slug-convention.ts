@@ -505,6 +505,16 @@ export const slugConventionRule: Rule = {
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the url category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "slug-convention", outcome: "problem" },
+      {
+        name: "slug-convention",
+        outcome: "clean",
+        clears: ["slug-convention"],
+      },
+      { name: "slug-convention", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

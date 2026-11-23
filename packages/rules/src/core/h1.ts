@@ -76,6 +76,12 @@ export const h1Rule: Rule = {
     skipOnNoindex: true,
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "h1", outcome: "problem" },
+      { name: "h1-unconfirmed", outcome: "problem" },
+      { name: "h1", outcome: "clean", clears: ["h1"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

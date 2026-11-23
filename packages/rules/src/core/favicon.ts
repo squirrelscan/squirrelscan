@@ -15,6 +15,12 @@ export const faviconRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "favicon", outcome: "problem" },
+      { name: "apple-touch-icon", outcome: "problem" },
+      { name: "favicon", outcome: "clean", clears: ["favicon"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

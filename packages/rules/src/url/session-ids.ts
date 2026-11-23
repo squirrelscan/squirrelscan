@@ -166,6 +166,16 @@ export const sessionIdsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "session-id-in-url", outcome: "problem" },
+      { name: "session-id-links", outcome: "problem" },
+      {
+        name: "session-ids",
+        outcome: "clean",
+        clears: ["session-id-in-url", "session-id-links"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

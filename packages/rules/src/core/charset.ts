@@ -90,6 +90,12 @@ export const charsetRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "charset", outcome: "problem" },
+      { name: "charset", outcome: "clean", clears: ["charset"] },
+      { name: "charset", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

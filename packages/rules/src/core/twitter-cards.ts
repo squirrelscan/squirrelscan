@@ -15,6 +15,11 @@ export const twitterCardsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "twitter-card", outcome: "problem" },
+      { name: "twitter-card", outcome: "clean", clears: ["twitter-card"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
