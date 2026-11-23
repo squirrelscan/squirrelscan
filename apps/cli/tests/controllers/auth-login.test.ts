@@ -6,7 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { agentSetupLines } from "@/cli/agent-setup";
+import { agentSetupLines, dashboardHandoffLines } from "@/cli/agent-setup";
 import { AGENT_SETUP_PROMPT, AGENT_SETUP_URL } from "@/constants";
 import {
   AUTH_SUCCESS_PAGE_SCRIPT,
@@ -557,5 +557,19 @@ describe("auth login — agent setup in the terminal (#180)", () => {
 
   test("names it as something to paste, so SSH users know what it is for", () => {
     expect(output).toContain("paste this prompt");
+  });
+});
+
+describe("auth login: dashboard onboarding hand-off (repo#4976)", () => {
+  const output = dashboardHandoffLines().join("\n");
+
+  // Literal, not DASHBOARD_URL: a changed or broken constant must fail here.
+  test("points at the dashboard at app.squirrelscan.com", () => {
+    expect(output).toContain("https://app.squirrelscan.com");
+  });
+
+  test("is plain text with no prompt to answer", () => {
+    expect(output).not.toMatch(/\[y\/n\]|\?\s*$/i);
+    expect(output).not.toContain("\u2014");
   });
 });
