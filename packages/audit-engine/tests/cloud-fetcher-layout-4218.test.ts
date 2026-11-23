@@ -5,10 +5,7 @@ import type {
   RenderResultItem,
 } from "@squirrelscan/core-contracts";
 
-import {
-  RENDER_LAYOUT_LIMITS,
-  normalizeRenderLayout,
-} from "@squirrelscan/core-contracts";
+import { normalizeRenderLayout } from "@squirrelscan/core-contracts";
 import { describe, expect, test } from "bun:test";
 
 import { mapRenderItemToResponse } from "../src/cloud-fetcher";
@@ -77,14 +74,22 @@ describe("mobile layout payload (repo#4218)", () => {
       "overlapping",
       "smallTapTargets",
     ] as const) {
-      expect(layout[k].length).toBeLessThanOrEqual(
-        RENDER_LAYOUT_LIMITS.maxPerList
-      );
+      expect(layout[k].length).toBeLessThanOrEqual(50);
     }
-    expect(layout.textDigest.length).toBe(RENDER_LAYOUT_LIMITS.digestChars);
-    expect(JSON.stringify(layout).length).toBeLessThanOrEqual(
-      RENDER_LAYOUT_LIMITS.maxBytes
-    );
+    // Stated literals, not RENDER_LAYOUT_LIMITS: loosening a cap must fail here.
+    expect(layout.textDigest.length).toBe(500);
+    expect(
+      new TextEncoder().encode(JSON.stringify(layout)).length
+    ).toBeLessThanOrEqual(32 * 1024);
+  });
+
+  test("per-list cap is 50 when the byte cap does not bind", () => {
+    // Small entries, one list: the 32 KiB cap never trims, so only the per-list cap applies.
+    const layout = normalizeRenderLayout({
+      overflowing: Array.from({ length: 2000 }, (_, i) => entry(i)),
+    }) as RenderLayout;
+    expect(layout.overflowing).toHaveLength(50);
+    expect(layout.truncated).toBe(true);
   });
 
   test("no layout in, no layout key out", () => {
