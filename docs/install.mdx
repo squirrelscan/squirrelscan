@@ -173,6 +173,24 @@ A hard failure means the download is not what squirrelscan published: delete it 
 
 `gh attestation verify` needs a logged-in `gh`, so run `gh auth login` once to turn that check on. A `gh` that is not logged in cannot verify anything, so it is treated like a missing one, with the warning, and never as a pass. The Windows installer (`install.ps1`) follows the same order and rules as `install.sh`: SHA-256, then the pinned-key signature, then the attestation. It verifies the signature with .NET (`ECDsa` on PowerShell 7, `ECDsaCng` on Windows PowerShell 5.1), so it needs no `openssl`. In the signed era a missing `.sig` with no verifiable attestation fails on Windows too.
 
+### If `squirrel self update` says verification failed
+
+`squirrel self update` stops with `Attestation verification failed` or `Release signature verification failed` when it cannot prove where a release came from. Nothing is installed, and the message names the recovery step. An attestation failure means `gh` found no GitHub attestation matching the binary. That is not proof of tampering on its own: a release built outside GitHub Actions carries no attestation, so it fails this check even when it is genuine. A signature failure means the bytes did not match the pinned release key, so treat that download as untrusted.
+
+Either way, reinstall with the installer, which fetches and verifies the latest release again:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+On Windows, in PowerShell:
+
+```powershell
+iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+```
+
+If the installer fails the same way, [open an issue](https://github.com/squirrelscan/squirrelscan/issues) with the output.
+
 ### Verify a signature by hand
 
 Download the binary, its `.sig`, `manifest.json` and `manifest.json.sig` from the [releases page](https://github.com/squirrelscan/squirrelscan/releases), save the release public key from [`release-keys.json`](https://github.com/squirrelscan/squirrelscan/blob/main/release-keys.json) as `squirrelscan-release.pub`, and run:

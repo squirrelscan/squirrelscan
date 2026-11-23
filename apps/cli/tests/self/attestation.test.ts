@@ -9,6 +9,7 @@ import {
   ATTESTATION_REPO,
   type GhRun,
   type GhRunner,
+  reinstallHint,
   verifyReleaseAttestation,
 } from "@/self/attestation";
 
@@ -90,6 +91,9 @@ describe("verifyReleaseAttestation (#169)", () => {
       expect(result.error.code).toBe("ATTESTATION_FAILED");
       expect(result.error.message).toContain("Nothing was installed");
       expect(result.error.message).toContain("no attestation found for digest");
+      // #2284: never claims the binary was not built by us, and names the fix.
+      expect(result.error.message).not.toMatch(/not built by/i);
+      expect(result.error.message).toContain(reinstallHint());
     }
     expect(existsSync(gh.verifiedFile?.path ?? "")).toBe(false);
   });
@@ -205,5 +209,29 @@ describe("verifyReleaseAttestation (#169)", () => {
     } finally {
       process.env.PATH = saved;
     }
+  });
+});
+
+describe("reinstallHint (#2284)", () => {
+  test("unix names the curl one-liner and the docs anchor", () => {
+    const hint = reinstallHint("linux");
+    expect(hint).toContain(
+      "curl -fsSL https://install.squirrelscan.com | bash"
+    );
+    expect(hint).not.toContain("install.ps1");
+    expect(hint).toContain(
+      "https://docs.squirrelscan.com/install#verifying-a-release"
+    );
+  });
+
+  test("windows names the install.ps1 line and the docs anchor", () => {
+    const hint = reinstallHint("win32");
+    expect(hint).toContain(
+      "iwr -useb https://install.squirrelscan.com/install.ps1 | iex"
+    );
+    expect(hint).not.toContain("curl");
+    expect(hint).toContain(
+      "https://docs.squirrelscan.com/install#verifying-a-release"
+    );
   });
 });

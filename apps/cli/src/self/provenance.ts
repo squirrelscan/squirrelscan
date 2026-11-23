@@ -4,6 +4,7 @@ import type { PlatformArch } from "./types";
 
 import {
   ATTESTATION_REPO,
+  reinstallHint,
   type AttestationDeps,
   verifyReleaseAttestation,
 } from "./attestation";
@@ -112,7 +113,7 @@ const signatureFailed = (why: string) =>
   err(
     commandError(
       "SIGNATURE_FAILED",
-      `Release signature verification failed: ${why}. Nothing was installed.`
+      `Release signature verification failed: ${why}. Nothing was installed.\n${reinstallHint()}`
     )
   );
 
@@ -191,7 +192,7 @@ const signedEraRequired = (version: string, reason: string) =>
   err(
     commandError(
       "SIGNATURE_REQUIRED",
-      `v${version.replace(/^v/, "")} must carry a squirrelscan release-key signature or a GitHub attestation, and neither could be verified (${reason}). sha256 alone is not accepted for this version. Nothing was installed.\nTo install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify: https://docs.squirrelscan.com/install#verifying-a-release`
+      `v${version.replace(/^v/, "")} must carry a squirrelscan release-key signature or a GitHub attestation, and neither could be verified (${reason}). sha256 alone is not accepted for this version. Nothing was installed.\n${reinstallHint()}\nTo install by hand, download the binary and its .sig and check them with openssl dgst -sha256 -verify.`
     )
   );
 
