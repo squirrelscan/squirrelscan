@@ -543,17 +543,56 @@ function looksLikeAnId(value: string): boolean {
  * (split at `;`, `,`, `=` and an encoded `/`) is a token or id or holds an
  * email address (#774). The reader sees where the link points; the masking is
  * a best effort, not a guarantee that no credential survives. Userinfo and the
- * fragment are dropped. Unparseable input comes back as `…`.
+ * fragment are dropped. Scheme-less input (`example.org/a`, `//example.org/a`)
+ * is masked as if it were `https://` and comes back without the added scheme
+ * (#2281). Input that is not a URL or a host at all comes back as `…`.
  */
 export function maskLinkTokens(url: string): string {
   let parsed: URL;
+  // The text put before the host in the output: the scheme, or for
+  // scheme-less input what the input itself had (`//` or nothing).
+  let prefix: string;
+  // Whether the parser's root `/` stays when the path is empty: kept for a
+  // URL, and for scheme-less input only when the input wrote it.
+  let keepRoot = true;
+  // For scheme-less input only: the host text before the parser normalised it.
+  let inputHost: string | null = null;
   try {
     parsed = new URL(url);
+    prefix = `${parsed.protocol}//`;
   } catch {
-    return "…";
+    const input = url.trim();
+    const protocolRelative = input.startsWith("//");
+    const rest = protocolRelative ? input.slice(2) : input;
+    // A host starts with a letter, a digit or `[` (IPv6); a relative path
+    // (`/a`, `./a`, `?q`) or blank input is not a link to show.
+    if (!/^[\p{L}\p{N}[]/u.test(rest)) return "…";
+    try {
+      parsed = new URL(`https://${rest}`);
+    } catch {
+      return "…";
+    }
+    prefix = protocolRelative ? "//" : "";
+    const hostEnd = rest.search(/[/?#]/);
+    keepRoot = hostEnd !== -1 && rest[hostEnd] === "/";
+    // The host as the input wrote it, userinfo and port left out: the parser
+    // lowercases `parsed.hostname`, which hides a mixed-case token.
+    const authority = hostEnd === -1 ? rest : rest.slice(0, hostEnd);
+    inputHost = authority
+      .slice(authority.lastIndexOf("@") + 1)
+      .replace(/:[^:\]]*$/, "");
   }
   const secret = (piece: string) =>
     looksLikeAToken(piece) || looksLikeAnId(piece) || containsAnEmail(piece);
+  // A scheme-less host is a guess: `a1b2c3d4e5` or a bare hex token parses
+  // as one, so a host with a label that looks secret is not shown (#2281).
+  // Both the input's own text (its case kept, so the mixed-case base64 check
+  // can fire) and the parsed hostname are checked.
+  if (
+    inputHost !== null &&
+    [...inputHost.split("."), ...parsed.hostname.split(".")].some(secret)
+  )
+    return "…";
   const path = parsed.pathname
     .split("/")
     .map((segment) => {
@@ -569,5 +608,5 @@ export function maskLinkTokens(url: string): string {
     keys.length > 0
       ? `?${[...new Set(keys)].map((k) => `${k}=…`).join("&")}`
       : "";
-  return `${parsed.protocol}//${parsed.host}${path}${query}`;
+  return `${prefix}${parsed.host}${path === "/" && !keepRoot ? "" : path}${query}`;
 }

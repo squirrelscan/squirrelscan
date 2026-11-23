@@ -81,6 +81,52 @@ describe("maskLinkTokens", () => {
   test("a URL that does not parse is fully masked", () => {
     expect(maskLinkTokens("not a url")).toBe("…");
   });
+
+  // #2281: a bare host or a scheme-less URL names its link, masked as https.
+  test("scheme-less input keeps its host and path, without an added scheme", () => {
+    expect(maskLinkTokens("example.org")).toBe("example.org");
+    expect(maskLinkTokens("example.org/a/b")).toBe("example.org/a/b");
+    expect(maskLinkTokens("example.org/")).toBe("example.org/");
+    expect(maskLinkTokens("  example.org/a  ")).toBe("example.org/a");
+    expect(maskLinkTokens("//example.org/a")).toBe("//example.org/a");
+  });
+
+  test("scheme-less input still has its tokens, ids and emails masked", () => {
+    expect(
+      maskLinkTokens("example.org/reset?token=0123456789abcdef0123456789abcdef")
+    ).toBe("example.org/reset?token=…");
+    expect(maskLinkTokens("example.org?u=7")).toBe("example.org?u=…");
+    expect(
+      maskLinkTokens("example.org/magic-login/0123456789abcdef0123#top")
+    ).toBe("example.org/magic-login/…");
+    expect(maskLinkTokens("example.org/users/a1b2c3d4e5/profile")).toBe(
+      "example.org/users/…/profile"
+    );
+    expect(maskLinkTokens("example.org/u/jane@mail.example")).toBe(
+      "example.org/u/…"
+    );
+  });
+
+  test("input that is not a URL or a host is still fully masked", () => {
+    for (const input of ["", "   ", "/a/b", "./a", "?q=1", "//", "a b.example"])
+      expect(maskLinkTokens(input)).toBe("…");
+  });
+
+  test("a scheme-less token or id is not taken for a host", () => {
+    expect(maskLinkTokens("0123456789abcdef0123456789abcdef")).toBe("…");
+    expect(maskLinkTokens("a1b2c3d4e5")).toBe("…");
+    expect(maskLinkTokens("a1b2c3d4e5/profile")).toBe("…");
+    expect(maskLinkTokens("//0123456789abcdef0123.example.org/a")).toBe("…");
+    expect(maskLinkTokens("cdn.example.org/a")).toBe("cdn.example.org/a");
+  });
+
+  test("a scheme-less mixed-case token is masked before the parser lowercases it", () => {
+    expect(maskLinkTokens("sk_live_51HxYzAbCdEfGhIjKlMnOp")).toBe("…");
+    expect(maskLinkTokens("AbCdEfGhIjKlMnOpQrStUv12")).toBe("…");
+    expect(maskLinkTokens("//AbCdEfGhIjKlMnOpQrStUv12/a")).toBe("…");
+    expect(maskLinkTokens("me@AbCdEfGhIjKlMnOpQrStUv12:8080/a")).toBe("…");
+    expect(maskLinkTokens("Docs.Example.org/a")).toBe("docs.example.org/a");
+  });
 });
 
 describe("the rules moved here unchanged", () => {

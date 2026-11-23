@@ -1,0 +1,1 @@
+- A link written without a scheme (`example.org/a`) is now shown masked in reports as `example.org/a` instead of a bare `…` (#2281)
