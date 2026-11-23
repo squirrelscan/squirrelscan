@@ -29,6 +29,16 @@ export const contentWithoutJsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "content-without-js", outcome: "problem" },
+      {
+        name: "content-without-js",
+        outcome: "clean",
+        clears: ["content-without-js"],
+      },
+      { name: "content-without-js", outcome: "skipped" },
+    ],
     // On a soft-404, raw and rendered are both the error shell — the raw-vs-JS
     // content diff is meaningless, so skip (#1174).
     skipOnSoft404: true,

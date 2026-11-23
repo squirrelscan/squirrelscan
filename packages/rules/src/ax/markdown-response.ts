@@ -20,6 +20,24 @@ export const markdownResponseRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "markdown-negotiation-error", outcome: "problem" },
+      { name: "markdown-response", outcome: "problem" },
+      { name: "markdown-response-headers", outcome: "problem" },
+      {
+        name: "markdown-negotiation-error",
+        outcome: "clean",
+        clears: ["markdown-negotiation-error"],
+      },
+      {
+        name: "markdown-response",
+        outcome: "clean",
+        clears: ["markdown-response"],
+      },
+      { name: "markdown-negotiation-error", outcome: "skipped" },
+      { name: "markdown-response", outcome: "skipped" },
+    ],
     discoveryProbes: ["markdown"],
   },
 

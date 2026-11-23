@@ -42,6 +42,23 @@ export const metaDescriptionRule: Rule = {
     skipOnNoindex: true,
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "meta-description", outcome: "problem" },
+      { name: "meta-description-too-short", outcome: "problem" },
+      { name: "meta-description-too-long", outcome: "problem" },
+      {
+        name: "meta-description-too-short",
+        outcome: "clean",
+        clears: ["meta-description-too-short"],
+      },
+      {
+        name: "meta-description-too-long",
+        outcome: "clean",
+        clears: ["meta-description-too-long"],
+      },
+      { name: "meta-description-too-short", outcome: "skipped" },
+    ],
     optionsSchema,
     // The old name carried both directions (pub#1765).
     supersededChecks: {

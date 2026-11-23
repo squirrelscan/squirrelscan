@@ -18,6 +18,11 @@ export const slugKeywordsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "slug-keywords", outcome: "problem" },
+      { name: "slug-keywords", outcome: "clean", clears: ["slug-keywords"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

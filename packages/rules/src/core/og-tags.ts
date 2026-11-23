@@ -15,6 +15,18 @@ export const ogTagsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "og-title", outcome: "problem" },
+      { name: "og-description", outcome: "problem" },
+      { name: "og-image", outcome: "problem" },
+      { name: "og-type", outcome: "problem" },
+      {
+        name: "og-tags",
+        outcome: "clean",
+        clears: ["og-title", "og-description", "og-image", "og-type"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

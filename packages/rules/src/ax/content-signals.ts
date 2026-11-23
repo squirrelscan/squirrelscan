@@ -214,6 +214,19 @@ export const contentSignalsRule: Rule = {
     // with only info checks the rule never enters the issues list at all.
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "content-signals", outcome: "problem" },
+      { name: "content-signals-policy", outcome: "problem" },
+      { name: "content-signals-syntax", outcome: "problem" },
+      { name: "content-signals-contradiction", outcome: "problem" },
+      {
+        name: "content-signals",
+        outcome: "clean",
+        clears: ["content-signals"],
+      },
+      { name: "content-signals", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -23,6 +23,12 @@ export const doctypeRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "doctype", outcome: "problem" },
+      { name: "doctype", outcome: "clean", clears: ["doctype"] },
+      { name: "doctype", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

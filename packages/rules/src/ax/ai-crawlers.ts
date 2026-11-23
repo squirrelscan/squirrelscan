@@ -329,6 +329,24 @@ export const aiCrawlersRule: Rule = {
     // warn checks. So the meta sits at "warning" to let that escalation happen.
     severity: "warning",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "ai-crawler-access", outcome: "problem" },
+      { name: "ai-crawlers-wildcard-blocked", outcome: "problem" },
+      { name: "ai-answer-access", outcome: "problem" },
+      { name: "archive-crawler-access", outcome: "problem" },
+      { name: "search-engine-access", outcome: "problem" },
+      {
+        name: "ai-crawler-access",
+        outcome: "clean",
+        clears: ["ai-crawler-access"],
+      },
+      {
+        name: "search-engine-access",
+        outcome: "clean",
+        clears: ["search-engine-access"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

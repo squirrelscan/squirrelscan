@@ -1,0 +1,1 @@
+- The rule pages for 38 more rules (ax, core and url) list the check names each rule emits and which clean check clears which problem check (#2218).

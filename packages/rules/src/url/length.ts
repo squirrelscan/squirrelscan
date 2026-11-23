@@ -18,6 +18,12 @@ export const urlLengthRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "url-length", outcome: "problem" },
+      { name: "url-depth", outcome: "problem" },
+      { name: "url-length", outcome: "clean", clears: ["url-length"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

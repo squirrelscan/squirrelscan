@@ -61,6 +61,23 @@ export const wellKnownAgentRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "well-known-agent", outcome: "problem" },
+      { name: "well-known-agent-present", outcome: "problem" },
+      { name: "well-known-agent-deprecated", outcome: "problem" },
+      {
+        name: "well-known-agent",
+        outcome: "clean",
+        clears: ["well-known-agent"],
+      },
+      {
+        name: "well-known-agent-present",
+        outcome: "clean",
+        clears: ["well-known-agent-present"],
+      },
+      { name: "well-known-agent", outcome: "skipped" },
+    ],
     discoveryProbes: [...MANIFEST_PATHS, ...DEPRECATED_PATHS],
   },
 

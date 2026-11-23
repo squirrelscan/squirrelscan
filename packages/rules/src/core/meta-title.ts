@@ -40,6 +40,24 @@ export const metaTitleRule: Rule = {
     skipOnNoindex: true,
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "meta-title", outcome: "problem" },
+      { name: "document-title", outcome: "problem" },
+      { name: "meta-title-too-short", outcome: "problem" },
+      { name: "meta-title-too-long", outcome: "problem" },
+      {
+        name: "meta-title-too-short",
+        outcome: "clean",
+        clears: ["meta-title-too-short"],
+      },
+      {
+        name: "meta-title-too-long",
+        outcome: "clean",
+        clears: ["meta-title-too-long"],
+      },
+      { name: "meta-title-too-short", outcome: "skipped" },
+    ],
     optionsSchema,
     // The old name carried both directions (pub#1765).
     supersededChecks: {

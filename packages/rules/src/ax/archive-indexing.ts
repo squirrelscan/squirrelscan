@@ -38,6 +38,22 @@ export const archiveIndexingRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "common-crawl-indexed", outcome: "problem" },
+      { name: "wayback-archived", outcome: "problem" },
+      {
+        name: "common-crawl-indexed",
+        outcome: "clean",
+        clears: ["common-crawl-indexed"],
+      },
+      {
+        name: "wayback-archived",
+        outcome: "clean",
+        clears: ["wayback-archived"],
+      },
+      { name: "archive-indexing", outcome: "skipped" },
+    ],
     cloud: {
       service: "archive-indexing",
       unit: "site",

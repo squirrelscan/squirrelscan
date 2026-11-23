@@ -75,6 +75,22 @@ export const llmsTxtRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "llms-txt-present", outcome: "problem" },
+      { name: "llms-txt-format", outcome: "problem" },
+      {
+        name: "llms-txt-present",
+        outcome: "clean",
+        clears: ["llms-txt-present"],
+      },
+      {
+        name: "llms-txt-format",
+        outcome: "clean",
+        clears: ["llms-txt-format"],
+      },
+      { name: "llms-txt", outcome: "skipped" },
+    ],
     discoveryProbes: ["llms-txt", ...LLMS_TXT_ALT_PATHS],
   },
 

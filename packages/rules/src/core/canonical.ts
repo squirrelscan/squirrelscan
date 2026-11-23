@@ -75,6 +75,12 @@ export const canonicalRule: Rule = {
     // the effective severity of a failing rule is its declared one (#1746). Missing and locale-home are `warn`.
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "canonical", outcome: "problem" },
+      { name: "canonical-to-homepage", outcome: "problem" },
+      { name: "canonical", outcome: "clean", clears: ["canonical"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

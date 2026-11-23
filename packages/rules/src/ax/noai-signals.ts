@@ -93,6 +93,11 @@ export const noaiSignalsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "noai-signals", outcome: "problem" },
+      { name: "noai-signals", outcome: "clean", clears: ["noai-signals"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

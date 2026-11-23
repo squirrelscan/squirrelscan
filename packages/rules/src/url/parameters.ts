@@ -17,6 +17,12 @@ export const urlParametersRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "url-parameters", outcome: "problem" },
+      { name: "tracking-parameters", outcome: "problem" },
+      { name: "url-parameters", outcome: "clean", clears: ["url-parameters"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
