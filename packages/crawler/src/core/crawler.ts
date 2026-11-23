@@ -8,6 +8,7 @@ import type {
   FrontierSource,
   LinkData,
   SitemapData,
+  SeedTwinFallback,
   WafBlockedSummary,
 } from "@squirrelscan/core-contracts";
 import type {
@@ -76,6 +77,8 @@ import { getHostname, urlHostKey } from "@squirrelscan/utils/url";
 import {
   classifyWafResponse,
   detectSoftChallengeEntry,
+  WAF_BLOCK_STATUS_CODES,
+  type WafBlockResult,
 } from "@squirrelscan/utils/waf";
 import { Effect, Stream, PubSub, Duration, Deferred, Either } from "effect";
 
@@ -123,6 +126,7 @@ import {
   isOffSiteFinalUrl,
   normalizeUrl,
   resolveSeedRedirect,
+  seedTwinUrl,
 } from "../frontier";
 import { createHostBackoff, type HostBackoffRegistry } from "../host-backoff";
 import {
@@ -843,6 +847,13 @@ export function createCrawler(
      * would drop a blocked page another worker had just recorded.
      */
     let wafBlocked: WafBlockedSummary | undefined;
+    /** Set when the crawl was re-seeded from the seed host's www/apex twin (#2257). */
+    let seedTwin: SeedTwinFallback | undefined;
+    /**
+     * What the seed probe in `detectRedirects` saw when the seed host refused it with
+     * a WAF classification (#2257). Reset per probe; read once by `start`.
+     */
+    let seedProbeBlock: { status: number; block: WafBlockResult } | undefined;
     /** Stored pages that look like a provider's refusal without its block marker (#1258). */
     let wafSuspect: WafSuspectSummary | undefined;
     /**
@@ -2742,6 +2753,7 @@ export function createCrawler(
           // resume, and `updates` can only displace a weaker source.
           rootFailure,
           ...(wafBlocked ? { wafBlocked } : {}),
+          ...(seedTwin ? { seedTwin } : {}),
           ...(wafSuspect ? { wafSuspect } : {}),
         };
 
@@ -2802,6 +2814,7 @@ export function createCrawler(
         // persisted stats keeps whatever root failure the earlier pass recorded.
         rootFailure = priorStats?.rootFailure;
         wafBlocked = priorStats?.wafBlocked;
+        seedTwin = priorStats?.seedTwin ?? seedTwin;
         wafSuspect = priorStats?.wafSuspect;
         processFailure = undefined;
         // Throttle verdicts do not survive a run. Exhaustion is terminal WITHIN
@@ -3223,6 +3236,7 @@ export function createCrawler(
         // fetched yet, and handing that back as the crawl's seed would let a
         // meta-refresh reroute the audit on the strength of a later timeout.
         let settledUrl = targetUrl;
+        seedProbeBlock = undefined;
         try {
           const MAX_REDIRECTS = 10;
           const REDIRECT_TIMEOUT_MS = 10_000;
@@ -3363,6 +3377,32 @@ export function createCrawler(
                     "seed redirect probe refused",
                     `${hopUrl} answered ${response.status}; the crawl base stays pinned to it`
                   );
+                  if (
+                    hopUrl === targetUrl &&
+                    WAF_BLOCK_STATUS_CODES.has(response.status)
+                  ) {
+                    const refusedBody = await readBodyCapped(
+                      response,
+                      DEFAULT_MAX_DOCUMENT_BODY_BYTES
+                    ).catch(() => "");
+                    const verdict = classifyWafResponse({
+                      status: response.status,
+                      headers: {
+                        server: response.headers.get("server"),
+                        cfCacheStatus: response.headers.get("cf-cache-status"),
+                        xCache: response.headers.get("x-cache"),
+                        raw: response.headers,
+                      },
+                      html: refusedBody,
+                    });
+                    if (verdict.verdict === "blocked") {
+                      seedProbeBlock = {
+                        status: response.status,
+                        block: verdict,
+                      };
+                    }
+                  }
+                  return undefined;
                 }
 
                 // Check if HTTP redirect occurred
@@ -3634,6 +3674,78 @@ export function createCrawler(
       }).pipe(Effect.onInterrupt(() => Effect.sync(() => interrupted.abort())));
     };
 
+    /**
+     * One GET of the seed's www/apex twin (#2257), through the same egress policy as the
+     * seed probe. Returns the URL it settled on when it answered 2xx with HTML that is not
+     * itself a challenge page, else null.
+     */
+    const probeSeedTwin = (
+      twinUrl: string
+    ): Effect.Effect<string | null, never, never> =>
+      Effect.promise(async () => {
+        try {
+          const egress = egressFor(twinUrl);
+          const send = egress
+            ? egressGuardedSend(fetchUndecoded, egress)
+            : undefined;
+          let guardedFinalUrl: string | undefined;
+          const timeoutMs = Math.max(1, Math.min(10_000, config.timeoutMs));
+          const headers = config.userAgent
+            ? { "User-Agent": config.userAgent }
+            : undefined;
+          return await withRequestDeadline(
+            timeoutMs,
+            (signal) =>
+              send
+                ? safeRedirectFetch(
+                    twinUrl,
+                    { method: "GET", signal, ...(headers ? { headers } : {}) },
+                    send
+                  ).then(({ response, finalUrl }) => {
+                    guardedFinalUrl = finalUrl;
+                    return response;
+                  })
+                : fetchUndecoded(twinUrl, {
+                    method: "GET",
+                    signal,
+                    redirect: "follow",
+                    ...(headers ? { headers } : {}),
+                  }),
+            async (response) => {
+              const served = guardedFinalUrl ?? (response.url || twinUrl);
+              const contentType = response.headers.get("content-type") || "";
+              if (
+                response.status < 200 ||
+                response.status >= 300 ||
+                !contentType.includes("text/html") ||
+                isOffSiteFinalUrl(twinUrl, served)
+              ) {
+                await response.body?.cancel().catch(() => {});
+                return null;
+              }
+              const html = await readBodyCapped(
+                response,
+                DEFAULT_MAX_DOCUMENT_BODY_BYTES
+              );
+              const verdict = classifyWafResponse({
+                status: response.status,
+                headers: {
+                  server: response.headers.get("server"),
+                  cfCacheStatus: response.headers.get("cf-cache-status"),
+                  xCache: response.headers.get("x-cache"),
+                  raw: response.headers,
+                },
+                html,
+              });
+              return verdict.verdict === "blocked" ? null : served;
+            }
+          );
+        } catch (error) {
+          logger.debug("seed twin probe failed", twinUrl, error);
+          return null;
+        }
+      });
+
     const start = (
       targetUrl: string,
       originalUrl?: string
@@ -3674,11 +3786,12 @@ export function createCrawler(
         // origin from it — a non-http(s) target would make `new URL(...).origin`
         // an opaque "null" origin and corrupt the whole crawl. Scheme-only:
         // internal/private hosts stay allowed.
-        const finalTargetUrl = isHttpOrHttpsUrl(rawFinalTargetUrl)
+        let finalTargetUrl = isHttpOrHttpsUrl(rawFinalTargetUrl)
           ? rawFinalTargetUrl
           : targetUrl;
         // Use provided originalUrl or fall back to targetUrl for backwards compat
-        const userProvidedUrl = originalUrl || targetUrl;
+        const typedSeedUrl = originalUrl || targetUrl;
+        let userProvidedUrl = typedSeedUrl;
 
         if (finalTargetUrl !== targetUrl) {
           logger.debug(
@@ -3704,10 +3817,42 @@ export function createCrawler(
         // `userProvidedUrl`, not `targetUrl`, is the seed: callers (the CLI)
         // resolve redirects themselves and pass the already-resolved URL as
         // `targetUrl` with the user's own URL as `originalUrl`.
-        const seedResolution = resolveSeedRedirect(
+        let seedResolution = resolveSeedRedirect(
           userProvidedUrl,
           finalTargetUrl
         );
+
+        // #2257: the seed host served a bot challenge, but its www/apex twin may
+        // answer normally. The engine already treats the two as one site, so
+        // re-seed from the twin rather than fail an audit whose site is reachable.
+        // Both challenged (or no twin) leaves everything as it was: the audit
+        // fails as blocked.
+        seedTwin = undefined;
+        const refusal = seedProbeBlock;
+        if (refusal && !isTargetedRun() && !seedResolution.offSite) {
+          const twinUrl = seedTwinUrl(seedResolution.seedUrl);
+          const twinFinal = twinUrl ? yield* probeSeedTwin(twinUrl) : null;
+          if (twinFinal) {
+            const fromHost = new URL(seedResolution.seedUrl).host;
+            const twinResolution = resolveSeedRedirect(twinUrl!, twinFinal);
+            const toHost = new URL(twinResolution.baseUrl).host;
+            seedTwin = {
+              fromHost,
+              toHost,
+              status: refusal.status,
+              provider: refusal.block.provider,
+              signal: refusal.block.signal ?? "challenge page",
+              reason:
+                `${fromHost} served a bot challenge (${refusal.status}` +
+                `${refusal.block.provider ? `, ${refusal.block.provider}` : ""}), ` +
+                `so the audit ran on ${toHost}, which answered normally`,
+            };
+            logger.warn("seed twin fallback", seedTwin.reason);
+            userProvidedUrl = twinUrl!;
+            finalTargetUrl = twinFinal;
+            seedResolution = twinResolution;
+          }
+        }
         baseUrl = seedResolution.baseUrl;
         headerSeed = userProvidedUrl;
         crawlEgress = egressFor(baseUrl);
@@ -3741,7 +3886,7 @@ export function createCrawler(
         const crawlId = yield* storage.createCrawl({
           baseUrl,
           seedUrl: finalTargetUrl,
-          originalUrl: userProvidedUrl,
+          originalUrl: typedSeedUrl,
           startedAt: Date.now(),
           status: "running",
           config: {

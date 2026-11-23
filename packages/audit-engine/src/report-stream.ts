@@ -1102,6 +1102,10 @@ export function buildV1Report(
     if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
       result.wafBlocked = crawl.stats.wafBlocked;
     }
+    // The seed host was challenged and the audit ran on its www/apex twin (#2257).
+    if (crawl?.stats?.seedTwin) {
+      result.seedTwin = crawl.stats.seedTwin;
+    }
     // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
     if (crawl?.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0) {
       result.wafSuspect = crawl.stats.wafSuspect;
@@ -1463,6 +1467,10 @@ export function buildV2Report(
     // (#1253): never scored, and the report says how many and who.
     if (crawl?.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0) {
       result.wafBlocked = crawl.stats.wafBlocked;
+    }
+    // The seed host was challenged and the audit ran on its www/apex twin (#2257).
+    if (crawl?.stats?.seedTwin) {
+      result.seedTwin = crawl.stats.seedTwin;
     }
     // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
     if (crawl?.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0) {

@@ -42,6 +42,25 @@ export interface WafBlockedSummary {
 }
 
 /**
+ * The audit ran on the `www` or apex twin of the seed host because the seed host
+ * served a bot challenge or block page and the twin answered normally (#2257).
+ */
+export interface SeedTwinFallback {
+  /** The host the user asked for, which was challenged or blocked. */
+  fromHost: string;
+  /** The twin host the crawl was re-seeded from and the audit describes. */
+  toHost: string;
+  /** The status the seed host answered with. */
+  status: number;
+  /** The provider's display name, when the response named one. */
+  provider: string | null;
+  /** The detector's fixed signal vocabulary, never a slice of the page. */
+  signal: string;
+  /** One sentence for the report. */
+  reason: string;
+}
+
+/**
  * A page that looks like a refusal from a known perimeter provider but carries none of
  * its block markers (a bare "Access Denied" behind Cloudflare, #1258). It is stored and
  * audited like any other page: the entry exists so the report can warn that the page may

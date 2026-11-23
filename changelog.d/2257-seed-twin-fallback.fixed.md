@@ -1,0 +1,1 @@
+- An audit whose seed host serves a bot challenge now re-seeds from its `www` or apex twin when the twin answers normally, and the report names the host that was audited and why. When both hosts are challenged the audit is still blocked. (#2257)

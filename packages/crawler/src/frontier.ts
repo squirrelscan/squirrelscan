@@ -378,6 +378,23 @@ export function isOffSiteFinalUrl(baseUrl: string, finalUrl: string): boolean {
   return !isSameSite(base, final);
 }
 
+/**
+ * The same URL on the `www` or apex twin of its host (#2257), or null for an IP
+ * literal, a single-label host or an unparseable URL. Scheme, port and path are kept.
+ */
+export function seedTwinUrl(url: string): string | null {
+  const parsed = parseHttpUrl(url);
+  if (!parsed) return null;
+  const host = parsed.hostname;
+  if (host.includes(":") || /^\d+(\.\d+){3}$/.test(host)) return null;
+  if (!host.includes(".")) return null;
+  const twin = new URL(parsed.href);
+  twin.hostname = host.startsWith("www.") ? host.slice(4) : `www.${host}`;
+  twin.username = "";
+  twin.password = "";
+  return twin.href;
+}
+
 /** Parsed URL, but only for the schemes a crawl can actually be about. */
 function parseHttpUrl(url: string): URL | null {
   try {
