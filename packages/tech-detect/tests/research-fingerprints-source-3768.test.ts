@@ -34,18 +34,17 @@ describe("research-fingerprints.json is the source of generated.ts (repo#3768)",
     expect(patterns.some((p) => p.includes("data-cf-beacon\\s*="))).toBe(true);
   });
 
-  test("Bing UET covers bat.bing.net with a URL boundary", () => {
-    const uet = GENERATED_FINGERPRINTS.find((f) => f.icon === "microsoft-uet");
-    const scriptUrl = uet?.detectors.find((d) => d.type === "script-url");
-    expect(
-      scriptUrl &&
-        "pattern" in scriptUrl &&
-        scriptUrl.pattern.test("https://bat.bing.net/bat.js")
-    ).toBe(true);
-    expect(
-      scriptUrl &&
-        "pattern" in scriptUrl &&
-        scriptUrl.pattern.test("https://bat.bing.com/bat.json")
-    ).toBe(false);
+  test("Bing UET source pattern covers bat.bing.net with a URL boundary", () => {
+    // Reads the JSON source, not generated.ts: dropping the host from
+    // research-fingerprints.json fails here before anyone regenerates.
+    const uet = raw
+      .flatMap((c) => c.fingerprints)
+      .find((f) => f.id === "microsoft-uet");
+    const source = uet?.detectors.find((d) => d.type === "script-url")?.pattern;
+    expect(source).toBeString();
+    const re = new RegExp(source ?? "(?!)", "i");
+    expect(re.test("https://bat.bing.net/bat.js")).toBe(true);
+    expect(re.test("https://bat.bing.com/bat.js")).toBe(true);
+    expect(re.test("https://bat.bing.com/bat.json")).toBe(false);
   });
 });
