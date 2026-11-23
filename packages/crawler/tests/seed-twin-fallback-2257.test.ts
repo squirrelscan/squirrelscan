@@ -68,7 +68,7 @@ interface Page {
 /**
  * The page-fetch seam. Deliberately NOT the preamble: the seed-redirect probe,
  * robots.txt and the AX sweep all go through `globalThis.fetch`, which the
- * tests stub separately so the two vantages can disagree — which is the whole
+ * tests stub separately so the two vantages can disagree: which is the whole
  * failure being reproduced.
  */
 const CHALLENGE_HTML =
