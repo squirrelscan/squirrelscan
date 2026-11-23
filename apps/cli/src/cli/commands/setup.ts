@@ -22,6 +22,7 @@ import { loadUserSettings, updateSettings } from "@/self/settings";
 import { type TelemetryEvent, trackFirstRunEvent } from "@/self/telemetry";
 
 import { version } from "../../../package.json";
+import { dashboardHandoffLines } from "../agent-setup";
 import { type Theme, createTheme } from "../theme";
 
 const tildify = (path: string) => tildifyIn(path, defaultSkillsEnv());
@@ -299,6 +300,12 @@ export async function runSetup(opts: {
   }
 
   console.log(`\n  ${t.ok(t.sym.ok)} ${t.bold("You're ready.")}`);
+  // Hand-off to the dashboard onboarding (repo#4976). Text only, so --yes and
+  // non-interactive runs print it and never block. Only for signed-in users:
+  // the dashboard needs an account to detect anything.
+  if (resolveCredential()) {
+    for (const line of dashboardHandoffLines()) console.log(line);
+  }
 
   // Last step: the first audit. Interactive runs are offered it right here;
   // everything else (no TTY, CI, an agent, --yes, --dry-run) never blocks and

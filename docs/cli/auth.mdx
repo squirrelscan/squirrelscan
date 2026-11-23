@@ -153,6 +153,8 @@ Opens browser for authentication. After completing login:
 
 The browser lands on a squirrelscan page served by the CLI on `127.0.0.1`. It confirms the email you signed in as, offers the one-line prompt that sets up your coding agent, and follows your light or dark setting. Nothing on it is loaded from the network, so it works offline. A sign-in that timed out or was already used gets the same page with the next step.
 
+After sign-in the terminal also prints the agent setup prompt and a pointer to the dashboard at `https://app.squirrelscan.com`, where onboarding picks up your first CLI sign-in or published audit on its own. The pointer is plain text: nothing to answer and no browser opened.
+
 ### Troubleshooting
 
 **`Couldn't reach the auth server …`**: the API was unreachable (it's down, or
