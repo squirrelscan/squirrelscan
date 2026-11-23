@@ -36,10 +36,10 @@ const parse = (options?: Parameters<typeof renderJson>[1]) =>
   };
 
 describe("meta.schemaVersion", () => {
-  test("is 1.30, the version that added `meta.coverage.requested` and `meta.coverage.findings` (after 1.29 `userAgentFallback`, 1.28 `javascript`, 1.27 WCAG criteria, 1.26 `cacheFreshness`), on every JSON report", () => {
-    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.30");
-    expect(parse().meta.schemaVersion).toBe("1.30");
-    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.30");
+  test("is 1.31, the version that added `seedTwin` (after 1.30 `meta.coverage.requested` and `meta.coverage.findings`, 1.29 `userAgentFallback`, 1.28 `javascript`, 1.27 WCAG criteria, 1.26 `cacheFreshness`), on every JSON report", () => {
+    expect(JSON_REPORT_SCHEMA_VERSION).toBe("1.31");
+    expect(parse().meta.schemaVersion).toBe("1.31");
+    expect(parse({ pages: rows(1) }).meta.schemaVersion).toBe("1.31");
   });
 });
 
