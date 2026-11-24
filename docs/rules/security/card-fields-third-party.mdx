@@ -1,0 +1,104 @@
+---
+title: "Card fields and third-party scripts: the skimming risk on your own checkout"
+description: "Card number fields in your page's own DOM can be read by every script on the page. squirrel flags card fields on pages that load third-party scripts."
+---
+
+## Why card fields in your own DOM are a risk
+
+Any script running in a document can read what is typed into that document's inputs. When a page takes card details in its own fields and also loads third-party scripts (a tag manager, an A/B testing snippet, a chat widget, an analytics tag), each of those scripts can read the card number as it is typed. If one of those vendors is compromised, its payload runs with the same access. In November 2026 a payload served through Optimizely snippets carried a card skimmer that watched form submissions and `fetch` and XHR request bodies for card numbers ([Report URI write-up](https://blog.report-uri.com/worlds-largest-brands-infected-with-malware-via-optimizely/)).
+
+A payment provider's hosted fields avoid this. Stripe Elements, Adyen, Braintree Hosted Fields and similar products put each card input inside a cross-origin iframe served by the provider. Scripts on your page cannot read into that iframe, so a skimmer on your page never sees the card number.
+
+## What squirrel checks
+
+The rule runs on every crawled page and emits one check, named `card-fields-third-party`.
+
+A field counts as a card number field when it is an enabled, visible `<input>` of type `text`, `tel`, `number` or `password` (or no type) and either:
+
+- its `autocomplete` names the `cc-number` token, with or without `section-*` and `billing`/`shipping` prefixes, or
+- its `name`, `id` or `placeholder` names a card number: `card_number`, `cardNumber`, `ccnum`, `credit-card`, "Card number" and similar, matched as whole words, so `discard_reason` is not one.
+
+A field is not a payment card field when its name, id, placeholder, `aria-label` or label says it is a gift card, voucher, coupon, promo, loyalty, rewards, membership, club, library or points card, or when it sits in a search box (`type="search"`, `role="search"` or `<search>`). An explicit `autocomplete="cc-number"` overrides those words. A field whose `autocomplete` names another token, such as `cc-exp`, is not a card number field.
+
+A third-party script is an executable `<script src>` whose host has a different registrable domain from the page: on `shop.example.com`, a script from `cdn.example.com` is first-party and one from `cdn.tagvendor.net` is third-party. JSON data blocks, templates and scripts inside `<noscript>` never run, so they do not count.
+
+- Warn when the page has at least one card number field and at least one third-party script. The message counts the card fields, names up to five third-party script hosts, says that any script in the document can read what is typed, and names the fix. Each item names one field, the attribute that identified it and the third-party hosts. Severity warning.
+- Pass when the page has card number fields and no third-party script.
+- Info with `No card number field in this page's own document` when the page has no card number field in its own document. That includes a page whose card fields live inside a payment provider's cross-origin iframe.
+
+### What it does not see
+
+The rule reads the HTML the audit fetched. A card form that JavaScript builds after the page loads is not seen by a local audit, so a pass on a single-page app checkout is not proof that the checkout is safe. It also does not inspect inline scripts, scripts that other scripts inject at run time, or the contents of any iframe.
+
+## How to fix it
+
+Move card entry into your payment provider's hosted fields or hosted checkout page, so the card inputs live in the provider's cross-origin iframe:
+
+```html
+<form id="payment-form" method="post" action="/pay">
+  <!-- The provider's SDK mounts a cross-origin iframe here -->
+  <div id="card-element"></div>
+  <button>Pay</button>
+</form>
+```
+
+If card fields have to stay in your own DOM, remove every third-party script from the payment page: tag managers, A/B testing, chat, analytics and session recording. A strict `Content-Security-Policy` on that page limits which scripts can load and where they can send data.
+
+| | |
+|---|---|
+| **Rule ID** | `security/card-fields-third-party` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/card-fields-third-party"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/card-fields-third-party"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `card-fields-third-party` | Problem |  |
+| `card-fields-third-party` | Clean | `card-fields-third-party` |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/sri](/rules/security/sri): pins the content of cross-origin scripts that do not change in place.
+- [security/csp](/rules/security/csp): a Content-Security-Policy limits which scripts a page can load.
+- [security/form-https](/rules/security/form-https): where a payment form submits.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Report URI: world's largest brands infected with malware via Optimizely](https://blog.report-uri.com/worlds-largest-brands-infected-with-malware-via-optimizely/)
+- [The autocomplete attribute and the cc-number token, MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/autocomplete)

@@ -551,8 +551,8 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // packages/rules/tests/rule-count-docs-2139.test.ts, private
 // rule-count-consistency) derive the floor from the registry and fail when this
 // constant, or any copy, disagrees. #1019 #986 #981
-// Currently 359 enabled rules.
-export const PUBLIC_RULE_COUNT_FLOOR = 350;
+// Currently 360 enabled rules.
+export const PUBLIC_RULE_COUNT_FLOOR = 360;
 export const PUBLIC_CATEGORY_COUNT = 22;
 
 // Hosted MCP (#113). These appear in the well-known manifests, the /add/<agent>

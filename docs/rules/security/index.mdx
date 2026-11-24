@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (33 rules).
+HTTPS, headers, and safe link practices (34 rules).
 
 ## Run only these rules
 
@@ -57,6 +57,7 @@ These carry the highest severity and weight in the category.
 |---|---|---|---|
 | [Auth endpoint leaks a password hash or the full user record](/rules/security/auth-endpoint-disclosure) | A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET per endpoint and names each leaked field. | error | Site-wide |
 | [Auth tokens in localStorage: why a stored JWT is exposed](/rules/security/token-storage) | A JWT or session token in localStorage or sessionStorage is readable by any script on the page. squirrel finds the writes in your scripts and names the key. | warning | Per-page |
+| [Card fields and third-party scripts: the skimming risk on your own checkout](/rules/security/card-fields-third-party) | Card number fields in your page's own DOM can be read by every script on the page. squirrel flags card fields on pages that load third-party scripts. | warning | Per-page |
 | [Client-side-only authorization: when your admin API answers anyone](/rules/security/client-side-authz) | Hiding the admin screen in the frontend does not protect the admin API. squirrel finds admin endpoints in your JavaScript and checks whether they answer without credentials. | error | Site-wide |
 | [Content-Security-Policy: what to set and how to check it](/rules/security/csp) | A missing CSP, a report-only policy or an unsafe-inline script-src leaves XSS unmitigated. squirrel parses the header and names each gap. | warning | Site-wide |
 | [Cookie flags: Secure, HttpOnly and SameSite on Set-Cookie](/rules/security/cookie-flags) | SameSite=None without Secure is rejected outright, and a session cookie without HttpOnly is readable by any script. squirrel parses every Set-Cookie. | warning | Per-page |

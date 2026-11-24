@@ -308,6 +308,7 @@
   "schema/video": 500,
   "schema/website-search": 1,
   "security/auth-endpoint-disclosure": 1,
+  "security/card-fields-third-party": 500,
   "security/client-side-authz": 1,
   "security/cookie-flags": 500,
   "security/csp": 1,

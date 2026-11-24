@@ -6,7 +6,7 @@ Does your tool read `CLAUDE.md` instead of `AGENTS.md`? Create a local `CLAUDE.m
 
 ## What this is
 
-squirrelscan is **the website QA tool for your coding agent**. It audits websites for SEO, performance, security, accessibility and agent experience (AX) issues, and gives your coding agent exact fixes. This repository is the open source (MIT) part: the `squirrel` CLI, the crawler, the audit engine, 350+ audit rules, the report renderers and the docs at [docs.squirrelscan.com](https://docs.squirrelscan.com). The CLI ships as a Bun standalone executable.
+squirrelscan is **the website QA tool for your coding agent**. It audits websites for SEO, performance, security, accessibility and agent experience (AX) issues, and gives your coding agent exact fixes. This repository is the open source (MIT) part: the `squirrel` CLI, the crawler, the audit engine, 360+ audit rules, the report renderers and the docs at [docs.squirrelscan.com](https://docs.squirrelscan.com). The CLI ships as a Bun standalone executable.
 
 Naming: the product is `squirrelscan`, always lowercase, and the binary is `squirrel`. Say "audit rules", not "SEO rules". The term is "agent experience (AX)", never "agent readiness" or "AI readiness".
 

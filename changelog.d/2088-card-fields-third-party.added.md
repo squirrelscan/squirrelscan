@@ -1,0 +1,1 @@
+- New rule `security/card-fields-third-party` warns when a page takes card numbers in its own fields while loading third-party scripts, any of which can read what is typed, and names the fields and the script hosts. Card fields inside a payment provider's hosted iframe, gift card, voucher, loyalty card and search fields are not flagged (#2088)

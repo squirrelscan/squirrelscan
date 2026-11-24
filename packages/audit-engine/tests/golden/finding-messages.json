@@ -3896,6 +3896,12 @@
    "auth-endpoint-not-checked|skipped|Probing is passive, so no auth or session endpoint was probed. Run with --probe active to check what they disclose.||"
   ]
  },
+ "security/card-fields-third-party": {
+  "digest": "46932262540060",
+  "lines": [
+   "card-fields-third-party|info|No card number field in this page's own document||"
+  ]
+ },
  "security/client-side-authz": {
   "digest": "98304338379794",
   "lines": [

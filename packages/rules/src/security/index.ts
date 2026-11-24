@@ -3,6 +3,7 @@
 import type { Rule } from "../types";
 
 import { authEndpointDisclosureRule } from "./auth-endpoint-disclosure";
+import { cardFieldsThirdPartyRule } from "./card-fields-third-party";
 import { clientSideAuthzRule } from "./client-side-authz";
 import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
@@ -51,6 +52,7 @@ export const rules: Rule[] = [
   mixedContentRule,
   formHttpsRule,
   formCaptchaRule,
+  cardFieldsThirdPartyRule,
   newTabRule,
   passwordFormGetRule,
   leakedSecretsRule,
@@ -74,6 +76,7 @@ export const rules: Rule[] = [
 
 export {
   authEndpointDisclosureRule,
+  cardFieldsThirdPartyRule,
   clientSideAuthzRule,
   cookieFlagsRule,
   cspBlocksOwnResourcesRule,
