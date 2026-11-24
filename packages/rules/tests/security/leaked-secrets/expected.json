@@ -1542,13 +1542,13 @@
     {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************u57O","extra":{"kind":"publishable","mode":"test"}}
   ],
   "stripe-publishable-test-key@next-data": [
-    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************j0r1","extra":{"kind":"publishable","mode":"test"}}
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"pk_tes********************j0r1","extra":{"kind":"publishable","mode":"test"}}
   ],
   "stripe-publishable-test-key@nuxt-payload": [
-    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"pk_tes********************9KMP","extra":{"kind":"publishable","mode":"test"}}
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"pk_tes********************9KMP","extra":{"kind":"publishable","mode":"test"}}
   ],
   "stripe-publishable-test-key@html-comment": [
-    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************QJWN","extra":{"kind":"publishable","mode":"test"}}
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"pk_tes********************QJWN","extra":{"kind":"publishable","mode":"test"}}
   ],
   "stripe-publishable-test-key@meta-content": [
     {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************ii1W","extra":{"kind":"publishable","mode":"test"}}
@@ -1570,6 +1570,12 @@
   ],
   "stripe-publishable-test-key@sourcemap-comment": [
     {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"pk_tes********************3tok","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@source-map": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"pk_tes********************yrGF","extra":{"kind":"publishable","mode":"test"}}
+  ],
+  "stripe-publishable-test-key@config-endpoint": [
+    {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"pk_tes********************daLO","extra":{"kind":"publishable","mode":"test"}}
   ],
   "stripe-publishable-test-key@entity-encoded-attribute": [
     {"type":"Stripe Publishable Test Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"pk_tes********************R7Xx","extra":{"kind":"publishable","mode":"test"}}
@@ -3915,13 +3921,13 @@
     {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************JEDQ"}
   ],
   "contentful-management-token@next-data": [
-    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************1nEk"}
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"CFPAT-********************1nEk"}
   ],
   "contentful-management-token@nuxt-payload": [
-    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"CFPAT-********************FRHp"}
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"CFPAT-********************FRHp"}
   ],
   "contentful-management-token@html-comment": [
-    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************WUBX"}
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"CFPAT-********************WUBX"}
   ],
   "contentful-management-token@meta-content": [
     {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************8ez-"}
@@ -3943,6 +3949,12 @@
   ],
   "contentful-management-token@sourcemap-comment": [
     {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"CFPAT-********************kFK6"}
+  ],
+  "contentful-management-token@source-map": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"CFPAT-********************bHzY"}
+  ],
+  "contentful-management-token@config-endpoint": [
+    {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"CFPAT-********************q6dX"}
   ],
   "contentful-management-token@entity-encoded-attribute": [
     {"type":"Contentful Management Token","confidence":"high","publicByDesign":false,"location":"html","masked":"CFPAT-********************yKps"}
@@ -3969,13 +3981,13 @@
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"pathPv********************ed82"}
   ],
   "airtable-personal-access-token@next-data": [
-    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"patAtS********************8818"}
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"patAtS********************8818"}
   ],
   "airtable-personal-access-token@nuxt-payload": [
-    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"patdb3********************abb2"}
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"patdb3********************abb2"}
   ],
   "airtable-personal-access-token@html-comment": [
-    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"pat7Aq********************5c32"}
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"pat7Aq********************5c32"}
   ],
   "airtable-personal-access-token@meta-content": [
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patgMu********************fa37"}
@@ -3994,6 +4006,12 @@
   ],
   "airtable-personal-access-token@sourcemap-comment": [
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"patPPQ********************bb39"}
+  ],
+  "airtable-personal-access-token@source-map": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"pataQY********************c543"}
+  ],
+  "airtable-personal-access-token@config-endpoint": [
+    {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"pat730********************e4c4"}
   ],
   "airtable-personal-access-token@entity-encoded-attribute": [
     {"type":"Airtable Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"patmZP********************160c"}
@@ -4020,13 +4038,13 @@
     {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_47********************ZTRB"}
   ],
   "notion-integration-token@next-data": [
-    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_64********************fw0h"}
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"ntn_64********************fw0h"}
   ],
   "notion-integration-token@nuxt-payload": [
-    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"ntn_62********************dwuL"}
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"ntn_62********************dwuL"}
   ],
   "notion-integration-token@html-comment": [
-    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_99********************zFpg"}
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"ntn_99********************zFpg"}
   ],
   "notion-integration-token@meta-content": [
     {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_69********************TPIK"}
@@ -4048,6 +4066,12 @@
   ],
   "notion-integration-token@sourcemap-comment": [
     {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"ntn_22********************hJ4r"}
+  ],
+  "notion-integration-token@source-map": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"ntn_92********************MAn7"}
+  ],
+  "notion-integration-token@config-endpoint": [
+    {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"ntn_21********************Z67B"}
   ],
   "notion-integration-token@entity-encoded-attribute": [
     {"type":"Notion Integration Token","confidence":"high","publicByDesign":false,"location":"html","masked":"ntn_54********************zdjE"}
@@ -4074,13 +4098,13 @@
     {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************ae3D"}
   ],
   "notion-integration-token-legacy@next-data": [
-    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************Vt1P"}
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"secret********************Vt1P"}
   ],
   "notion-integration-token-legacy@nuxt-payload": [
-    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"secret********************ifZ8"}
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"secret********************ifZ8"}
   ],
   "notion-integration-token-legacy@html-comment": [
-    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************5UFF"}
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"secret********************5UFF"}
   ],
   "notion-integration-token-legacy@meta-content": [
     {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************XqU9"}
@@ -4102,6 +4126,12 @@
   ],
   "notion-integration-token-legacy@sourcemap-comment": [
     {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"secret********************XaQ2"}
+  ],
+  "notion-integration-token-legacy@source-map": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"secret********************nSxe"}
+  ],
+  "notion-integration-token-legacy@config-endpoint": [
+    {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"secret********************7aZQ"}
   ],
   "notion-integration-token-legacy@entity-encoded-attribute": [
     {"type":"Notion Integration Token (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"secret********************y49t"}
@@ -4128,13 +4158,13 @@
     {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
   ],
   "cloudinary-url@next-data": [
-    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"cloudi********************edia"}
   ],
   "cloudinary-url@nuxt-payload": [
-    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"cloudi********************edia"}
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"cloudi********************edia"}
   ],
   "cloudinary-url@html-comment": [
-    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"cloudi********************edia"}
   ],
   "cloudinary-url@meta-content": [
     {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
@@ -4150,6 +4180,12 @@
   ],
   "cloudinary-url@pre-env-dump": [
     {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@source-map": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"source-map","masked":"cloudi********************edia"}
+  ],
+  "cloudinary-url@config-endpoint": [
+    {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"cloudi********************edia"}
   ],
   "cloudinary-url@entity-encoded-attribute": [
     {"type":"Cloudinary URL","confidence":"high","publicByDesign":false,"location":"html","masked":"cloudi********************edia"}
@@ -4176,13 +4212,13 @@
     {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************rsx4"}
   ],
   "onesignal-rest-api-key@next-data": [
-    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************icsv"}
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"os_v2_********************icsv"}
   ],
   "onesignal-rest-api-key@nuxt-payload": [
-    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"os_v2_********************k5ro"}
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"os_v2_********************k5ro"}
   ],
   "onesignal-rest-api-key@html-comment": [
-    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************v7uw"}
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"os_v2_********************v7uw"}
   ],
   "onesignal-rest-api-key@meta-content": [
     {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************rfka"}
@@ -4204,6 +4240,12 @@
   ],
   "onesignal-rest-api-key@sourcemap-comment": [
     {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"os_v2_********************b85a"}
+  ],
+  "onesignal-rest-api-key@source-map": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"source-map","masked":"os_v2_********************fgs4"}
+  ],
+  "onesignal-rest-api-key@config-endpoint": [
+    {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"os_v2_********************yj18"}
   ],
   "onesignal-rest-api-key@entity-encoded-attribute": [
     {"type":"OneSignal REST API Key","confidence":"high","publicByDesign":false,"location":"html","masked":"os_v2_********************evhw"}
@@ -4230,13 +4272,13 @@
     {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************fiVE"}
   ],
   "pubnub-secret-key@next-data": [
-    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************PMwC"}
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sec-c-********************PMwC"}
   ],
   "pubnub-secret-key@nuxt-payload": [
-    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sec-c-********************P4t0"}
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sec-c-********************P4t0"}
   ],
   "pubnub-secret-key@html-comment": [
-    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************4vFH"}
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"sec-c-********************4vFH"}
   ],
   "pubnub-secret-key@meta-content": [
     {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************aLap"}
@@ -4258,6 +4300,12 @@
   ],
   "pubnub-secret-key@sourcemap-comment": [
     {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sec-c-********************M0SI"}
+  ],
+  "pubnub-secret-key@source-map": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"source-map","masked":"sec-c-********************kG91"}
+  ],
+  "pubnub-secret-key@config-endpoint": [
+    {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"sec-c-********************wr0q"}
   ],
   "pubnub-secret-key@entity-encoded-attribute": [
     {"type":"PubNub Secret Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sec-c-********************9Qm9"}
@@ -4284,13 +4332,13 @@
     {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************ba2e"}
   ],
   "pubnub-publish-key@next-data": [
-    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************6b87"}
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"pub-c-********************6b87"}
   ],
   "pubnub-publish-key@nuxt-payload": [
-    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"pub-c-********************65f0"}
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"pub-c-********************65f0"}
   ],
   "pubnub-publish-key@html-comment": [
-    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************5d13"}
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"pub-c-********************5d13"}
   ],
   "pubnub-publish-key@meta-content": [
     {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************f5be"}
@@ -4312,6 +4360,12 @@
   ],
   "pubnub-publish-key@sourcemap-comment": [
     {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"pub-c-********************312d"}
+  ],
+  "pubnub-publish-key@source-map": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"pub-c-********************2caf"}
+  ],
+  "pubnub-publish-key@config-endpoint": [
+    {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"pub-c-********************4825"}
   ],
   "pubnub-publish-key@entity-encoded-attribute": [
     {"type":"PubNub Publish Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"pub-c-********************6b9d"}
@@ -4338,13 +4392,13 @@
     {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************7a7c"}
   ],
   "pubnub-subscribe-key@next-data": [
-    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************afbf"}
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"sub-c-********************afbf"}
   ],
   "pubnub-subscribe-key@nuxt-payload": [
-    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"sub-c-********************5d1d"}
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"sub-c-********************5d1d"}
   ],
   "pubnub-subscribe-key@html-comment": [
-    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************6c14"}
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"sub-c-********************6c14"}
   ],
   "pubnub-subscribe-key@meta-content": [
     {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************c6ff"}
@@ -4366,6 +4420,12 @@
   ],
   "pubnub-subscribe-key@sourcemap-comment": [
     {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"sub-c-********************c6db"}
+  ],
+  "pubnub-subscribe-key@source-map": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"sub-c-********************758a"}
+  ],
+  "pubnub-subscribe-key@config-endpoint": [
+    {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"sub-c-********************9dad"}
   ],
   "pubnub-subscribe-key@entity-encoded-attribute": [
     {"type":"PubNub Subscribe Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"sub-c-********************3443"}
@@ -4392,13 +4452,13 @@
     {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************a00/"}
   ],
   "zapier-webhook-url@next-data": [
-    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************jzo/"}
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"https:********************jzo/"}
   ],
   "zapier-webhook-url@nuxt-payload": [
-    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************ndl/"}
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"https:********************ndl/"}
   ],
   "zapier-webhook-url@html-comment": [
-    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************uk7/"}
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"https:********************uk7/"}
   ],
   "zapier-webhook-url@meta-content": [
     {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************pta/"}
@@ -4414,6 +4474,12 @@
   ],
   "zapier-webhook-url@pre-env-dump": [
     {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************6wb/"}
+  ],
+  "zapier-webhook-url@source-map": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"https:********************mg9/"}
+  ],
+  "zapier-webhook-url@config-endpoint": [
+    {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"https:********************ulb/"}
   ],
   "zapier-webhook-url@entity-encoded-attribute": [
     {"type":"Zapier Webhook URL","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************001/"}
@@ -4440,13 +4506,13 @@
     {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************64\\\""}
   ],
   "gcp-service-account-key@next-data": [
-    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************c1\\\""}
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"\\\"priv********************c1\\\""}
   ],
   "gcp-service-account-key@nuxt-payload": [
-    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************08\\\""}
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"\\\"priv********************08\\\""}
   ],
   "gcp-service-account-key@html-comment": [
-    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\"priva********************c43\""}
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"\"priva********************c43\""}
   ],
   "gcp-service-account-key@json-ld": [
     {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"\\\"priv********************75\\\""}
@@ -4456,6 +4522,12 @@
   ],
   "gcp-service-account-key@pre-env-dump": [
     {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\"priva********************587\""}
+  ],
+  "gcp-service-account-key@source-map": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"source-map","masked":"\\\"priv********************94\\\""}
+  ],
+  "gcp-service-account-key@config-endpoint": [
+    {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"\\\"priv********************ce\\\""}
   ],
   "gcp-service-account-key@entity-encoded-attribute": [
     {"type":"GCP Service Account Key","confidence":"high","publicByDesign":false,"location":"html","masked":"\\\"priv********************23\\\""}
@@ -4482,13 +4554,13 @@
     {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************o%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
   ],
   "azure-sas-token@next-data": [
-    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************Lh4=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sv=202********************Lh4=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
   ],
   "azure-sas-token@nuxt-payload": [
-    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sv=202********************0%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sv=202********************0%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
   ],
   "azure-sas-token@html-comment": [
-    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************+ig=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"sv=202********************+ig=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
   ],
   "azure-sas-token@meta-content": [
     {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************w%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
@@ -4504,6 +4576,12 @@
   ],
   "azure-sas-token@pre-env-dump": [
     {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************Ijw=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@source-map": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"sv=202********************w%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
+  ],
+  "azure-sas-token@config-endpoint": [
+    {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"sv=202********************0NI=","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
   ],
   "azure-sas-token@entity-encoded-attribute": [
     {"type":"Azure SAS Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sv=202********************M%3D","extra":{"permissions":"rwdlac","resource":"account","expiresAt":"2031-01-01T00:00:00.000Z","expired":false,"kind":"write"}}
@@ -4530,13 +4608,13 @@
     {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************3r=="}
   ],
   "azure-function-key@next-data": [
-    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************GS=="}
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"https:********************GS=="}
   ],
   "azure-function-key@nuxt-payload": [
-    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"https:********************vo=="}
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"https:********************vo=="}
   ],
   "azure-function-key@html-comment": [
-    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************Jd=="}
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"https:********************Jd=="}
   ],
   "azure-function-key@meta-content": [
     {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************8C=="}
@@ -4552,6 +4630,12 @@
   ],
   "azure-function-key@pre-env-dump": [
     {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************hq=="}
+  ],
+  "azure-function-key@source-map": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"https:********************aP=="}
+  ],
+  "azure-function-key@config-endpoint": [
+    {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"https:********************TG=="}
   ],
   "azure-function-key@entity-encoded-attribute": [
     {"type":"Azure Function Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"https:********************s1=="}
@@ -4578,16 +4662,22 @@
     {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************srv\""}
   ],
   "mux-token-secret@next-data": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************KUF\""}
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"MUX_TO********************KUF\""}
   ],
   "mux-token-secret@nuxt-payload": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"MUX_TO********************IEQ\""}
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"MUX_TO********************IEQ\""}
   ],
   "mux-token-secret@html-comment": [
-    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"MUX_TO********************5ws\""}
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"MUX_TO********************5ws\""}
   ],
   "mux-token-secret@external-bundle": [
     {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"MUX_TO********************84T\""}
+  ],
+  "mux-token-secret@source-map": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"MUX_TO********************OrY\""}
+  ],
+  "mux-token-secret@config-endpoint": [
+    {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"MUX_TO********************Sr+\""}
   ],
   "mux-token-secret@entity-encoded-attribute": [
     {"type":"Mux Token Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"MUX_TO********************oKN\""}
@@ -4614,13 +4704,13 @@
     {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************eFOR"}
   ],
   "sentry-organization-token@next-data": [
-    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************Q9jt"}
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sntrys********************Q9jt"}
   ],
   "sentry-organization-token@nuxt-payload": [
-    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntrys********************U8yo"}
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sntrys********************U8yo"}
   ],
   "sentry-organization-token@html-comment": [
-    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************oklj"}
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"sntrys********************oklj"}
   ],
   "sentry-organization-token@meta-content": [
     {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************92J1"}
@@ -4642,6 +4732,12 @@
   ],
   "sentry-organization-token@sourcemap-comment": [
     {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntrys********************yNRF"}
+  ],
+  "sentry-organization-token@source-map": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"sntrys********************gin0"}
+  ],
+  "sentry-organization-token@config-endpoint": [
+    {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"sntrys********************eHhp"}
   ],
   "sentry-organization-token@entity-encoded-attribute": [
     {"type":"Sentry Organization Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntrys********************JV9K"}
@@ -4668,13 +4764,13 @@
     {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************578a"}
   ],
   "sentry-user-token@next-data": [
-    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************3f04"}
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sntryu********************3f04"}
   ],
   "sentry-user-token@nuxt-payload": [
-    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sntryu********************9d7e"}
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sntryu********************9d7e"}
   ],
   "sentry-user-token@html-comment": [
-    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************5a90"}
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"sntryu********************5a90"}
   ],
   "sentry-user-token@meta-content": [
     {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************7805"}
@@ -4696,6 +4792,12 @@
   ],
   "sentry-user-token@sourcemap-comment": [
     {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sntryu********************e761"}
+  ],
+  "sentry-user-token@source-map": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"sntryu********************086f"}
+  ],
+  "sentry-user-token@config-endpoint": [
+    {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"sntryu********************7034"}
   ],
   "sentry-user-token@entity-encoded-attribute": [
     {"type":"Sentry User Token","confidence":"high","publicByDesign":false,"location":"html","masked":"sntryu********************4104"}
@@ -4722,13 +4824,13 @@
     {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_yB********************QuPK"}
   ],
   "typeform-personal-access-token@next-data": [
-    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_QM********************Omuh"}
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"tfp_QM********************Omuh"}
   ],
   "typeform-personal-access-token@nuxt-payload": [
-    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"tfp_fi********************ubFh"}
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"tfp_fi********************ubFh"}
   ],
   "typeform-personal-access-token@html-comment": [
-    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_Nx********************oXiS"}
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"tfp_Nx********************oXiS"}
   ],
   "typeform-personal-access-token@meta-content": [
     {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_rA********************OIZB"}
@@ -4750,6 +4852,12 @@
   ],
   "typeform-personal-access-token@sourcemap-comment": [
     {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"tfp_9G********************nUSr"}
+  ],
+  "typeform-personal-access-token@source-map": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"tfp_PU********************1HW2"}
+  ],
+  "typeform-personal-access-token@config-endpoint": [
+    {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"tfp_jD********************zPzC"}
   ],
   "typeform-personal-access-token@entity-encoded-attribute": [
     {"type":"Typeform Personal Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"tfp_Va********************jx1u"}
@@ -4776,13 +4884,13 @@
     {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
   ],
   "intercom-access-token@next-data": [
-    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOm********************OjA="}
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"dG9rOm********************OjA="}
   ],
   "intercom-access-token@nuxt-payload": [
-    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"dG9rOj********************OjA="}
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"dG9rOj********************OjA="}
   ],
   "intercom-access-token@html-comment": [
-    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"dG9rOm********************OjA="}
   ],
   "intercom-access-token@meta-content": [
     {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
@@ -4804,6 +4912,12 @@
   ],
   "intercom-access-token@sourcemap-comment": [
     {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"external-script","masked":"dG9rOj********************OjA="}
+  ],
+  "intercom-access-token@source-map": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"source-map","masked":"dG9rOm********************OjA="}
+  ],
+  "intercom-access-token@config-endpoint": [
+    {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"dG9rOj********************OjA="}
   ],
   "intercom-access-token@entity-encoded-attribute": [
     {"type":"Intercom Access Token","confidence":"high","publicByDesign":false,"location":"html","masked":"dG9rOm********************OjA="}
@@ -4830,13 +4944,13 @@
     {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-24********************52f3"}
   ],
   "launchdarkly-sdk-key@next-data": [
-    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-51********************0a37"}
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sdk-51********************0a37"}
   ],
   "launchdarkly-sdk-key@nuxt-payload": [
-    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"inline-script","masked":"sdk-60********************daed"}
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"framework-payload","masked":"sdk-60********************daed"}
   ],
   "launchdarkly-sdk-key@html-comment": [
-    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-12********************7642"}
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html-comment","masked":"sdk-12********************7642"}
   ],
   "launchdarkly-sdk-key@meta-content": [
     {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-75********************460a"}
@@ -4858,6 +4972,12 @@
   ],
   "launchdarkly-sdk-key@sourcemap-comment": [
     {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"external-script","masked":"sdk-fa********************c6ba"}
+  ],
+  "launchdarkly-sdk-key@source-map": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"source-map","masked":"sdk-cc********************4090"}
+  ],
+  "launchdarkly-sdk-key@config-endpoint": [
+    {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"config-endpoint","masked":"sdk-f2********************8db4"}
   ],
   "launchdarkly-sdk-key@entity-encoded-attribute": [
     {"type":"LaunchDarkly SDK Key","confidence":"high","publicByDesign":false,"location":"html","masked":"sdk-cc********************272c"}
@@ -4884,13 +5004,13 @@
     {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-c8********************d310"}
   ],
   "launchdarkly-mobile-key@next-data": [
-    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-75********************7d47"}
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"mob-75********************7d47"}
   ],
   "launchdarkly-mobile-key@nuxt-payload": [
-    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"mob-6d********************e0e3"}
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"mob-6d********************e0e3"}
   ],
   "launchdarkly-mobile-key@html-comment": [
-    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-73********************4aa0"}
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"mob-73********************4aa0"}
   ],
   "launchdarkly-mobile-key@meta-content": [
     {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-09********************3d25"}
@@ -4912,6 +5032,12 @@
   ],
   "launchdarkly-mobile-key@sourcemap-comment": [
     {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"mob-cd********************94cf"}
+  ],
+  "launchdarkly-mobile-key@source-map": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"mob-cd********************0a32"}
+  ],
+  "launchdarkly-mobile-key@config-endpoint": [
+    {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"mob-16********************bee3"}
   ],
   "launchdarkly-mobile-key@entity-encoded-attribute": [
     {"type":"LaunchDarkly Mobile Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"mob-ad********************4e6b"}
@@ -4938,16 +5064,22 @@
     {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************3a1\""}
   ],
   "launchdarkly-client-side-id@next-data": [
-    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************92d\""}
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"client********************92d\""}
   ],
   "launchdarkly-client-side-id@nuxt-payload": [
-    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"client********************45c\""}
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"client********************45c\""}
   ],
   "launchdarkly-client-side-id@html-comment": [
-    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"client********************1b2\""}
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"client********************1b2\""}
   ],
   "launchdarkly-client-side-id@external-bundle": [
     {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"client********************c38\""}
+  ],
+  "launchdarkly-client-side-id@source-map": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"client********************03e\""}
+  ],
+  "launchdarkly-client-side-id@config-endpoint": [
+    {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"client********************008\""}
   ],
   "launchdarkly-client-side-id@entity-encoded-attribute": [
     {"type":"LaunchDarkly Client-side ID","confidence":"medium","publicByDesign":true,"location":"html","masked":"client********************5f8\""}
@@ -4974,13 +5106,13 @@
     {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-9**************f695"}
   ],
   "new-relic-browser-key@next-data": [
-    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-9**************959e"}
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"NRJS-9**************959e"}
   ],
   "new-relic-browser-key@nuxt-payload": [
-    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"NRJS-4**************6514"}
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"NRJS-4**************6514"}
   ],
   "new-relic-browser-key@html-comment": [
-    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-0**************5080"}
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"NRJS-0**************5080"}
   ],
   "new-relic-browser-key@meta-content": [
     {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-e**************d8a1"}
@@ -5002,6 +5134,12 @@
   ],
   "new-relic-browser-key@sourcemap-comment": [
     {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"NRJS-e**************a599"}
+  ],
+  "new-relic-browser-key@source-map": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"NRJS-6**************ef4f"}
+  ],
+  "new-relic-browser-key@config-endpoint": [
+    {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"NRJS-7**************8afd"}
   ],
   "new-relic-browser-key@entity-encoded-attribute": [
     {"type":"New Relic Browser Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"NRJS-c**************4077"}
@@ -6834,13 +6972,13 @@
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"992807********************8e6a"}
   ],
   "algolia-search-only-api-key@next-data": [
-    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"6a13c2********************9360"}
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"6a13c2********************9360"}
   ],
   "algolia-search-only-api-key@nuxt-payload": [
-    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"51f802********************1f3f"}
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"51f802********************1f3f"}
   ],
   "algolia-search-only-api-key@html-comment": [
-    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"0e6e49********************755e"}
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"0e6e49********************755e"}
   ],
   "algolia-search-only-api-key@meta-content": [
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"974038********************365f"}
@@ -6856,6 +6994,12 @@
   ],
   "algolia-search-only-api-key@sourcemap-comment": [
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"959f97********************f075"}
+  ],
+  "algolia-search-only-api-key@source-map": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"3205df********************f799"}
+  ],
+  "algolia-search-only-api-key@config-endpoint": [
+    {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"53db2e********************4229"}
   ],
   "algolia-search-only-api-key@entity-encoded-attribute": [
     {"type":"Algolia Search-Only API Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"51500f********************1451"}
@@ -6939,13 +7083,13 @@
     {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8jzfK3**************A7tt"}
   ],
   "storyblok-access-token@next-data": [
-    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"9lcJeZ**************5ztt"}
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"9lcJeZ**************5ztt"}
   ],
   "storyblok-access-token@nuxt-payload": [
-    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7i91DL**************zxtt"}
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"7i91DL**************zxtt"}
   ],
   "storyblok-access-token@html-comment": [
-    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9NklIp**************oItt"}
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"9NklIp**************oItt"}
   ],
   "storyblok-access-token@meta-content": [
     {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"8OzrwF**************uxtt"}
@@ -6964,6 +7108,12 @@
   ],
   "storyblok-access-token@sourcemap-comment": [
     {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"1iaz2q**************xett"}
+  ],
+  "storyblok-access-token@source-map": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"5ykZR1**************Lctt"}
+  ],
+  "storyblok-access-token@config-endpoint": [
+    {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"2jRNI3**************Gftt"}
   ],
   "storyblok-access-token@entity-encoded-attribute": [
     {"type":"Storyblok Access Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"67R9EC**************a6tt"}
@@ -6990,13 +7140,13 @@
     {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"9a0b4a********************1f2f"}
   ],
   "webflow-api-token@next-data": [
-    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"03fa0c********************f9aa"}
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"03fa0c********************f9aa"}
   ],
   "webflow-api-token@nuxt-payload": [
-    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"255898********************f6f4"}
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"255898********************f6f4"}
   ],
   "webflow-api-token@html-comment": [
-    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9ad561********************a35a"}
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"9ad561********************a35a"}
   ],
   "webflow-api-token@meta-content": [
     {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"9f4130********************56e4"}
@@ -7015,6 +7165,12 @@
   ],
   "webflow-api-token@sourcemap-comment": [
     {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"2c84cd********************5501"}
+  ],
+  "webflow-api-token@source-map": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"2f366e********************1ade"}
+  ],
+  "webflow-api-token@config-endpoint": [
+    {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"3bb2dc********************1b5e"}
   ],
   "webflow-api-token@entity-encoded-attribute": [
     {"type":"Webflow API Token","confidence":"medium","publicByDesign":false,"location":"html","masked":"4b5a57********************9c40"}
@@ -7041,13 +7197,13 @@
     {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"89b53b********************ea0e"}
   ],
   "squarespace-api-key@next-data": [
-    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"e8aa91********************ce33"}
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"e8aa91********************ce33"}
   ],
   "squarespace-api-key@nuxt-payload": [
-    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"b7ffd7********************95fb"}
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"b7ffd7********************95fb"}
   ],
   "squarespace-api-key@html-comment": [
-    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"7f7e07********************d0e3"}
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"7f7e07********************d0e3"}
   ],
   "squarespace-api-key@meta-content": [
     {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"eeccba********************8339"}
@@ -7066,6 +7222,12 @@
   ],
   "squarespace-api-key@sourcemap-comment": [
     {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"ed3238********************ebee"}
+  ],
+  "squarespace-api-key@source-map": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"41ddae********************8867"}
+  ],
+  "squarespace-api-key@config-endpoint": [
+    {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"142d9a********************36c2"}
   ],
   "squarespace-api-key@entity-encoded-attribute": [
     {"type":"Squarespace API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"1f28ba********************cfaf"}
@@ -7092,13 +7254,13 @@
     {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7eyQjH********************aOF6"}
   ],
   "onesignal-rest-api-key-legacy@next-data": [
-    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"6w0UDr********************ycL9"}
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"6w0UDr********************ycL9"}
   ],
   "onesignal-rest-api-key-legacy@nuxt-payload": [
-    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7mOU6V********************POwt"}
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"7mOU6V********************POwt"}
   ],
   "onesignal-rest-api-key-legacy@html-comment": [
-    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"8qiyXl********************sjjS"}
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"8qiyXl********************sjjS"}
   ],
   "onesignal-rest-api-key-legacy@meta-content": [
     {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"83q301********************UXe6"}
@@ -7117,6 +7279,12 @@
   ],
   "onesignal-rest-api-key-legacy@sourcemap-comment": [
     {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"3zxC5i********************s7LB"}
+  ],
+  "onesignal-rest-api-key-legacy@source-map": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"5uge14********************CJlO"}
+  ],
+  "onesignal-rest-api-key-legacy@config-endpoint": [
+    {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"9ycYHN********************R9Hi"}
   ],
   "onesignal-rest-api-key-legacy@entity-encoded-attribute": [
     {"type":"OneSignal REST API Key (legacy)","confidence":"medium","publicByDesign":false,"location":"html","masked":"03oqYU********************N8en"}
@@ -7143,13 +7311,13 @@
     {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"492650**********3a25"}
   ],
   "pusher-app-key@next-data": [
-    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"512652**********31f6"}
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"512652**********31f6"}
   ],
   "pusher-app-key@nuxt-payload": [
-    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"5d9eb8**********aa51"}
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"5d9eb8**********aa51"}
   ],
   "pusher-app-key@html-comment": [
-    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"522865**********5304"}
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"522865**********5304"}
   ],
   "pusher-app-key@meta-content": [
     {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"9b7f81**********b822"}
@@ -7165,6 +7333,12 @@
   ],
   "pusher-app-key@sourcemap-comment": [
     {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"5a9f89**********1725"}
+  ],
+  "pusher-app-key@source-map": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"0d022b**********34a3"}
+  ],
+  "pusher-app-key@config-endpoint": [
+    {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"11590d**********3cb9"}
   ],
   "pusher-app-key@entity-encoded-attribute": [
     {"type":"Pusher App Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"4743fa**********bfe1"}
@@ -7191,13 +7365,13 @@
     {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"99a1bc**********d363"}
   ],
   "pusher-app-secret@next-data": [
-    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0d1022**********b1f1"}
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"0d1022**********b1f1"}
   ],
   "pusher-app-secret@nuxt-payload": [
-    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"2fbeb6**********4bdc"}
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"2fbeb6**********4bdc"}
   ],
   "pusher-app-secret@html-comment": [
-    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"129339**********aa36"}
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"129339**********aa36"}
   ],
   "pusher-app-secret@meta-content": [
     {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"5c472a**********0568"}
@@ -7213,6 +7387,12 @@
   ],
   "pusher-app-secret@sourcemap-comment": [
     {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"31acd7**********09dc"}
+  ],
+  "pusher-app-secret@source-map": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"341ae2**********8118"}
+  ],
+  "pusher-app-secret@config-endpoint": [
+    {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"62c7c7**********753c"}
   ],
   "pusher-app-secret@entity-encoded-attribute": [
     {"type":"Pusher App Secret","confidence":"medium","publicByDesign":false,"location":"html","masked":"05fe03**********6a38"}
@@ -7239,13 +7419,13 @@
     {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"61c267**********05a0"}
   ],
   "uploadcare-public-key@next-data": [
-    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"2d75b5**********1d84"}
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"2d75b5**********1d84"}
   ],
   "uploadcare-public-key@nuxt-payload": [
-    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"inline-script","masked":"3236ff**********ae5e"}
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"framework-payload","masked":"3236ff**********ae5e"}
   ],
   "uploadcare-public-key@html-comment": [
-    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"508626**********9af2"}
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html-comment","masked":"508626**********9af2"}
   ],
   "uploadcare-public-key@meta-content": [
     {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"81677f**********8851"}
@@ -7261,6 +7441,12 @@
   ],
   "uploadcare-public-key@sourcemap-comment": [
     {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"external-script","masked":"781217**********f011"}
+  ],
+  "uploadcare-public-key@source-map": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"source-map","masked":"463a0b**********ff90"}
+  ],
+  "uploadcare-public-key@config-endpoint": [
+    {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"config-endpoint","masked":"774aee**********3f51"}
   ],
   "uploadcare-public-key@entity-encoded-attribute": [
     {"type":"Uploadcare Public Key","confidence":"medium","publicByDesign":true,"location":"html","masked":"5a0b78**********7216"}
@@ -7287,13 +7473,13 @@
     {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"57f0a2**********4411"}
   ],
   "uploadcare-secret-key@next-data": [
-    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"07ca90**********be7c"}
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"07ca90**********be7c"}
   ],
   "uploadcare-secret-key@nuxt-payload": [
-    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5ebce1**********501f"}
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"5ebce1**********501f"}
   ],
   "uploadcare-secret-key@html-comment": [
-    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"40e0e7**********26bf"}
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"40e0e7**********26bf"}
   ],
   "uploadcare-secret-key@meta-content": [
     {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"01bc22**********8602"}
@@ -7309,6 +7495,12 @@
   ],
   "uploadcare-secret-key@sourcemap-comment": [
     {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"63a685**********2cc0"}
+  ],
+  "uploadcare-secret-key@source-map": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"43fc22**********f2bf"}
+  ],
+  "uploadcare-secret-key@config-endpoint": [
+    {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"30eb63**********55b4"}
   ],
   "uploadcare-secret-key@entity-encoded-attribute": [
     {"type":"Uploadcare Secret Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"5fa386**********07bd"}
@@ -7335,13 +7527,13 @@
     {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"4AQia5********************WQda"}
   ],
   "unsplash-access-key@next-data": [
-    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"8Eabfv********************Cmiu"}
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"8Eabfv********************Cmiu"}
   ],
   "unsplash-access-key@nuxt-payload": [
-    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"0wkEvR********************zomC"}
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"0wkEvR********************zomC"}
   ],
   "unsplash-access-key@html-comment": [
-    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"4PqVfN********************cmgJ"}
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"4PqVfN********************cmgJ"}
   ],
   "unsplash-access-key@meta-content": [
     {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"90Xf2p********************3N5f"}
@@ -7360,6 +7552,12 @@
   ],
   "unsplash-access-key@sourcemap-comment": [
     {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"9Xz72a********************feI1"}
+  ],
+  "unsplash-access-key@source-map": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"986Ny1********************RKOx"}
+  ],
+  "unsplash-access-key@config-endpoint": [
+    {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"9WAUOf********************seQy"}
   ],
   "unsplash-access-key@entity-encoded-attribute": [
     {"type":"Unsplash Access Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"8xmWIB********************hAZ4"}
@@ -7386,13 +7584,13 @@
     {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"5124de********************aac1"}
   ],
   "cloudflare-global-api-key@next-data": [
-    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"57f7c5********************58ce"}
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"57f7c5********************58ce"}
   ],
   "cloudflare-global-api-key@nuxt-payload": [
-    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"inline-script","masked":"7a5d45********************5eaf"}
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"framework-payload","masked":"7a5d45********************5eaf"}
   ],
   "cloudflare-global-api-key@html-comment": [
-    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"03222a********************3d32"}
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html-comment","masked":"03222a********************3d32"}
   ],
   "cloudflare-global-api-key@meta-content": [
     {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"40728e********************debc"}
@@ -7411,6 +7609,12 @@
   ],
   "cloudflare-global-api-key@sourcemap-comment": [
     {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"external-script","masked":"17fa15********************c413"}
+  ],
+  "cloudflare-global-api-key@source-map": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"source-map","masked":"436798********************86b3"}
+  ],
+  "cloudflare-global-api-key@config-endpoint": [
+    {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"config-endpoint","masked":"181529********************78fb"}
   ],
   "cloudflare-global-api-key@entity-encoded-attribute": [
     {"type":"Cloudflare Global API Key","confidence":"medium","publicByDesign":false,"location":"html","masked":"61da79********************990e"}
