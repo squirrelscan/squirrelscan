@@ -1,4 +1,5 @@
-// pub#2298: `cookie-httponly-third-party-scripts` supersedes `cookie-httponly`, keyed by cookie name.
+// pub#2298: one `cookie-httponly` check. A session-like cookie that goes from warn to fail (third-party scripts
+// appear on the page) keeps its finding key, so the merge carries one finding getting worse.
 
 import type {
   CheckResult,
@@ -6,7 +7,6 @@ import type {
 } from "@squirrelscan/core-contracts";
 import type { ParsedPage } from "@squirrelscan/rules/types";
 
-import { buildSupersededIndex } from "@squirrelscan/core-contracts/resolution";
 import { parsePage } from "@squirrelscan/parser";
 import { loadAllRules } from "@squirrelscan/rules";
 import { describe, expect, test } from "bun:test";
@@ -65,7 +65,6 @@ function merge(cookieChecks: CheckResult[], priors: PageFindingRecord[]) {
     freshFindings: flattenChecks(URL, RULE, cookieChecks),
     removedUrls: new Set(),
     severityByRule: new Map([[RULE, "warning"]]),
-    supersededChecks: buildSupersededIndex([rule.meta]),
     statusByUrl: new Map([[URL, 200]]),
     priorFindings: priors,
     priorPages: [
@@ -80,54 +79,50 @@ function merge(cookieChecks: CheckResult[], priors: PageFindingRecord[]) {
     ],
     now: NOW,
   });
-  const row = (check: string, locator: string) =>
-    merged.persisted.find(
+  const rows = (check: string, locator: string) =>
+    merged.persisted.filter(
       (f) =>
         findingKey(f.normalizedUrl, f.ruleId, f.checkName, f.locator) ===
         findingKey(URL, RULE, check, locator)
     );
-  return { row };
+  return { rows, all: merged.persisted };
 }
 
-describe("cookie-httponly is superseded by cookie-httponly-third-party-scripts (#2298)", () => {
-  test("the rule declares the link", () => {
-    expect(rule.meta.supersededChecks?.["cookie-httponly"]).toEqual([
-      "cookie-httponly-third-party-scripts",
-    ]);
+describe("cookie-httponly keeps one finding key across warn and fail (#2298)", () => {
+  test("the rule declares no superseded checks", () => {
+    expect(rule.meta.supersededChecks).toBeUndefined();
   });
 
-  test("a cookie that moved warn -> fail: old row retires, same finding worse, keeps first-seen", () => {
-    const { row } = merge(
+  test("a prior warn becomes the same key at fail: worsened in place, first-seen kept", () => {
+    const { rows, all } = merge(
       checks("PHPSESSID=abc; Path=/; Secure", WITH_SCRIPT),
       [prior("PHPSESSID")]
     );
-    expect(row("cookie-httponly", "PHPSESSID")?.state).toBe("stale");
-    const next = row("cookie-httponly-third-party-scripts", "PHPSESSID")!;
-    expect(next.state).toBe("open");
-    expect(next.status).toBe("fail");
-    expect(next.firstSeenAt).toBe(FIRST);
+    const found = rows("cookie-httponly", "PHPSESSID");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.state).toBe("open");
+    expect(found[0]?.status).toBe("fail");
+    expect(found[0]?.firstSeenAt).toBe(FIRST);
+    expect(
+      all.some((f) => f.checkName === "cookie-httponly-third-party-scripts")
+    ).toBe(false);
   });
 
-  test("a cookie still failing cookie-httponly keeps its finding unchanged", () => {
-    // `theme` is not session-like, so it stays a warning even with third-party scripts.
-    const { row } = merge(checks("theme=dark; Path=/; Secure", WITH_SCRIPT), [
-      prior("theme"),
+  test("a cookie still without third-party scripts stays warn with its first-seen date", () => {
+    const { rows } = merge(checks("PHPSESSID=abc; Path=/; Secure", ""), [
+      prior("PHPSESSID"),
     ]);
-    const kept = row("cookie-httponly", "theme")!;
-    expect(kept.state).toBe("open");
-    expect(kept.status).toBe("warn");
-    expect(kept.firstSeenAt).toBe(FIRST);
-    expect(row("cookie-httponly-third-party-scripts", "theme")).toBeUndefined();
+    const found = rows("cookie-httponly", "PHPSESSID");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.status).toBe("warn");
+    expect(found[0]?.firstSeenAt).toBe(FIRST);
   });
 
-  test("a fixed cookie resolves the old finding", () => {
-    const { row } = merge(
+  test("a fixed cookie resolves the prior finding", () => {
+    const { rows } = merge(
       checks("PHPSESSID=abc; Path=/; Secure; HttpOnly", WITH_SCRIPT),
       [prior("PHPSESSID")]
     );
-    expect(row("cookie-httponly", "PHPSESSID")?.state).toBe("resolved");
-    expect(
-      row("cookie-httponly-third-party-scripts", "PHPSESSID")
-    ).toBeUndefined();
+    expect(rows("cookie-httponly", "PHPSESSID")[0]?.state).toBe("resolved");
   });
 });

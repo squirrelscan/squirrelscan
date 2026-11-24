@@ -377,12 +377,20 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
     '<script src="https://cdn.optimizely.com/js/123.js"></script>' +
     '<script async src="https://www.googletagmanager.com/gtag/js?id=G-1"></script>';
 
-  test("a session cookie without HttpOnly fails and names the third-party hosts", async () => {
+  const httpOnlyChecks = (
+    checks: Awaited<ReturnType<typeof cookieFlagsRule.run>>["checks"]
+  ) => checks.filter((c) => c.name === "cookie-httponly");
+
+  test("a session cookie without HttpOnly fails under cookie-httponly and names the third-party hosts", async () => {
     const { checks } = await cookieFlagsRule.run(
       ctxWithScripts(SESSION, VENDORS)
     );
-    expect(checksByName(checks, "cookie-httponly")).toBeUndefined();
-    const check = checksByName(checks, "cookie-httponly-third-party-scripts");
+    expect(
+      checks.some((c) => c.name === "cookie-httponly-third-party-scripts")
+    ).toBe(false);
+    const found = httpOnlyChecks(checks);
+    expect(found).toHaveLength(1);
+    const check = found[0];
     expect(check?.status).toBe("fail");
     expect(check?.items?.map((i) => i.id)).toEqual(["PHPSESSID"]);
     expect(check?.message).toBe(
@@ -405,21 +413,44 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
     expect(check?.message).toBe("1 cookie(s) missing the HttpOnly flag");
   });
 
-  test("a cookie that is not session-like still warns, beside the failing one", async () => {
+  test("check name and locator are identical at warn and at fail, so the finding key does not change", async () => {
+    const failing = httpOnlyChecks(
+      (await cookieFlagsRule.run(ctxWithScripts(SESSION, VENDORS))).checks
+    );
+    const warning = httpOnlyChecks(
+      (await cookieFlagsRule.run(ctxWithScripts(SESSION, ""))).checks
+    );
+    expect(failing[0]?.status).toBe("fail");
+    expect(warning[0]?.status).toBe("warn");
+    expect(failing[0]?.name).toBe(warning[0]?.name);
+    expect(failing[0]?.items).toEqual(warning[0]?.items);
+    expect(failing[0]?.items).toEqual([{ id: "PHPSESSID" }]);
+  });
+
+  test("a cookie that is not session-like stays a warning, beside the failing one, under the same check name", async () => {
     const { checks } = await cookieFlagsRule.run(
       ctxWithScripts(
         "laravel_session=a; Path=/; Secure; SameSite=Lax\ntheme=dark; Path=/; Secure; SameSite=Lax",
         VENDORS
       )
     );
-    expect(
-      checksByName(checks, "cookie-httponly-third-party-scripts")?.items?.map(
-        (i) => i.id
-      )
-    ).toEqual(["laravel_session"]);
-    const plain = checksByName(checks, "cookie-httponly");
-    expect(plain?.status).toBe("warn");
-    expect(plain?.items?.map((i) => i.id)).toEqual(["theme"]);
+    const found = httpOnlyChecks(checks);
+    expect(found.map((c) => c.status).sort()).toEqual(["fail", "warn"]);
+    expect(found.find((c) => c.status === "fail")?.items).toEqual([
+      { id: "laravel_session" },
+    ]);
+    expect(found.find((c) => c.status === "warn")?.items).toEqual([
+      { id: "theme" },
+    ]);
+  });
+
+  test("a non-session cookie alone warns even with third-party scripts", async () => {
+    const { checks } = await cookieFlagsRule.run(
+      ctxWithScripts("theme=dark; Path=/; Secure; SameSite=Lax", VENDORS)
+    );
+    const found = httpOnlyChecks(checks);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.status).toBe("warn");
   });
 
   test("an HttpOnly session cookie is not raised by third-party scripts", async () => {
@@ -429,6 +460,7 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
         VENDORS
       )
     );
+    expect(httpOnlyChecks(checks)).toHaveLength(0);
     expect(checks).toHaveLength(1);
     expect(checks[0]?.status).toBe("pass");
   });
@@ -444,7 +476,8 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
           '<script src="https://js.a-vendor.net/other.js"></script>'
       )
     );
-    const check = checksByName(checks, "cookie-httponly-third-party-scripts");
+    const check = checksByName(checks, "cookie-httponly");
+    expect(check?.status).toBe("fail");
     expect(check?.message).toContain(
       "from 7 third-party host(s): js.a-vendor.net, js.b-vendor.net, js.c-vendor.net, js.d-vendor.net, js.e-vendor.net and 2 more."
     );
@@ -459,9 +492,6 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
           '<script type="application/json" src="https://cdn.vendor.net/b.json"></script>'
       )
     );
-    expect(
-      checksByName(checks, "cookie-httponly-third-party-scripts")
-    ).toBeUndefined();
     expect(checksByName(checks, "cookie-httponly")?.status).toBe("warn");
   });
 
@@ -473,8 +503,7 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
       )
     );
     expect(
-      checksByName(checks, "cookie-httponly-third-party-scripts")?.details
-        ?.thirdPartyScriptHosts
+      checksByName(checks, "cookie-httponly")?.details?.thirdPartyScriptHosts
     ).toEqual(["esm.vendor.dev"]);
   });
 
@@ -485,9 +514,6 @@ describe("security/cookie-flags: third-party scripts on the page (#2089)", () =>
       parsed: { ...page.parsed, document: null },
     } as unknown as RuleContext;
     const { checks } = await cookieFlagsRule.run(unread);
-    expect(
-      checksByName(checks, "cookie-httponly-third-party-scripts")
-    ).toBeUndefined();
     expect(checksByName(checks, "cookie-httponly")?.status).toBe("warn");
   });
 

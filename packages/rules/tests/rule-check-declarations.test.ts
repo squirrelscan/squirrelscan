@@ -140,7 +140,6 @@ describe("meta.checks declarations (#1741)", () => {
       "links/broken-external-links",
       "links/broken-links",
       "links/internal-links",
-      "security/cookie-flags",
     ]);
     for (const { meta } of withSuperseded) {
       for (const [oldName, successors] of Object.entries(

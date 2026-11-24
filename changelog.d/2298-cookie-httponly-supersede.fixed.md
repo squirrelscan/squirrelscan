@@ -1,1 +1,0 @@
-- `security/cookie-flags`: a session-like cookie that moves from the `cookie-httponly` warning to the `cookie-httponly-third-party-scripts` failure is now carried as the same finding getting worse, keeping its first-seen date, instead of one resolved finding and one new failure (#2298)
