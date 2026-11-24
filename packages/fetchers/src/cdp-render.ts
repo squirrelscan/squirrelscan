@@ -108,8 +108,9 @@ class CdpConnection {
       let socket: WebSocket;
       try {
         socket = new WebSocket(url);
-      } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)));
+      } catch {
+        // The runtime's message can echo the URL, userinfo included: keep it out of the reason.
+        reject(new Error("could not open a WebSocket to the endpoint"));
         return;
       }
       const timer = setTimeout(() => {
@@ -180,7 +181,8 @@ export async function resolveCdpWebSocketUrl(
   try {
     url = new URL(endpoint);
   } catch {
-    throw new Error(`'${endpoint}' is not a URL`);
+    // The raw endpoint may carry user:pass; the message lands in the report and the log.
+    throw new Error("the endpoint is not a URL");
   }
   if (url.protocol === "ws:" || url.protocol === "wss:") return endpoint;
   if (url.protocol !== "http:" && url.protocol !== "https:")
@@ -189,7 +191,14 @@ export async function resolveCdpWebSocketUrl(
   const res = await fetch(versionUrl, {
     signal: AbortSignal.timeout(timeoutMs),
   });
-  if (!res.ok) throw new Error(`${versionUrl.href} answered ${res.status}`);
+  if (!res.ok) {
+    // `new URL(path, base)` keeps the base's userinfo: strip it so a password in the endpoint
+    // never reaches report.render.fallbackReason or the log.
+    const shown = new URL(versionUrl);
+    shown.username = "";
+    shown.password = "";
+    throw new Error(`${shown.href} answered ${res.status}`);
+  }
   const info = (await res.json()) as { webSocketDebuggerUrl?: unknown };
   if (typeof info.webSocketDebuggerUrl !== "string")
     throw new Error("no webSocketDebuggerUrl in /json/version");

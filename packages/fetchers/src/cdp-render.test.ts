@@ -417,6 +417,40 @@ describe("cdp-render fetcher (#2306)", () => {
     await f2.close();
   });
 
+  it("keeps endpoint credentials out of every fallback reason", async () => {
+    server?.stop(true);
+    server = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => new Response("nope", { status: 500 }),
+    });
+    const secret = "hunter2-cdp-secret";
+    const endpoint = `http://admin:${secret}@127.0.0.1:${server.port}`;
+    const err = await resolveCdpWebSocketUrl(endpoint).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("answered 500");
+    expect((err as Error).message).not.toContain(secret);
+    expect((err as Error).message).not.toContain("admin");
+
+    const reasons: string[] = [];
+    const fetcher = createCdpRenderFetcher({
+      endpoint,
+      fallback: fakeHttp(),
+      onFallback: (r) => reasons.push(r),
+      ...fast,
+    });
+    await fetcher.fetch({ url: "https://example.com/" });
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toContain("answered 500");
+    expect(reasons[0]).not.toContain(secret);
+
+    const bad = await resolveCdpWebSocketUrl(
+      `http://admin:${secret}@[bad`
+    ).catch((e: Error) => e);
+    expect((bad as Error).message).not.toContain(secret);
+    await fetcher.close();
+  });
+
   it("refuses endpoints that are not ws or http", async () => {
     await expect(
       resolveCdpWebSocketUrl("file:///etc/passwd")
