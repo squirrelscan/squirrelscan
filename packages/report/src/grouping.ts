@@ -385,6 +385,7 @@ export function groupIssuesByCategory(
       solution?: string;
       severity: string;
       weight: number;
+      messageCountsItems?: boolean;
     };
     // Normalize legacy category codes (e.g. stored "adblock" → "blocking").
     const category = normalizeCategoryCode(meta.category);
@@ -648,10 +649,24 @@ export function groupIssuesByCategory(
         itemById,
         itemSeen: _____,
         carriedPageSet: ___,
-        messageShape: ____,
+        messageShape,
         lcpEvidence,
         ...check
       }) => {
+        // #2300: pages can each list a different cookie and agree on the count
+        // ("1 cookie(s)" on two pages, two cookies between them). A rule whose
+        // message opens with its item count must not state fewer than the items
+        // it lists, so the count widens to the range up to the merged items.
+        const lead = messageShape.counts[0];
+        if (
+          meta.messageCountsItems === true &&
+          lead &&
+          messageShape.parts[0] === "" &&
+          itemById.size > lead.max
+        ) {
+          lead.max = itemById.size;
+          check.message = renderMergedMessage(messageShape);
+        }
         if (lcpEvidence && lcpEvidence.size > 0) {
           // Added beside the legacy single-page fields, which stay for compatibility.
           check.details = {
