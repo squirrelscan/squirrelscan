@@ -1,0 +1,110 @@
+---
+// Shadows tangly's built-in <CopyPrompt> (the theme component is aliased to
+// this file) so the docs render the same "Onboard your agent" pill as the
+// website: markup contract and copy from agent-pill.ts, styles from
+// ../onboard.css (loaded on every page by tangly). Same props as the built-in.
+//
+//   <CopyPrompt href="/agent-setup/prompt.md?ref=docs-home" subject="squirrelscan" />
+//
+// A relative href is resolved against the current document at click time: the
+// agent receiving the prompt has no page context, so it needs an absolute URL.
+import {
+  AGENT_PILL_COPIED,
+  AGENT_PILL_COPIED_MS,
+  AGENT_PILL_COPY,
+  AGENT_PILL_ICON_CHECK,
+  AGENT_PILL_ICON_COPY,
+  AGENT_PILL_LABEL,
+  AGENT_PILL_MARKS,
+  AGENT_PILL_TITLE,
+} from "./agent-pill.ts";
+
+export interface Props {
+  /** URL of the instructions the agent should fetch. Relative is fine. */
+  href?: string;
+  /** Full prompt text. Wins over `href` when both are given. */
+  text?: string;
+  /** What the fetched instructions set up, e.g. "squirrelscan". */
+  subject?: string;
+  /** Overrides the pill's label (the shared default is used otherwise). */
+  label?: string;
+  /** Native tooltip. */
+  title?: string;
+}
+
+const { href, text, subject, label = AGENT_PILL_LABEL, title = AGENT_PILL_TITLE } =
+  Astro.props as Props;
+
+if (!href && !text) {
+  throw new Error("<CopyPrompt /> needs an `href` or a `text` prop.");
+}
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, "");
+const withBase = (p?: string) => (p && p.startsWith("/") ? `${baseUrl}${p}` : p);
+
+const promptTemplate =
+  text ??
+  `Fetch and follow the setup instructions${subject ? ` for ${subject}` : ""} at {{url}}`;
+---
+
+<div class="sq-onboard-action">
+  <button
+    type="button"
+    class="sq-onboard"
+    data-sq-onboard
+    data-prompt={promptTemplate}
+    data-href={withBase(href)}
+    data-copied-ms={AGENT_PILL_COPIED_MS}
+    title={title}
+  >
+    <span class="sq-onboard-label">{label}</span>
+    <span class="sq-onboard-marks" aria-hidden="true">
+      {AGENT_PILL_MARKS.map((src) => <img src={withBase(src)} alt="" width="24" height="24" loading="lazy" decoding="async" />)}
+    </span>
+    <span class="sq-onboard-copy">
+      <span class="sq-onboard-copy-idle">
+        <svg viewBox="0 0 24 24" aria-hidden="true">{AGENT_PILL_ICON_COPY.map((d) => <path d={d} />)}</svg>
+        <span class="sq-onboard-copy-text">{AGENT_PILL_COPY}</span>
+      </span>
+      <span class="sq-onboard-copy-done">
+        <svg viewBox="0 0 24 24" aria-hidden="true">{AGENT_PILL_ICON_CHECK.map((d) => <path d={d} />)}</svg>
+        <span class="sq-onboard-copy-text">{AGENT_PILL_COPIED}</span>
+      </span>
+    </span>
+  </button>
+</div>
+
+<script is:inline>
+  (() => {
+    if (window.__sqOnboard) return;
+    window.__sqOnboard = true;
+
+    document.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const button = target.closest("[data-sq-onboard]");
+      if (!button) return;
+
+      const href = button.getAttribute("data-href");
+      const url = href ? new URL(href, window.location.href).href : "";
+      // Replacer function, not a string: `$&` and friends in the URL must not
+      // act as substitution patterns.
+      const prompt = (button.getAttribute("data-prompt") ?? "").replace("{{url}}", () => url);
+
+      try {
+        await navigator.clipboard.writeText(prompt);
+      } catch {
+        // Clipboard denied: let the user copy by hand rather than do nothing.
+        window.prompt("Copy this prompt:", prompt);
+        return;
+      }
+
+      button.setAttribute("data-copied", "");
+      clearTimeout(button.__sqOnboardTimer);
+      button.__sqOnboardTimer = setTimeout(
+        () => button.removeAttribute("data-copied"),
+        Number(button.getAttribute("data-copied-ms")) || 2000,
+      );
+    });
+  })();
+</script>
