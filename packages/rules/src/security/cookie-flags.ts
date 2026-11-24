@@ -118,7 +118,6 @@ export const cookieFlagsRule: Rule = {
       { name: "cookie-secure", outcome: "problem" },
       { name: "cookie-httponly-platform", outcome: "problem" },
       { name: "cookie-httponly-csrf", outcome: "problem" },
-      { name: "cookie-httponly-third-party-scripts", outcome: "problem" },
       { name: "cookie-httponly", outcome: "problem" },
       { name: "cookie-samesite", outcome: "problem" },
       {
@@ -129,7 +128,6 @@ export const cookieFlagsRule: Rule = {
           "cookie-secure",
           "cookie-httponly-platform",
           "cookie-httponly-csrf",
-          "cookie-httponly-third-party-scripts",
           "cookie-httponly",
           "cookie-samesite",
         ],
@@ -230,6 +228,10 @@ export const cookieFlagsRule: Rule = {
     // Any script on the page can read a cookie without HttpOnly. When the page
     // loads scripts from other registrable domains, a session-like cookie among
     // them fails instead of warning, and the check names those hosts (#2089).
+    // A check carries one status, so the two severities are two results under the
+    // SAME name `cookie-httponly`; each cookie keeps its own locator (its name), so
+    // the finding key is the same whichever status it has and a cookie that moves
+    // from warn to fail is one finding getting worse (#2298).
     // With no third-party script, or no parsed document, nothing changes.
     const scriptHosts =
       missingHttpOnly.length > 0
@@ -244,7 +246,7 @@ export const cookieFlagsRule: Rule = {
     );
     if (exposed.length > 0) {
       checks.push({
-        name: "cookie-httponly-third-party-scripts",
+        name: "cookie-httponly",
         status: "fail",
         message: `${exposed.length} session-like cookie(s) missing the HttpOnly flag on a page that loads scripts from ${scriptHosts.length} third-party host(s): ${formatScriptHosts(scriptHosts)}. Any script on the page can read these cookies`,
         items: exposed.map((c) => ({ id: c.name })),
