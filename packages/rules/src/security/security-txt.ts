@@ -184,6 +184,26 @@ export const securityTxtRule: Rule = {
     severity: "warning",
     weight: 3,
     discoveryProbes: [CANONICAL_PATH, LEGACY_PATH],
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "security-txt", outcome: "problem" },
+      { name: "security-txt-contact", outcome: "problem" },
+      { name: "security-txt-expires", outcome: "problem" },
+      { name: "security-txt-expires-duplicate", outcome: "problem" },
+      { name: "security-txt-signed", outcome: "problem" },
+      { name: "security-txt-location", outcome: "problem" },
+      {
+        name: "security-txt",
+        outcome: "clean",
+        clears: [
+          "security-txt",
+          "security-txt-contact",
+          "security-txt-expires",
+          "security-txt-expires-duplicate",
+        ],
+      },
+      { name: "security-txt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

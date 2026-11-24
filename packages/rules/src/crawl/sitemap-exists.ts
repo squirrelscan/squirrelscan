@@ -18,6 +18,19 @@ export const sitemapExistsRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 10,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-exists", outcome: "problem" },
+      { name: "sitemap-in-robots", outcome: "problem" },
+      { name: "sitemap-urls", outcome: "problem" },
+      { name: "sitemap-exists", outcome: "clean", clears: ["sitemap-exists"] },
+      {
+        name: "sitemap-in-robots",
+        outcome: "clean",
+        clears: ["sitemap-in-robots"],
+      },
+      { name: "sitemap-exists", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

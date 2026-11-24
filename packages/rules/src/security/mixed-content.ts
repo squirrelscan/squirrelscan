@@ -128,6 +128,13 @@ export const mixedContentRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "mixed-content", outcome: "problem" },
+      { name: "local-development-url", outcome: "problem" },
+      { name: "mixed-content", outcome: "clean", clears: ["mixed-content"] },
+      { name: "mixed-content", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

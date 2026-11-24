@@ -528,6 +528,13 @@ export const tokenStorageRule: Rule = {
     severity: "warning",
     weight: 6,
     skipOnSoft404: true,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "token-storage", outcome: "problem" },
+      { name: "token-storage", outcome: "clean", clears: ["token-storage"] },
+      { name: "token-storage", outcome: "skipped" },
+      { name: "token-storage-truncated", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -121,6 +121,12 @@ export const schemaNoindexConflict: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "schema-noindex", outcome: "problem" },
+      { name: "schema-noindex", outcome: "clean", clears: ["schema-noindex"] },
+      { name: "schema-noindex", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

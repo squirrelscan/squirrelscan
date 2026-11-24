@@ -22,6 +22,12 @@ export const sitemapDomainRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-domain", outcome: "problem" },
+      { name: "sitemap-domain", outcome: "clean", clears: ["sitemap-domain"] },
+      { name: "sitemap-domain", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

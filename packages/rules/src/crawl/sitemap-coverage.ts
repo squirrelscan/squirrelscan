@@ -43,6 +43,19 @@ const coverageRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-coverage", outcome: "problem" },
+      { name: "sitemap-orphans", outcome: "problem" },
+      { name: "product-discovery", outcome: "problem" },
+      {
+        name: "sitemap-coverage",
+        outcome: "clean",
+        clears: ["sitemap-coverage"],
+      },
+      { name: "sitemap-coverage", outcome: "skipped" },
+      { name: "sitemap-unverified", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

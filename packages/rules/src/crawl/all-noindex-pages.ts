@@ -155,6 +155,18 @@ export const allNoindexPages: Rule = {
           "URL patterns that should trigger error severity if noindex (e.g., '/landing-pages/')"
         ),
     }),
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "critical-noindex", outcome: "problem" },
+      { name: "important-noindex", outcome: "problem" },
+      { name: "all-noindex", outcome: "problem" },
+      {
+        name: "all-noindex",
+        outcome: "clean",
+        clears: ["critical-noindex", "important-noindex", "all-noindex"],
+      },
+      { name: "all-noindex", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

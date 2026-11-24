@@ -15,6 +15,12 @@ export const indexabilityCheck: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "indexability", outcome: "problem" },
+      { name: "indexability", outcome: "clean", clears: ["indexability"] },
+      { name: "indexability", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

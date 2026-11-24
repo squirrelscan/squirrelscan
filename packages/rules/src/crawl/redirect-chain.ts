@@ -26,6 +26,13 @@ export const redirectChainRule: Rule = {
         .default(2)
         .describe("Flag redirect chains exceeding this many hops"),
     }),
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "redirect-chain", outcome: "problem" },
+      { name: "entry-url-redirect", outcome: "problem" },
+      { name: "redirect-chain", outcome: "clean", clears: ["redirect-chain"] },
+      { name: "redirect-chain", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

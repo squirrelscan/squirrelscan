@@ -19,6 +19,17 @@ export const paginationRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "pagination-canonical", outcome: "problem" },
+      { name: "pagination-links", outcome: "problem" },
+      {
+        name: "pagination-canonical",
+        outcome: "clean",
+        clears: ["pagination-canonical"],
+      },
+      { name: "pagination", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

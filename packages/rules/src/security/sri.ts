@@ -124,6 +124,12 @@ export const sriRule: Rule = {
     severity: "warning",
     weight: 5,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sri", outcome: "problem" },
+      { name: "sri", outcome: "clean", clears: ["sri"] },
+      { name: "sri", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

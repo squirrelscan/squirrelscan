@@ -112,6 +112,16 @@ export const noindexInSitemapRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "noindex-in-sitemap", outcome: "problem" },
+      {
+        name: "noindex-in-sitemap",
+        outcome: "clean",
+        clears: ["noindex-in-sitemap"],
+      },
+      { name: "noindex-in-sitemap", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

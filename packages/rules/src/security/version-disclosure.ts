@@ -55,6 +55,17 @@ export const versionDisclosureRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "version-disclosure", outcome: "problem" },
+      {
+        name: "version-disclosure",
+        outcome: "clean",
+        clears: ["version-disclosure"],
+      },
+      { name: "version-disclosure", outcome: "skipped" },
+      { name: "version-disclosure-unrecorded", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

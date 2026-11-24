@@ -16,6 +16,14 @@ export const newTabRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "noopener", outcome: "problem" },
+      { name: "noreferrer", outcome: "problem" },
+      { name: "noopener", outcome: "clean", clears: ["noopener"] },
+      { name: "noreferrer", outcome: "clean", clears: ["noreferrer"] },
+      { name: "new-tab-security", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

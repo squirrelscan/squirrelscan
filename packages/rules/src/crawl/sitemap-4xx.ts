@@ -20,6 +20,14 @@ export const sitemap4xxRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-4xx", outcome: "problem" },
+      { name: "sitemap-4xx", outcome: "clean", clears: ["sitemap-4xx"] },
+      { name: "sitemap-4xx", outcome: "skipped" },
+      { name: "sitemap-off-site-not-checked", outcome: "skipped" },
+      { name: "sitemap-rate-limited", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

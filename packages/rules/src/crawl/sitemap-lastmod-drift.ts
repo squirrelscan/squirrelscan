@@ -189,6 +189,20 @@ export const sitemapLastmodDriftRule: Rule = {
     severity: "warning",
     weight: 4,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-lastmod-behind-page", outcome: "problem" },
+      { name: "sitemap-lastmod-ahead-of-page", outcome: "problem" },
+      {
+        name: "sitemap-lastmod-drift",
+        outcome: "clean",
+        clears: [
+          "sitemap-lastmod-behind-page",
+          "sitemap-lastmod-ahead-of-page",
+        ],
+      },
+      { name: "sitemap-lastmod-drift", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

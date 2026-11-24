@@ -112,6 +112,29 @@ export const cookieFlagsRule: Rule = {
     weight: 5,
     // Each check message starts with the number of cookies (#1262).
     messageCountsItems: true,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "cookie-samesite-none-insecure", outcome: "problem" },
+      { name: "cookie-secure", outcome: "problem" },
+      { name: "cookie-httponly-platform", outcome: "problem" },
+      { name: "cookie-httponly-csrf", outcome: "problem" },
+      { name: "cookie-httponly-third-party-scripts", outcome: "problem" },
+      { name: "cookie-httponly", outcome: "problem" },
+      { name: "cookie-samesite", outcome: "problem" },
+      {
+        name: "cookie-flags",
+        outcome: "clean",
+        clears: [
+          "cookie-samesite-none-insecure",
+          "cookie-secure",
+          "cookie-httponly-platform",
+          "cookie-httponly-csrf",
+          "cookie-httponly-third-party-scripts",
+          "cookie-httponly",
+          "cookie-samesite",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
