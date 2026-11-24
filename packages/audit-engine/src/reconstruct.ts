@@ -117,30 +117,45 @@ function parsePayload(payload: string | null): ParsedPayload {
 /**
  * Rebuild one page's CheckResults for a single rule from its findings — the
  * inverse of {@link flattenChecks}. Findings are grouped by (normalizedUrl,
- * checkName): item findings (locator = item id) collect back into `items[]`;
+ * checkName, status): item findings (locator = item id) collect back into `items[]`;
  * a single whole-check finding (locator "") rebuilds a check with no items.
  * `details`/`pages` come from the finding payload (identical across a check's
  * item findings — flattenChecks copies the source check's details onto each).
  */
 function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
-  // Nested Map (url -> checkName -> findings) so the group identity needs no
-  // concatenated string key / delimiter — a check name is free to contain any
-  // character without risking a group collision.
-  const byPage = new Map<string, Map<string, PageFindingRecord[]>>();
+  // Nested Map (url -> checkName -> status -> findings) so the group identity
+  // needs no concatenated string key / delimiter: a check name is free to
+  // contain any character without risking a group collision. Status is part of
+  // the identity because a rule may emit two checks under ONE name on a page,
+  // one per severity (cookie-httponly fail plus warn, #2298); keying on the name
+  // alone would merge them and give every item the first row's status.
+  const byPage = new Map<
+    string,
+    Map<string, Map<string, PageFindingRecord[]>>
+  >();
   for (const f of findings) {
     let byCheck = byPage.get(f.normalizedUrl);
     if (!byCheck) {
       byCheck = new Map();
       byPage.set(f.normalizedUrl, byCheck);
     }
-    const list = byCheck.get(f.checkName);
+    let byStatus = byCheck.get(f.checkName);
+    if (!byStatus) {
+      byStatus = new Map();
+      byCheck.set(f.checkName, byStatus);
+    }
+    // Normalized the same way the rebuilt status is below, so two rows that
+    // rebuild to the same status always share a group.
+    const status = f.status === "warn" ? "warn" : "fail";
+    const list = byStatus.get(status);
     if (list) list.push(f);
-    else byCheck.set(f.checkName, [f]);
+    else byStatus.set(status, [f]);
   }
 
   const groups: PageFindingRecord[][] = [];
   for (const byCheck of byPage.values())
-    for (const group of byCheck.values()) groups.push(group);
+    for (const byStatus of byCheck.values())
+      for (const group of byStatus.values()) groups.push(group);
 
   const checks: CheckResult[] = [];
   for (const group of groups) {
@@ -149,8 +164,9 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
     // "fail". (flattenChecks only ever emits fail/warn findings.)
     const status = first.status === "warn" ? "warn" : "fail";
     // flattenChecks emits EITHER one whole-check finding (locator "") OR one per
-    // item (locator = item.id) for a given check — never both — so a group is
-    // homogeneous and this split is exhaustive.
+    // item (locator = item.id) for a given check, never both. A group is one
+    // (page, checkName, status), i.e. one source check, so it is homogeneous and
+    // this split is exhaustive.
     // Parse each row's payload exactly ONCE: the aggregate scan, details/pages
     // and the item-order sort all read it.
     const parsed = group.map((f) => parsePayload(f.payload));
@@ -265,7 +281,7 @@ function reconstructRuleChecks(findings: PageFindingRecord[]): CheckResult[] {
  *
  * `findings` must be the findings of a SINGLE page. Feeding it a page at a time
  * yields byte-identical checks to reconstructing the whole audit at once:
- * reconstructRuleChecks groups by (normalizedUrl, checkName) first, so a page's
+ * reconstructRuleChecks groups by (normalizedUrl, checkName, status) first, so a page's
  * groups never span pages, and the per-rule concatenation order is preserved when
  * pages arrive in the loader's `normalizedUrl` order.
  */
