@@ -60,6 +60,7 @@ import {
   ISSUE_PENALTY_SCALE,
   ISSUE_PENALTY_MAX,
   ISSUE_PENALTY_ITEM_CAP,
+  ISSUE_PENALTY_SHARED_CAP,
 } from "@squirrelscan/utils/constants";
 import { isRateLimitStatus } from "@squirrelscan/utils/rate-limit";
 
@@ -586,10 +587,31 @@ export interface IssueTally {
   failed: number;
   warnUnits: number;
   failUnits: number;
+  /**
+   * (#2256) The part of `warnUnits` / `failUnits` that comes from findings the
+   * checks themselves mark as ONE shared component (observed, groupable
+   * component evidence: a header logo link, a footer icon). A SUBSET of the
+   * totals above, never extra. The density penalty caps what this part can
+   * weigh, see {@link calculateIssueDensityPenalty}. Absent reads as 0.
+   */
+  sharedWarnUnits?: number;
+  sharedFailUnits?: number;
 }
 
 export function emptyTally(): IssueTally {
   return { passed: 0, warnings: 0, failed: 0, warnUnits: 0, failUnits: 0 };
+}
+
+// (#2256) A check is "shared chrome" when every occurrence of component evidence
+// it carries is an observed, groupable one: the same predicate the report's
+// fix-once groups use for a cross-page component. A check with no evidence, or
+// with any uncertain or page-scoped occurrence, stays an ordinary per-page issue.
+function isSharedComponentCheck(check: CheckResult): boolean {
+  const occurrences = check.componentOccurrences;
+  if (!occurrences || occurrences.length === 0) return false;
+  return occurrences.every(
+    (o) => o.groupable === true && o.confidence === "observed"
+  );
 }
 
 // Add ONE rule's checks to a tally.
@@ -638,6 +660,9 @@ export function addChecksToTally(
   const failUnitsByKey = new Map<string, number>();
   const failExtraByKey = new Map<string, number>();
   const warnKeys = new Set<string>();
+  // (#2256) Keys whose every counted check is shared-component evidence.
+  const unsharedKeys = new Set<string>();
+  const sharedKeys = new Set<string>();
   for (const check of checks) {
     if (advisory && check.status === "warn") continue;
     if (check.status === "pass") {
@@ -647,6 +672,8 @@ export function addChecksToTally(
       const key = `${check.name}\u0000${check.pageUrl ?? ""}`;
       const units = Math.max(check.items?.length ?? 0, 1);
       const continuation = isCarriedContinuation(check);
+      if (isSharedComponentCheck(check)) sharedKeys.add(key);
+      else unsharedKeys.add(key);
       if (check.status === "warn") {
         if (!continuation) tally.warnings++;
         warnKeys.add(key);
@@ -664,12 +691,20 @@ export function addChecksToTally(
     }
     // "skipped" and "info" don't count toward totals
   }
+  const isShared = (key: string): boolean =>
+    sharedKeys.has(key) && !unsharedKeys.has(key);
   tally.warnUnits += warnKeys.size;
+  for (const key of warnKeys) {
+    if (isShared(key)) tally.sharedWarnUnits = (tally.sharedWarnUnits ?? 0) + 1;
+  }
   for (const [key, units] of failUnitsByKey) {
-    tally.failUnits += Math.min(
+    const capped = Math.min(
       units + (failExtraByKey.get(key) ?? 0),
       ISSUE_PENALTY_ITEM_CAP
     );
+    tally.failUnits += capped;
+    if (isShared(key))
+      tally.sharedFailUnits = (tally.sharedFailUnits ?? 0) + capped;
   }
   // Carried-clean synthetic passes (#918): each is one pass, so bump the pass
   // tally by the count — equivalent to N "carried (clean)" pass checks.
@@ -682,6 +717,12 @@ export function addTally(target: IssueTally, source: IssueTally): void {
   target.failed += source.failed;
   target.warnUnits += source.warnUnits;
   target.failUnits += source.failUnits;
+  if (source.sharedWarnUnits)
+    target.sharedWarnUnits =
+      (target.sharedWarnUnits ?? 0) + source.sharedWarnUnits;
+  if (source.sharedFailUnits)
+    target.sharedFailUnits =
+      (target.sharedFailUnits ?? 0) + source.sharedFailUnits;
 }
 
 /**
@@ -744,7 +785,9 @@ function calculateCategoryScoreFromResults(
   const { multiplier } = calculateIssueDensityPenalty(
     tally.passed,
     tally.warnUnits,
-    tally.failUnits
+    tally.failUnits,
+    tally.sharedWarnUnits,
+    tally.sharedFailUnits
   );
   const score = Math.round(curved * multiplier);
 
@@ -827,22 +870,54 @@ function calculatePenaltyMultiplier(
 function calculateIssueDensityPenalty(
   passed: number,
   warnUnits: number,
-  failUnits: number
-): { multiplier: number; deduction: number } {
-  const totalIssueUnits = warnUnits + failUnits;
-  const totalUnits = passed + warnUnits + failUnits;
+  failUnits: number,
+  sharedWarnUnits = 0,
+  sharedFailUnits = 0
+): { multiplier: number; deduction: number; sharedDeduction: number } {
+  // (#2256) One shared component (a header logo link) repeated on every page is
+  // one repair, so the units that come from shared-component evidence, pooled,
+  // can weigh at most ISSUE_PENALTY_SHARED_CAP. Scaling both kinds by the same
+  // factor keeps their fail/warn proportion. Below the cap nothing changes.
+  const sharedWarn = Math.min(sharedWarnUnits, warnUnits);
+  const sharedFail = Math.min(sharedFailUnits, failUnits);
+  const sharedWeight =
+    sharedFail * ISSUE_PENALTY_FAIL_WEIGHT +
+    sharedWarn * ISSUE_PENALTY_WARNING_WEIGHT;
+  const scale =
+    sharedWeight > ISSUE_PENALTY_SHARED_CAP
+      ? ISSUE_PENALTY_SHARED_CAP / sharedWeight
+      : 1;
+  const effWarn = warnUnits - sharedWarn * (1 - scale);
+  const effFail = failUnits - sharedFail * (1 - scale);
 
-  if (totalIssueUnits < ISSUE_PENALTY_THRESHOLD || totalUnits === 0) {
-    return { multiplier: 1, deduction: 0 };
-  }
+  const penaltyFor = (warn: number, fail: number): number => {
+    const issues = warn + fail;
+    const total = passed + issues;
+    if (issues < ISSUE_PENALTY_THRESHOLD || total === 0) return 0;
+    const weighted =
+      fail * ISSUE_PENALTY_FAIL_WEIGHT + warn * ISSUE_PENALTY_WARNING_WEIGHT;
+    return Math.min(
+      ISSUE_PENALTY_MAX,
+      (weighted / total) * ISSUE_PENALTY_SCALE
+    );
+  };
 
-  const weightedIssues =
-    failUnits * ISSUE_PENALTY_FAIL_WEIGHT +
-    warnUnits * ISSUE_PENALTY_WARNING_WEIGHT;
-  const density = weightedIssues / totalUnits;
-  const penalty = Math.min(ISSUE_PENALTY_MAX, density * ISSUE_PENALTY_SCALE);
-
-  return { multiplier: 1 - penalty, deduction: penalty };
+  const penalty = penaltyFor(effWarn, effFail);
+  // What the shared units add to the penalty (after the cap): the same audit
+  // with them removed, subtracted. Reported so a report can say how much of the
+  // adjustment came from shared components.
+  const sharedDeduction =
+    sharedWeight > 0
+      ? Math.max(
+          0,
+          penalty -
+            penaltyFor(
+              effWarn - sharedWarn * scale,
+              effFail - sharedFail * scale
+            )
+        )
+      : 0;
+  return { multiplier: 1 - penalty, deduction: penalty, sharedDeduction };
 }
 
 /** Crawl-outcome signals used to decide whether a real audit happened (#489). */
@@ -1219,7 +1294,9 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
     const { multiplier: groupMultiplier } = calculateIssueDensityPenalty(
       agg.tally.passed,
       agg.tally.warnUnits,
-      agg.tally.failUnits
+      agg.tally.failUnits,
+      agg.tally.sharedWarnUnits,
+      agg.tally.sharedFailUnits
     );
     groups.push({
       group,
@@ -1268,12 +1345,17 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
 
   // Apply proportional penalties for critical failures
   const penaltyMultiplier = calculatePenaltyMultiplier(results);
-  const { multiplier: issuePenaltyMultiplier, deduction: issuePenalty } =
-    calculateIssueDensityPenalty(
-      overallTally.passed,
-      overallTally.warnUnits,
-      overallTally.failUnits
-    );
+  const {
+    multiplier: issuePenaltyMultiplier,
+    deduction: issuePenalty,
+    sharedDeduction,
+  } = calculateIssueDensityPenalty(
+    overallTally.passed,
+    overallTally.warnUnits,
+    overallTally.failUnits,
+    overallTally.sharedWarnUnits,
+    overallTally.sharedFailUnits
+  );
 
   const overall = Math.round(
     curvedScore * penaltyMultiplier * issuePenaltyMultiplier
@@ -1296,7 +1378,23 @@ export function calculateHealthScore(ctx: ScoringContext): HealthScore {
       penalties: Math.round(penaltyFromCritical + penaltyFromIssues), // Show as point deduction for readability
       issuePenalty: Math.round(penaltyFromIssues),
       issueDensity: Number((issuePenalty * 100).toFixed(1)),
+      ...sharedDebug(overallTally, sharedDeduction),
     },
+  };
+}
+
+// (#2256) The debug fields that say how much of the density penalty came from
+// shared components. Omitted when the audit has none, so a report with no shared
+// chrome reads exactly as before.
+function sharedDebug(
+  tally: IssueTally,
+  sharedDeduction: number
+): { sharedComponentUnits?: number; issueDensityShared?: number } {
+  const units = (tally.sharedWarnUnits ?? 0) + (tally.sharedFailUnits ?? 0);
+  if (units === 0) return {};
+  return {
+    sharedComponentUnits: units,
+    issueDensityShared: Number((sharedDeduction * 100).toFixed(1)),
   };
 }
 
@@ -1405,7 +1503,9 @@ export function calculateHealthScoreFromTallies(
     const { multiplier } = calculateIssueDensityPenalty(
       catTally.passed,
       catTally.warnUnits,
-      catTally.failUnits
+      catTally.failUnits,
+      catTally.sharedWarnUnits,
+      catTally.sharedFailUnits
     );
     categories.push({
       category,
@@ -1442,7 +1542,9 @@ export function calculateHealthScoreFromTallies(
     const { multiplier: groupMultiplier } = calculateIssueDensityPenalty(
       agg.tally.passed,
       agg.tally.warnUnits,
-      agg.tally.failUnits
+      agg.tally.failUnits,
+      agg.tally.sharedWarnUnits,
+      agg.tally.sharedFailUnits
     );
     groups.push({
       group,
@@ -1469,12 +1571,17 @@ export function calculateHealthScoreFromTallies(
     totalWeight > 0 ? (earnedWeight / totalWeight) * SCORE_SCALE : SCORE_SCALE;
   const curvedScore = applyScoringCurve(baseScore);
   const penaltyMultiplier = calculatePenaltyMultiplier(penaltyResults);
-  const { multiplier: issuePenaltyMultiplier, deduction: issuePenalty } =
-    calculateIssueDensityPenalty(
-      overallTally.passed,
-      overallTally.warnUnits,
-      overallTally.failUnits
-    );
+  const {
+    multiplier: issuePenaltyMultiplier,
+    deduction: issuePenalty,
+    sharedDeduction,
+  } = calculateIssueDensityPenalty(
+    overallTally.passed,
+    overallTally.warnUnits,
+    overallTally.failUnits,
+    overallTally.sharedWarnUnits,
+    overallTally.sharedFailUnits
+  );
 
   const overall = Math.round(
     curvedScore * penaltyMultiplier * issuePenaltyMultiplier
@@ -1496,6 +1603,7 @@ export function calculateHealthScoreFromTallies(
       penalties: Math.round(penaltyFromCritical + penaltyFromIssues),
       issuePenalty: Math.round(penaltyFromIssues),
       issueDensity: Number((issuePenalty * 100).toFixed(1)),
+      ...sharedDebug(overallTally, sharedDeduction),
     },
   };
 }

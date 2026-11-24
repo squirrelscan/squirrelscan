@@ -2117,6 +2117,8 @@ function subtractCheckTallies(
     "failed",
     "warnUnits",
     "failUnits",
+    "sharedWarnUnits",
+    "sharedFailUnits",
     "skipped",
   ] as const;
   const out: CheckTallies = {};

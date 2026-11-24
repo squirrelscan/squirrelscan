@@ -1147,6 +1147,12 @@ export function freshTally(
     tally.failed += count(t?.failed);
     tally.warnUnits += count(t?.warnUnits);
     tally.failUnits += count(t?.failUnits);
+    const sharedWarn = count(t?.sharedWarnUnits);
+    const sharedFail = count(t?.sharedFailUnits);
+    if (sharedWarn > 0)
+      tally.sharedWarnUnits = (tally.sharedWarnUnits ?? 0) + sharedWarn;
+    if (sharedFail > 0)
+      tally.sharedFailUnits = (tally.sharedFailUnits ?? 0) + sharedFail;
   }
   return tally;
 }

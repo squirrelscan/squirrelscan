@@ -751,6 +751,10 @@ export interface HealthScore {
     penalties: number;
     issuePenalty?: number;
     issueDensity?: number;
+    /** (#2256) Issue-density units from shared-component findings, before the cap. Absent when none. */
+    sharedComponentUnits?: number;
+    /** (#2256) Of `issueDensity` (percent points), the part the shared-component findings account for after the cap. */
+    issueDensityShared?: number;
   };
 }
 
@@ -1435,6 +1439,9 @@ export interface CheckTally {
   failed?: number;
   warnUnits?: number;
   failUnits?: number;
+  /** (#2256) The part of `warnUnits` / `failUnits` from shared-component findings. A subset, not extra. */
+  sharedWarnUnits?: number;
+  sharedFailUnits?: number;
   skipped?: number;
   /**
    * Of the `skipped` checks, the ones that are a gap rather than a "does not
