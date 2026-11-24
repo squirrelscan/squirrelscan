@@ -614,6 +614,15 @@ function isSharedComponentCheck(check: CheckResult): boolean {
   );
 }
 
+// (#2304) The non-owning item row of a multi-item check: no occurrences and a
+// `sibling-row` marker. The owning row of the same key decides sharedness.
+function isSiblingRow(check: CheckResult): boolean {
+  return (
+    (check.componentOccurrences?.length ?? 0) === 0 &&
+    check.componentEvidence?.reason === "sibling-row"
+  );
+}
+
 // Add ONE rule's checks to a tally.
 //
 // FAIL units are item-aware: a failed check contributes its `items[]` count
@@ -672,7 +681,13 @@ export function addChecksToTally(
       const key = `${check.name}\u0000${check.pageUrl ?? ""}`;
       const units = Math.max(check.items?.length ?? 0, 1);
       const continuation = isCarriedContinuation(check);
-      if (isSharedComponentCheck(check)) sharedKeys.add(key);
+      // (#2304) A sibling row of a multi-item check carries no evidence by
+      // design (flattenChecks stamps it on ONE row), so it says nothing about
+      // sharedness: neutral. Any other evidence-less row, including a
+      // `payload-limit` marker, is unshared.
+      if (isSiblingRow(check)) {
+        // neutral
+      } else if (isSharedComponentCheck(check)) sharedKeys.add(key);
       else unsharedKeys.add(key);
       if (check.status === "warn") {
         if (!continuation) tally.warnings++;

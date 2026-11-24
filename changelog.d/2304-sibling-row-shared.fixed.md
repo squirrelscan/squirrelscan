@@ -1,0 +1,1 @@
+- Partial re-audits now score the same as full audits for findings that repeat as shared components on carried pages, including findings with several items (#2301, #2304).
