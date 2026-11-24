@@ -80,6 +80,16 @@ export const thirdPartyCookiesRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "tracking-domains", outcome: "problem" },
+      { name: "third-party-resources", outcome: "problem" },
+      {
+        name: "third-party-cookies",
+        outcome: "clean",
+        clears: ["tracking-domains", "third-party-resources"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

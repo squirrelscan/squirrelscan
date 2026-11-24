@@ -46,6 +46,12 @@ export const formHttpsRule: Rule = {
     // the report degrades this to "warning" when every check merely warned.
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "form-https", outcome: "problem" },
+      { name: "form-https", outcome: "clean", clears: ["form-https"] },
+      { name: "form-https", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

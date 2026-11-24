@@ -214,6 +214,12 @@ export const httpToHttpsRule: Rule = {
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "http-to-https", outcome: "problem" },
+      { name: "http-to-https", outcome: "clean", clears: ["http-to-https"] },
+      { name: "http-to-https", outcome: "skipped" },
+    ],
   },
 
   async run(ctx: RuleContext): Promise<RuleResult> {

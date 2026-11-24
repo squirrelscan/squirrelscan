@@ -53,6 +53,19 @@ export const sitemapValidRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-fetch-failed", outcome: "problem" },
+      { name: "sitemap-syntax", outcome: "problem" },
+      { name: "sitemap-size", outcome: "problem" },
+      { name: "sitemap-lastmod-format", outcome: "problem" },
+      { name: "sitemap-lastmod-zone", outcome: "problem" },
+      { name: "sitemap-orphans", outcome: "problem" },
+      { name: "sitemap-missing", outcome: "problem" },
+      { name: "sitemap-syntax", outcome: "clean", clears: ["sitemap-syntax"] },
+      { name: "sitemap-size", outcome: "clean", clears: ["sitemap-size"] },
+      { name: "sitemap-valid", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

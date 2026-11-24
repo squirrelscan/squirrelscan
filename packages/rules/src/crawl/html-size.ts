@@ -33,6 +33,12 @@ export const htmlSizeRule: Rule = {
     severity: "error",
     weight: 5,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "html-size", outcome: "problem" },
+      { name: "html-parse", outcome: "problem" },
+      { name: "html-size", outcome: "clean", clears: ["html-size"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

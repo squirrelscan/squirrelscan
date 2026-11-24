@@ -14,6 +14,16 @@ export const permissionsPolicyRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "permissions-policy", outcome: "problem" },
+      {
+        name: "permissions-policy",
+        outcome: "clean",
+        clears: ["permissions-policy"],
+      },
+      { name: "permissions-policy", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

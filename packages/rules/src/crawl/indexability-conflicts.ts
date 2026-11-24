@@ -70,6 +70,16 @@ export const indexabilityConflicts: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "robots-block-without-noindex", outcome: "problem" },
+      {
+        name: "conflicts",
+        outcome: "clean",
+        clears: ["robots-block-without-noindex"],
+      },
+      { name: "conflicts", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

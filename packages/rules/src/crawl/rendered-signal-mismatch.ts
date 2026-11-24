@@ -122,6 +122,26 @@ export const renderedSignalMismatchRule: Rule = {
     // `audit_page` (#2290): the render runs inside the audit and is billed as the page's own audit
     // charge, never as a render on top of it. The same spec as ax/content-without-js.
     cloud: { service: "render", unit: "page", creditFeature: "audit_page" },
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "canonical-mismatch", outcome: "problem" },
+      { name: "noindex-mismatch", outcome: "problem" },
+      { name: "title-modified", outcome: "problem" },
+      { name: "h1-modified", outcome: "problem" },
+      {
+        name: "canonical-mismatch",
+        outcome: "clean",
+        clears: ["canonical-mismatch"],
+      },
+      {
+        name: "noindex-mismatch",
+        outcome: "clean",
+        clears: ["noindex-mismatch"],
+      },
+      { name: "title-modified", outcome: "clean", clears: ["title-modified"] },
+      { name: "h1-modified", outcome: "clean", clears: ["h1-modified"] },
+      { name: "rendered-signal-mismatch", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

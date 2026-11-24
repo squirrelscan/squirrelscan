@@ -20,6 +20,20 @@ export const canonicalChainRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "page-redirect-chain", outcome: "problem" },
+      { name: "canonical-chain", outcome: "problem" },
+      { name: "canonical-protocol", outcome: "problem" },
+      { name: "canonical-target", outcome: "problem" },
+      { name: "canonical-redirects", outcome: "problem" },
+      {
+        name: "canonical-chain",
+        outcome: "clean",
+        clears: ["canonical-chain"],
+      },
+      { name: "canonical-chain", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

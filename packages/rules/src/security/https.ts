@@ -17,6 +17,11 @@ export const httpsRule: Rule = {
     weight: 8,
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "https", outcome: "problem" },
+      { name: "https", outcome: "clean", clears: ["https"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

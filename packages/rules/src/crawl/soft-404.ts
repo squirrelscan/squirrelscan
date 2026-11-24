@@ -41,6 +41,11 @@ export const soft404Rule: Rule = {
     severity: "warning",
     weight: 5,
     // MUST NOT set skipOnSoft404 — this rule exists to report soft-404 pages.
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "soft-404", outcome: "problem" },
+      { name: "soft-404", outcome: "clean", clears: ["soft-404"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

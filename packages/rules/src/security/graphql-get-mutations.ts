@@ -53,6 +53,16 @@ export const graphqlGetMutationsRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "graphql-get-mutations", outcome: "problem" },
+      {
+        name: "graphql-get-mutations",
+        outcome: "clean",
+        clears: ["graphql-get-mutations"],
+      },
+      { name: "graphql-get-mutations", outcome: "skipped" },
+    ],
   },
 
   async run(ctx: RuleContext): Promise<RuleResult> {

@@ -148,6 +148,21 @@ export const passwordFormGetRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "password-form-get", outcome: "problem" },
+      { name: "password-form-get-undetermined", outcome: "problem" },
+      { name: "password-form-get-no-method", outcome: "problem" },
+      {
+        name: "password-form-get",
+        outcome: "clean",
+        clears: [
+          "password-form-get",
+          "password-form-get-undetermined",
+          "password-form-get-no-method",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

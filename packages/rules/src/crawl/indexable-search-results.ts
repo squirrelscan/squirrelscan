@@ -269,6 +269,16 @@ export const indexableSearchResults: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "indexable-search-results", outcome: "problem" },
+      {
+        name: "indexable-search-results",
+        outcome: "clean",
+        clears: ["indexable-search-results"],
+      },
+      { name: "indexable-search-results", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

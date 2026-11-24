@@ -71,6 +71,15 @@ export const singlePageSiteRule: Rule = {
     // Advisory and weightless: see the header. Score-neutral by construction.
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "single-page-site", outcome: "problem" },
+      {
+        name: "single-page-site",
+        outcome: "clean",
+        clears: ["single-page-site"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

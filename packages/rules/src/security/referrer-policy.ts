@@ -21,6 +21,16 @@ export const referrerPolicyRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "referrer-policy", outcome: "problem" },
+      {
+        name: "referrer-policy",
+        outcome: "clean",
+        clears: ["referrer-policy"],
+      },
+      { name: "referrer-policy", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

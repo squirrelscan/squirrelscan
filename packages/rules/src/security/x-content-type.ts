@@ -14,6 +14,12 @@ export const xContentTypeRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "x-content-type", outcome: "problem" },
+      { name: "x-content-type", outcome: "clean", clears: ["x-content-type"] },
+      { name: "x-content-type", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -35,6 +35,18 @@ export const pdfSizeRule: Rule = {
     severity: "error",
     weight: 4,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "pdf-size", outcome: "problem" },
+      { name: "pdf-size-warn", outcome: "problem" },
+      {
+        name: "pdf-size",
+        outcome: "clean",
+        clears: ["pdf-size", "pdf-size-warn"],
+      },
+      { name: "pdf-size", outcome: "skipped" },
+      { name: "pdf-size-errors", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

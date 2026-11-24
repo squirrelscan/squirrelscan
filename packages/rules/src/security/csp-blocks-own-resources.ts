@@ -291,6 +291,16 @@ export const cspBlocksOwnResourcesRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "csp-blocks-own-resources", outcome: "problem" },
+      { name: "csp-chunk-only-hosts", outcome: "problem" },
+      {
+        name: "csp-blocks-own-resources",
+        outcome: "clean",
+        clears: ["csp-blocks-own-resources", "csp-chunk-only-hosts"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -1,0 +1,1 @@
+- The rule pages for 42 more rules (crawl and security) list the check names each rule emits and which clean check clears which problem check (#2218).

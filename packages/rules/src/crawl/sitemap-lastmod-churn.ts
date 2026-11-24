@@ -32,6 +32,16 @@ export const sitemapLastmodChurnRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "sitemap-lastmod-churn", outcome: "problem" },
+      {
+        name: "sitemap-lastmod-churn",
+        outcome: "clean",
+        clears: ["sitemap-lastmod-churn"],
+      },
+      { name: "sitemap-lastmod-churn", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

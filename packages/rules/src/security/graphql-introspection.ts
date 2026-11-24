@@ -138,6 +138,16 @@ export const graphqlIntrospectionRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "graphql-introspection", outcome: "problem" },
+      {
+        name: "graphql-introspection",
+        outcome: "clean",
+        clears: ["graphql-introspection"],
+      },
+      { name: "graphql-introspection", outcome: "skipped" },
+    ],
   },
 
   async run(ctx: RuleContext): Promise<RuleResult> {

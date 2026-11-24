@@ -648,6 +648,12 @@ export const formCaptchaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "form-captcha", outcome: "problem" },
+      { name: "form-captcha", outcome: "clean", clears: ["form-captcha"] },
+      { name: "form-captcha", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

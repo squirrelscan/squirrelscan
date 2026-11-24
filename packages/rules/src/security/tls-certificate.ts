@@ -223,6 +223,30 @@ export const tlsCertificateRule: Rule = {
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
     optionsSchema,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "tls-certificate-expiry", outcome: "problem" },
+      { name: "tls-certificate-hostname", outcome: "problem" },
+      { name: "tls-certificate-chain", outcome: "problem" },
+      { name: "tls-certificate-key", outcome: "problem" },
+      { name: "tls-certificate-signature", outcome: "problem" },
+      { name: "tls-certificate-protocol", outcome: "problem" },
+      { name: "tls-certificate-www", outcome: "problem" },
+      {
+        name: "tls-certificate-expiry",
+        outcome: "clean",
+        clears: [
+          "tls-certificate-expiry",
+          "tls-certificate-hostname",
+          "tls-certificate-chain",
+          "tls-certificate-key",
+          "tls-certificate-signature",
+          "tls-certificate-protocol",
+          "tls-certificate-www",
+        ],
+      },
+      { name: "tls-certificate", outcome: "skipped" },
+    ],
   },
 
   async run(ctx: RuleContext): Promise<RuleResult> {
