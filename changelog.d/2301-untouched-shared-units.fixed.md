@@ -1,1 +1,0 @@
-- Partial re-audits now score the same as full audits when findings repeat as shared components on carried pages. The untouched-carried aggregate was dropping the shared-component units (#2301).
