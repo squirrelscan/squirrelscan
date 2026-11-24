@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: installer-path-${{ github.ref }}
+  group: installer-path-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
