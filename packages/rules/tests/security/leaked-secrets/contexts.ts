@@ -17,6 +17,17 @@ export interface Embedded {
   html: string;
   /** External scripts the page references, keyed by URL. */
   scripts?: Array<{ url: string; content: string }>;
+  /**
+   * Bodies the engine fetched because a script referenced them (#362): a same-origin source map or config endpoint,
+   * handed to the rule as `site.secretSources`.
+   */
+  sources?: Array<{
+    kind: "source-map" | "config-endpoint";
+    url: string;
+    referencedBy: string;
+    contentType: string;
+    content: string;
+  }>;
 }
 
 export interface Context {
@@ -158,7 +169,7 @@ export const CONTEXTS = [
 
   define(
     "next-data",
-    "inline-script",
+    "framework-payload",
     ["prefixed", "keyed", "assignment"],
     (v, k, t) => ({
       html: page(
@@ -170,7 +181,7 @@ export const CONTEXTS = [
 
   define(
     "nuxt-payload",
-    "inline-script",
+    "framework-payload",
     ["prefixed", "keyed", "assignment"],
     (v, k, t) => ({
       html: page(
@@ -182,7 +193,7 @@ export const CONTEXTS = [
 
   define(
     "html-comment",
-    "html",
+    "html-comment",
     ["prefixed", "keyed", "assignment"],
     (v, k, t) => ({
       html: page(
@@ -273,6 +284,72 @@ export const CONTEXTS = [
           content:
             `(function(g){g.__vendor={version:"4.2.1",loaded:Date.now()}})(window);\n` +
             `//# sourceMappingURL=https://maps.acme-cdn.test/vendor.c04d2e.js.map?${encodeURI(k)}=${encodeURI(v.text)}\n`,
+        },
+      ],
+    })
+  ),
+
+  // A build that inlined `process.env.X` into a module whose original source the deployed source map carries in
+  // `sourcesContent` (#362). The minified bundle no longer holds the value (dead-code eliminated), the map does.
+  define(
+    "source-map",
+    "source-map",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page("", `<script src="/static/js/app.5d2f10.js" defer></script>`),
+      scripts: [
+        {
+          url: "https://app.acme.test/static/js/app.5d2f10.js",
+          content:
+            `!function(){"use strict";window.__app={v:"3.1.0"}}();\n` +
+            `//# sourceMappingURL=app.5d2f10.js.map\n`,
+        },
+      ],
+      sources: [
+        {
+          kind: "source-map",
+          url: "https://app.acme.test/static/js/app.5d2f10.js.map",
+          referencedBy: "https://app.acme.test/static/js/app.5d2f10.js",
+          contentType: "application/json",
+          content: JSON.stringify({
+            version: 3,
+            file: "app.5d2f10.js",
+            sources: [
+              "webpack://app/./src/config.ts",
+              "webpack://app/./src/index.ts",
+            ],
+            sourcesContent: [
+              `export const config = {\n  env: "production",\n  ${jsEntry(v, k, t)},\n  region: "us-east-1",\n};\n`,
+              `import { config } from "./config";\nwindow.__app = { v: "3.1.0", env: config.env };\n`,
+            ],
+            names: [],
+            mappings: "AAAA",
+          }),
+        },
+      ],
+    })
+  ),
+
+  // A same-origin JSON config a bundle fetches by literal URL at boot (#362).
+  define(
+    "config-endpoint",
+    "config-endpoint",
+    ["prefixed", "keyed", "assignment"],
+    (v, k, t) => ({
+      html: page("", `<script src="/static/js/boot.e81a77.js" defer></script>`),
+      scripts: [
+        {
+          url: "https://app.acme.test/static/js/boot.e81a77.js",
+          content: `!function(){fetch("/config.json").then(function(r){return r.json()}).then(function(c){window.__cfg=c})}();`,
+        },
+      ],
+      sources: [
+        {
+          kind: "config-endpoint",
+          url: "https://app.acme.test/config.json",
+          referencedBy: "https://app.acme.test/static/js/boot.e81a77.js",
+          contentType: "application/json",
+          content: `{"env":"production","api":{"base":"https://api.acme.test/v2"},${jsonEntry(v, k, t)},"features":{"beta":true}}`,
         },
       ],
     })

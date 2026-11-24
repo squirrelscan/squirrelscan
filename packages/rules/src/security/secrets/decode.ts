@@ -25,11 +25,22 @@
 import type { LeakedSecret } from "../leaked-secrets";
 
 import { sharedRegex } from "../../shared-regex";
-/** The three places the scanner reads. */
-export type SecretLocation = "html" | "inline-script" | "external-script"; // pragma: allowlist secret
+/**
+ * The places the scanner reads: the page's HTML, its comments, its inline scripts (a framework's server-side data
+ * payload among them), its external scripts, and the bodies those scripts point at that a repository scanner never
+ * sees (#362): a same-origin source map's original sources and a same-origin config endpoint a bundle fetches.
+ */
+export type SecretLocation = // pragma: allowlist secret
+  | "html"
+  | "html-comment"
+  | "inline-script"
+  | "framework-payload"
+  | "external-script"
+  | "source-map"
+  | "config-endpoint";
 
 /**
- * Where a finding is reported: one of the three locations, with a `(base64)`
+ * Where a finding is reported: one of the locations, with a `(base64)`
  * suffix when the value only existed inside a decoded blob. One suffix, however
  * deep the blob sat: what matters to the reader is that the page carries the
  * key in an encoded form, not how many times it was wrapped.
@@ -334,7 +345,8 @@ export function decodeForLocation(
   content: string,
   location: ReportedLocation
 ): string {
-  if (location === "html")
+  // A comment is read out of the same document, so it decodes as the HTML pass always decoded it.
+  if (location === "html" || location === "html-comment")
     return unescapeJsStrings(decodePercentRuns(decodeHtmlEntities(content)));
   // Script text, and the inside of a decoded blob whatever it came from: a
   // JSON config blob escapes the same way a script string does.

@@ -91,6 +91,14 @@ export const SCRIPT_FETCH_LIMITS = {
   MAX_RETRIES: 1,
 } as const;
 
+// security/leaked-secrets extra fetches (#362): same-origin source maps and config
+// endpoints the fetched scripts reference. One request per URL (no retry, no
+// redirect followed), on the asset phase's shared budget, at most MAX_FETCHES per
+// audit; each body under the script size cap.
+export const SECRET_SOURCE_FETCH_LIMITS = {
+  MAX_FETCHES: 10,
+} as const;
+
 // Stylesheet body fetch limits (repo#1374). Bodies are read in-process by rules
 // (ctx.site.stylesheets) and never published. Same-site only; the fetch shares the
 // script fetcher's FetchBudget, egress policy and concurrency.

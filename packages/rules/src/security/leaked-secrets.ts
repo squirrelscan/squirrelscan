@@ -40,6 +40,7 @@ import {
   scanBase64Blobs,
   type ReportedLocation,
 } from "./secrets/decode";
+import { isHtmlBody, sourceMapSources } from "./secrets/sources";
 export type { ReportedLocation, SecretLocation } from "./secrets/decode";
 
 // Secret detection patterns with service names
@@ -1609,6 +1610,8 @@ export interface LeakedSecret {
   /** Zero-based position of an inline script in the page's complete script list. */
   scriptIndex?: number;
   sourceUrl?: string; // URL of the script file or page
+  /** At `framework-payload`: the framework whose server-side data block carried the value (#362). */
+  framework?: FrameworkPayload;
   /** What the value's own structure decoded to (#361): account id, role… */
   extra?: FindingExtra;
   /**
@@ -1648,11 +1651,17 @@ const SERVER_ONLY_TYPES: ReadonlySet<string> = new Set([
   "DigitalOcean Token",
 ]);
 
-/** An inline or external script is shipped to every visitor's browser. */
+/**
+ * An inline or external script is shipped to every visitor's browser, and so is a framework's data payload (an inline
+ * script), a same-origin source map and a config endpoint a bundle fetches (#362): anyone can read them.
+ */
 function isBrowserServed(location: ReportedLocation): boolean {
   return (
     location.startsWith("inline-script") ||
-    location.startsWith("external-script")
+    location.startsWith("external-script") ||
+    location.startsWith("framework-payload") ||
+    location.startsWith("source-map") ||
+    location.startsWith("config-endpoint")
   );
 }
 
@@ -4775,6 +4784,8 @@ interface ScanSource {
    * each one lost, in page order, so offsets are reported as they are in the fully blanked page.
    */
   blankCut?: readonly number[];
+  /** The body is this framework's server-side data payload (#362): every finding in it says so. */
+  framework?: FrameworkPayload;
 }
 
 /**
@@ -4794,6 +4805,24 @@ export function scanContentBounded(
 ): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
   const sink = createFindingSink();
   scanInto(sink, content, location, sourceUrl, depth, source);
+  return {
+    secrets: sink.result(),
+    omitted: sink.omitted(),
+    omittedSerious: sink.omittedSerious(),
+  };
+}
+
+/**
+ * The findings of several texts read as one body's (#362): a source map's original sources, which share ONE cap of
+ * {@link PAGE_FINDINGS_CAP} distinct values like a page's scripts do. Offsets are into each text.
+ */
+export function scanTextsBounded(
+  texts: readonly string[],
+  location: ReportedLocation,
+  sourceUrl?: string
+): { secrets: LeakedSecret[]; omitted: number; omittedSerious: boolean } {
+  const sink = createFindingSink();
+  for (const text of texts) scanInto(sink, text, location, sourceUrl, 0, {});
   return {
     secrets: sink.result(),
     omitted: sink.omitted(),
@@ -4885,6 +4914,7 @@ function scanInto(
         ? { scriptIndex: source.scriptIndex }
         : {}),
       sourceUrl,
+      ...(source.framework ? { framework: source.framework } : {}),
       ...(context !== undefined ? { context } : {}),
       ...(extra ? { extra } : {}),
     };
@@ -5694,8 +5724,86 @@ function scanInto(
       ...(source.scriptIndex !== undefined
         ? { scriptIndex: source.scriptIndex }
         : {}),
+      ...(source.framework ? { framework: source.framework } : {}),
     });
   }
+}
+
+// ── Framework data payloads (#362) ──────────────────────────────────────────
+
+/** The frameworks whose server-side data block an inline script can be. */
+export type FrameworkPayload = "next" | "nuxt" | "remix" | "sveltekit";
+
+/** How a report names each framework's payload and the loader that filled it, so the fix starts in the right file. */
+export const FRAMEWORK_PAYLOADS: Readonly<
+  Record<FrameworkPayload, { name: string; payload: string; loader: string }>
+> = {
+  next: {
+    name: "Next.js",
+    payload: "__NEXT_DATA__",
+    loader: "getServerSideProps, getStaticProps or getInitialProps",
+  },
+  nuxt: {
+    name: "Nuxt",
+    payload: "__NUXT__",
+    loader: "useAsyncData, useFetch, asyncData or runtimeConfig.public",
+  },
+  remix: {
+    name: "Remix",
+    payload: "__remixContext",
+    loader: "a route loader",
+  },
+  sveltekit: {
+    name: "SvelteKit",
+    payload: "__sveltekit_*",
+    loader: "a load function",
+  },
+};
+
+/** How much of a script's start is read to recognise a payload: each one opens with its global. */
+const PAYLOAD_HEAD = 512;
+const NUXT_HEAD_RE = /(?:^|[;\s(])(?:window\.)?__NUXT__\s*=/;
+const REMIX_HEAD_RE = /\bwindow\.__remixContext\s*=/;
+const SVELTEKIT_HEAD_RE = /\b__sveltekit_[A-Za-z0-9]+\s*=/;
+
+/**
+ * The framework whose server-side data `script` carries, or undefined for any other inline script: Next.js's
+ * `<script id="__NEXT_DATA__">`, Nuxt's `window.__NUXT__ =` (Nuxt 2) and `<script id="__NUXT_DATA__">` (Nuxt 3),
+ * Remix's `window.__remixContext =`, and SvelteKit's `__sveltekit_<hash> =` boot script and its
+ * `<script data-sveltekit-fetched>` blocks. These are props a server loader returned, serialised verbatim.
+ */
+export function frameworkPayloadOf(
+  script: Element,
+  text: string
+): FrameworkPayload | undefined {
+  const id = script.getAttribute("id");
+  if (id === "__NEXT_DATA__") return "next";
+  if (id === "__NUXT_DATA__") return "nuxt";
+  if (script.hasAttribute("data-sveltekit-fetched")) return "sveltekit";
+  const head = text.slice(0, PAYLOAD_HEAD);
+  if (NUXT_HEAD_RE.test(head)) return "nuxt";
+  if (REMIX_HEAD_RE.test(head)) return "remix";
+  if (SVELTEKIT_HEAD_RE.test(head)) return "sveltekit";
+  return undefined;
+}
+
+// ── HTML comments (#362) ────────────────────────────────────────────────────
+
+const COMMENT_NODE = 8;
+const ELEMENT_NODE_TYPE = 1;
+
+/** Every comment node under `root`, in document order. Script and style bodies are text, never walked. */
+function commentsOf(root: Node): Comment[] {
+  const out: Comment[] = [];
+  const stack: Node[] = [];
+  for (let c = root.lastChild; c; c = c.previousSibling) stack.push(c);
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.nodeType === COMMENT_NODE) out.push(node as Comment);
+    else if (node.nodeType === ELEMENT_NODE_TYPE)
+      for (let c = node.lastChild; c; c = c.previousSibling) stack.push(c);
+  }
+  return out;
 }
 
 /**
@@ -5785,21 +5893,36 @@ function scanPageInto(
   // script moves, or comes any nearer anything else), and the one page-level fact a script value was judged by in the
   // HTML pass, whether the page loads from the Shopify CDN, is handed to the inline pass. The page is serialised up
   // front but still scanned last, so a scan stopped at the budget has read the scripts first, as before.
-  const inline: Array<{ script: Element; text: string; scriptIndex: number }> =
-    [];
+  const inline: Array<{
+    script: Element;
+    text: string;
+    scriptIndex: number;
+    framework: FrameworkPayload | undefined;
+  }> = [];
   for (const [scriptIndex, script] of Array.from(
     doc.querySelectorAll("script")
   ).entries()) {
     if (script.hasAttribute("src")) continue;
     const text = script.textContent || "";
-    if (text.trim()) inline.push({ script, text, scriptIndex });
+    if (text.trim())
+      inline.push({
+        script,
+        text,
+        scriptIndex,
+        framework: frameworkPayloadOf(script, text),
+      });
   }
+  // Comments are read on their own as `html-comment` (#362) and blanked in the HTML pass like the scripts, each to
+  // exactly as many spaces as its text (never cut, so no offset after one moves).
+  const comments = commentsOf(doc).filter((c) => c.data.trim().length > 0);
 
   // A long body keeps BLANK_KEEP spaces and loses the rest (see BLANK_KEEP); `cut` records what each lost, in page order.
   const keep = " ".repeat(BLANK_KEEP);
   const serializeBlanked = (keepsText: (text: string) => boolean) => {
     const cut: number[] = [];
-    const blanks = new Map<Element, string>();
+    const blanks = new Map<Node, string>();
+    for (const comment of comments)
+      blanks.set(comment, " ".repeat(comment.data.length));
     for (const { script, text } of inline) {
       // The inline pass decodes JS and percent escapes only; the HTML pass also decodes HTML entities. A script whose
       // text an entity decode would change keeps its text in the HTML pass, so a value visible only after that decode is
@@ -5841,7 +5964,7 @@ function scanPageInto(
         )));
 
   sink.phase(1);
-  for (const { script, text, scriptIndex } of inline) {
+  for (const { script, text, scriptIndex, framework } of inline) {
     // The script's own open tag goes in front of its text, so the inline
     // pass classifies `<script id="shopify-features">{"accessToken":…}`
     // exactly as the whole-document pass does: the naming attribute is
@@ -5849,13 +5972,24 @@ function scanPageInto(
     // that the rule's dedup then has to reconcile. Attributes carry no
     // findings of their own that the document pass has not already made.
     const openTag = openTagOf(script);
-    scanInto(sink, `${openTag}${text}`, "inline-script", pageUrl, 0, {
-      offsetBase: -openTag.length,
-      scriptIndex,
-      pageLoadsShopify: { read: readPageShopify, replacesOwn: false },
-    });
+    scanInto(
+      sink,
+      `${openTag}${text}`,
+      framework ? "framework-payload" : "inline-script",
+      pageUrl,
+      0,
+      {
+        offsetBase: -openTag.length,
+        scriptIndex,
+        pageLoadsShopify: { read: readPageShopify, replacesOwn: false },
+        ...(framework ? { framework } : {}),
+      }
+    );
   }
   sink.phase(0);
+  // Offsets in a comment are into the comment's text.
+  for (const comment of comments)
+    scanInto(sink, comment.data, "html-comment", pageUrl, 0, {});
   if (html) {
     scanInto(sink, html, "html", pageUrl, 0, {
       pageLoadsShopify: { read: readPageShopify, replacesOwn: true },
@@ -5906,7 +6040,10 @@ interface ValueOrigins {
   pages: Set<string>;
   /** More pages than {@link ORIGIN_PAGES_CAP} carried the value: `pages` is the first ones. */
   pagesTruncated: boolean;
-  /** One entry per distinct place: the page for html and inline-script, the script URL for external-script. */
+  /**
+   * One entry per distinct place: the page for html and inline-script, the body's URL for external-script, source-map
+   * and config-endpoint.
+   */
   occurrences: Map<
     string,
     { location: string; page?: string; script?: string; loadedBy?: number }
@@ -5935,7 +6072,8 @@ function noteOrigin(
     if (entry.pages.size >= ORIGIN_PAGES_CAP) entry.pagesTruncated = true;
     else entry.pages.add(page);
   };
-  const external = finding.location.startsWith("external-script");
+  // A body other pages load (a script, a source map, a config endpoint) counts the pages that load it.
+  const external = loadedBy !== undefined;
   if (external) for (const page of loadedBy ?? []) addPage(page);
   else addPage(source);
   const key = `${finding.location}\u0000${source}`;
@@ -5954,6 +6092,13 @@ function noteOrigin(
         }
       : { location: finding.location, page: source }
   );
+}
+
+/** What a framework-payload finding's label adds (#362): whose payload, and which loader to fix. */
+function frameworkNote(s: LeakedSecret): string {
+  if (!s.framework) return "";
+  const f = FRAMEWORK_PAYLOADS[s.framework];
+  return `: the ${f.name} ${f.payload} payload, which serialises what ${f.loader} returned on the server`;
 }
 
 /** The `meta` for an item's places. Only URLs and counts, never the value. */
@@ -6083,7 +6228,7 @@ export const leakedSecretsRule: Rule = {
     id: "security/leaked-secrets",
     name: "Leaked Secrets and API Keys",
     description:
-      "Checks for exposed API keys, secrets, and credentials in HTML/JS",
+      "Checks for exposed API keys, secrets, and credentials in HTML, comments, scripts, framework data payloads, same-origin source maps and config endpoints",
     solution:
       "API keys and secrets exposed in client-side code can be harvested by attackers to access your services, " +
       "incur charges, or steal data. Move sensitive credentials to server-side code and use environment variables " +
@@ -6239,6 +6384,33 @@ export const leakedSecretsRule: Rule = {
         }
       }
     }
+    // The bodies those scripts point at that a repository scanner never sees (#362): a same-origin source map's
+    // original sources and a same-origin config endpoint a bundle fetches. The engine requested at most
+    // SECRET_SOURCE_FETCH_LIMITS.MAX_FETCHES of them on the asset budget; a body it could not read is simply not
+    // scanned (it is a derived source: the script that names it was scanned, and is reported if it was not).
+    for (const source of ctx.site?.secretSources ?? []) {
+      if (source.content === null || source.content === "") continue;
+      let scanned: ReturnType<typeof scanTextsBounded> | null = null;
+      if (source.kind === "source-map") {
+        const sources = sourceMapSources(source.content);
+        if (sources && sources.length > 0)
+          scanned = scanTextsBounded(sources, "source-map", source.url);
+      } else if (!isHtmlBody(source.contentType, source.content)) {
+        scanned = scanContentBounded(
+          source.content,
+          "config-endpoint",
+          source.url
+        );
+      }
+      if (!scanned) continue;
+      const kept = admitted(
+        scanned.secrets,
+        scanned.omitted,
+        scanned.omittedSerious
+      );
+      append(kept.secrets, source.url, source.sourcePages);
+      noteOmitted(source.url, kept.omitted, kept.serious);
+    }
     // Scripts the asset fetch caps never requested: counted, not named (the crawl dropped them before they had a record).
     const capDropped = ctx.site?.assetCapDropped?.scripts ?? 0;
     // Scripts a `store_scripts` run fetched for storage but the script rule limit kept from this rule (#1757).
@@ -6313,13 +6485,16 @@ export const leakedSecretsRule: Rule = {
     // `meta`, which the JSON, LLM and XML renderers carry through verbatim.
     const item = (s: LeakedSecret): CheckItem => ({
       id: `${s.type}: ${maskSecret(s.value)}`,
-      label: `Found in ${s.location}${s.sourceUrl ? ` (${redact(s.sourceUrl)})` : ""}`,
+      label: `Found in ${s.location}${s.sourceUrl ? ` (${redact(s.sourceUrl)})` : ""}${frameworkNote(s)}`,
       // Each page the value sat on, whether in its HTML or inline script or through a script it loads.
       ...(origins.get(s.value)?.pages.size
         ? { sourcePages: [...origins.get(s.value)!.pages].map(redact) }
         : {}),
       meta: {
         ...(s.extra ?? {}),
+        ...(s.framework
+          ? { framework: FRAMEWORK_PAYLOADS[s.framework].name }
+          : {}),
         ...occurrencesMeta(origins.get(s.value), redact),
         length: s.length,
         offset: s.offset,
