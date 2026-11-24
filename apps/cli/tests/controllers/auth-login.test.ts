@@ -306,13 +306,6 @@ describe("auth/login - callback response headers (#1286)", () => {
 
   test("the real loopback server sends them on 200, 410, 404 and 500 responses", async () => {
     const { startCallbackServer } = await import("@/controllers/auth/login");
-    const { createServer } = await import("node:net");
-    const freePort = await new Promise<number>((resolve) => {
-      const probe = createServer().listen(0, "127.0.0.1", () => {
-        const port = (probe.address() as { port: number }).port;
-        probe.close(() => resolve(port));
-      });
-    });
     let apiStatus: Record<string, unknown> | "down" = {
       status: "completed",
       token: "tok",
@@ -326,8 +319,9 @@ describe("auth/login - callback response headers (#1286)", () => {
           ? new Response("nope", { status: 500 })
           : Response.json(apiStatus),
     });
+    // Bind port 0 and read the real port back: no probe-then-reuse race (#2294).
     const callback = startCallbackServer(
-      freePort,
+      0,
       "session",
       "verifier",
       `http://127.0.0.1:${api.port}`,
@@ -335,6 +329,13 @@ describe("auth/login - callback response headers (#1286)", () => {
       () => {}
     );
     try {
+      if (!callback.server.listening) {
+        await new Promise<void>((resolve, reject) => {
+          callback.server.once("listening", resolve);
+          callback.server.once("error", reject);
+        });
+      }
+      const freePort = (callback.server.address() as { port: number }).port;
       const get = (path: string) =>
         fetch(`http://127.0.0.1:${freePort}${path}`);
       const expectHardened = (res: Response, type: string) => {
