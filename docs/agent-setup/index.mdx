@@ -11,20 +11,7 @@ icon: "bot"
 <div class="agent-setup-page">
 
 <div class="agent-hero">
-  <div class="sq-onboard-action">
-    <CopyPrompt
-      href="/agent-setup/prompt.md?ref=docs-agent-setup"
-      subject="squirrelscan"
-      label="Onboard your agent to squirrelscan"
-      icons={[
-        "/logo/agents/claude-code.png",
-        "/logo/agents/codex.png",
-        "/logo/agents/cursor.png",
-        "/logo/agents/opencode.png",
-      ]}
-      title="Copies a one-line prompt that sets your agent up for squirrelscan"
-    />
-  </div>
+  <CopyPrompt href="/agent-setup/prompt.md?ref=docs-agent-setup" subject="squirrelscan" />
   <p class="agent-hero-note">
     Copies one line for your agent: fetch and follow
     [the setup instructions](/agent-setup/prompt). It installs the CLI, adds the
@@ -134,7 +121,7 @@ published reports) need an account: run `squirrel auth login`. Free accounts get
   color: var(--tangly-color-muted);
 }
 
-/* The onboard button's styles are in docs/onboard.css. */
+/* The onboard pill: docs/components/CopyPrompt.astro and docs/onboard.css. */
 
 /* Agent grid. Hairline gaps come from the grid background showing through, so
    each cell needs an opaque surface of its own. */

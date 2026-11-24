@@ -1,14 +1,17 @@
-/* "Onboard your agent" button on the docs home, quickstart and agent setup
-   pages. One pill: the label on the left, the agents' marks on the right.
-   Clicking copies the setup prompt; the prompt itself is not shown.
+/* The "Onboard your agent" pill: the single stylesheet for the docs home,
+   quickstart and agent setup pages AND the website (hero and /for). The docs
+   pick it up because tangly loads every .css beside docs.json; the website
+   imports this file from the pinned repo-public submodule. Do not copy it.
 
-   tangly loads every .css file beside docs.json on every page (0.7.0), after
-   the theme CSS, so this needs no import. The pages wrap tangly's <CopyPrompt>
-   in .sq-onboard-action; the rules below restyle its button to the pill (marks
-   moved to the right, no stacking).
-
-   The website (apps/web in the private repo) carries its own copy of these
-   rules for the same button. Change both when the design changes.
+   Markup (components/CopyPrompt.astro and apps/web AgentSetupPrompt render it):
+     .sq-onboard-action
+       > button.sq-onboard
+           > span.sq-onboard-label, span.sq-onboard-marks > img,
+             span.sq-onboard-copy > svg + span (idle: "Copy prompt")
+                                  + svg + span (done: "Copied", button[data-copied])
+       + p.sq-onboard-toast (website only, while copied)
+   The whole pill is one button: its accessible name is its text, so it
+   includes "Copy prompt" (and reads "Copied" for ~2 s after a click).
 
    Tokens resolve the docs theme first, then the website's, then a literal. */
 
@@ -17,6 +20,7 @@
   --sq-ob-border-hover: var(--tangly-color-muted, var(--muted-foreground, #acb59e));
   --sq-ob-bg: var(--tangly-color-bg, var(--card, #fff));
   --sq-ob-fg: var(--tangly-color-fg, var(--foreground, #191b19));
+  --sq-ob-muted: var(--tangly-color-muted, var(--muted-foreground, #5f665c));
   --sq-ob-primary: var(--tangly-color-primary, var(--primary, #16a34a));
 
   position: relative;
@@ -24,8 +28,7 @@
   max-width: 100%;
 }
 
-.sq-onboard,
-.sq-onboard-action .tangly-copy-prompt {
+.sq-onboard {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -41,34 +44,33 @@
   font-size: 16px;
   font-weight: 500;
   line-height: 1.2;
+  text-align: left;
   cursor: pointer;
   box-shadow: 0 1px 2px rgb(37 48 35 / 0.05);
   transition:
     border-color 150ms,
     background 150ms;
 }
-.sq-onboard:hover,
-.sq-onboard-action .tangly-copy-prompt:hover {
+.sq-onboard:hover {
   border-color: var(--sq-ob-border-hover);
 }
-.sq-onboard:focus-visible,
-.sq-onboard-action .tangly-copy-prompt:focus-visible {
+.sq-onboard:focus-visible {
   outline: 2px solid var(--sq-ob-primary);
   outline-offset: 2px;
 }
 
-/* Marks: a flat row on the right, not a stacked avatar group. */
-.sq-onboard-marks,
-.sq-onboard-action .tangly-copy-prompt-icons {
+.sq-onboard-label {
+  min-width: 0;
+}
+
+/* Marks: a flat row, not a stacked avatar group. */
+.sq-onboard-marks {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 6px;
-  order: 2;
 }
 .sq-onboard-marks img,
-.sq-onboard-action .tangly-copy-prompt-icons img,
-.sq-onboard-action .tangly-copy-prompt-icons img:last-child,
 .prose-tang .sq-onboard-action img {
   width: 24px;
   height: 24px;
@@ -81,8 +83,45 @@
   box-shadow: none;
 }
 
-.sq-onboard-done,
-.sq-onboard-action .tangly-copy-prompt-done {
+/* "Copy prompt" + icon at the right end, set off by a divider. */
+.sq-onboard-copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding-left: 14px;
+  border-left: 1.5px solid var(--sq-ob-border);
+  color: var(--sq-ob-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.sq-onboard:hover .sq-onboard-copy {
+  color: var(--sq-ob-fg);
+}
+.sq-onboard-copy svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sq-onboard-copy-idle,
+.sq-onboard-copy-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sq-onboard-copy-done,
+.sq-onboard[data-copied] .sq-onboard-copy-idle {
+  display: none;
+}
+.sq-onboard[data-copied] .sq-onboard-copy-done {
+  display: inline-flex;
+}
+.sq-onboard[data-copied] .sq-onboard-copy {
   color: var(--sq-ob-primary);
 }
 
@@ -103,26 +142,32 @@
   box-shadow: 0 4px 12px rgb(37 48 35 / 0.08);
 }
 
+/* Narrow screens: the "Copy prompt" words drop to just the icon but stay in
+   the accessible name (visually hidden, not removed). */
 @media (max-width: 480px) {
-  .sq-onboard,
-  .sq-onboard-action .tangly-copy-prompt {
-    gap: 12px;
+  .sq-onboard {
+    gap: 10px;
     min-height: 46px;
-    padding: 9px 15px;
+    padding: 9px 14px;
     font-size: 15px;
   }
+  .sq-onboard-marks {
+    gap: 4px;
+  }
   .sq-onboard-marks img,
-  .sq-onboard-action .tangly-copy-prompt-icons img {
+  .prose-tang .sq-onboard-action img {
     width: 20px;
     height: 20px;
   }
-}
-
-/* Install commands are made to be copied: in an install CodeGroup the Copy
-   button is always shown, not only on hover (docs.json sets copyButton to
-   "hover" for every other block). The selectors repeat tangly's own, one class
-   more specific, so they win over its hover rule. */
-:root[data-copy] .sq-install .tangly-code-group .tangly-code-figure .tangly-code-copy,
-:root[data-copy] .sq-install .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy {
-  opacity: 1;
+  .sq-onboard-copy {
+    padding-left: 10px;
+  }
+  .sq-onboard-copy-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
