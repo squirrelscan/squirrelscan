@@ -385,6 +385,8 @@ export function buildCheckTallies(
       if (tally.failed > 0) entry.failed = tally.failed;
       if (tally.warnUnits > 0) entry.warnUnits = tally.warnUnits;
       if (tally.failUnits > 0) entry.failUnits = tally.failUnits;
+      if (tally.sharedWarnUnits) entry.sharedWarnUnits = tally.sharedWarnUnits;
+      if (tally.sharedFailUnits) entry.sharedFailUnits = tally.sharedFailUnits;
       if (skipped > 0) entry.skipped = skipped;
       if (gaps) entry.gaps = gaps;
       // A class of info checks only scores nothing and says nothing a reader

@@ -179,6 +179,16 @@ function subtractTally(target: IssueTally, source: IssueTally): void {
   target.failed = Math.max(0, target.failed - source.failed);
   target.warnUnits = Math.max(0, target.warnUnits - source.warnUnits);
   target.failUnits = Math.max(0, target.failUnits - source.failUnits);
+  if (target.sharedWarnUnits)
+    target.sharedWarnUnits = Math.max(
+      0,
+      target.sharedWarnUnits - (source.sharedWarnUnits ?? 0)
+    );
+  if (target.sharedFailUnits)
+    target.sharedFailUnits = Math.max(
+      0,
+      target.sharedFailUnits - (source.sharedFailUnits ?? 0)
+    );
 }
 
 function addInto(target: IssueTally, source: IssueTally): void {
@@ -187,6 +197,12 @@ function addInto(target: IssueTally, source: IssueTally): void {
   target.failed += source.failed;
   target.warnUnits += source.warnUnits;
   target.failUnits += source.failUnits;
+  if (source.sharedWarnUnits)
+    target.sharedWarnUnits =
+      (target.sharedWarnUnits ?? 0) + source.sharedWarnUnits;
+  if (source.sharedFailUnits)
+    target.sharedFailUnits =
+      (target.sharedFailUnits ?? 0) + source.sharedFailUnits;
 }
 
 /**

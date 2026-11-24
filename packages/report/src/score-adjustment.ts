@@ -16,6 +16,11 @@ export interface ScoreAdjustment {
   issueDensity: boolean;
   /** The robots.txt / sitemap part is present. */
   crawlSetup: boolean;
+  /**
+   * (#2256) Percent points of the issue-density penalty that shared-component findings
+   * account for (after their cap); 0 when there are none.
+   */
+  sharedComponentDensity: number;
 }
 
 const finite = (v: unknown): v is number =>
@@ -52,6 +57,9 @@ export function scoreAdjustment(
     percent,
     issueDensity: density > 0 || (debug.issueDensity ?? 0) > 0,
     crawlSetup: total - density > 0,
+    sharedComponentDensity: finite(debug.issueDensityShared)
+      ? Math.max(0, debug.issueDensityShared)
+      : 0,
   };
 }
 
@@ -62,7 +70,11 @@ export function scoreAdjustmentNote(adjustment: ScoreAdjustment): string {
     adjustment.crawlSetup ? "robots.txt or sitemap problems" : null,
   ].filter((c): c is string => c !== null);
   const because = causes.length > 0 ? ` for ${causes.join(" and ")}` : "";
-  return `Overall ${adjustment.overall}: ${adjustment.before} before a ${adjustment.percent}% site-wide adjustment${because}. Section scores use only their own checks.`;
+  const shared =
+    adjustment.issueDensity && adjustment.sharedComponentDensity > 0
+      ? ` Shared components (one element repeated across pages) account for ${adjustment.sharedComponentDensity} points of the density penalty; each counts once, however many pages it is on.`
+      : "";
+  return `Overall ${adjustment.overall}: ${adjustment.before} before a ${adjustment.percent}% site-wide adjustment${because}. Section scores use only their own checks.${shared}`;
 }
 
 /** The note for a report's health score, or null when there is nothing to explain. */

@@ -78,6 +78,27 @@ describe("scoreAdjustment", () => {
     });
   });
 
+  test("says how much of the density penalty came from shared components (#2256)", () => {
+    const note = scoreAdjustmentNoteFor(
+      score({
+        debug: {
+          base: 96,
+          curved: 95,
+          penalties: 23,
+          issuePenalty: 23,
+          issueDensity: 24.4,
+          sharedComponentUnits: 25,
+          issueDensityShared: 3.2,
+        },
+      })
+    );
+    expect(note).toBe(
+      `${NOTE} Shared components (one element repeated across pages) account for 3.2 points of the density penalty; each counts once, however many pages it is on.`
+    );
+    // No shared part: the sentence is the one it always was.
+    expect(scoreAdjustmentNoteFor(score())).toBe(NOTE);
+  });
+
   test("names the robots.txt / sitemap part when the penalties exceed the density part", () => {
     const note = scoreAdjustmentNoteFor(
       score({

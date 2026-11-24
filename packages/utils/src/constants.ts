@@ -500,6 +500,13 @@ export const ISSUE_PENALTY_MAX = 0.45;
 // So 200 contrast errors on one page count as this, not 200 — one page can't
 // zero a group. (#683)
 export const ISSUE_PENALTY_ITEM_CAP = 20;
+// (#2256) Most weighted issue units that findings marked as ONE shared component
+// (observed, groupable component evidence: a header logo link or footer icon
+// repeated on every page) can add to a bucket's density penalty, pooled. Equal to
+// one failing element (ISSUE_PENALTY_FAIL_WEIGHT). The cap is on the bucket's
+// pool, not per finding: one shared defect weighs the same on 2 pages as on 200,
+// and several shared defects together weigh no more than one.
+export const ISSUE_PENALTY_SHARED_CAP = 2.0;
 
 // Default exclude patterns
 export const DEFAULT_EXCLUDE_PATTERNS = [

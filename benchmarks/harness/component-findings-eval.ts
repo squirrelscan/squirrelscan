@@ -101,7 +101,9 @@ console.log(lines.join("\n"));
 console.log("");
 console.log(
   `message grouping unchanged by evidence: ${rows.every((r) => r.result.presentationOnly) ? "all cases" : "NO"}; ` +
-    `health score unchanged: ${rows.every((r) => r.result.healthScoreOn === r.result.healthScoreOff) ? "all cases" : "NO"}; ` +
+    // #2256: shared-component evidence may raise the score (capped density), never lower it.
+    `health score never lowered by evidence: ${rows.every((r) => (r.result.healthScoreOn ?? 0) >= (r.result.healthScoreOff ?? 0)) ? "all cases" : "NO"}` +
+    ` (raised in ${rows.filter((r) => (r.result.healthScoreOn ?? 0) > (r.result.healthScoreOff ?? 0)).length}); ` +
     `ids and membership identical across forward/reversed/shuffled: ${rows.every((r) => r.deterministic) ? "all cases" : "NO"}; ` +
     `coverage complete: ${rows.every((r) => r.result.coverageOk) ? "all cases" : "NO"}`,
 );
