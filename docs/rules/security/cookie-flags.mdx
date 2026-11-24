@@ -48,6 +48,8 @@ So the rule looks at the page's `<script src>` elements. A script served from an
 
 A cookie counts as session-like when its name is a common default session name (`PHPSESSID`, `JSESSIONID`, `ASP.NET_SessionId`, `connect.sid`, `sessionid`, `sid`, or a name ending in `_session` or `.sid` such as `laravel_session`), or when it names a credential the way [security/token-storage](/rules/security/token-storage) recognises a key (`auth_token`, `access_token`, `jwt`, `session_id`). A `__Host-` or `__Secure-` prefix is ignored. Other cookies without `HttpOnly`, such as `theme`, keep the `cookie-httponly` warning. The exempt platform and CSRF cookies above stay info.
 
+`cookie-httponly-third-party-scripts` supersedes `cookie-httponly` for those cookies. A cookie that was reported under `cookie-httponly` in an earlier audit and now fails the third-party check is the same finding getting worse, not one resolved finding and one new one: it keeps its first-seen date. If the cookie is fixed, the earlier finding resolves.
+
 A page with no third-party script reports exactly as before. So does a page the crawl could not parse, because its markup is unknown. Only scripts in the page's markup are seen: a script that another script adds while the page runs is not counted, so a page can run more third-party code than the check names.
 
 Multiple cookies in one header value are split on newlines and on commas that are followed by a `name=` pair, so an `Expires` date containing a comma does not split a cookie in two. Only cookies your server sets in a response header are seen; cookies written by JavaScript are not.
@@ -111,6 +113,10 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `cookie-httponly` | Problem |  |
 | `cookie-samesite` | Problem |  |
 | `cookie-flags` | Clean | `cookie-samesite-none-insecure`, `cookie-secure`, `cookie-httponly-platform`, `cookie-httponly-csrf`, `cookie-httponly-third-party-scripts`, `cookie-httponly`, `cookie-samesite` |
+
+Retired check names:
+
+- `cookie-httponly` is replaced by `cookie-httponly-third-party-scripts`.
 
 {/* rule-checks:end */}
 

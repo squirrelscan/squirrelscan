@@ -135,6 +135,12 @@ export const cookieFlagsRule: Rule = {
         ],
       },
     ],
+    // A session-like cookie moved from the `cookie-httponly` warning to the
+    // third-party-scripts failure (#2260). Both key the finding by cookie name,
+    // so the merge carries it as one finding getting worse (#2298).
+    supersededChecks: {
+      "cookie-httponly": ["cookie-httponly-third-party-scripts"],
+    },
   },
 
   run(ctx: RuleContext): RuleResult {
