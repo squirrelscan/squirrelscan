@@ -224,6 +224,14 @@ export interface UntouchedRuleTotals {
   warnings: number;
   /** Distinct (checkName, page) holding a warn row. */
   warnUnits: number;
+  /**
+   * (#2301) Of `warnUnits` / `failUnits`, the units from findings that repeat as one
+   * shared component, as `addChecksToTally` fills `CheckTally.sharedWarnUnits` /
+   * `sharedFailUnits`. Optional, zero omitted: a store twin that does not count them
+   * reads as none.
+   */
+  sharedWarnUnits?: number;
+  sharedFailUnits?: number;
   /** Untouched pages whose `site_pages` row is ACTIVE and that hold a row for the rule. */
   activePages: number;
   /**
@@ -577,7 +585,13 @@ export function createCompleteStoreTallyFold(
       if (!advisory(meta)) {
         tally.warnings += r.warnings;
         tally.warnUnits += r.warnUnits;
+        if (r.sharedWarnUnits)
+          tally.sharedWarnUnits =
+            (tally.sharedWarnUnits ?? 0) + r.sharedWarnUnits;
       }
+      if (r.sharedFailUnits)
+        tally.sharedFailUnits =
+          (tally.sharedFailUnits ?? 0) + r.sharedFailUnits;
       if (r.activePages > 0) {
         carriedDirtyPagesByRule.set(
           r.ruleId,
@@ -1399,6 +1413,12 @@ export function aggregateUntouchedCarried(
       totals.failUnits += tally.failUnits;
       totals.warnings += tally.warnings;
       totals.warnUnits += tally.warnUnits;
+      if (tally.sharedWarnUnits)
+        totals.sharedWarnUnits =
+          (totals.sharedWarnUnits ?? 0) + tally.sharedWarnUnits;
+      if (tally.sharedFailUnits)
+        totals.sharedFailUnits =
+          (totals.sharedFailUnits ?? 0) + tally.sharedFailUnits;
       if (page.active) {
         totals.activePages += 1;
         totals.activeChecks =
