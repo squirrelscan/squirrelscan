@@ -9,10 +9,17 @@ import type {
   ReportRenderMode,
 } from "@squirrelscan/core-contracts";
 
+import {
+  CDP_REASON_PREFIX,
+  CDP_RENDER_FETCHER_ID,
+} from "@squirrelscan/fetchers";
+
 /** The fetcher ids a browser render reports: the cloud render, and the container's browser queue. */
 const RENDERED_FETCHER_IDS: ReadonlySet<string> = new Set([
   "cloud-render",
   "browser",
+  // The user's own Chrome over CDP (#2306).
+  CDP_RENDER_FETCHER_ID,
 ]);
 
 /** Whether a page's `fetcherId` says a browser rendered it. */
@@ -97,7 +104,10 @@ export function renderFallbackLine(
     total === 0
       ? "no pages were fetched"
       : `${render.pagesRendered.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} pages were rendered, the rest fetched as plain HTML`;
-  return `Cloud rendering fell back to plain HTTP (${render.fallbackReason}): ${split}.`;
+  const renderer = render.fallbackReason.startsWith(CDP_REASON_PREFIX)
+    ? "Local browser rendering"
+    : "Cloud rendering";
+  return `${renderer} fell back to plain HTTP (${render.fallbackReason}): ${split}.`;
 }
 
 /**

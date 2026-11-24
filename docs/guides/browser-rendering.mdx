@@ -66,6 +66,33 @@ render = "auto"   # off | auto | all
 
 Setting `render` explicitly overrides the level's default, so every signed-in audit of this project renders the same way. (The older `rendering = "http" | "browser"` still works: `http` = `off`, `browser` = `all`, but `render` is preferred.)
 
+## Render in your own Chrome
+
+Already run a headless Chrome (agent-browser, Playwright, browserless, a CI image)? Point squirrelscan at it with `--render-cdp`. Pages render in your browser instead of the cloud, so it works signed out, needs no credits for rendering, and reaches pages the cloud browser cannot: staging hosts on a private network, and pages behind a login.
+
+```bash
+# Start Chrome with a debugging port (any Chrome that speaks the DevTools Protocol works)
+chrome --headless=new --remote-debugging-port=9222
+
+squirrel audit https://staging.example.com --render-cdp http://127.0.0.1:9222 --render-mode all
+```
+
+The endpoint is a Chrome DevTools Protocol URL: `http://host:port` (squirrelscan reads the browser's WebSocket address from `/json/version`) or a `ws://` browser endpoint. To pin it for a project:
+
+```toml squirrel.toml
+[render]
+cdp_url = "http://127.0.0.1:9222"
+```
+
+How it behaves:
+
+- **Strategies.** `--render-mode all` opens every crawled HTML page in the browser. `--render-mode auto` fetches over plain HTTP first and opens only the pages that look like client-rendered shells. Without a flag, the audit level decides, as for cloud rendering.
+- **What the browser opens.** Only pages the crawler chose to fetch. `robots.txt`, the page limit, scope and `--max-pages` apply exactly as with plain HTTP, and `robots.txt`, sitemaps, scripts and other assets are still fetched by squirrelscan itself. A redirect to a link-local or cloud metadata address off the site is not followed.
+- **Your session.** Each page opens in a new tab of the browser's default profile, so its saved cookies and storage apply. A page behind a login renders when that browser is already signed in. The tab is closed after the page is read.
+- **Nothing goes to the squirrelscan cloud for rendering.** The cloud browser is not used, whatever your sign-in state. Signed in, the audit is still billed as with `--http`, and `--offline` turns the other cloud features off.
+- **Fallback.** A page the browser cannot render (error, timeout, bot wall, not HTML) is fetched over plain HTTP. If the endpoint cannot be reached, the whole audit runs on plain HTTP and the report's `render.fallbackReason` says why, for example `Chrome endpoint unreachable (connection refused)`.
+- **Flags.** `--render-cdp` cannot be combined with `--http`, `--render` (the cloud browser) or `--render-mode off`. A `[render] cdp_url` in `squirrel.toml` gives way to those flags for one run.
+
 ## Watch your page count
 
 Every audited page costs 2 credits on top of the audit's 50-credit base, rendered or not, so page count is the part of an audit that scales. Two settings to keep in mind:

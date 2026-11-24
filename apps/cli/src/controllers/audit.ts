@@ -68,6 +68,8 @@ import {
 } from "@squirrelscan/core-contracts/seed-redirect";
 import {
   createConditionalRenderDocumentFetcher,
+  CDP_RENDER_FETCHER_ID,
+  createCdpRenderFetcher,
   createFetchDocumentFetcher,
 } from "@squirrelscan/fetchers";
 import { summarizeIgnored } from "@squirrelscan/report/ignored";
@@ -361,6 +363,12 @@ export interface RunAuditOptions extends AuditOptions {
    */
   renderStrategy?: "auto" | "all";
   /**
+   * Chrome DevTools Protocol endpoint to render pages in (#2306). The command layer resolves it
+   * from `--render-cdp` or `[render] cdp_url` and sets it only when it won over the other render
+   * flags. Set: the crawl uses the `cdp-render` fetcher, never the cloud one.
+   */
+  renderCdpUrl?: string;
+  /**
    * Whether cloud is usable this run — resolved ONCE by the CLI layer (token
    * present AND a balance call succeeded). `false` means the session is expired
    * or the API is unreachable, so every cloud step skips cleanly (no client is
@@ -395,6 +403,65 @@ export interface ResolveFetcherHooks {
   onFallbackReason?: (reason: string) => void;
 }
 
+/**
+ * The `cdp-render` fetcher (#2306): pages open in the user's own Chrome, plain HTTP backs every page
+ * the browser cannot render. Same `auto`/`all` strategies as cloud rendering; no cloud client, no
+ * credits. Strategy: explicit option or `[cloud].render`, else the coverage default.
+ */
+function resolveCdpDocumentFetcher(
+  endpoint: string,
+  options: RunAuditOptions,
+  mergedConfig: Config,
+  isQuickMode: boolean,
+  hooks: ResolveFetcherHooks
+): DocumentFetcher {
+  const httpFetcher = createFetchDocumentFetcher();
+  const renderFetcher = createCdpRenderFetcher({
+    endpoint,
+    fallback: httpFetcher,
+    onFallback: (reason) => {
+      logger.warn(`${reason}; continuing with plain HTTP fetch`);
+      hooks.onFallbackReason?.(reason);
+    },
+    onPageFallback: (url, reason) =>
+      logger.info(`Chrome did not render ${url} (${reason}); using plain HTTP`),
+  });
+  const strategy =
+    options.renderStrategy ??
+    (mergedConfig.cloud.render === "auto" || mergedConfig.cloud.render === "all"
+      ? mergedConfig.cloud.render
+      : undefined) ??
+    (isQuickMode ? "auto" : "all");
+  if (strategy === "auto") {
+    return withClose(
+      createHybridDocumentFetcher({
+        http: httpFetcher,
+        render: renderFetcher,
+        onUpgrade: (url) =>
+          logger.debug("hybrid: upgrading CSR shell to Chrome render", url),
+      }),
+      renderFetcher
+    );
+  }
+  return renderFetcher;
+}
+
+/** A fetcher that closes `inner`'s browser connection when closed. */
+function withClose(
+  fetcher: DocumentFetcher,
+  inner: { close(): Promise<void> }
+): DocumentFetcher {
+  return Object.assign(fetcher, { close: () => inner.close() });
+}
+
+/** Close the browser connection a CDP fetcher holds, if it holds one. */
+export async function closeDocumentFetcher(
+  fetcher: DocumentFetcher | undefined
+): Promise<void> {
+  const close = (fetcher as { close?: () => Promise<void> } | undefined)?.close;
+  if (typeof close === "function") await close.call(fetcher).catch(() => {});
+}
+
 export function resolveDocumentFetcher(
   options: RunAuditOptions,
   mergedConfig: Config,
@@ -407,6 +474,16 @@ export function resolveDocumentFetcher(
   hooks: ResolveFetcherHooks = {}
 ): DocumentFetcher | undefined {
   if (options.documentFetcher) return options.documentFetcher;
+  const cdpUrl = options.renderCdpUrl;
+  if (cdpUrl) {
+    return resolveCdpDocumentFetcher(
+      cdpUrl,
+      options,
+      mergedConfig,
+      isQuickMode,
+      hooks
+    );
+  }
   // Cloud unusable (expired/unreachable) → no render fetcher even for explicit
   // --render (resolveCloudRendering returns "browser" before checking auth).
   if (
@@ -1822,6 +1899,8 @@ export async function runAudit(
       } finally {
         if (crawlPhaseTimer) clearTimeout(crawlPhaseTimer);
         if (durationTimer) clearTimeout(durationTimer);
+        // The Chrome connection (#2306) ends with the crawl; a later plain request needs none.
+        await closeDocumentFetcher(documentFetcher);
       }
 
       // Show redirect if it occurred (user chose to show all redirects). A seed
@@ -2247,7 +2326,9 @@ export async function runAudit(
                   // Skip the raw-vs-rendered `render` service only when the crawl rendered EVERY page — i.e. the
                   // resolved fetcher is the full-render one ("cloud-render"), NOT the "auto" hybrid ("hybrid-http-
                   // first", most pages raw) or plain HTTP (undefined). #673.
-                  crawlRendered: documentFetcher?.id === "cloud-render",
+                  crawlRendered:
+                    documentFetcher?.id === "cloud-render" ||
+                    documentFetcher?.id === CDP_RENDER_FETCHER_ID,
                 },
                 prefetchPayloads
               ),
@@ -3156,7 +3237,9 @@ export async function runAudit(
       {
         const { rendered, plain } = renderTally.counts();
         report.render = buildReportRender({
-          requested: mergedConfig.cloud.rendering === "browser",
+          requested:
+            mergedConfig.cloud.rendering === "browser" ||
+            !!options.renderCdpUrl,
           fetcherId: documentFetcher?.id,
           fallbackReason: renderFallbackReason,
           rendered,

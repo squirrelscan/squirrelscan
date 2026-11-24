@@ -721,3 +721,12 @@ export type { HybridFetcherOptions } from "./hybrid";
 // 304 instead of re-rendering unchanged pages every re-run (#821).
 export { createConditionalRenderDocumentFetcher } from "./conditional-render";
 export type { ConditionalRenderFetcherOptions } from "./conditional-render";
+
+// Local Chrome render over the DevTools Protocol (#2306).
+export {
+  CDP_REASON_PREFIX,
+  CDP_RENDER_FETCHER_ID,
+  createCdpRenderFetcher,
+  resolveCdpWebSocketUrl,
+} from "./cdp-render";
+export type { CdpRenderFetcher, CdpRenderFetcherOptions } from "./cdp-render";

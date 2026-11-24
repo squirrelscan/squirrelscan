@@ -1042,6 +1042,19 @@ export function probeBannerLines(probe: {
   };
 }
 
+/** Why `value` cannot be a Chrome DevTools Protocol endpoint, or null when it can (#2306). */
+export function invalidCdpEndpoint(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return `'${value}' is not a URL (expected ws://host:port/... or http://host:port)`;
+  }
+  if (!/^(wss?|https?):$/.test(url.protocol))
+    return `'${value}' must start with ws://, wss://, http:// or https://`;
+  return null;
+}
+
 /**
  * Validate mutually-exclusive audit flags. Returns a human-readable error to
  * print (then exit 1), or null when the combination is valid.
@@ -1054,6 +1067,10 @@ export function validateAuditFlags(args: {
   noEphemeral?: boolean;
   render?: boolean;
   http?: boolean;
+  /** `--render-cdp` as given (#2306). */
+  renderCdp?: string;
+  /** `--render-mode` as given. */
+  renderMode?: string;
   externalLinks?: boolean;
   noExternalLinks?: boolean;
 }): string | null {
@@ -1080,6 +1097,16 @@ export function validateAuditFlags(args: {
   // rather than silently picking one.
   if (args.render && args.http) {
     return "--render and --http cannot be combined";
+  }
+  // #2306: --render-cdp renders in your own Chrome; each of these says no browser or the cloud one.
+  if (args.renderCdp !== undefined) {
+    if (args.http) return "--render-cdp and --http cannot be combined";
+    if (args.render)
+      return "--render-cdp and --render cannot be combined (--render uses the cloud browser)";
+    if (args.renderMode === "off")
+      return "--render-cdp and --render-mode off cannot be combined";
+    const invalid = invalidCdpEndpoint(args.renderCdp);
+    if (invalid) return `--render-cdp ${invalid}`;
   }
   return null;
 }
@@ -1366,6 +1393,11 @@ export const audit = defineCommand({
       description:
         "Render strategy: off (HTTP only) | auto (render only client-rendered pages) | all (render every page). Only rendering runs in the cloud: your machine still fetches the site. Overrides [cloud].render.",
     },
+    "render-cdp": {
+      type: "string",
+      description:
+        "Render pages in a Chrome you run, over the DevTools Protocol (ws://host:port/... or http://host:port). Works signed out and sends nothing to the squirrelscan cloud. Pair with --render-mode auto|all. Overrides [render] cdp_url",
+    },
     http: {
       type: "boolean",
       description:
@@ -1618,6 +1650,12 @@ export const audit = defineCommand({
       noEphemeral: hasNegatedFlag(rawArgs, "ephemeral"),
       externalLinks: externalLinksOn,
       noExternalLinks: externalLinksOff,
+      renderCdp:
+        typeof args["render-cdp"] === "string" ? args["render-cdp"] : undefined,
+      renderMode:
+        typeof args["render-mode"] === "string"
+          ? args["render-mode"]
+          : undefined,
     });
     if (flagError) {
       console.error(flagError);
@@ -2217,10 +2255,23 @@ export const audit = defineCommand({
       // rendering), or undefined for the level's own. Resolved here, not at
       // the consent step below, because the banner has to say when it changes
       // the level.
-      const requestedRenderMode = resolveExplicitRenderMode(
+      // #2306: the Chrome to render in. The flag always counts; `[render] cdp_url` yields to a
+      // one-run --http, --render or --render-mode off, like any config setting.
+      const renderCdpUrl =
+        typeof args["render-cdp"] === "string"
+          ? args["render-cdp"]
+          : args.http || args.render || renderModeArg === "off"
+            ? undefined
+            : config.render?.cdp_url;
+      // With a Chrome to render in, a config's "off" for the cloud browser is not a choice about it.
+      const resolvedRenderMode = resolveExplicitRenderMode(
         { http: args.http, render: args.render, renderMode: renderModeArg },
         config
       );
+      const requestedRenderMode =
+        renderCdpUrl && resolvedRenderMode === "off"
+          ? undefined
+          : resolvedRenderMode;
 
       // CLI --max-pages > config max_pages (if non-default) > the level's page
       // budget. The config's settings over the level, read once.
@@ -2735,13 +2786,16 @@ export const audit = defineCommand({
       // failure. Announce it only when the user actually asked for rendering —
       // the default (unset) mode is resolved in the controller and never
       // reached the cloud for a local host anyway.
-      const explicitRenderMode = nonPublicHost ? "off" : requestedRenderMode;
+      // A Chrome on your side (#2306) can reach what the cloud cannot, so it does not turn rendering off.
+      const explicitRenderMode =
+        nonPublicHost && !renderCdpUrl ? "off" : requestedRenderMode;
       // Only when rendering was actually going to happen: the user asked for it
       // AND this run could have reached the cloud at all. Signed out or
       // --offline, cloud rendering was already off for other reasons, and
       // blaming the host there is a notice about nothing.
       if (
         nonPublicHost &&
+        !renderCdpUrl &&
         signedIn &&
         !args.offline &&
         (requestedRenderMode === "auto" || requestedRenderMode === "all")
@@ -2773,11 +2827,14 @@ export const audit = defineCommand({
         // --render-mode and [cloud].render route through the unchanged path.
         args: {
           ...args,
-          http: explicitRenderMode === "off",
-          render: explicitRenderMode === "auto" || explicitRenderMode === "all",
+          // The cloud browser is never used with a local Chrome (#2306): it counts as plain HTTP here.
+          http: explicitRenderMode === "off" || !!renderCdpUrl,
+          render:
+            !renderCdpUrl &&
+            (explicitRenderMode === "auto" || explicitRenderMode === "all"),
         },
         configRendering:
-          explicitRenderMode === "off"
+          explicitRenderMode === "off" || renderCdpUrl
             ? "http"
             : explicitRenderMode
               ? "browser"
@@ -3083,6 +3140,7 @@ export const audit = defineCommand({
           // Render strategy when rendering is on: auto = HTTP-first hybrid,
           // all = render every page. The level's setting unless overridden.
           renderStrategy,
+          ...(renderCdpUrl ? { renderCdpUrl } : {}),
           // The level's external link checks unless a flag or [external_links]
           // enabled in the config file says otherwise (--offline still turns
           // them off).
