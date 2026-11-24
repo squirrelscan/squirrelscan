@@ -130,6 +130,22 @@ describe("shared-component density cap (#2256)", () => {
     expect(shared).toBeLessThanOrEqual(many.debug!.issueDensity!);
   });
 
+  // The cap is on each score's pool of shared units, not per finding (docs/reports.mdx): three
+  // distinct shared defects weigh in the density penalty no more than one does.
+  test("shared findings are pooled per score: three distinct shared defects weigh as one", () => {
+    const distinct = (name: string) =>
+      sharedChecks(10, true).map((c) => ({ ...c, name }));
+    const one = scoreWith(distinct("logo-link"));
+    const three = scoreWith([
+      ...distinct("logo-link"),
+      ...distinct("footer-icon"),
+      ...distinct("nav-toggle"),
+    ]);
+    expect(three.debug?.sharedComponentUnits).toBe(30);
+    expect(three.debug?.issueDensity).toBe(one.debug?.issueDensity);
+    expect(three.overall).toBe(one.overall);
+  });
+
   test("a shared fail key records its units as a subset of the totals", () => {
     const tally = emptyTally();
     addChecksToTally(tally, sharedChecks(1, true));
