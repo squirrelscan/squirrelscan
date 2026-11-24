@@ -141,12 +141,44 @@ describe("component findings evaluation (repo#2307)", () => {
         }
       });
 
-      test("evidence changes presentation only: message grouping and health score are identical", async () => {
+      test("evidence leaves message grouping identical", async () => {
         const result = await evaluateCase(evalCase);
         expect(result.presentationOnly).toBe(true);
-        expect(result.healthScoreOn).toBe(result.healthScoreOff);
-        expect(result.healthScoreOn).not.toBeNull();
       });
+
+      // #2256 (decided: scores move): shared-component evidence caps what one
+      // repeated chrome finding weighs in the issue-density penalty, so evidence
+      // can raise the health score but never lower it, and without an observed,
+      // groupable occurrence it changes nothing.
+      test("evidence never lowers the health score, and moves it only through shared-component findings (#2256)", async () => {
+        const result = await evaluateCase(evalCase);
+        expect(result.healthScoreOn).not.toBeNull();
+        expect(result.healthScoreOff).not.toBeNull();
+        expect(result.healthScoreOn!).toBeGreaterThanOrEqual(
+          result.healthScoreOff!
+        );
+        const { checks } = await runCaseRules(evalCase, "forward");
+        const hasShared =
+          !evalCase.legacy &&
+          Object.values(checks)
+            .flat()
+            .some(
+              (c) =>
+                (c.componentOccurrences?.length ?? 0) > 0 &&
+                c.componentOccurrences!.every(
+                  (o) => o.groupable === true && o.confidence === "observed"
+                )
+            );
+        if (!hasShared)
+          expect(result.healthScoreOn).toBe(result.healthScoreOff);
+      });
+
+      if (evalCase.id === "mixed-site-order-independence") {
+        test("shared-component evidence past the cap lifts the health score (#2256)", async () => {
+          const result = await evaluateCase(evalCase);
+          expect(result.healthScoreOn!).toBeGreaterThan(result.healthScoreOff!);
+        });
+      }
 
       test("a legacy report (evidence stripped) renders without fix groups and without throwing", async () => {
         const { checks } = await runCaseRules(evalCase, "forward");
