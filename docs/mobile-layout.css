@@ -1,0 +1,48 @@
+/* Keep the article column inside the viewport on narrow screens.
+
+   tangly gives .tangly-article `margin-inline: auto` and a max-width. Auto
+   margins stop a grid item stretching, so it sizes to its max-content (an
+   unwrapped code line or wide table) up to max-width, and the page scrolls
+   sideways (pub#2292: 801 px on a 375 px screen). width: 100% makes it fill
+   its grid track instead; max-width and the auto margins still centre it on
+   wide screens, and code blocks and tables scroll inside their own box.
+
+   tangly loads every .css file beside docs.json on every page (0.7.0). */
+
+.tangly-article {
+  width: 100%;
+}
+
+/* Tables are not wrapped in a scroll box by tangly, so a wide one pushes the
+   page out. Make the table its own scroll container. */
+.prose-tang table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Top bar: the brand block, theme toggle and GitHub button are all shrink-0
+   and add up to more than 375 px with the default gaps and padding. Tighten
+   them on narrow screens so every control stays visible. */
+@media (max-width: 480px) {
+  .tangly-topnav .tangly-nav-brand {
+    padding-inline: 0.5rem;
+    gap: 0.25rem;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+  .tangly-topnav .tangly-nav-brand a {
+    min-width: 0;
+  }
+  .tangly-topnav .tangly-nav-brand img {
+    height: 1.25rem;
+    max-width: 100%;
+  }
+  .tangly-topnav .tangly-cta {
+    padding-inline: 0.625rem;
+  }
+  .tangly-topnav .tangly-shell-row > .flex-1 {
+    gap: 0.5rem;
+    padding-inline: 0.5rem 0.75rem;
+  }
+}
