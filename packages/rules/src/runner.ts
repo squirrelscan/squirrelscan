@@ -390,6 +390,7 @@ export { UNREAD_PAGE_SKIP_REASON };
  */
 export const RUNS_ON_UNREAD_PAGE: ReadonlySet<string> = new Set([
   "a11y/focus-visible",
+  "a11y/rendered-layout",
   "analytics/consent-mode",
   "content/mime-type",
   "core/doctype",

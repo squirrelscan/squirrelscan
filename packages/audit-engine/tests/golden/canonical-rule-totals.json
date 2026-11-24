@@ -50,6 +50,7 @@
   "a11y/object-alt": 500,
   "a11y/paste-inputs": 500,
   "a11y/reduced-motion": 500,
+  "a11y/rendered-layout": 500,
   "a11y/select-name": 500,
   "a11y/skip-link": 500,
   "a11y/svg-img-alt": 0,

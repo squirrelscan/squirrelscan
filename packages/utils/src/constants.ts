@@ -545,14 +545,14 @@ export type OrgLogoContentType = (typeof ORG_LOGO_CONTENT_TYPES)[number];
 // Public rule/category counts for marketing and doc copy that can't read the
 // live catalog (MDX, plugin manifests, skill files, MCP tool descriptions).
 // PUBLIC_RULE_COUNT_FLOOR is the live total (`loadAllRules().size`) rounded DOWN
-// to the nearest 10, so copy says "350+" and needs a bump only when the count
+// to the nearest 10, so copy says "360+" and needs a bump only when the count
 // crosses the next multiple of 10. PUBLIC_CATEGORY_COUNT tracks exactly since
 // categories change far less often. The rule-count guards (public
 // packages/rules/tests/rule-count-docs-2139.test.ts, private
 // rule-count-consistency) derive the floor from the registry and fail when this
 // constant, or any copy, disagrees. #1019 #986 #981
-// Currently 359 enabled rules.
-export const PUBLIC_RULE_COUNT_FLOOR = 350;
+// Currently 360 enabled rules.
+export const PUBLIC_RULE_COUNT_FLOOR = 360;
 export const PUBLIC_CATEGORY_COUNT = 22;
 
 // Hosted MCP (#113). These appear in the well-known manifests, the /add/<agent>

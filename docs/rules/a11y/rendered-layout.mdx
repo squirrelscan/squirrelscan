@@ -1,0 +1,134 @@
+---
+title: "Reflow, text spacing and 200% text size: rendered layout checks"
+description: "A page that scrolls sideways at 320px or clips text when spacing or text size grows. squirrel measures all three in a browser render and names the elements."
+---
+
+{/* cloud-note:start */}
+<Note>**Requires cloud.** This rule reads the `render` cloud service (per page; 2 credits per page). An offline or signed-out audit skips it and lists it under Not checked. See [Cloud rules](/cloud/rules#what-offline-audits-skip) for the skip reasons and how to run it.</Note>
+{/* cloud-note:end */}
+
+## What rendered layout failures are
+
+Markup alone cannot tell you whether a page still works for someone who zooms in, widens their text spacing or sets a large default text size. A fixed-width table, a card with a fixed height and `overflow: hidden`, or a button with a set width can all look fine at the default size and then push content off screen or cut text off when the reader changes how the page is displayed.
+
+Three WCAG success criteria cover this:
+
+- 1.4.10 Reflow: content fits a 320 CSS pixel wide viewport without horizontal scrolling (a data table, map or toolbar that needs two dimensions is exempt).
+- 1.4.12 Text Spacing: nothing is clipped or lost when line height is 1.5, paragraph spacing 2em, letter spacing 0.12em and word spacing 0.16em.
+- 1.4.4 Resize Text: nothing is clipped or lost when text is enlarged to 200%.
+
+## What squirrel checks
+
+The rule reads layout measurements that the cloud render service takes in the same browser pass that renders the page, so it adds no second render. It needs a cloud audit. It emits up to three checks per page, one for each condition the render service measured:
+
+- `reflow`, failing with `At 320px wide the page scrolls horizontally (content is Npx wide, WCAG 1.4.10): <selector> (Npx wide)`. The page fails when its scrollable width exceeds the viewport width by more than one pixel. Up to five overflowing elements are named, with the rest counted.
+- `text-spacing`, failing with `Text is clipped under the WCAG 1.4.12 text-spacing overrides: <selector> (Npx clipped)`.
+- `text-resize`, failing with `Content is clipped at 200% text size (WCAG 1.4.4): <selector> (Npx clipped)`.
+- Each check passes when its condition produced no overflow or clipping.
+
+One skipped check named `rendered-layout` replaces them when the page cannot be measured. The message is `Rendered layout checks skipped: they need a cloud audit` when the audit is offline or the render did not run (the skip reason says why), and `Rendered layout checks skipped` when the render returned no layout measurements or only unusable ones. The static [a11y/zoom-disabled](/rules/a11y/zoom-disabled) rule remains the offline check. The rule is skipped on a page detected as a soft 404.
+
+## How to fix it
+
+Let boxes grow with their content instead of fixing their size:
+
+```css
+.card {
+  min-height: 8rem; /* not height */
+  max-width: 100%;  /* not width */
+  overflow-wrap: anywhere;
+}
+.table-wrap { overflow-x: auto; } /* a wide table scrolls inside its own box */
+```
+
+Use relative units, flexible containers and media queries based on content rather than device widths. Avoid `overflow: hidden` on any box that holds text.
+
+| | |
+|---|---|
+| **Rule ID** | `a11y/rendered-layout` |
+| **Category** | [Accessibility](/rules/a11y) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/rendered-layout"]
+```
+
+### Disable all Accessibility rules
+
+```toml squirrel.toml
+[rules]
+disable = ["a11y/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["a11y/rendered-layout"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `reflow` | Problem |  |
+| `reflow` | Clean | `reflow` |
+| `text-spacing` | Problem |  |
+| `text-spacing` | Clean | `text-spacing` |
+| `text-resize` | Problem |  |
+| `text-resize` | Clean | `text-resize` |
+| `rendered-layout` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## WCAG success criteria
+
+{/* rule-wcag:start */}
+
+The WCAG success criteria this rule's findings map to. These automated checks cover part of WCAG; passing them does not mean a site conforms. Run `squirrel audit --wcag-level AA` to keep only the accessibility rules mapped to a criterion at Level A or AA.
+
+| Criterion | Level | Introduced in |
+| --- | --- | --- |
+| 1.4.4 Resize Text | AA | WCAG 2.0 |
+| 1.4.10 Reflow | AA | WCAG 2.1 |
+| 1.4.12 Text Spacing | AA | WCAG 2.1 |
+
+{/* rule-wcag:end */}
+
+## Related rules
+
+- [a11y/zoom-disabled](/rules/a11y/zoom-disabled): the offline check for a viewport that blocks zoom.
+- [a11y/touch-targets](/rules/a11y/touch-targets): interactive elements below the minimum target size.
+- [mobile/horizontal-scroll](/rules/mobile/horizontal-scroll): the static, markup-based guess at horizontal overflow.
+
+## References
+
+- [Reflow, WCAG 2.2 Understanding 1.4.10](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html)
+- [Text Spacing, WCAG 2.2 Understanding 1.4.12](https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html)
+- [Resize Text, WCAG 2.2 Understanding 1.4.4](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
+
+## Check your site
+
+Run `squirrel audit https://example.com` signed in to a cloud account and open the Accessibility section of the report.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Accessibility section looks like on a real site.
+  </Card>
+</CardGroup>
