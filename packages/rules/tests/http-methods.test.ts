@@ -131,9 +131,11 @@ describe("findings", () => {
       [`${BASE}/`]: (req) =>
         req.method === "OPTIONS"
           ? new Response(null, { headers: { allow: "GET, TRACE, TRACK" } })
-          : new Response(
-              `TRACE / HTTP/1.1\r\n${req.headers["x-squirrelscan-trace"]}`
-            ),
+          : new Response("", {
+              headers: {
+                "x-echo": `TRACE / ${req.headers["x-squirrelscan-trace"]}`,
+              },
+            }),
     });
     restore = s.restore;
     const r = await runHttpMethods(ruleCtx({}));
@@ -186,8 +188,8 @@ describe("what is sent", () => {
   test("only OPTIONS and at most one TRACE, however many methods are advertised", async () => {
     const s = stubFetch({
       [`${BASE}/`]: allow("PUT, DELETE, PATCH, CONNECT, TRACE, TRACK"),
-      [`${BASE}/blog`]: allow("PUT, DELETE, PATCH, CONNECT, TRACE, TRACK"),
-      [`${BASE}/shop`]: allow("PUT, DELETE, PATCH, CONNECT, TRACE, TRACK"),
+      [`${BASE}/blog/a`]: allow("PUT, DELETE, PATCH, CONNECT, TRACE, TRACK"),
+      [`${BASE}/shop/x`]: allow("PUT, DELETE, PATCH, CONNECT, TRACE, TRACK"),
     });
     restore = s.restore;
     await runHttpMethods(
@@ -248,11 +250,39 @@ describe("unverified answers", () => {
   test("a finding stands even when another path was throttled", async () => {
     const s = stubFetch({
       [`${BASE}/`]: allow("PUT"),
-      [`${BASE}/blog`]: () => new Response("", { status: 429 }),
+      [`${BASE}/blog/a`]: () => new Response("", { status: 429 }),
     });
     restore = s.restore;
     const r = await runHttpMethods(withPages(ruleCtx({}), ["/blog/a"]));
+    expect(s.sent.map((q) => q.url)).toEqual([`${BASE}/`, `${BASE}/blog/a`]);
     expect(names(r)).toEqual(["http-methods-dangerous:warn"]);
+  });
+  test("a redirected OPTIONS is not a pass", async () => {
+    const s = stubFetch({
+      [`${BASE}/`]: allow("GET, HEAD"),
+      [`${BASE}/blog/a`]: () =>
+        new Response(null, {
+          status: 301,
+          headers: { location: `${BASE}/blog/a/` },
+        }),
+    });
+    restore = s.restore;
+    const r = await runHttpMethods(withPages(ruleCtx({}), ["/blog/a"]));
+    expect(names(r)).toEqual(["http-methods-not-checked:skipped"]);
+    expect(r.checks[0]!.skipReason).toBe("probe-incomplete");
+  });
+  test("a marker in the TRACE body alone is not reflection", async () => {
+    // Bun's fetch returns an empty TRACE body, so only headers are read.
+    const s = stubFetch({
+      [`${BASE}/`]: (req) =>
+        req.method === "OPTIONS"
+          ? new Response(null, { headers: { allow: "TRACE" } })
+          : new Response(String(req.headers["x-squirrelscan-trace"])),
+    });
+    restore = s.restore;
+    expect(names(await runHttpMethods(ruleCtx({})))).toEqual([
+      "http-methods-dangerous:warn",
+    ]);
   });
 });
 

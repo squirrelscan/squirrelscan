@@ -16,8 +16,8 @@
 //    the Allow header, never tried.
 //
 // Reflection is confirmed when the TRACE answer is 2xx and either echoes the
-// marker (body or header) or is typed `message/http`. Bun's fetch hands back
-// an empty body for TRACE, so the content type is the fallback evidence.
+// marker in a response header or is typed `message/http`. Bun's fetch hands
+// back an empty body for TRACE, so the body is never evidence.
 
 import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
@@ -113,7 +113,7 @@ export function selectOptionsUrls(ctx: Pick<RuleContext, "site">): string[] {
 
 interface OptionsOutcome {
   url: string;
-  /** The request failed, or the answer cannot show what is allowed (throttled, challenged, 5xx). */
+  /** The request failed, or the answer cannot show what is allowed (redirected, throttled, challenged, 5xx). */
   unverified: boolean;
   methods: DangerousMethod[];
 }
@@ -147,11 +147,11 @@ export async function sendOptions(
       headers: { "User-Agent": SQUIRRELSCAN_USER_AGENT },
     });
     const { text } = await readCapped(res, 4 * 1024);
-    const unverified = isUnverifiedReply({
-      status: res.status,
-      headers: res.headers,
-      text,
-    });
+    // A redirect is not followed, so its Allow header (usually absent) says
+    // nothing about the path: unknown, never a pass.
+    const unverified =
+      (res.status >= 300 && res.status < 400) ||
+      isUnverifiedReply({ status: res.status, headers: res.headers, text });
     return {
       url,
       unverified,
@@ -180,7 +180,6 @@ export async function sendTrace(
     if (isUnverifiedReply({ status: res.status, headers: res.headers, text }))
       return null;
     if (res.status < 200 || res.status >= 300) return false;
-    if (text.includes(marker)) return true;
     for (const [, v] of res.headers) if (v.includes(marker)) return true;
     return (res.headers.get("content-type") ?? "")
       .toLowerCase()

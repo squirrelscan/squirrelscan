@@ -27,14 +27,14 @@ Requests carry no cookies and do not follow redirects. Each has a 10 second time
 
 ### How TRACE is confirmed
 
-The `TRACE` answer counts as reflection when it is a 2xx and either echoes the marker (in the body or a header) or is typed `message/http`. A `TRACE` that is advertised but refused is reported as a lower-severity advertised method.
+The `TRACE` answer counts as reflection when it is a 2xx and either echoes the marker in a response header or is typed `message/http`. Reflection is read from the response headers only: the body is not read as evidence, because the HTTP client squirrel uses returns an empty body for `TRACE`. A `TRACE` that is advertised but refused is reported as a lower-severity advertised method.
 
 ### Results
 
 - `http-methods-trace` (fail) when the server reflected the `TRACE` request. The details carry `severity: "error"`.
 - `http-methods-dangerous` (warn) lists each path whose `Allow` header names `TRACK`, `PUT`, `DELETE`, `PATCH` or `CONNECT`, or `TRACE` that was not reflected. Each item has the `methods` found.
-- `http-methods` (pass) when every `OPTIONS` request got a definite answer and none advertised a dangerous method. An answer with no `Allow` header counts as advertising nothing.
-- `http-methods-not-checked` (skipped) when a request failed, was throttled (HTTP 429), met a bot or WAF challenge or got a 5xx, so nothing can be said about that path. The reason is `probing-passive`, `probe-budget`, `probe-errors` when every request failed, or `probe-incomplete` otherwise.
+- `http-methods` (pass) when every `OPTIONS` request got a definite answer and none advertised a dangerous method. A non-redirect answer with no `Allow` header counts as advertising nothing.
+- `http-methods-not-checked` (skipped) when a request failed, was redirected (3xx, which is not followed), was throttled (HTTP 429), met a bot or WAF challenge or got a 5xx, so nothing can be said about that path. The reason is `probing-passive`, `probe-budget`, `probe-errors` when every request failed, or `probe-incomplete` otherwise.
 
 ### Limits
 
