@@ -21,7 +21,8 @@
 // header, or a second GET that adds limit and page parameters and gets fewer
 // rows back. That second GET is sent only for an endpoint already over the
 // threshold, so it costs one request per such endpoint, within the shared
-// probe budget. An answer to the second GET that cannot be read leaves the
+// probe budget. Below aggressive it is not sent when robots.txt disallows the
+// paged URL; the endpoint then counts as not checked. An answer to the second GET that cannot be read leaves the
 // endpoint unflagged: the rule never accuses on a guess.
 //
 // A finding carries the endpoint, the row count and the response size. It never
@@ -32,6 +33,7 @@
 // be complete will be flagged as informational advice to confirm.
 
 import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
+import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
 import type {
   CheckItem,
@@ -160,9 +162,11 @@ export function readList(response: ApiProbeResponse): ListReading | null {
 
   if (response.truncated) {
     // Cut at the read cap: the size is over any threshold, and a list of
-    // objects shows as an array of objects opening the body or a wrapper key.
+    // objects shows as an array of objects opening the body, under a wrapper
+    // key, or one level deeper. A body that opens with a single object under a
+    // key is one large document, not a table, so it is not read as a list.
     if (
-      !/^(?:\[\s*\{|\{\s*"[^"\\]{1,64}"\s*:\s*(?:\[\s*\{|\{\s*"data"|\{))/.test(
+      !/^(?:\[\s*\{|\{\s*"[^"\\]{1,64}"\s*:\s*(?:\[\s*\{|\{\s*"[^"\\]{1,64}"\s*:\s*\[\s*\{))/.test(
         text
       )
     )
@@ -325,6 +329,9 @@ export const unpaginatedApiRule: Rule = {
     let unverified = 0;
     let budgetStopped = false;
     let pushback = false;
+    let robotsSkipped = false;
+    const aggressive = ctx.probe.level === "aggressive";
+    const robotsTxt = ctx.site?.robotsTxt ?? null;
     const flagged: Flagged[] = [];
     for (const candidate of selection.candidates) {
       const outcome = await sendApiProbe(ctx.probe, candidate.url);
@@ -356,6 +363,17 @@ export const unpaginatedApiRule: Rule = {
       if (!reading || reading.paginated || !overThreshold(reading)) continue;
 
       // Over the threshold with no metadata: does it honour a page size?
+      // The paged URL adds a query string, which robots.txt can disallow on
+      // its own (`Disallow: /*?`). Below aggressive it is not requested, and
+      // the endpoint is left unverified rather than flagged on one answer.
+      if (
+        !aggressive &&
+        isRobotsTxtDisallowed(pagedUrl(candidate.url), robotsTxt, "*")
+      ) {
+        unverified++;
+        robotsSkipped = true;
+        continue;
+      }
       const paged = await sendPagedGet(ctx, candidate.url);
       if (paged === "not-sent") {
         budgetStopped = true;
@@ -413,6 +431,10 @@ export const unpaginatedApiRule: Rule = {
           "the site throttled the probes or answered with a bot challenge"
         );
       if (budgetStopped) why.push("the probe budget ran out");
+      if (robotsSkipped)
+        why.push(
+          "robots.txt disallows the paged request (--probe aggressive sends it)"
+        );
       if (why.length === 0)
         why.push(
           "some answers failed, were server errors or could not be read"

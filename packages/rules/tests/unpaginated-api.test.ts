@@ -10,6 +10,7 @@ import {
   hasNextLinkHeader,
   hasPaginationMetadata,
   MIN_BYTES,
+  MIN_RECORD_FIELDS,
   MIN_ROWS,
   PAGING_QUERY,
   unpaginatedApiRule,
@@ -18,6 +19,7 @@ import {
   BASE,
   candidate,
   json,
+  robots,
   ruleCtx,
   stubFetch,
   surface,
@@ -247,6 +249,65 @@ describe("security/unpaginated-api: not flagged", () => {
       restore?.();
       restore = undefined;
     }
+  });
+});
+
+describe("security/unpaginated-api: one large document", () => {
+  // Over the read cap, the body cannot be parsed, so only its opening is read.
+  const doc = () => ({
+    settings: Object.fromEntries(
+      Array.from({ length: 4000 }, (_, i) => [`k${i}`, "x".repeat(60)])
+    ),
+  });
+
+  test("a single object over the read cap is not a whole table", async () => {
+    const body = doc();
+    expect(JSON.stringify(body).length).toBeGreaterThan(API_RESPONSE_CAP);
+    const { checks, sent } = await run({ [ORDERS]: () => json(body) });
+    expect(names(checks)).toEqual(["unpaginated-api"]);
+    expect(sent).toHaveLength(1);
+  });
+
+  test("a list one wrapper deeper over the read cap is still read", async () => {
+    const big = Array.from({ length: 4000 }, (_, i) => ({
+      id: i,
+      a: "x".repeat(60),
+      ...Object.fromEntries(
+        Array.from({ length: MIN_RECORD_FIELDS }, (_, j) => [`f${j}`, j])
+      ),
+    }));
+    const { checks } = await run({
+      [ORDERS]: () => json({ result: { rows: big } }),
+    });
+    expect(names(checks)).toEqual(["unpaginated-api-list"]);
+  });
+});
+
+describe("security/unpaginated-api: robots.txt", () => {
+  // Disallows only URLs with a query string, so the plain GET is allowed and
+  // only the paged GET is not.
+  const robotsTxt = robots(["/api/orders?"]);
+
+  test("below aggressive, a disallowed paged URL is not requested and the endpoint is unchecked", async () => {
+    const { checks, sent } = await run(
+      { [ORDERS]: () => json(rows(MIN_ROWS + 20)) },
+      { robotsTxt }
+    );
+    expect(sent.map((s) => s.url)).toEqual([ORDERS]);
+    expect(names(checks)).toEqual(["unpaginated-api-unchecked"]);
+    expect(checks[0]!.message).toContain("robots.txt");
+  });
+
+  test("aggressive sends the paged GET anyway", async () => {
+    const { checks, sent } = await run(
+      { [ORDERS]: () => json(rows(MIN_ROWS + 20)) },
+      { robotsTxt, level: "aggressive" }
+    );
+    expect(sent.map((s) => s.url)).toEqual([
+      ORDERS,
+      `${ORDERS}?${PAGING_QUERY}`,
+    ]);
+    expect(names(checks)).toEqual(["unpaginated-api-list"]);
   });
 });
 

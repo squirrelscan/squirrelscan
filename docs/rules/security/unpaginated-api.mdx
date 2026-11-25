@@ -31,14 +31,14 @@ Only an endpoint that is over the threshold and shows no pagination gets a secon
 ?limit=1&per_page=1&page_size=1&pageSize=1&size=1&take=1&top=1&_limit=1&page=1
 ```
 
-Both requests count against the shared probe budget.
+Both requests count against the shared probe budget. Below `aggressive`, the second `GET` is not sent when `robots.txt` disallows the URL with these parameters, and the endpoint counts as not verified.
 
 ### What is flagged
 
 An endpoint is flagged when all of these hold:
 
 - the answer is a 2xx JSON list of full records: an array of objects, or an array under a wrapper key such as `data`, `items` or `results`, with at least three fields per record;
-- the list has at least 100 rows, or the body is at least 128 KB with at least 10 rows, or the body is longer than the 256 KB read limit;
+- the list has at least 100 rows, or the body is at least 128 KB with at least 10 rows, or the body is longer than the 256 KB read limit and opens with an array of objects, at the top or under one or two wrapper keys;
 - the answer shows no pagination: no next link or cursor, no `has_more`, no total pages or page size in the body or its `meta` and `links` objects, and no `Link` header with `rel="next"`;
 - the second `GET` still returns as many rows, so the endpoint ignores `limit` and `page`.
 
@@ -56,7 +56,7 @@ The item meta carries `rows`, `bytes` and the status. It never carries a record 
 
 - `unpaginated-api-list` (warn): at least one endpoint returns a whole table.
 - `unpaginated-api` (pass): every probed endpoint answered and none returned an unpaginated whole table.
-- `unpaginated-api-unchecked` (skipped): probing is passive (`probing-passive`), no API endpoint was found in page code (`no-endpoints`), the probe budget ran out (`probe-budget`), or some endpoints were not verified (`probe-incomplete`). An endpoint is not verified when it answers with an HTTP `429`, a bot challenge or a `5xx`, when a probe fails, or when the second `GET` gets an answer that cannot say whether paging is honoured. A run with any endpoint not verified is never a pass.
+- `unpaginated-api-unchecked` (skipped): probing is passive (`probing-passive`), no API endpoint was found in page code (`no-endpoints`), the probe budget ran out (`probe-budget`), or some endpoints were not verified (`probe-incomplete`). An endpoint is not verified when it answers with an HTTP `429`, a bot challenge or a `5xx`, when a probe fails, when `robots.txt` disallows the second `GET` below `aggressive`, or when the second `GET` gets an answer that cannot say whether paging is honoured. A run with any endpoint not verified is never a pass.
 
 ### What is not flagged
 
@@ -64,6 +64,7 @@ The item meta carries `rows`, `bytes` and the status. It never carries a record 
 - An endpoint that returns fewer rows when it is given `limit` and `page`.
 - An endpoint that shows pagination metadata or a `Link` header.
 - A list of bare ids or labels (fewer than three fields per record).
+- One large JSON document over the read limit that does not open with an array of objects.
 - An error, a redirect, an HTML page or a body that is not JSON.
 
 ### Limits
