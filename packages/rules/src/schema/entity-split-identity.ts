@@ -31,6 +31,16 @@ export const entitySplitIdentityRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-split-identity", outcome: "problem" },
+      {
+        name: "entity-split-identity",
+        outcome: "clean",
+        clears: ["entity-split-identity"],
+      },
+      { name: "entity-split-identity", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

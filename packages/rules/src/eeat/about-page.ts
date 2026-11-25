@@ -43,6 +43,12 @@ export const aboutPageRule: Rule = {
     discoveryProbes: ["configured-pages"],
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "about-page", outcome: "problem" },
+      { name: "about-page", outcome: "clean", clears: ["about-page"] },
+      { name: "about-page", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

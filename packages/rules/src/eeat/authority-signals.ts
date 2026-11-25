@@ -20,6 +20,16 @@ export const authoritySignalsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "authority-signals", outcome: "problem" },
+      {
+        name: "authority-signals",
+        outcome: "clean",
+        clears: ["authority-signals"],
+      },
+      { name: "authority-signals", outcome: "skipped" },
+    ],
     // Assessing authorship/citations on a soft-404 error page is meaningless —
     // skip so a broken template can't warn "no author" per page (#1174).
     skipOnSoft404: true,

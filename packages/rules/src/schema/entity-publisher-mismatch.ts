@@ -30,6 +30,16 @@ export const entityPublisherMismatchRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-publisher-mismatch", outcome: "problem" },
+      {
+        name: "entity-publisher-mismatch",
+        outcome: "clean",
+        clears: ["entity-publisher-mismatch"],
+      },
+      { name: "entity-publisher-mismatch", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -187,6 +187,16 @@ export const entityConflictsRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-conflicts", outcome: "problem" },
+      {
+        name: "entity-conflicts",
+        outcome: "clean",
+        clears: ["entity-conflicts"],
+      },
+      { name: "entity-conflicts", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

@@ -376,6 +376,16 @@ export const schemaCoverageOutlierRule: Rule = {
     // Deliberately light, and one site-wide check with capped items rather than a
     // per-page finding, so this rule cannot dominate the schema category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "coverage-outlier", outcome: "problem" },
+      {
+        name: "coverage-outlier",
+        outcome: "clean",
+        clears: ["coverage-outlier"],
+      },
+      { name: "coverage-outlier", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

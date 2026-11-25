@@ -1,0 +1,1 @@
+- The rule pages for the 15 eeat and 25 schema rules list the check names each rule emits and which clean check clears which problem check (#2348).

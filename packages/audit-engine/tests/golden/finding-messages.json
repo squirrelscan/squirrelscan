@@ -3885,9 +3885,10 @@
   ]
  },
  "schema/website-search": {
-  "digest": "238085668331082",
+  "digest": "88090764485733",
   "lines": [
-   "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|"
+   "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|",
+   "website-schema|skipped|No WebSite schema on this page (only the homepage is checked)||"
   ]
  },
  "security/auth-endpoint-disclosure": {

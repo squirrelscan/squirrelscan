@@ -21,6 +21,17 @@ export const faqSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "faq-schema", outcome: "problem" },
+      { name: "faq-mainEntity", outcome: "problem" },
+      { name: "faq-questions", outcome: "problem" },
+      {
+        name: "faq-valid",
+        outcome: "clean",
+        clears: ["faq-schema", "faq-mainEntity", "faq-questions"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

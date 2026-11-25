@@ -30,6 +30,12 @@ export const entityOrphanRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-orphan", outcome: "problem" },
+      { name: "entity-orphan", outcome: "clean", clears: ["entity-orphan"] },
+      { name: "entity-orphan", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

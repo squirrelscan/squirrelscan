@@ -33,6 +33,29 @@ export const organizationSchemaRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "organization-schema", outcome: "problem" },
+      { name: "organization-required", outcome: "problem" },
+      { name: "organization-logo", outcome: "problem" },
+      { name: "organization-social", outcome: "problem" },
+      { name: "organization-sameas-missing", outcome: "problem" },
+      {
+        name: "organization-required",
+        outcome: "clean",
+        clears: [
+          "organization-schema",
+          "organization-required",
+          "organization-logo",
+          "organization-sameas-missing",
+        ],
+      },
+      {
+        name: "organization-social",
+        outcome: "clean",
+        clears: ["organization-social"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

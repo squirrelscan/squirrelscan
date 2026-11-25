@@ -35,6 +35,16 @@ export const entityLocalBusinessPerPageRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-local-business-per-page", outcome: "problem" },
+      {
+        name: "entity-local-business-per-page",
+        outcome: "clean",
+        clears: ["entity-local-business-per-page"],
+      },
+      { name: "entity-local-business-per-page", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

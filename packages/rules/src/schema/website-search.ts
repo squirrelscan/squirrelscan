@@ -21,6 +21,19 @@ export const websiteSearchSchemaRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "website-schema", outcome: "problem" },
+      { name: "website-search", outcome: "problem" },
+      { name: "search-action", outcome: "problem" },
+      { name: "website-schema", outcome: "clean", clears: ["website-schema"] },
+      {
+        name: "search-action",
+        outcome: "clean",
+        clears: ["website-search", "search-action"],
+      },
+      { name: "website-schema", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -66,6 +79,15 @@ export const websiteSearchSchemaRule: Rule = {
           status: "info",
           message: "No WebSite schema on homepage",
           value: "Consider adding for sitelinks searchbox",
+        });
+      } else {
+        // Only the homepage is expected to carry a WebSite entity, so an inner page without one was not judged.
+        checks.push({
+          name: "website-schema",
+          status: "skipped",
+          message:
+            "No WebSite schema on this page (only the homepage is checked)",
+          skipReason: "not-applicable",
         });
       }
       return { checks };

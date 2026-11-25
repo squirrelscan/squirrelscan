@@ -27,6 +27,16 @@ export const entityOrganizationMissingRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-organization-missing", outcome: "problem" },
+      {
+        name: "entity-organization-missing",
+        outcome: "clean",
+        clears: ["entity-organization-missing"],
+      },
+      { name: "entity-organization-missing", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

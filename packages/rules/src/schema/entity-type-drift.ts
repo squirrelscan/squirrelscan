@@ -50,6 +50,16 @@ export const entityTypeDriftRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-type-drift", outcome: "problem" },
+      {
+        name: "entity-type-drift",
+        outcome: "clean",
+        clears: ["entity-type-drift"],
+      },
+      { name: "entity-type-drift", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

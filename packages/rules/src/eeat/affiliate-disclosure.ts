@@ -16,6 +16,17 @@ export const affiliateDisclosureRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "affiliate-links", outcome: "problem" },
+      { name: "affiliate-disclosure", outcome: "problem" },
+      {
+        name: "affiliate-disclosure",
+        outcome: "clean",
+        clears: ["affiliate-disclosure", "affiliate-links"],
+      },
+      { name: "affiliate-disclosure", outcome: "skipped" },
+    ],
     // Affiliate / sponsored-content disclosure (FTC) applies to monetised content
     // publishers — blogs, news, review sites. A SaaS / corporate / ecommerce-own
     // store has no affiliate relationships to disclose. Gate to content types;

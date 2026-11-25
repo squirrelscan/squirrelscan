@@ -20,6 +20,23 @@ export const videoSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "video-schema", outcome: "problem" },
+      { name: "video-required", outcome: "problem" },
+      { name: "video-recommended", outcome: "problem" },
+      { name: "video-duration", outcome: "problem" },
+      {
+        name: "video-required",
+        outcome: "clean",
+        clears: [
+          "video-schema",
+          "video-required",
+          "video-recommended",
+          "video-duration",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

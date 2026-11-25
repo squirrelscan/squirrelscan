@@ -306,7 +306,7 @@
   "schema/rating-scope": 500,
   "schema/review": 500,
   "schema/video": 500,
-  "schema/website-search": 1,
+  "schema/website-search": 500,
   "security/auth-endpoint-disclosure": 1,
   "security/client-side-authz": 1,
   "security/cookie-flags": 500,

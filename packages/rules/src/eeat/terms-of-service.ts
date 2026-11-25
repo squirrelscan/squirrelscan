@@ -17,6 +17,16 @@ export const termsOfServiceRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "terms-of-service", outcome: "problem" },
+      {
+        name: "terms-of-service",
+        outcome: "clean",
+        clears: ["terms-of-service"],
+      },
+      { name: "terms-of-service", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

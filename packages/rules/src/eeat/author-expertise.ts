@@ -16,6 +16,16 @@ export const authorExpertiseRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "author-expertise", outcome: "problem" },
+      {
+        name: "author-expertise",
+        outcome: "clean",
+        clears: ["author-expertise"],
+      },
+      { name: "author-expertise", outcome: "skipped" },
+    ],
     // Author credentials matter for editorial / YMYL content sites; irrelevant to
     // SaaS marketing / ecommerce / landing pages. Gate to content-publishing
     // types. Offline / no-metadata / low-confidence runs as today.
