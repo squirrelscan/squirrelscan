@@ -32,6 +32,14 @@ export const articleLinksRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "internal-links", outcome: "problem" },
+      { name: "external-links", outcome: "problem" },
+      { name: "internal-links", outcome: "clean", clears: ["internal-links"] },
+      { name: "external-links", outcome: "clean", clears: ["external-links"] },
+      { name: "article-links", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

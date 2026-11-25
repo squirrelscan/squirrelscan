@@ -765,6 +765,17 @@ export const placeholderTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "placeholder-content", outcome: "problem" },
+      { name: "placeholder-title", outcome: "problem" },
+      {
+        name: "placeholder-content",
+        outcome: "clean",
+        clears: ["placeholder-content"],
+      },
+      { name: "placeholder-content", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 

@@ -69,6 +69,12 @@ export const readingLevelRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "sentence-length", outcome: "problem" },
+      { name: "reading-level", outcome: "clean", clears: ["sentence-length"] },
+      { name: "reading-level", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

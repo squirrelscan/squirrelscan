@@ -67,6 +67,22 @@ enable = ["content/font-consistency"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `font-sprawl` | Problem |  |
+| `rogue-font-family` | Problem |  |
+| `unreferenced-font-face` | Problem |  |
+| `font-consistency` | Clean | `font-sprawl`, `rogue-font-family`, `unreferenced-font-face` |
+| `font-consistency` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [perf/font-delivery](/rules/perf/font-delivery): render-blocking font stylesheets, a delivery cost rather than a consistency question.

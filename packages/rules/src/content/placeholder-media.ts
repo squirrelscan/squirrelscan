@@ -246,6 +246,16 @@ export const placeholderMediaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "placeholder-media", outcome: "problem" },
+      {
+        name: "placeholder-media",
+        outcome: "clean",
+        clears: ["placeholder-media"],
+      },
+      { name: "placeholder-media", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 

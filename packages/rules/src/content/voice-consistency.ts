@@ -247,6 +247,16 @@ export const voiceConsistencyRule: Rule = {
     findingScope: "resource",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "voice-consistency", outcome: "problem" },
+      {
+        name: "voice-consistency",
+        outcome: "clean",
+        clears: ["voice-consistency"],
+      },
+      { name: "voice-consistency", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

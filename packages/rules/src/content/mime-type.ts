@@ -54,6 +54,12 @@ export const mimeTypeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "mime-type", outcome: "problem" },
+      { name: "mime-type", outcome: "clean", clears: ["mime-type"] },
+      { name: "mime-type", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

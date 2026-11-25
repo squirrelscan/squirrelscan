@@ -15,6 +15,18 @@ export const headingHierarchyRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "heading-hierarchy", outcome: "problem" },
+      { name: "empty-headings", outcome: "problem" },
+      { name: "long-headings", outcome: "problem" },
+      { name: "duplicate-headings", outcome: "problem" },
+      {
+        name: "heading-hierarchy",
+        outcome: "clean",
+        clears: ["heading-hierarchy"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -201,6 +201,16 @@ export const placeholderContactRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "placeholder-contact", outcome: "problem" },
+      {
+        name: "placeholder-contact",
+        outcome: "clean",
+        clears: ["placeholder-contact"],
+      },
+      { name: "placeholder-contact", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 

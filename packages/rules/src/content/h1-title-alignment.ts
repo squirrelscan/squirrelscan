@@ -396,6 +396,16 @@ export const h1TitleAlignmentRule: Rule = {
     skipOnNoindex: true,
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "h1-title-alignment", outcome: "problem" },
+      {
+        name: "h1-title-alignment",
+        outcome: "clean",
+        clears: ["h1-title-alignment"],
+      },
+      { name: "h1-title-alignment", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

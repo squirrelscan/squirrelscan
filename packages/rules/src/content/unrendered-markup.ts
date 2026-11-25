@@ -734,6 +734,16 @@ export const unrenderedMarkupRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "unrendered-markup", outcome: "problem" },
+      {
+        name: "unrendered-markup",
+        outcome: "clean",
+        clears: ["unrendered-markup"],
+      },
+      { name: "unrendered-markup", outcome: "skipped" },
+    ],
     skipOnSoft404: true,
   },
 

@@ -128,6 +128,16 @@ export const staleCopyrightRule: Rule = {
     // cannot dominate the content category score.
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "footer-copyright-year", outcome: "problem" },
+      {
+        name: "footer-copyright-year",
+        outcome: "clean",
+        clears: ["footer-copyright-year"],
+      },
+      { name: "footer-copyright-year", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

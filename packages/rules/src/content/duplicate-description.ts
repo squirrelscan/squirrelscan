@@ -112,6 +112,16 @@ export const duplicateDescriptionRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "duplicate-description", outcome: "problem" },
+      {
+        name: "duplicate-description",
+        outcome: "clean",
+        clears: ["duplicate-description"],
+      },
+      { name: "duplicate-description", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

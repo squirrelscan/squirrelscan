@@ -496,6 +496,16 @@ export const duplicateContentRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "duplicate-content", outcome: "problem" },
+      {
+        name: "duplicate-content",
+        outcome: "clean",
+        clears: ["duplicate-content"],
+      },
+      { name: "duplicate-content", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

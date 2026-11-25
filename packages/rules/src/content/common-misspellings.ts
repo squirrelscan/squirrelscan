@@ -471,6 +471,17 @@ export const commonMisspellingsRule: Rule = {
     // warn check at the rule's severity. Body-text and doubled-word findings stay info.
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    // The per-word problem checks are named `misspelling:<word>` and `doubled-word:<word>`; the word is part of the name, so they cannot be listed here.
+    checks: [
+      { name: "common-misspellings-truncated", outcome: "problem" },
+      {
+        name: "common-misspellings",
+        outcome: "clean",
+        clears: ["common-misspellings-truncated"],
+      },
+      { name: "common-misspellings", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 
