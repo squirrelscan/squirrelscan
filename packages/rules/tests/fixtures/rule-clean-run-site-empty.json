@@ -18,6 +18,7 @@
   "security/json-sensitive-fields",
   "security/open-redirect",
   "security/query-error-fuzz",
+  "security/sequential-resource-ids",
   "security/supabase-rls",
   "security/tls-certificate",
   "security/unauthenticated-api"

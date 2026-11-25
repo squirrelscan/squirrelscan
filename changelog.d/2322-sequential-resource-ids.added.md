@@ -1,0 +1,1 @@
+- New advisory rule `security/sequential-resource-ids` flags API endpoints keyed by small sequential integer ids (such as `/api/orders/42`) as IDOR-prone. It reads discovered URLs only, sends no request, and does not flag UUIDs or other opaque ids. (#2322)

@@ -675,6 +675,7 @@
                   "rules/security/open-redirect",
                   "rules/security/query-error-fuzz",
                   "rules/security/client-side-authz",
+                  "rules/security/sequential-resource-ids",
                   "rules/security/exposed-actuator",
                   "rules/security/supabase-rls",
                   "rules/security/third-party-cookies",
