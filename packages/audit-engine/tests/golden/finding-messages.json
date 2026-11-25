@@ -4052,6 +4052,12 @@
    "security-txt|skipped|security.txt not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
+ "security/sitemap-sensitive-urls": {
+  "digest": "51605781840100",
+  "lines": [
+   "sitemap-sensitive-urls-clean|pass|No sitemap entry has a sensitive or internal looking path||"
+  ]
+ },
  "security/sri": {
   "digest": "215556054092134",
   "lines": [

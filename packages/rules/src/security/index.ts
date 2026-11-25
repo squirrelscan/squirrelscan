@@ -30,6 +30,7 @@ import { permissionsPolicyRule } from "./permissions-policy";
 import { queryErrorFuzzRule } from "./query-error-fuzz";
 import { referrerPolicyRule } from "./referrer-policy";
 import { securityTxtRule } from "./security-txt";
+import { sitemapSensitiveUrlsRule } from "./sitemap-sensitive-urls";
 import { sriRule } from "./sri";
 import { supabaseRlsRule } from "./supabase-rls";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
@@ -62,6 +63,7 @@ export const rules: Rule[] = [
   tokenStorageRule,
   thirdPartyCookiesRule,
   sriRule,
+  sitemapSensitiveUrlsRule,
   cookieFlagsRule,
   graphqlIntrospectionRule,
   graphqlGetMutationsRule,
@@ -112,6 +114,7 @@ export {
   referrerPolicyRule,
   securityTxtRule,
   sriRule,
+  sitemapSensitiveUrlsRule,
   supabaseRlsRule,
   thirdPartyCookiesRule,
   tlsCertificateRule,

@@ -335,6 +335,7 @@
   "security/query-error-fuzz": 1,
   "security/referrer-policy": 1,
   "security/security-txt": 1,
+  "security/sitemap-sensitive-urls": 1,
   "security/sri": 500,
   "security/supabase-rls": 1,
   "security/third-party-cookies": 500,

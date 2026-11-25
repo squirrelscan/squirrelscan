@@ -1,0 +1,1 @@
+- New rule `security/sitemap-sensitive-urls` flags admin, staging, draft, preview, backup and internal looking URLs a sitemap lists, and reports only the ones that answer a credential-free probe on the audited origin (#2331)

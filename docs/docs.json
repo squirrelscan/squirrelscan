@@ -685,6 +685,7 @@
                   "rules/security/http-methods",
                   "rules/security/supabase-rls",
                   "rules/security/firebase-open-rules",
+                  "rules/security/sitemap-sensitive-urls",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags",
