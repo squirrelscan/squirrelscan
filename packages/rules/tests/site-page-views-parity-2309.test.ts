@@ -259,12 +259,12 @@ describe("page views: legacy site.pages vs ctx.siteQuery.pageViews() (#2309)", (
     const withSource = ctxFor([], viewOnlyQuery);
     const count = (await sitemapCoverageRule.run(withSource)).checks.length;
     expect(count).toBeGreaterThan(0);
-    // eeat/terms reads content pages only: its views exclude the redirect source.
+    // eeat/privacy-policy reads content pages only: its views exclude the redirect source.
     const noRedirect = views.filter((v) => !v.redirectSource);
-    const filtered = await termsOfServiceRule.run(
+    const filtered = await privacyPolicyRule.run(
       ctxFor([], { pageViews: () => noRedirect } as unknown as SiteQuery)
     );
-    const unfiltered = await termsOfServiceRule.run(withSource);
+    const unfiltered = await privacyPolicyRule.run(withSource);
     expect(unfiltered.checks).toEqual(filtered.checks);
   });
 });
