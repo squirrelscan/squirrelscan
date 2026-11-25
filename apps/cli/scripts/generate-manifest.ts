@@ -3,6 +3,8 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { parseReleaseKeys } from "../src/self/release-keys";
+
 interface BinaryInfo {
   filename: string;
   sha256: string;
@@ -24,12 +26,54 @@ interface ReleaseManifest {
   released_at: string;
   binaries: Partial<Record<PlatformArch, BinaryInfo>>;
   release_notes_url: string;
+  /**
+   * The pinned release key that signs this manifest. The CLI refuses a signed
+   * manifest without it (provenance.ts). It is written here, not appended
+   * later, because the release lane publishes these exact bytes and the
+   * signature covers them.
+   */
+  signing_key_id: string;
 }
 
-const VERSION = process.env.VERSION ?? "0.0.0";
-const CHANNEL = (process.env.CHANNEL ?? "stable") as "stable" | "beta";
+export interface GenerateManifestOptions {
+  buildDir: string;
+  version: string;
+  channel: "stable" | "beta";
+  /** Defaults to the repository's release-keys.json. */
+  releaseKeysPath?: string;
+  now?: Date;
+}
+
 const BUILD_DIR = join(import.meta.dir, "..", "build");
+const RELEASE_KEYS_PATH = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "..",
+  "release-keys.json"
+);
 const REPO = "squirrelscan/squirrelscan";
+
+/**
+ * The id of the current-slot key in release-keys.json. Throws when the slot is
+ * empty or malformed: a manifest without a key id can never verify, so the
+ * build must stop rather than publish one.
+ */
+export async function readSigningKeyId(
+  releaseKeysPath: string = RELEASE_KEYS_PATH
+): Promise<string> {
+  const set = parseReleaseKeys(await Bun.file(releaseKeysPath).json());
+  const current = set.keys[0];
+  if (!current || current.slot !== "current" || current.id === "")
+    throw new Error(
+      `${releaseKeysPath}: the current release key slot is empty, so manifest.json would carry no signing_key_id`
+    );
+  if (set.revokedKeyIds.includes(current.id))
+    throw new Error(
+      `${releaseKeysPath}: the current release key ${current.id} is revoked`
+    );
+  return current.id;
+}
 
 async function computeSHA256(buffer: ArrayBuffer): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
@@ -50,8 +94,11 @@ function extractPlatformArch(filename: string): PlatformArch | null {
   return null;
 }
 
-async function generateManifest() {
-  const files = await readdir(BUILD_DIR);
+export async function generateManifest(
+  opts: GenerateManifestOptions
+): Promise<ReleaseManifest> {
+  const signingKeyId = await readSigningKeyId(opts.releaseKeysPath);
+  const files = await readdir(opts.buildDir);
   const binaries: Partial<Record<PlatformArch, BinaryInfo>> = {};
 
   for (const filename of files) {
@@ -61,7 +108,7 @@ async function generateManifest() {
     const platformArch = extractPlatformArch(filename);
     if (!platformArch) continue;
 
-    const filepath = join(BUILD_DIR, filename);
+    const filepath = join(opts.buildDir, filename);
     const file = Bun.file(filepath);
     const buffer = await file.arrayBuffer();
     const sha256 = await computeSHA256(buffer);
@@ -76,21 +123,29 @@ async function generateManifest() {
   }
 
   const manifest: ReleaseManifest = {
-    version: VERSION,
-    channel: CHANNEL,
-    released_at: new Date().toISOString(),
+    version: opts.version,
+    channel: opts.channel,
+    released_at: (opts.now ?? new Date()).toISOString(),
     binaries,
-    release_notes_url: `https://github.com/${REPO}/releases/tag/v${VERSION}`,
+    release_notes_url: `https://github.com/${REPO}/releases/tag/v${opts.version}`,
+    signing_key_id: signingKeyId,
   };
 
-  const manifestPath = join(BUILD_DIR, "manifest.json");
+  const manifestPath = join(opts.buildDir, "manifest.json");
   await Bun.write(manifestPath, JSON.stringify(manifest, null, 2));
 
   console.log(`\nManifest written to ${manifestPath}`);
   console.log(JSON.stringify(manifest, null, 2));
+  return manifest;
 }
 
-generateManifest().catch((error) => {
-  console.error("Manifest generation failed:", error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  generateManifest({
+    buildDir: BUILD_DIR,
+    version: process.env.VERSION ?? "0.0.0",
+    channel: (process.env.CHANNEL ?? "stable") as "stable" | "beta",
+  }).catch((error) => {
+    console.error("Manifest generation failed:", error);
+    process.exit(1);
+  });
+}

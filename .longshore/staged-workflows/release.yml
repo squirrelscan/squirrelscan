@@ -250,6 +250,13 @@ jobs:
             const fail = (msg) => { console.log(`::error::${msg}`); process.exit(1); };
             const manifest = await Bun.file(`${dir}/manifest.json`).json();
             if (manifest.version !== version) fail(`manifest.json says ${manifest.version}, the tag says ${version}`);
+            // The lane publishes manifest.json unmodified and its signature
+            // covers these bytes, so the key id must already be the pinned
+            // current key: the CLI refuses a signed manifest without it.
+            const keys = await Bun.file("release-keys.json").json();
+            const pinnedId = keys.keys?.[0]?.slot === "current" ? keys.keys[0].id : "";
+            if (!/^[0-9a-f]{16}$/.test(pinnedId)) fail(`release-keys.json pins no current key id`);
+            if (manifest.signing_key_id !== pinnedId) fail(`manifest.json names signing key ${manifest.signing_key_id}, release-keys.json pins ${pinnedId}`);
             const listed = Object.values(manifest.binaries ?? {});
             const onDisk = [...new Bun.Glob(`squirrel-${version}-*`).scanSync(dir)].sort();
             const names = listed.map((b) => b.filename).sort();
@@ -283,6 +290,37 @@ jobs:
         with:
           name: release-binaries
           path: release-assets/
+          if-no-files-found: error
+      # The npm package as a recorded tarball, for the release lane's npm
+      # target (beta versions publish under dist-tag `beta`). The `version`
+      # job already checked every manifest; this re-checks the one npm reads.
+      - name: Check the npm package version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          stamped=$(jq -r .version npm/package.json)
+          if [ "$stamped" != "$VERSION" ]; then
+            echo "::error::npm/package.json says ${stamped}, the tag says ${VERSION}"
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.14.0"
+      - name: Pack the npm package
+        working-directory: npm
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm pack
+          test -f "squirrelscan-${VERSION}.tgz"
+          mkdir ../npm-package
+          mv "squirrelscan-${VERSION}.tgz" ../npm-package/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: npm-package/
           if-no-files-found: error
 
   # The authoritative signature gate, and the only place in the pipeline where
