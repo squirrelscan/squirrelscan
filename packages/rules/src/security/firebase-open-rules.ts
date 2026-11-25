@@ -40,6 +40,7 @@ import {
   type EgressPolicy,
   type ResolveHost,
 } from "@squirrelscan/utils/public-egress";
+import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
 import type { ProbeBudget } from "../probe-budget";
 import type {
@@ -275,7 +276,9 @@ async function probe(
   ]);
   budget.record();
   try {
-    const res = await egressGuardedSend((u, i) => fetch(u, i), egress)(url, {
+    // Undecoded, so the runtime never inflates a compressed body past the cap
+    // (#2717): readCappedBytes decodes it and stops at MAX_BODY_BYTES.
+    const res = await egressGuardedSend(fetchUndecoded, egress)(url, {
       ...init,
       signal,
     });
@@ -544,7 +547,9 @@ export function createFirebaseOpenRulesRule(
         checks.push({
           name: CHECK,
           status: "fail",
-          message: `${exposed.length} Firebase database(s) or collection(s) answer a read with no sign-in. The security rules are open (key and collection names read only, no value)${incomplete}`,
+          // Starts with the item count (`messageCountsItems`), so an
+          // `[[ignore]]` that waives some items rewrites it to what remains.
+          message: `${items.length} Firebase database path(s) or collection(s) answer a read with no sign-in. The security rules are open (key and collection names read only, no value)${incomplete}`,
           items,
           details: {
             exposed: exposed.map((e) =>

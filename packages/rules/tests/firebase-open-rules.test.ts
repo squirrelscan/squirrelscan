@@ -5,6 +5,7 @@
 import type { ScriptContentData } from "@squirrelscan/core-contracts";
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
 
 import type { CheckResult, RuleContext } from "../src/types";
 
@@ -14,11 +15,6 @@ import {
   classifyResponse,
   createFirebaseOpenRulesRule,
   discoverFirebase,
-  MAX_COLLECTIONS_PER_PROJECT,
-  MAX_DATABASES,
-  MAX_PATH_NAME_CHARS,
-  MAX_PATHS_REPORTED,
-  MAX_PROBES,
   redactPaths,
 } from "../src/security/firebase-open-rules";
 
@@ -179,12 +175,12 @@ describe("discovery (sends nothing)", () => {
       .map((n) => `databaseURL:"https://${n}-app.firebaseio.com"`)
       .join(";");
     const d = discoverFirebase([{ url: "a.js", content }]);
-    expect(d.databases.map((x) => x.host)).toEqual(
-      ["a-app", "b-app", "c-app", "d-app"]
-        .slice(0, MAX_DATABASES)
-        .map((n) => `${n}.firebaseio.com`)
-    );
-    expect(d.databasesSkipped).toBe(4 - MAX_DATABASES);
+    // Literal bounds: loosening the cap in the rule must fail this test.
+    expect(d.databases.map((x) => x.host)).toEqual([
+      "a-app.firebaseio.com",
+      "b-app.firebaseio.com",
+    ]);
+    expect(d.databasesSkipped).toBe(2);
   });
 });
 
@@ -269,16 +265,16 @@ describe("classification", () => {
     const keys = [
       "users",
       SECRET,
-      "x".repeat(MAX_PATH_NAME_CHARS + 1),
-      ...Array.from(
-        { length: MAX_PATHS_REPORTED + 3 },
-        (_, i) => `p${String(i).padStart(2, "0")}`
-      ),
+      "x".repeat(25),
+      ...Array.from({ length: 13 }, (_, i) => `p${String(i).padStart(2, "0")}`),
     ];
     const r = redactPaths(keys);
-    expect(r.paths).toHaveLength(MAX_PATHS_REPORTED);
+    // Literal bounds: at most 10 names, none longer than 24 characters.
+    expect(r.paths).toHaveLength(10);
     expect(r.paths).not.toContain(SECRET);
-    expect(r.redacted).toBe(keys.length - MAX_PATHS_REPORTED);
+    expect(r.redacted).toBe(keys.length - 10);
+    expect(redactPaths(["y".repeat(24)]).paths).toEqual(["y".repeat(24)]);
+    expect(redactPaths(["y".repeat(25)]).redacted).toBe(1);
   });
 });
 
@@ -299,6 +295,9 @@ describe("rule", () => {
     expect(checks).toHaveLength(1);
     expect(checks[0]!.status).toBe("fail");
     const labels = checks[0]!.items!.map((i) => i.label);
+    // messageCountsItems: the message opens with the item count.
+    expect(labels).toHaveLength(3);
+    expect(checks[0]!.message).toStartWith("3 ");
     expect(labels).toContain("/users");
     expect(labels).toContain("users");
     expect(JSON.stringify(checks)).not.toContain(SECRET);
@@ -313,6 +312,23 @@ describe("rule", () => {
     expect(new Set(sent.map((s) => s.host))).toEqual(
       new Set([DB_HOST, "firestore.googleapis.com"])
     );
+  });
+
+  test("a compressed answer is read undecoded and decoded within the cap", async () => {
+    const sent = stubFetch({
+      [`${DB_HOST}/.json`]: () =>
+        new Response(gzipSync('{"users":true}'), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "content-encoding": "gzip",
+          },
+        }),
+    });
+    const c = (await run(ctx({ scripts: [script(CONFIG)] })))[0]!;
+    expect(sent[0]!.headers["accept-encoding"]).toBeDefined();
+    expect(c.status).toBe("fail");
+    expect(c.items!.map((i) => i.label)).toEqual(["/users"]);
   });
 
   test("denied answers pass", async () => {
@@ -387,8 +403,8 @@ describe("rule", () => {
     const code = `${CONFIG}${names.map((n) => `collection(db,"${n}");`).join("")}`;
     const sent = stubFetch({});
     const c = (await run(ctx({ scripts: [script(code)] })))[0]!;
-    expect(sent.length).toBeLessThanOrEqual(MAX_PROBES);
-    expect(sent.length).toBeLessThanOrEqual(1 + MAX_COLLECTIONS_PER_PROJECT);
+    // Literal bounds: one database plus 10 collections, never more.
+    expect(sent).toHaveLength(11);
     expect(c.status).toBe("skipped");
   });
 
