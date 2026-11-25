@@ -292,7 +292,12 @@ jobs:
           path: release-assets/
           if-no-files-found: error
       # The npm package as a recorded tarball, for the release lane's npm
-      # target (beta versions publish under dist-tag `beta`). The `version`
+      # target. The lane's npm target has one fixed dist-tag (default
+      # `latest`) and no prerelease logic: the operator sets `--tag beta`
+      # on the target while betas ship and switches it back to `latest`
+      # before a stable release. The target's `--artifact` matches the file
+      # name inside the run's zip, so it must name `squirrelscan-<version>.tgz`
+      # and be updated each release, or npm silently skips. The `version`
       # job already checked every manifest; this re-checks the one npm reads.
       - name: Check the npm package version
         env:
