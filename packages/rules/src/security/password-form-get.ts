@@ -20,7 +20,7 @@ export function methodOf(raw: string | null): Method {
 }
 
 /** The controls that submit a form: a button of type submit (the default), or an input submit/image. */
-function isSubmitControl(el: Element): boolean {
+export function isSubmitControl(el: Element): boolean {
   if (el.hasAttribute("disabled")) return false;
   const tag = el.tagName.toLowerCase();
   const type = (el.getAttribute("type") ?? "").trim().toLowerCase();

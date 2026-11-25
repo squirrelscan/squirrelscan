@@ -8,6 +8,8 @@ import {
   belongsTo,
   describeAction,
   hasNoUsableAction,
+  isSubmitControl,
+  methodOf,
   safeFormSelector,
   safeFormSnippet,
   scriptSubmits,
@@ -37,6 +39,20 @@ const STATE_VERBS = new Set([
   "approve",
   "reject",
   "revoke",
+]);
+
+/**
+ * Verbs that also name read-only actions ("Update results", "Confirm filters", "Save search",
+ * "Create report"): they count only in the action path, never in button text.
+ */
+const AMBIGUOUS_VERBS = new Set([
+  "create",
+  "update",
+  "save",
+  "checkout",
+  "check out",
+  "cancel",
+  "confirm",
 ]);
 
 /** Two-word verbs, matched on adjacent tokens ("Sign out", "Log out"). */
@@ -72,8 +88,10 @@ const READ_ONLY_FIELDS = new Set([
   "limit",
 ]);
 
-const MAX_TEXT = 200;
-const MAX_FIELDS = 200;
+/** Characters of an action path or a button text that are read. */
+export const MAX_TEXT = 200;
+/** Controls of one form that are read. */
+export const MAX_FIELDS = 200;
 
 /** Lowercase tokens split on non-alphanumerics and camelCase, so `deleteAccount` reads as delete, account. */
 function tokens(text: string): string[] {
@@ -85,42 +103,65 @@ function tokens(text: string): string[] {
     .filter((t) => t !== "");
 }
 
-/** The first state-changing verb among the tokens, or null. */
-export function findVerb(list: string[]): string | null {
+/** The first state-changing verb among the tokens, or null. `unambiguous` skips {@link AMBIGUOUS_VERBS}. */
+export function findVerb(list: string[], unambiguous = false): string | null {
+  const keep = (verb: string) => !unambiguous || !AMBIGUOUS_VERBS.has(verb);
   for (let i = 0; i < list.length; i++) {
     const t = list[i]!;
-    if (STATE_VERBS.has(t)) return t;
+    if (STATE_VERBS.has(t) && keep(t)) return t;
     for (const [a, b] of STATE_PHRASES) {
-      if (t === a && list[i + 1] === b) return `${a} ${b}`;
+      if (t === a && list[i + 1] === b && keep(`${a} ${b}`)) {
+        return `${a} ${b}`;
+      }
     }
   }
   return null;
 }
 
 /** The action's path only: query and fragment are not part of what the form does. */
-function actionPath(form: Element): string {
-  const raw = (form.getAttribute("action") ?? "").trim();
+function actionPath(action: string | null): string {
+  const raw = (action ?? "").trim();
   if (/^javascript:/i.test(raw)) return "";
   const noOrigin = raw.replace(/^([a-z][a-z0-9+.-]*:)?\/\/[^/?#]*/i, "");
   return noOrigin.split(/[?#]/)[0]!.slice(0, MAX_TEXT);
 }
 
-function submitText(controls: Element[]): string[] {
-  const out: string[] = [];
-  for (const el of controls) {
-    if (el.hasAttribute("disabled")) continue;
-    const tag = el.tagName.toLowerCase();
-    const type = (el.getAttribute("type") ?? "").trim().toLowerCase();
-    if (tag === "button" && type !== "button" && type !== "reset") {
-      out.push(
-        el.getAttribute("aria-label") ??
-          (el.textContent ?? "").slice(0, MAX_TEXT)
-      );
-    } else if (tag === "input" && (type === "submit" || type === "image")) {
-      out.push(el.getAttribute("value") ?? el.getAttribute("alt") ?? "");
-    }
+/** The visible name of a submit control: a button's aria-label or text, an input's value or alt. */
+function submitText(el: Element): string {
+  if (el.tagName.toLowerCase() === "button") {
+    return (
+      el.getAttribute("aria-label") ?? (el.textContent ?? "").slice(0, MAX_TEXT)
+    );
   }
-  return out;
+  return el.getAttribute("value") ?? el.getAttribute("alt") ?? "";
+}
+
+/**
+ * The submit controls that send this form by GET, each with the action it submits to
+ * (its `formaction`, else the form's `action`). With no submit control, only Enter
+ * submits the form, by its own method and action.
+ */
+function getSubmitters(
+  form: Element,
+  controls: Element[]
+): { control: Element | null; action: string | null }[] {
+  const submitters = controls.filter(isSubmitControl);
+  if (submitters.length === 0) {
+    return methodOf(form.getAttribute("method")) === "get"
+      ? [{ control: null, action: form.getAttribute("action") }]
+      : [];
+  }
+  return submitters
+    .filter(
+      (el) =>
+        methodOf(
+          el.getAttribute("formmethod") ?? form.getAttribute("method")
+        ) === "get"
+    )
+    .map((el) => ({
+      control: el,
+      action: el.getAttribute("formaction") ?? form.getAttribute("action"),
+    }));
 }
 
 function fieldType(el: Element): string {
@@ -250,10 +291,17 @@ export const getStateChangeRule: Rule = {
         return;
       }
 
-      const pathVerb = findVerb(tokens(actionPath(form)));
-      const textVerb = searchLike
-        ? null
-        : findVerb(submitText(controls).flatMap((t) => tokens(t)));
+      // Only what a GET submission does counts: a Delete button with formmethod="post" on a GET
+      // listing form is not a GET delete.
+      const getSubmits = getSubmitters(form, controls);
+      let pathVerb: string | null = null;
+      let textVerb: string | null = null;
+      for (const { control, action: target } of getSubmits) {
+        pathVerb ??= findVerb(tokens(actionPath(target)));
+        if (!searchLike && control !== null) {
+          textVerb ??= findVerb(tokens(submitText(control)), true);
+        }
+      }
       const verb = pathVerb ?? textVerb;
       if (verb !== null) {
         const where =
@@ -300,7 +348,7 @@ export const getStateChangeRule: Rule = {
         details,
       });
     }
-    if (checks.length === 0) {
+    if (checks.length === 0 && assessed > 0) {
       checks.push({
         name: "get-state-change",
         status: "pass",

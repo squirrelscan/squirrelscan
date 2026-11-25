@@ -4,5 +4,6 @@
   "integrity/kit-signature",
   "mobile/input-zoom",
   "schema/website-search",
+  "security/get-state-change",
   "security/password-form-get"
 ]

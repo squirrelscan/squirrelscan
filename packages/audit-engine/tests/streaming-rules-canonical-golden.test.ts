@@ -87,10 +87,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
     // overall past one more rounding boundary; without either one (or both) the number is 57.
     // ax/commerce-readiness adds an info row on each of the 500 pages (the harness has no site type, and no
     // page carries Product markup) and does not move it.
-    // 58 -> 59 (#2337): security/get-state-change passes on each of the 500 pages (the synthetic site has no
-    // GET form that looks state-changing), per the #1741 clean-run-is-a-check rule, which lifts the weighted
-    // overall past one more rounding boundary. Without the rule the number is 58.
-    expect(v1.healthScore.overall).toBe(59);
+    expect(v1.healthScore.overall).toBe(58);
     // Per-rule finding totals live in golden/canonical-rule-totals.json, one
     // sorted line per rule, so two new-rule PRs touch different lines and
     // rebase cleanly (#2055). There is no grand total or rule count to edit:
