@@ -27,6 +27,7 @@ import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { queryErrorFuzzRule } from "./query-error-fuzz";
 import { referrerPolicyRule } from "./referrer-policy";
+import { serializedAccountDataRule } from "./serialized-account-data";
 import { securityTxtRule } from "./security-txt";
 import { sriRule } from "./sri";
 import { supabaseRlsRule } from "./supabase-rls";
@@ -57,6 +58,7 @@ export const rules: Rule[] = [
   passwordFormGetRule,
   leakedSecretsRule,
   tokenStorageRule,
+  serializedAccountDataRule,
   thirdPartyCookiesRule,
   sriRule,
   cookieFlagsRule,
@@ -103,6 +105,7 @@ export {
   queryErrorFuzzRule,
   referrerPolicyRule,
   securityTxtRule,
+  serializedAccountDataRule,
   sriRule,
   supabaseRlsRule,
   thirdPartyCookiesRule,

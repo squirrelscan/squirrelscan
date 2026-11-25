@@ -665,6 +665,7 @@
                   "rules/security/password-form-get",
                   "rules/security/leaked-secrets",
                   "rules/security/token-storage",
+                  "rules/security/serialized-account-data",
                   "rules/security/graphql-introspection",
                   "rules/security/json-sensitive-fields",
                   "rules/security/graphql-get-mutations",
