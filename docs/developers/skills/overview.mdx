@@ -1,0 +1,105 @@
+---
+title: "squirrelscan agent skills for Claude Code, Codex and Cursor"
+sidebarTitle: "Overview"
+description: "Agent skills teach your coding agent to run squirrelscan audits and fix issues. Install 13 skills with the squirrel CLI, npx or the Claude Code plugin."
+icon: "brain"
+---
+
+squirrelscan ships 13 agent skills. Each skill teaches your coding agent one job: operate the CLI, fix issues, harden security, check accessibility, gate CI and more. The source is the [squirrelscan/skills](https://github.com/squirrelscan/skills) repository, which every install path reads.
+
+## What an agent skill is
+
+An agent skill is a folder with a `SKILL.md` file. The file holds a name, a description and instructions. The format is the open [Agent Skills](https://agentskills.io/home) standard, so the same `SKILL.md` works in Claude Code, Codex, Cursor, Gemini CLI, Amp and other tools.
+
+Your coding agent reads the description of every installed skill and loads a skill only when a request matches it. You can also invoke one by name, for example `/audit-website` in Claude Code.
+
+Skills sit between the CLI and the MCP server:
+
+| Piece | Role |
+|-------|------|
+| [`squirrel` CLI](/cli) | Runs audits on your machine and writes reports. |
+| [Hosted MCP server](/developers/mcp) | Gives your coding agent audit tools over MCP. |
+| Skills | Tell your coding agent when and how to use the CLI or the MCP server, and how to fix what the report finds. |
+
+The audit skills need the CLI or the hosted MCP server. They do not replace either. `security-headers` is the exception: it needs neither.
+
+## Install with the squirrel CLI
+
+The CLI installs and updates skills itself. It needs no Node and no `npx`.
+
+```bash
+squirrel skills install
+```
+
+This installs two skills: `squirrelscan` and `audit-website`. The CLI keeps them current with its own auto-update. See [`squirrel skills`](/cli/skills) for `--agent`, `--project`, `update` and `uninstall`.
+
+`squirrelscan` is the main skill. It teaches your coding agent the CLI itself: installation, login, audits, reports, credits, API keys, MCP setup and configuration. Your coding agent loads it for any task that touches squirrelscan. It also offers the other skills when a request matches one. `audit-website` is the general fix loop.
+
+<Note>`squirrel skills install` installs only these two skills. Install the task skills with `npx skills add` or the Claude Code plugin.</Note>
+
+## Other install paths
+
+<Tabs>
+  <Tab title="npx skills">
+    Install every skill for the agents you select:
+
+    ```bash
+    npx skills add squirrelscan/skills
+    ```
+
+    Install one skill:
+
+    ```bash
+    npx skills add squirrelscan/skills --skill seo-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and connects the hosted MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+
+    See [squirrelscan for Claude Code](/developers/agents/claude-code).
+  </Tab>
+  <Tab title="Codex">
+    Codex reads skills from `.agents/skills/` in a project and `~/.agents/skills/` globally. `npx skills add` installs there. Add the MCP server in `~/.codex/config.toml`: see [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add squirrelscan/skills`. Cursor reads skills from `.cursor/skills/` and `.agents/skills/`. The skills repository is also a Cursor plugin. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add squirrelscan/skills`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+You can also clone the repository and copy or symlink the `skills/*` folders you want into your agent's skills folder.
+
+## Task skills
+
+The task skills each cover one job. They run the matching audit rules, read the report, fix by template and re-audit. Each one says what its checks cannot judge, and reads a skipped rule as not checked, never as clean.
+
+| Skill | What it does |
+|-------|--------------|
+| [`squirrelscan`](/developers/skills/squirrelscan) | Operate the CLI: install, login, audits, reports, credits, API keys, the entity map, MCP setup, configuration, troubleshooting. |
+| [`audit-website`](/developers/skills/audit-website) | The fix loop: audit a website, map issues to code, fix in batches, re-audit until it scores well. |
+| [`security-audit`](/developers/skills/security-audit) | Leaked secrets, exposed files and endpoints, headers, cookies and signs of compromise. Asks about ownership before aggressive probing. |
+| [`supabase-security-audit`](/developers/skills/supabase-security-audit) | Whether the public anon key can read tables with Row Level Security off, and secret keys in the browser. Writes RLS fixes. |
+| [`security-headers`](/developers/skills/security-headers) | CSP, HSTS and other header config for Cloudflare, Vercel, Netlify, nginx and Next.js. Needs no CLI. |
+| [`accessibility-audit`](/developers/skills/accessibility-audit) | Accessible names, ARIA, headings and contrast, with a WCAG level filter and checklist. Says what needs a person. |
+| [`seo-audit`](/developers/skills/seo-audit) | Crawlability, indexing, canonicals, titles, descriptions and duplicates, fixed template first. |
+| [`broken-link-checker`](/developers/skills/broken-link-checker) | Dead links, anchors, redirect chains, orphan pages and broken images, with a decision per issue. |
+| [`performance-audit`](/developers/skills/performance-audit) | What slows loading: images, scripts, compression, caching and layout shift. |
+| [`structured-data-audit`](/developers/skills/structured-data-audit) | JSON-LD validity and the website-wide entity map. |
+| [`agent-experience-audit`](/developers/skills/agent-experience-audit) | How agents and crawlers read a website: bot access, content without JavaScript, `llms.txt` and `AGENTS.md`. |
+| [`website-ci-gate`](/developers/skills/website-ci-gate) | Fail CI on a score threshold, errors or new issues. Covers GitHub Actions, GitLab and preview deploys. |
+| [`launch-checklist`](/developers/skills/launch-checklist) | A pre-launch pass that runs the others in launch order and ends in a go or no-go list. |
+
+## Versioning
+
+Each skill carries a semver version in `metadata.version` in its `SKILL.md`. The version shown on each skill page is the one in the repository when these pages were written. Run `squirrel skills` to see the installed and latest versions of the two CLI-managed skills.
+
+## Source
+
+The skills, plugins and `manifest.json` live at [github.com/squirrelscan/skills](https://github.com/squirrelscan/skills). Open skill issues and pull requests there.

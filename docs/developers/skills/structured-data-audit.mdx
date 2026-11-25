@@ -1,0 +1,111 @@
+---
+title: "Structured data audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "structured-data-audit"
+description: "The structured-data-audit agent skill validates JSON-LD, builds the website-wide entity map and fixes identity problems such as duplicate organizations."
+icon: "brain"
+---
+
+`structured-data-audit` is an Agent Skills `SKILL.md` from squirrelscan: a JSON-LD validator and schema markup audit for coding agents. It runs squirrelscan's structured data rules and its website-wide entity map through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other agents. Valid markup does not guarantee rich results, and this skill does not claim eligibility.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks that JSON-LD parses, that it is the right type for the page and that required and recommended properties are present.
+- Builds the entity map with `squirrel entities`: the site-wide graph of the entities your pages declare.
+- Finds entity problems: `no-id`, `conflict`, `dangling`, `single-page` and `split-identity`.
+- Gives each real-world entity (organization, website, authors, products) one stable `@id`, declared once and referenced elsewhere.
+- Fixes in order: parse errors, identity, type fit, properties, then markup that claims more than the page shows.
+- Never adds markup for content users cannot see.
+- Proves a fix with `squirrel entities --diff`, reading the `gainedId` section and its coverage.
+- Points to where the fix lives in Yoast SEO, Next.js, Shopify, Webflow and static websites.
+
+## Questions it answers
+
+- Check my JSON-LD
+- Audit my schema markup
+- Fix duplicate Organization entities
+- Why does every page declare a separate Organization?
+- Does my JSON-LD parse?
+- Is the schema type right for each page type?
+- Is my Product or Article markup missing required properties?
+- Is my theme and my SEO plugin both printing JSON-LD?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill structured-data-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Check my JSON-LD on https://example.com
+Audit my schema markup and show me the entity problems
+Fix duplicate Organization entities and give each one a stable @id
+```
+
+The agent audits the schema rules, reads the entity graph, fixes identity in the layout or plugin config and proves it with an entity diff.
+
+## How it works
+
+1. Check the CLI and login status and tell you the cost.
+2. Run `squirrel audit` with `--rule-include schema`, then `squirrel entities`, using `--level full` when the entity map matters.
+3. Fix parse errors first, then identity, type fit and properties.
+4. Re-audit, then run `squirrel entities --diff` to prove the change.
+5. Stop when `schema/json-ld-valid` is clean and no conflicts, split identities or dangling references remain on a full crawl.
+
+## Related skills
+
+- [`seo-audit`](/developers/skills/seo-audit): titles, canonicals and content.
+- [`audit-website`](/developers/skills/audit-website): the wider audit and fix loop.
+- [`launch-checklist`](/developers/skills/launch-checklist): structured data as part of a pre-launch pass.
+
+## Related rules and guides
+
+- [Structured data rules](/rules/schema)
+- [squirrel entities](/cli/entities)
+- [Entity map guide](/guides/entity-map)
+
+## Source on GitHub
+
+- [`skills/structured-data-audit`](https://github.com/squirrelscan/skills/tree/main/skills/structured-data-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/structured-data-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/structured-data-audit/SKILL.md)

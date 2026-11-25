@@ -1,0 +1,1 @@
+- New "Skills" section in the developer docs: an overview and one page for each of the 13 squirrelscan agent skills, with install steps, example prompts and links to the matching rule categories (#2407).

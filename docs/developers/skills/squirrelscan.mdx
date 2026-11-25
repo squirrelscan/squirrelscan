@@ -1,0 +1,127 @@
+---
+title: "squirrelscan skill: website audits from Claude Code, Codex and Cursor"
+sidebarTitle: "squirrelscan"
+description: "The squirrelscan agent skill teaches Claude Code, Codex and Cursor to install and run the squirrel CLI, read reports and set up MCP."
+icon: "brain"
+---
+
+`squirrelscan` is the core Agent Skills `SKILL.md` for the squirrelscan website audit tool: the skill that teaches Claude Code, Codex, Cursor and other coding agents to operate the `squirrel` CLI. squirrelscan crawls a website like a search engine and checks every page against 350+ audit rules in 22 categories. The categories include SEO, performance, security, accessibility, content, structured data and agent experience. It returns a health score and concrete, fixable issues. Use it for installing and updating the CLI, login, running audits and reading reports.
+
+Version 2.5.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Runs `squirrel audit <url>` and reads the report.
+- Uses `--format llm` when an agent reads the output, and JSON when it needs every affected page.
+- Explains the three audit levels: `quick` (25 pages), `surface` (100 pages, one page per URL pattern) and `full` (500 pages).
+- Tells you before a logged-in audit what it costs and what it leaves behind, and offers `--no-publish`, `--ephemeral` and `--offline`.
+- Sets the probing level by who owns the website: `--passive` for websites you do not own, and `--aggressive` or `--pentest` only when you own or may test the website.
+- Handles exit codes and audits that did not run: `3` blocked, `4` redirected to another website, `5` unreachable. None of these is a score.
+- Reads skipped and not-checked rules as unchecked, never as clean.
+- Covers publishing and sharing reports, diffs, cloud credits, API keys and MCP server setup.
+- Covers the entity map: the site-wide graph of entities a website declares in JSON-LD, and fixing identity problems such as an organization declared separately on every page.
+- Offers the companion skills when a request matches, and loads a reference file only when the task needs it.
+
+## Commands it covers
+
+`squirrel audit`, `crawl`, `analyze`, `report`, `entities`, `init`, `config`, `auth`, `keys`, `credits`, `mcp`, `skills`, `self` and `feedback`. Every command supports `--help`.
+
+## Questions it answers
+
+- Check my website's SEO, speed or health
+- How do I install or update the squirrel CLI?
+- How do I log in and create an API key for squirrelscan?
+- What does a squirrelscan audit cost in credits?
+- How do I publish and share an audit report?
+- What do squirrel exit codes 3, 4 and 5 mean?
+- How do I set up the squirrelscan MCP server?
+- How do I disable a rule that does not apply to my website?
+
+## Install
+
+The squirrel CLI installs this skill with [`squirrel skills install`](/cli/skills), together with the other main skill. It is the one command that keeps both current.
+
+```bash
+squirrel skills install
+```
+
+To install only this skill with the CLI:
+
+```bash
+squirrel skills install squirrelscan
+```
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill squirrelscan
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Audit https://example.com with squirrelscan and show me the top issues
+Install the squirrel CLI and run a first audit
+Publish the last audit as a shareable report
+```
+
+The agent checks login and cost, runs the audit at the right level and reads the report. For the full fix workflow, it hands over to `audit-website`.
+
+## How it works
+
+1. Run `squirrel auth status` before the first audit and tell you the cost, the dashboard and schedule side effects and what gets published.
+2. Run `squirrel audit` at the level you need, with probing set by who owns the website.
+3. Read the report: `--format llm` is a sample, JSON is the full list, and a `Not checked:` line names rules that did not run.
+4. Treat a issue as a issue, not always a bug: ask before changing a deliberate `noindex` or `robots.txt` block.
+5. Load a reference for installation, accounts and credits, reports, MCP, entity maps, configuration or maintenance when the task needs one.
+
+## Related skills
+
+- [`audit-website`](/developers/skills/audit-website): the full audit, fix and re-audit loop.
+- [`security-audit`](/developers/skills/security-audit): leaks, exposed files and signs of compromise.
+- [`seo-audit`](/developers/skills/seo-audit): crawlability, indexing and metadata.
+- [`structured-data-audit`](/developers/skills/structured-data-audit): JSON-LD and the entity map.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): audits in CI.
+
+## Related rules and guides
+
+- [All audit rules](/rules)
+
+## Source on GitHub
+
+- [`skills/squirrelscan`](https://github.com/squirrelscan/skills/tree/main/skills/squirrelscan): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/squirrelscan/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/squirrelscan/SKILL.md)

@@ -1,0 +1,108 @@
+---
+title: "Agent experience audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "agent-experience-audit"
+description: "The agent-experience-audit agent skill checks how AI agents and crawlers read a website: bot access, content without JavaScript, llms.txt and AGENTS.md."
+icon: "brain"
+---
+
+`agent-experience-audit` is an Agent Skills `SKILL.md` from squirrelscan that checks how well a website works for AI agents and crawlers: the AX audit, an `llms.txt` checker and an AI crawler access check in one skill. It runs squirrelscan's agent experience audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents. It is about access and readability, not rankings or visibility in AI answers.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks which bots `robots.txt` lets in, per bot, and whether a CDN or WAF blocks agents regardless of `robots.txt`.
+- Checks whether the main content is in the HTML or only appears after JavaScript.
+- Checks for `llms.txt`, `AGENTS.md`, markdown responses, API discovery, well-known agent files and machine-readable policies.
+- Leaves allow or block decisions to the website owner: it shows the per-bot result, asks which bots you want in and never changes `robots.txt` bot rules on its own.
+- Treats `llms.txt` as a proposed convention: its absence is never a defect, but an SPA that answers 200 with its HTML shell for `/llms.txt` is a failure.
+- Says when discovery probes were turned off and the related rules report not checked, instead of calling them clean.
+- Does not measure visibility in AI answers and never claims a website will be cited or recommended by an assistant.
+
+## Questions it answers
+
+- How well does my website work for AI agents?
+- Audit my llms.txt
+- Which AI crawlers does my robots.txt let in?
+- Is my main content visible without JavaScript?
+- Is Cloudflare blocking AI agents on top of robots.txt?
+- Does my website have an AGENTS.md or an llms.txt?
+- Does my website serve markdown versions of pages?
+- Can agents discover my API?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill agent-experience-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+How well does my website work for AI agents? Audit https://example.com
+Audit my llms.txt and tell me what is wrong with it
+Which AI bots can reach my website, and which ones does my CDN block?
+```
+
+The agent runs the `ax` audit rules and shows you the per-bot verdicts. It asks which bots you want in. Then it fixes server rendering and discovery files and records the policy in the repo.
+
+## How it works
+
+1. Check the CLI and login status, tell you the cost and offer `--offline`, as with every squirrelscan audit skill.
+2. Run `squirrel audit` with `--rule-include ax` at `--level surface`, or a single discovery rule at `--level quick`.
+3. Fix in order: can agents reach it, is the content in the HTML, is it easy to read and quote, discovery files, then policies the owner chooses.
+4. Stop when each `ax` rule is clean, knowingly waived with the owner's reason, or reported as not checked with the cause.
+
+## Related skills
+
+- [`seo-audit`](/developers/skills/seo-audit): metadata, canonicals and sitemaps.
+- [`structured-data-audit`](/developers/skills/structured-data-audit): JSON-LD validity and the entity map.
+- [`audit-website`](/developers/skills/audit-website): the wider audit and fix loop.
+
+## Related rules and guides
+
+- [Agent experience (AX) rules](/rules/ax)
+- [Agents score group](/rules/agents)
+
+## Source on GitHub
+
+- [`skills/agent-experience-audit`](https://github.com/squirrelscan/skills/tree/main/skills/agent-experience-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/agent-experience-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/agent-experience-audit/SKILL.md)

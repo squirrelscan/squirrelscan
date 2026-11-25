@@ -1,0 +1,112 @@
+---
+title: "Supabase security audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "supabase-security-audit"
+description: "The supabase-security-audit agent skill checks whether the anon key can read tables with Row Level Security off, and writes the RLS fixes."
+icon: "brain"
+---
+
+`supabase-security-audit` is an Agent Skills `SKILL.md` from squirrelscan: a Supabase RLS checker and exposed-key audit for coding agents. It uses the squirrel CLI or the hosted squirrelscan MCP server in Claude Code, Codex, Cursor and other agents. It checks whether the public anon key can read tables with Row Level Security off. It also checks whether a secret key shipped to the browser. It then writes the RLS SQL fixes.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Reads the repo first, with no network: secret keys in client code, every table the client queries and the migrations that enable RLS.
+- Confirms ownership before probing: "Is this your Supabase project, or are you authorized to test it?" If not, it stops.
+- Runs the `security/supabase-rls` audit rule, which sends one `HEAD` request per table with `Prefer: count=exact`. It never reads a row.
+- Probes only tables the website's own code names, and never uses a secret key to probe.
+- Reports skipped probes as not checked, not clean.
+- Says that a count of zero cannot tell RLS hiding every row from an empty table.
+- Writes `alter table ... enable row level security` and `create policy` SQL, and puts it in `supabase/migrations/`.
+- Treats exposed rows as already read, and tells you to rotate anything sensitive and any exposed secret key.
+- Waives a table that is public by design with an `[[ignore]]` entry and a reason.
+
+## Questions it answers
+
+- Is my Supabase app leaking data?
+- Audit my Supabase RLS
+- Check if my secret key is exposed
+- Is Row Level Security turned on for every table?
+- Can the anon key read my tables?
+- Did my service role key end up in the browser bundle?
+- Does my Lovable or Bolt app have tables with no RLS?
+- What RLS policy should I write for a profiles table?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill supabase-security-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Is my Supabase app leaking data? Audit https://app.example.com
+Audit my Supabase RLS and write the migration to fix it
+Check if my service role key is exposed in the frontend code
+```
+
+The agent searches the repo, asks about ownership, runs the probe, reads each table's result and writes the SQL and key-rotation steps.
+
+## How it works
+
+1. Confirm you own the Supabase project, or stop.
+2. Read the code: secret keys, queried tables and RLS in migrations.
+3. Run `squirrel audit` with `--aggressive --probe-budget 1m` and the `security/supabase-rls` and `security/leaked-secrets` rules.
+4. Read the answer per table: fail, pass or skipped, with the reason for any skip.
+5. Enable RLS, add policies, move secret keys to a server and rotate them. Stop when a re-run passes, or skips only for reasons you explained.
+
+## Related skills
+
+- [`security-audit`](/developers/skills/security-audit): headers, exposed files, cookies and the rest of the website.
+- [`security-headers`](/developers/skills/security-headers): CSP and header config.
+- [`audit-website`](/developers/skills/audit-website): non-security findings.
+
+## Related rules and guides
+
+- [security/supabase-rls](/rules/security/supabase-rls)
+- [security/leaked-secrets](/rules/security/leaked-secrets)
+- [Security rules](/rules/security)
+
+## Source on GitHub
+
+- [`skills/supabase-security-audit`](https://github.com/squirrelscan/skills/tree/main/skills/supabase-security-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/supabase-security-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/supabase-security-audit/SKILL.md)

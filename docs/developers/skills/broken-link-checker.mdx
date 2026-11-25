@@ -1,0 +1,113 @@
+---
+title: "Broken link checker skill for Claude Code, Codex and Cursor"
+sidebarTitle: "broken-link-checker"
+description: "The broken-link-checker agent skill finds dead links, anchors, redirect chains, orphan pages and broken images, with a decision for each issue."
+icon: "brain"
+---
+
+`broken-link-checker` is an Agent Skills `SKILL.md` from squirrelscan: a broken link checker, 404 finder and redirect chain cleaner for coding agents. It runs squirrelscan's link audit rules through the squirrel CLI or the hosted squirrelscan MCP server in Claude Code, Codex, Cursor and other agents. Broken links are usually a decision, not a mechanical fix, so it gives each issue a decision.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Finds broken internal and external links, broken anchors, redirect chains, orphan pages, broken images and dead sitemap URLs.
+- Recommends per issue whether to fix, redirect, remove or leave the link.
+- Status-checks internal link targets the crawl did not fetch, and checks external links unless you pass `--no-external-links`.
+- Warns about cost before a logged-in run: the cloud charges 1 credit per distinct external link it verifies. Offers `--no-external-links` or `--offline` for internal-only checks.
+- Treats a link behind a bot wall as unverified, not broken.
+- Uses `--level full` for sign-off, because `surface` samples one page per URL pattern.
+- Never deletes a link without telling you which pages lose it.
+- Prefers fixing the source link over adding a redirect, and points to where redirects live in Next.js, WordPress, Shopify, Webflow, Cloudflare, Vercel and Netlify.
+
+## Questions it answers
+
+- Find broken links on my website
+- Check for 404s and redirect chains
+- Clean up dead sitemap URLs
+- Which pages link to a page that returns 404?
+- Which of my external links are dead?
+- Which pages are orphans with no inbound links?
+- Are there broken anchors or broken images on my website?
+- Should I redirect or remove a link to a deleted page?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill broken-link-checker
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Find broken links on https://example.com and tell me what to do with each one
+Check for 404s and redirect chains, internal links only
+Clean up dead sitemap URLs in this repo
+```
+
+The agent runs the link audit rules and exports every broken link with the pages it appears on. It proposes a decision for each. It edits links or redirects only after you agree.
+
+## How it works
+
+1. Check the CLI and login status, and say what external link checks cost when logged in.
+2. Run `squirrel audit` with the `links`, `images/broken-images`, `reliability/broken-resources` and `crawl/sitemap-4xx` rules.
+3. Export the full list as JSON, since the `llm` format lists at most 5 pages per rule.
+4. Decide per issue using the decision table: fix, redirect, remove or leave.
+5. Re-audit at `--level full` with `--refresh`. A link the tool could not verify is reported as not checked, never fine.
+
+## Related skills
+
+- [`seo-audit`](/developers/skills/seo-audit): page content and metadata.
+- [`audit-website`](/developers/skills/audit-website): the wider fix loop.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): fail a build on new broken links.
+
+## Related rules and guides
+
+- [Link rules](/rules/links)
+- [images/broken-images](/rules/images/broken-images)
+- [reliability/broken-resources](/rules/reliability/broken-resources)
+- [crawl/sitemap-4xx](/rules/crawl/sitemap-4xx)
+- [Link checking guide](/guides/link-checking)
+
+## Source on GitHub
+
+- [`skills/broken-link-checker`](https://github.com/squirrelscan/skills/tree/main/skills/broken-link-checker): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/broken-link-checker/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/broken-link-checker/SKILL.md)

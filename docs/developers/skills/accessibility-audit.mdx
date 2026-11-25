@@ -1,0 +1,110 @@
+---
+title: "Accessibility audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "accessibility-audit"
+description: "The accessibility-audit agent skill runs squirrelscan's WCAG and ARIA rules and fixes issues by component, then lists the checks a person must do."
+icon: "brain"
+---
+
+`accessibility-audit` is an Agent Skills `SKILL.md` from squirrelscan, the skill people look for as a WCAG audit skill or an accessibility checker for coding agents. It runs squirrelscan's accessibility audit rules through the squirrel CLI or the hosted squirrelscan MCP server, then fixes what it finds by component and template. It works in Claude Code, Codex, Cursor and other coding agents, and it says plainly that automated checks cover only part of WCAG.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks accessible names, labels, ARIA, headings, landmarks, contrast, language, zoom and target sizes.
+- Uses hand-written squirrelscan rules that read each page's markup. It is not an axe-core run.
+- Takes an optional WCAG level filter (`--wcag-level A|AA|AAA`) and prints a criterion checklist from a stored audit.
+- Groups issues by template, so one fix in a header, footer, card or form component clears many pages.
+- Fixes in a set order: page-level blockers, names for controls, ARIA correctness, structure, then visual issues.
+- Asks for design tokens before changing contrast or focus styles, instead of guessing.
+- Reads skipped checks as not checked, never as passed.
+- Reports "no automated issues", never "WCAG compliant", and hands over the manual checklist: keyboard-only walk, screen reader pass, captions, alt text quality, focus order and form error messages.
+- Points to where the fix usually lives in Next.js and React, WordPress, Shopify, Webflow and static websites.
+
+## Questions it answers
+
+- Check my website's accessibility
+- Run a WCAG audit
+- Why does this button have no accessible name?
+- Which form fields on my website are missing labels?
+- Which pages fail color contrast?
+- Does my website have a skip link and exactly one main landmark?
+- Are my ARIA roles and attributes valid?
+- What can an automated accessibility check not tell me?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill accessibility-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Run a WCAG AA audit on https://example.com and fix the issues in this repo
+Check my website's accessibility and group the findings by component
+Print the WCAG checklist for the last audit
+```
+
+The agent runs `squirrel audit` with the accessibility rules and maps each issue to a component or template. It fixes in batches and re-audits. Then it gives you the list of checks a person still has to do.
+
+## How it works
+
+1. Check `squirrel --version` and `squirrel auth status`, tell you the cost of a logged-in audit, and offer `--offline`.
+2. Run the audit at `--level surface` with the accessibility rules, optionally with `--wcag-level AA`.
+3. Read the JSON issues and `skippedChecks`, then group issues by template.
+4. Fix in order: page-level blockers, control names, ARIA, structure, visual.
+5. Re-audit at `--level full` with `--wcag-level AA`. Stop when no error-severity issues remain, every skipped check is explained and you have the manual checklist.
+
+## Related skills
+
+- [`audit-website`](/developers/skills/audit-website): the general audit and fix loop for non-accessibility findings.
+- [`launch-checklist`](/developers/skills/launch-checklist): a pre-release pass across everything, including accessibility.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): fail CI when accessibility findings return.
+
+## Related rules and guides
+
+- [Accessibility rules](/rules/a11y)
+
+## Source on GitHub
+
+- [`skills/accessibility-audit`](https://github.com/squirrelscan/skills/tree/main/skills/accessibility-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/accessibility-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/accessibility-audit/SKILL.md)

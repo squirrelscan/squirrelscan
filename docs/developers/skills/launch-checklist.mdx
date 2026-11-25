@@ -1,0 +1,110 @@
+---
+title: "Launch checklist skill for Claude Code, Codex and Cursor"
+sidebarTitle: "launch-checklist"
+description: "The launch-checklist agent skill runs one full baseline audit, works through the other squirrelscan skills in launch order and ends in a go or no-go list."
+icon: "brain"
+---
+
+`launch-checklist` is an Agent Skills `SKILL.md` from squirrelscan: a pre-launch website check for a new website, a redesign or a migration. It runs one full baseline audit through the squirrel CLI or the hosted squirrelscan MCP server. Then it works through the other squirrelscan skills in launch order and ends with a go or no-go list. It runs in Claude Code, Codex, Cursor and other coding agents.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Runs a baseline audit at `--level full` and reads the score, the error-severity issues and the `Not checked:` line.
+- Treats blockers as no-go until clear: compromise and leaks, HTTPS, indexing, broken links and server errors.
+- Checks that a staging `noindex` or `Disallow: /` is gone on the live website and that canonicals and the sitemap point at the live host.
+- Lists what should be fixed before launch: titles and descriptions, accessibility, performance, security headers, structured data and the bot policy.
+- Lists the human checks the tool cannot do: forms end to end, analytics and consent, the 404 page, legal pages, redirects from the old domain, the email sending domain and the sitemap submission in Search Console.
+- Never removes `noindex` from staging itself: only in the production build, checked again on the live URL.
+- Writes a go or no-go table where each blocker is clear, not clear or not checked, with the before and after score.
+- Says what it cannot judge: copy, design and legal compliance.
+
+## Questions it answers
+
+- Is my website ready to launch?
+- Run a pre-launch website check
+- Audit my migration before cutover
+- Did I leave noindex or a robots.txt Disallow on the live website?
+- Do my canonicals and sitemap point at the production domain?
+- Which redirects do I need after changing domains?
+- What should I fix before launch and what can wait?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill launch-checklist
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Is my website ready to launch? Check https://staging.example.com
+Run a pre-launch website check and give me a go or no-go list
+Audit my migration before cutover and compare the live website with the baseline
+```
+
+The agent audits staging first and works through the blockers with the matching skills. It re-audits the live URL after DNS and deploy. Then it gives you the go or no-go table.
+
+## How it works
+
+1. Run the full baseline audit on the staging or pre-production URL.
+2. Work through the blocker table, using `security-audit`, `seo-audit`, `broken-link-checker` and `audit-website` for fixes.
+3. Handle the should-fix list and hand the human checks to you.
+4. Write the go or no-go table, with "not checked" never counted as clear.
+5. After launch, re-audit the live URL with `--refresh`, compare with the baseline and add `website-ci-gate`.
+
+## Related skills
+
+- [`security-audit`](/developers/skills/security-audit): leaks, exposed files, HTTPS and signs of compromise.
+- [`seo-audit`](/developers/skills/seo-audit): indexing, canonicals and sitemaps.
+- [`broken-link-checker`](/developers/skills/broken-link-checker): redirects and dead links after a migration.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): hold launch quality in CI.
+
+## Related rules and guides
+
+- [All audit rules](/rules)
+- [Audit levels](/guides/audit-levels)
+
+## Source on GitHub
+
+- [`skills/launch-checklist`](https://github.com/squirrelscan/skills/tree/main/skills/launch-checklist): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/launch-checklist/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/launch-checklist/SKILL.md)

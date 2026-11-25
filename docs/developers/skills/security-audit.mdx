@@ -1,0 +1,111 @@
+---
+title: "Security audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "security-audit"
+description: "The security-audit agent skill finds leaked secrets, exposed files, weak headers and signs of compromise, and fixes them in damage-limiting order."
+icon: "brain"
+---
+
+`security-audit` is an Agent Skills `SKILL.md` from squirrelscan: a Claude Code security audit and leaked secrets scanner for websites. It runs squirrelscan's security and integrity audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents. It is not a penetration test: a clean run means these checks found nothing, not that the website is secure.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Finds leaked secrets, exposed files and endpoints, weak headers and cookies, mixed content and signs of compromise.
+- Asks "Do you own this website, or are you authorized to test it?" before any probing beyond the crawl.
+- Defaults to `--passive --ephemeral` for a website that is not yours, and never adds `--aggressive` or `--pentest` on its own.
+- Reads skipped probe rules as not checked, never as clean, and says which checks did not run.
+- Fixes in an order that limits damage: `integrity/*` issues first, then leaked secrets, exposed files and endpoints, Supabase tables, transport, headers, cookies and third parties.
+- Tells you before changing anything when `integrity` issues suggest the website is compromised, and does not just delete files.
+- Rotates leaked keys at the provider before removing them from code, and never pastes a secret into chat, a commit or a PR.
+- Waives intentional issues with an `[[ignore]]` entry that has a reason, not by disabling the rule.
+
+## Questions it answers
+
+- Check my website's security
+- Find leaked secrets
+- Is there an API key in my website's JavaScript bundle?
+- Are there exposed files or endpoints on my website?
+- Is my website compromised or serving injected pages?
+- Is my website using HTTPS correctly, with no mixed content?
+- Are my cookie flags and security headers set?
+- Is it safe to audit a website I do not own?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill security-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Check my website's security: https://example.com
+Find leaked secrets in what my website ships to the browser
+Run a passive security audit on a competitor's website, ephemeral
+```
+
+The agent asks about ownership, picks the probe level that fits, exports the full list of issues and fixes them in damage-limiting order. It gives rotation steps for any exposed key.
+
+## How it works
+
+1. Check the CLI and login status, and confirm ownership to choose the probe level.
+2. Run `squirrel audit` with `--rule-include security,integrity`, passive for websites that are not yours.
+3. Export the full list as JSON and read `skippedChecks` and the `Not checked:` line.
+4. Fix in order, handing off to `supabase-security-audit` and `security-headers` where they apply.
+5. Re-audit with the same command and `--refresh`. Stop when no error-severity issues remain in `security` and `integrity`, applicable probes were checked and exposed secrets are rotated.
+
+## Related skills
+
+- [`supabase-security-audit`](/developers/skills/supabase-security-audit): Supabase apps whose anon key may read tables.
+- [`security-headers`](/developers/skills/security-headers): CSP, HSTS and other header config.
+- [`audit-website`](/developers/skills/audit-website): findings outside security.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): gate security findings in CI.
+
+## Related rules and guides
+
+- [Security rules](/rules/security)
+- [Site integrity rules](/rules/integrity)
+
+## Source on GitHub
+
+- [`skills/security-audit`](https://github.com/squirrelscan/skills/tree/main/skills/security-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/security-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/security-audit/SKILL.md)

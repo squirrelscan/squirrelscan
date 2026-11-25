@@ -1,0 +1,128 @@
+---
+title: "Website audit and fix skill for Claude Code, Codex and Cursor"
+sidebarTitle: "audit-website"
+description: "The audit-website agent skill audits a website with squirrelscan, maps issues to code, fixes them in batches and re-audits until it scores well."
+icon: "brain"
+---
+
+`audit-website` is an Agent Skills `SKILL.md` from squirrelscan: the website audit agent skill. It audits a website and maps each issue to the code or content behind it. It fixes in batches and re-audits until the website scores well. It runs 350+ audit rules across SEO, performance, security, technical, content, accessibility and more, through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents, and is the general fix loop the narrower squirrelscan skills hand back to.
+
+Version 3.4.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Runs a squirrelscan audit and reads the LLM-optimized report: score, grade and top issues by severity.
+- Starts with a quick pass to learn the website's structure, then goes deeper: `surface` (one page per URL pattern) for template-level coverage and `full` for sign-off.
+- Checks intent before calling something broken, since a `noindex`, a `robots.txt` block or a page behind a login can be what you want.
+- Gets the fix from the rule's docs page (or `get_rule` over MCP), not from the report.
+- Proposes fixes, confirms with you before changing anything, then fixes in batches and verifies that the project still builds.
+- Re-audits with `--refresh` after deploys and shows before and after scores, with `squirrel report --diff` or `compare_audits` for regressions.
+- Tells you the cost and what a logged-in audit leaves behind (dashboard entry, recurring audits, an unlisted report) before it runs. It offers `--offline`, `--no-publish` and `--ephemeral`.
+- Reads skipped and not-checked rules as unchecked.
+- Does not start a fix loop when the exit code is `3`, `4` or `5`, because nothing was audited.
+- Tailors the audit to the website: a issue class that does not apply can be disabled in `squirrel.toml`.
+
+## Questions it answers
+
+- Audit my website and fix all errors and warnings
+- Run an audit on example.com and show me the top 5 critical issues
+- Check my website for broken links and leaked secrets
+- Re-audit after the deploy and diff against the last report
+- What is wrong with my website, and how do I fix it?
+- What is my website's health score, and how do I raise it?
+- Which issues should I fix first?
+- Which issue is intentional and which is a real bug?
+
+## Install
+
+The squirrel CLI installs this skill with [`squirrel skills install`](/cli/skills), together with the other main skill. It is the one command that keeps both current.
+
+```bash
+squirrel skills install
+```
+
+To install only this skill with the CLI:
+
+```bash
+squirrel skills install audit-website
+```
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill audit-website
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Audit this website and fix all errors and warnings
+Run an audit on example.com and show me the top 5 critical issues
+Re-audit after the deploy and diff against the last report
+```
+
+The agent asks which website to audit, tells you the cost and runs the audit. It proposes fixes for your approval and edits the source files. Then it re-audits and shows the score change.
+
+## How it works
+
+1. Run `squirrel auth status`, tell you the cost and side effects, and get a yes.
+2. Run `squirrel audit <url> --format llm`, quick first and then `surface` or `full`. Over MCP, use `run_audit`, `get_audit_status` and `get_report`.
+3. Present the report and check intent for each issue that might be deliberate.
+4. Export the full JSON list, map issues to source files, and fix in batches after you approve.
+5. Re-audit with `--refresh` and repeat until errors are fixed or confirmed intentional and the rest needs a human decision.
+
+## Over MCP
+
+With the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`), the same loop runs with its tools: `whoami`, `run_audit`, `get_audit_status`, `get_report`, `list_issues`, `get_issue`, `get_rule`, `comment_on_issue` and `compare_audits`. Every hosted audit is a billed cloud audit, and `run_audit` returns an estimate for you to confirm before it spends credits.
+
+## Related skills
+
+- [`squirrelscan`](/developers/skills/squirrelscan): operate the CLI: install, login, reports, credits, MCP setup.
+- [`seo-audit`](/developers/skills/seo-audit): a focused technical SEO pass.
+- [`security-audit`](/developers/skills/security-audit): a focused security pass.
+- [`launch-checklist`](/developers/skills/launch-checklist): a pre-launch pass that runs the others in launch order.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): keep the score from regressing in CI.
+
+## Related rules and guides
+
+- [All audit rules](/rules)
+- [Fix your website with a coding agent](/guides/fix-your-site-with-an-ai-agent)
+
+## Source on GitHub
+
+- [`skills/audit-website`](https://github.com/squirrelscan/skills/tree/main/skills/audit-website): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/audit-website/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/audit-website/SKILL.md)

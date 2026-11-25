@@ -1,0 +1,103 @@
+---
+title: "Security headers skill for Claude Code, Codex and Cursor"
+sidebarTitle: "security-headers"
+description: "The security-headers agent skill writes CSP, HSTS and other security header config for Cloudflare, Vercel, Netlify, nginx and Next.js. It needs no CLI."
+icon: "brain"
+---
+
+`security-headers` is an Agent Skills `SKILL.md` from squirrelscan that writes HTTP security header configs: a CSP, HSTS and security headers generator for coding agents. It covers Cloudflare, Vercel, Netlify, nginx and Next.js in Claude Code, Codex, Cursor and other agents. It is standalone: it needs neither the squirrel CLI nor the hosted squirrelscan MCP server, and verifies live headers with `curl`.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks what a website sends now with `curl -sI`, and notes whether the app, the CDN or the host sets each header.
+- Proposes a baseline from OWASP's secure headers project: HSTS, `X-Content-Type-Options`, a starter Content-Security-Policy, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy`.
+- Rolls CSP out safely: report-only first, then nonces or hashes, then each legitimate origin, then enforcing.
+- Starts HSTS with a short `max-age` on a website you are unsure about, and adds `preload` only when every subdomain is HTTPS for good.
+- Writes the config where the platform wants it: `next.config.ts`, `vercel.json`, Netlify `_headers`, nginx `add_header` lines or a Cloudflare Transform Rule.
+- Warns about platform traps, such as nginx dropping parent `add_header` lines in a nested `location` and duplicate headers from the origin and the CDN.
+- Says which headers WordPress, Shopify and Webflow owners cannot set, instead of promising them.
+- Verifies with `curl` and, if the squirrel CLI is installed, the matching audit rules in passive mode.
+
+## Questions it answers
+
+- Add security headers to Next.js
+- Set up a CSP
+- Fix missing HSTS and Referrer-Policy headers
+- How do I add a Content-Security-Policy without breaking my website?
+- How do I set security headers on Cloudflare, Vercel, Netlify or nginx?
+- What should my X-Frame-Options and frame-ancestors be?
+- Is it safe to add HSTS preload?
+- How do I check which security headers my website sends?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill security-headers
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+None. This skill needs neither the squirrel CLI nor the hosted squirrelscan MCP server. `curl` is enough. The CLI is optional, for verification.
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Add security headers to my Next.js app
+Set up a CSP for https://example.com, report-only first
+Fix missing HSTS and Referrer-Policy headers on our nginx config
+```
+
+The agent checks the live headers with `curl`, writes the config for your platform, rolls CSP out in report-only mode and re-checks the live response.
+
+## How it works
+
+1. See what is sent now with `curl -sI` on a page, not only the homepage.
+2. Pick the baseline set of headers.
+3. Roll out CSP: report-only, nonces or hashes, add legitimate origins, then enforce.
+4. Put the headers where the platform wants them.
+5. Verify with `curl`, check the console for CSP violations on the main flows and, optionally, confirm with the squirrel CLI audit rules.
+
+## Related skills
+
+- [`security-audit`](/developers/skills/security-audit): leaks, exposed files, cookies and probes.
+- [`supabase-security-audit`](/developers/skills/supabase-security-audit): Supabase Row Level Security and exposed keys.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): gate header regressions in CI.
+
+## Related rules and guides
+
+- [Security rules](/rules/security)
+
+## Source on GitHub
+
+- [`skills/security-headers`](https://github.com/squirrelscan/skills/tree/main/skills/security-headers): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/security-headers/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/security-headers/SKILL.md)

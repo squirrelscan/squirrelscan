@@ -1,0 +1,116 @@
+---
+title: "SEO audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "seo-audit"
+description: "The seo-audit agent skill runs a technical SEO audit for crawlability, indexing, canonicals, titles and descriptions, and fixes templates first."
+icon: "brain"
+---
+
+`seo-audit` is an Agent Skills `SKILL.md` from squirrelscan: a technical SEO audit skill and website SEO checker for coding agents. It runs squirrelscan's audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other agents, and fixes template-level issues first. It finds technical and on-page problems; it does not know what your searchers want or how pages rank.
+
+Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks crawlability and indexability: `robots.txt`, sitemaps, canonicals, noindex and server errors.
+- Checks titles, descriptions, headings, duplicate content, URLs, social tags, languages and image alt text.
+- Groups issues by rule, then by template: a title over 60 characters on 41 pages is one change to a title template.
+- Fixes in indexability-first order: crawl and index, discovery, what each page says, duplicate or thin content, then URLs, social, language and images.
+- Checks intent before calling anything broken, since a `noindex`, a `robots.txt` block or a canonical to another page can be deliberate.
+- Leaves staging and preview `noindex` in place.
+- Points to where the fix lives in Next.js metadata, WordPress with Yoast SEO, Shopify, Webflow and static websites.
+- Does not promise rankings: it says what was fixed and what the tool cannot judge.
+
+## Questions it answers
+
+- Run an SEO audit on my website
+- Why aren't my pages indexed?
+- Check my meta tags and sitemap
+- Which pages have missing or duplicate titles and meta descriptions?
+- Are my canonicals pointing at the right URLs?
+- Is my robots.txt blocking pages I want indexed?
+- Is my sitemap valid, and does it list live URLs only?
+- How do I fix SEO titles in Next.js metadata or Yoast?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill seo-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    /plugin install squirrelscan@squirrelscan
+    ```
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+```text
+Run an SEO audit on https://example.com
+Why aren't my pages indexed? Check robots, canonicals and the sitemap
+Check my meta tags and sitemap and fix the title template
+```
+
+The agent runs the crawl, core, content, URL, social, language and image rules at surface level. It fixes the templates behind the issues and re-audits with `--refresh`.
+
+## How it works
+
+1. Check the CLI and login status and tell you the cost.
+2. Run `squirrel audit` at `--level surface` with the SEO-related rule categories.
+3. Read errors in `crawl` and `core` first, grouped by template, and check intent before changing anything.
+4. Fix in order and re-audit with `--refresh` after the deploy.
+5. Stop when a `--level full` re-audit has no error-severity issues in `crawl` and `core`, and what is left is judgment listed for you.
+
+## Related skills
+
+- [`broken-link-checker`](/developers/skills/broken-link-checker): dead links and redirect chains.
+- [`structured-data-audit`](/developers/skills/structured-data-audit): JSON-LD and schema markup.
+- [`performance-audit`](/developers/skills/performance-audit): page speed.
+- [`launch-checklist`](/developers/skills/launch-checklist): a pre-launch pass that includes indexing checks.
+
+## Related rules and guides
+
+- [Crawlability rules](/rules/crawl)
+- [Core SEO rules](/rules/core)
+- [Content rules](/rules/content)
+- [URL rules](/rules/url)
+- [Social rules](/rules/social)
+- [Internationalization rules](/rules/i18n)
+- [Image rules](/rules/images)
+
+## Source on GitHub
+
+- [`skills/seo-audit`](https://github.com/squirrelscan/skills/tree/main/skills/seo-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/seo-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/seo-audit/SKILL.md)
