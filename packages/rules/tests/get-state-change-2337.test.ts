@@ -40,11 +40,17 @@ describe("findVerb", () => {
     expect(findVerb(["updates"])).toBeNull();
   });
 
-  test("unambiguous mode skips verbs that also name read-only actions", () => {
+  test("button text skips an ambiguous verb alone or before a read-only noun", () => {
     expect(findVerb(["update"], true)).toBeNull();
     expect(findVerb(["confirm"], true)).toBeNull();
     expect(findVerb(["check", "out"], true)).toBeNull();
+    expect(findVerb(["update", "results"], true)).toBeNull();
+    expect(findVerb(["save", "search"], true)).toBeNull();
+    expect(findVerb(["remove", "filter"], true)).toBeNull();
     expect(findVerb(["delete"], true)).toBe("delete");
+    expect(findVerb(["remove"], true)).toBe("remove");
+    expect(findVerb(["save", "changes"], true)).toBe("save");
+    expect(findVerb(["check", "out", "now"], true)).toBe("check out");
   });
 });
 
@@ -91,6 +97,23 @@ describe("state-changing verbs", () => {
         "get-state-change"
       )
     ).toBeDefined();
+  });
+
+  test("flags an ambiguous verb in button text that names what it changes", () => {
+    for (const [label, verb] of [
+      ["Save changes", "save"],
+      ["Confirm order", "confirm"],
+      ["Cancel subscription", "cancel"],
+    ]) {
+      const fail = named(
+        run(
+          `<form action="/account" method="get"><input name="plan"><button>${label}</button></form>`
+        ),
+        "get-state-change"
+      );
+      expect(fail?.items?.[0]?.meta?.reason).toBe("submit-text-verb");
+      expect(fail?.items?.[0]?.meta?.detail).toBe(verb);
+    }
   });
 
   test("a GET button's formaction path counts", () => {
@@ -152,6 +175,14 @@ describe("read-only forms", () => {
     }
   });
 
+  test("a Remove filter button on a GET facet form passes", () => {
+    expect(
+      run(
+        `<form action="/products" method="get"><input type="checkbox" name="color" value="red" checked><button>Remove filter</button></form>`
+      )
+    ).toEqual(PASS);
+  });
+
   test("a GET form whose Delete button posts passes", () => {
     expect(
       run(
@@ -185,6 +216,7 @@ describe("credential forms", () => {
     const warn = named(checks, "get-credential-form");
     expect(warn?.status).toBe("warn");
     expect(warn?.items?.[0]?.meta?.reason).toBe("credential-field");
+    expect(warn?.items?.[0]?.label).toContain("submits an email field by GET");
   });
 
   test("flags a username field", () => {

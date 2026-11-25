@@ -42,8 +42,9 @@ const STATE_VERBS = new Set([
 ]);
 
 /**
- * Verbs that also name read-only actions ("Update results", "Confirm filters", "Save search",
- * "Create report"): they count only in the action path, never in button text.
+ * Verbs that also name read-only actions ("Update results", "Confirm filters", "Save search"):
+ * in button text they count only when followed by a word that is not a read-only noun
+ * ("Save changes", "Confirm order", "Cancel subscription").
  */
 const AMBIGUOUS_VERBS = new Set([
   "create",
@@ -53,6 +54,21 @@ const AMBIGUOUS_VERBS = new Set([
   "check out",
   "cancel",
   "confirm",
+]);
+
+/** Verbs that act on a facet, not on data, when followed by a read-only noun ("Remove filter"). */
+const FACET_VERBS = new Set(["remove"]);
+
+/** Nouns after which a button verb names a read-only action on a search or filter view. */
+const READ_ONLY_NOUNS = new Set([
+  "results",
+  "filter",
+  "filters",
+  "search",
+  "view",
+  "list",
+  "selection",
+  "preview",
 ]);
 
 /** Two-word verbs, matched on adjacent tokens ("Sign out", "Log out"). */
@@ -103,14 +119,23 @@ function tokens(text: string): string[] {
     .filter((t) => t !== "");
 }
 
-/** The first state-changing verb among the tokens, or null. `unambiguous` skips {@link AMBIGUOUS_VERBS}. */
-export function findVerb(list: string[], unambiguous = false): string | null {
-  const keep = (verb: string) => !unambiguous || !AMBIGUOUS_VERBS.has(verb);
+/**
+ * The first state-changing verb among the tokens, or null. `buttonText` reads the tokens as a
+ * button's text: an ambiguous verb that stands alone, or one followed by a read-only noun, is
+ * skipped, and so is "remove" followed by a read-only noun.
+ */
+export function findVerb(list: string[], buttonText = false): string | null {
+  const keep = (verb: string, next: string | undefined): boolean => {
+    if (!buttonText) return true;
+    const readOnlyNext = next !== undefined && READ_ONLY_NOUNS.has(next);
+    if (AMBIGUOUS_VERBS.has(verb)) return next !== undefined && !readOnlyNext;
+    return !(FACET_VERBS.has(verb) && readOnlyNext);
+  };
   for (let i = 0; i < list.length; i++) {
     const t = list[i]!;
-    if (STATE_VERBS.has(t) && keep(t)) return t;
+    if (STATE_VERBS.has(t) && keep(t, list[i + 1])) return t;
     for (const [a, b] of STATE_PHRASES) {
-      if (t === a && list[i + 1] === b && keep(`${a} ${b}`)) {
+      if (t === a && list[i + 1] === b && keep(`${a} ${b}`, list[i + 2])) {
         return `${a} ${b}`;
       }
     }
@@ -320,7 +345,7 @@ export const getStateChangeRule: Rule = {
       if (cred !== null) {
         credential.push(
           item(
-            `${position} (${action}) submits a ${cred} field by GET, which puts it in the URL`,
+            `${position} (${action}) submits ${cred === "email" ? "an" : "a"} ${cred} field by GET, which puts it in the URL`,
             "credential-field",
             cred
           )
