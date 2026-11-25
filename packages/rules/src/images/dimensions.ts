@@ -15,6 +15,15 @@ export const dimensionsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "image-dimensions", outcome: "problem" },
+      {
+        name: "image-dimensions",
+        outcome: "clean",
+        clears: ["image-dimensions"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

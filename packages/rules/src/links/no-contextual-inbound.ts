@@ -368,6 +368,16 @@ export const noContextualInboundRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "no-contextual-inbound", outcome: "problem" },
+      {
+        name: "no-contextual-inbound",
+        outcome: "clean",
+        clears: ["no-contextual-inbound"],
+      },
+      { name: "no-contextual-inbound", outcome: "skipped" },
+    ],
     optionsSchema: z.object({
       minInboundLinks: z
         .number()

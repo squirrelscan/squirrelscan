@@ -17,6 +17,12 @@ export const srcsetRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "srcset", outcome: "problem" },
+      { name: "srcset", outcome: "clean", clears: ["srcset"] },
+      { name: "srcset", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

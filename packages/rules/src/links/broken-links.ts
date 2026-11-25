@@ -47,6 +47,24 @@ export const brokenLinksRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "broken-links", outcome: "problem" },
+      { name: "broken-links-sitewide", outcome: "problem" },
+      { name: "refused-links", outcome: "problem" },
+      { name: "rate-limited-links", outcome: "problem" },
+      {
+        name: "broken-links",
+        outcome: "clean",
+        clears: [
+          "broken-links",
+          "broken-links-sitewide",
+          "refused-links",
+          "rate-limited-links",
+        ],
+      },
+      { name: "broken-links", outcome: "skipped" },
+    ],
     // A link moves between the content check and the site-wide check as the pages that carry it change (#1772).
     // A finding stored under one name is judged by the other, so a link that only changed check is not
     // resolved (and reported fixed) under its old name: it continues under the new one.

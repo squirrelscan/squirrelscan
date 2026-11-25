@@ -30,6 +30,16 @@ The <img> provides fallback for:
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "picture-element", outcome: "problem" },
+      {
+        name: "picture-element",
+        outcome: "clean",
+        clears: ["picture-element"],
+      },
+      { name: "picture-element", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

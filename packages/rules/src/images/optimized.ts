@@ -49,6 +49,27 @@ export const optimizedRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "legacy-image-formats", outcome: "problem" },
+      { name: "image-optimization-needed", outcome: "problem" },
+      {
+        name: "image-cdn",
+        outcome: "clean",
+        clears: ["legacy-image-formats", "image-optimization-needed"],
+      },
+      {
+        name: "modern-image-formats",
+        outcome: "clean",
+        clears: ["legacy-image-formats", "image-optimization-needed"],
+      },
+      {
+        name: "picture-elements",
+        outcome: "clean",
+        clears: ["legacy-image-formats", "image-optimization-needed"],
+      },
+      { name: "image-optimization", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

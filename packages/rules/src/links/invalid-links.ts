@@ -23,6 +23,11 @@ export const invalidLinksRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "invalid-links", outcome: "problem" },
+      { name: "invalid-links", outcome: "clean", clears: ["invalid-links"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -157,6 +157,16 @@ export const responsiveSizeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "images-possibly-oversized", outcome: "problem" },
+      {
+        name: "responsive-size",
+        outcome: "clean",
+        clears: ["images-possibly-oversized"],
+      },
+      { name: "responsive-size", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

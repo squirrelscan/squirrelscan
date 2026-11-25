@@ -15,6 +15,12 @@ export const externalLinksRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2347).
+    // Informational: the only non-pass check is the info note that the page has no external links.
+    checks: [
+      { name: "external-links", outcome: "problem" },
+      { name: "external-links", outcome: "clean", clears: ["external-links"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

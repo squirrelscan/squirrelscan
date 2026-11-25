@@ -401,6 +401,32 @@ export const brokenExternalLinksRule: Rule = {
     // links that may be broken warn, and links that cannot be verified inform.
     severity: "error",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "broken-external-links", outcome: "problem" },
+      { name: "broken-external-links-sitewide", outcome: "problem" },
+      { name: "possibly-broken-external-links", outcome: "problem" },
+      { name: "awaiting-confirmation-external-links", outcome: "problem" },
+      { name: "waf-blocked-external-links", outcome: "problem" },
+      { name: "rate-limited-external-links", outcome: "problem" },
+      { name: "not-requested-external-links", outcome: "problem" },
+      { name: "refused-external-links", outcome: "problem" },
+      {
+        name: "broken-external-links",
+        outcome: "clean",
+        clears: [
+          "broken-external-links",
+          "broken-external-links-sitewide",
+          "possibly-broken-external-links",
+          "awaiting-confirmation-external-links",
+          "waf-blocked-external-links",
+          "rate-limited-external-links",
+          "not-requested-external-links",
+          "refused-external-links",
+        ],
+      },
+      { name: "broken-external-links", outcome: "skipped" },
+    ],
     // A link moves between the content check and the site-wide check (#1772): see links/broken-links.
     supersededChecks: {
       "broken-external-links": ["broken-external-links-sitewide"],

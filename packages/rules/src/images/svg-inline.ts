@@ -15,6 +15,11 @@ export const svgInlineRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "svg-inline", outcome: "problem" },
+      { name: "svg-inline", outcome: "clean", clears: ["svg-inline"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

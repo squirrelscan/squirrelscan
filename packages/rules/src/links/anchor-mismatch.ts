@@ -1000,6 +1000,16 @@ export const anchorMismatchRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "anchor-mismatch", outcome: "problem" },
+      {
+        name: "anchor-mismatch",
+        outcome: "clean",
+        clears: ["anchor-mismatch"],
+      },
+      { name: "anchor-mismatch", outcome: "skipped" },
+    ],
     optionsSchema: z.object({}),
   },
 

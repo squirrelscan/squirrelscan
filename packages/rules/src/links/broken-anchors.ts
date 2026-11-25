@@ -102,6 +102,17 @@ export const brokenAnchorsRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "broken-anchors", outcome: "problem" },
+      { name: "unconfirmed-anchors", outcome: "problem" },
+      {
+        name: "broken-anchors",
+        outcome: "clean",
+        clears: ["broken-anchors", "unconfirmed-anchors"],
+      },
+      { name: "broken-anchors", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

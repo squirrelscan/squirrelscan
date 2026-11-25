@@ -123,6 +123,12 @@ export const orphanPagesRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "orphan-pages", outcome: "problem" },
+      { name: "orphan-pages", outcome: "clean", clears: ["orphan-pages"] },
+      { name: "orphan-pages", outcome: "skipped" },
+    ],
     optionsSchema: z.object({
       minInboundLinks: z
         .number()

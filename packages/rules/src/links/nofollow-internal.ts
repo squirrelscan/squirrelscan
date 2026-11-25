@@ -25,6 +25,15 @@ export const nofollowInternalRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "nofollow-internal", outcome: "problem" },
+      {
+        name: "nofollow-internal",
+        outcome: "clean",
+        clears: ["nofollow-internal"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

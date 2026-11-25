@@ -105,6 +105,16 @@ export const weakInternalLinksRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "weak-internal-links", outcome: "problem" },
+      {
+        name: "weak-internal-links",
+        outcome: "clean",
+        clears: ["weak-internal-links"],
+      },
+      { name: "weak-internal-links", outcome: "skipped" },
+    ],
     optionsSchema: z.object({
       excludePatterns: z
         .array(z.string())

@@ -17,6 +17,16 @@ export const filenameQualityRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "filename-quality", outcome: "problem" },
+      {
+        name: "filename-quality",
+        outcome: "clean",
+        clears: ["filename-quality"],
+      },
+      { name: "filename-quality", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

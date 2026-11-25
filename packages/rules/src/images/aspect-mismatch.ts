@@ -83,6 +83,15 @@ export const aspectMismatchRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "aspect-mismatch", outcome: "problem" },
+      {
+        name: "aspect-mismatch",
+        outcome: "clean",
+        clears: ["aspect-mismatch"],
+      },
+    ],
     optionsSchema,
   },
 

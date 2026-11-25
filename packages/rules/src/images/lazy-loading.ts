@@ -17,6 +17,17 @@ export const lazyLoadingRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "lazy-loading", outcome: "problem" },
+      { name: "lazy-loading-missing", outcome: "problem" },
+      {
+        name: "lazy-loading",
+        outcome: "clean",
+        clears: ["lazy-loading", "lazy-loading-missing"],
+      },
+      { name: "lazy-loading", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

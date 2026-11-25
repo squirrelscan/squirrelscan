@@ -162,6 +162,25 @@ export const telMailtoRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "tel-links", outcome: "problem" },
+      { name: "mailto-links", outcome: "problem" },
+      { name: "tel-mismatch", outcome: "problem" },
+      { name: "tel-trunk-prefix", outcome: "problem" },
+      { name: "mailto-mismatch", outcome: "problem" },
+      {
+        name: "tel-links",
+        outcome: "clean",
+        clears: ["tel-links", "tel-mismatch", "tel-trunk-prefix"],
+      },
+      {
+        name: "mailto-links",
+        outcome: "clean",
+        clears: ["mailto-links", "mailto-mismatch"],
+      },
+      { name: "tel-mailto", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
