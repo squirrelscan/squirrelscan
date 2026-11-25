@@ -4,6 +4,7 @@
 // Every sample sentence here was written for this test.
 
 import { describe, expect, test } from "bun:test";
+import { francAll } from "franc";
 
 import { parseHTML } from "../src/dom";
 import {
@@ -133,6 +134,42 @@ describe("franc detector", () => {
   });
 });
 
+describe("franc detector confidence and language list", () => {
+  test("confidence is the margin over the runner-up: 1 - second-best score", () => {
+    const only = [...FRANC_WEB_LANGUAGES];
+    for (const text of [EN, DE, FR, ES]) {
+      const ranked = francAll(text, { minLength: 1, only });
+      const result = createFrancDetector({ only }).detectLanguage(text);
+      expect(result?.confidence).toBe(1 - ranked[1][1]);
+    }
+  });
+
+  test("a near tie between two listed languages scores lower than a clear winner", () => {
+    const clear = createFrancDetector({ only: ["eng", "deu"] }).detectLanguage(
+      DE
+    );
+    // Danish and Norwegian Bokmal share most trigrams.
+    const close = createFrancDetector({ only: ["dan", "nob"] }).detectLanguage(
+      "Egernet gemte tolv agern under det gamle egetræ, før den første sne faldt i dalen om vinteren."
+    );
+    expect(clear?.lang).toBe("de");
+    expect(close).not.toBeNull();
+    expect(close!.confidence).toBeLessThan(clear!.confidence);
+  });
+
+  test("the only list confines the answer, and a single-language list scores 1", () => {
+    const deNl = createFrancDetector({ only: ["deu", "nld"] });
+    expect(["de", "nl"]).toContain(deNl.detectLanguage(EN)!.lang);
+    expect(createFrancDetector({ only: ["fra"] }).detectLanguage(EN)).toEqual({
+      lang: "fr",
+      confidence: 1,
+    });
+    expect(createFrancDetector({ only: ["fra"], id: "custom" }).id).toBe(
+      "custom"
+    );
+  });
+});
+
 describe("normalizeLanguageTag", () => {
   test("folds region subtags, case and deprecated aliases", () => {
     expect(normalizeLanguageTag("en-US")).toBe("en");
@@ -199,6 +236,67 @@ describe("createContentLanguageView", () => {
     );
     expect(view.page()).toBeNull();
     expect(view.blocks()[0].language).toBeNull();
+  });
+
+  test("page text skips header, nav, footer and aside chrome", () => {
+    const inner = fixed(null);
+    createContentLanguageView(
+      page(
+        `<header>HEADERWORD</header><nav>NAVWORD</nav><main><p>KEPTWORD</p><aside>ASIDEWORD</aside></main><footer>FOOTERWORD</footer>`
+      ),
+      inner
+    ).page();
+    expect(inner.calls).toHaveLength(1);
+    expect(inner.calls[0]).toContain("KEPTWORD");
+    for (const word of ["HEADERWORD", "NAVWORD", "ASIDEWORD", "FOOTERWORD"])
+      expect(inner.calls[0]).not.toContain(word);
+  });
+
+  test("pre, code, kbd, samp and aria-hidden text is excluded from page and blocks", () => {
+    const inner = fixed({ lang: "xx", confidence: 1 });
+    const view = createContentLanguageView(
+      page(
+        `<main><p>KEPTWORD <code>CODEWORD</code> <kbd>KBDWORD</kbd> <samp>SAMPWORD</samp></p><pre>PREWORD</pre><p aria-hidden="true">HIDDENWORD</p><div aria-hidden="true"><p>HIDDENBLOCK</p></div></main>`
+      ),
+      inner
+    );
+    view.page();
+    const blocks = view.blocks();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].tag).toBe("p");
+    const all = inner.calls.join(" | ");
+    expect(all).toContain("KEPTWORD");
+    for (const word of [
+      "CODEWORD",
+      "KBDWORD",
+      "SAMPWORD",
+      "PREWORD",
+      "HIDDENWORD",
+      "HIDDENBLOCK",
+    ])
+      expect(all).not.toContain(word);
+  });
+
+  test("neighbouring blocks are separated so their words do not glue together", () => {
+    const inner = fixed(null);
+    createContentLanguageView(
+      page(
+        `<main><div>alpha</div><div>beta</div><p>gamma</p><p>delta<br>epsilon</p><ul><li>zeta</li><li>eta</li></ul><table><tr><td>theta</td><td>iota</td></tr></table></main>`
+      ),
+      inner
+    ).page();
+    const words = inner.calls[0].split(/\s+/).filter(Boolean);
+    expect(words).toEqual([
+      "alpha",
+      "beta",
+      "gamma",
+      "delta",
+      "epsilon",
+      "zeta",
+      "eta",
+      "theta",
+      "iota",
+    ]);
   });
 
   test("without a DOM it reads stored text content and reports no blocks", () => {

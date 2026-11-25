@@ -8,7 +8,7 @@
 // measurement tool, not part of the product.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname, join, relative } from "node:path";
 
 import { parseHTML } from "../dom";
 import {
@@ -459,7 +459,9 @@ export function* loadLanguageCorpus(
       continue;
     }
     if (!TEXT_EXTENSIONS.has(ext) && !HTML_EXTENSIONS.has(ext)) continue;
-    const rel = path.slice(dir.length).replace(/^[\\/]+/, "");
+    // relative(), not path.slice(dir.length): join() in walkFiles normalises the
+    // path, so "./corpus" or "c/" would otherwise mis-slice the label.
+    const rel = relative(dir, path);
     const parts = rel.split(/[\\/]/);
     if (parts.length < 2) continue; // a file at the top level has no label directory
     try {

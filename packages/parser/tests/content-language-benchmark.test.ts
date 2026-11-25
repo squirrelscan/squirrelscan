@@ -17,6 +17,8 @@ import { join, resolve } from "node:path";
 import type { LanguageDetector } from "../src/language";
 
 import {
+  loadLanguageCorpus,
+  MIN_BUCKET_SUPPORT,
   runLanguageBenchmark,
   type BenchmarkSample,
 } from "../src/language/benchmark";
@@ -142,6 +144,57 @@ describe("runLanguageBenchmark floor suggestion", () => {
       accuracy: round4(40 / 110),
     });
   });
+});
+
+describe("runLanguageBenchmark minimum support", () => {
+  const always: LanguageDetector = {
+    id: "always-en",
+    detectLanguage: () => ({ lang: "en", confidence: 0.9 }),
+  };
+  const samples = (n: number): BenchmarkSample[] =>
+    Array.from({ length: n }, (_, i) => ({
+      lang: "en",
+      text: `sample ${i}`.padEnd(100, "x"),
+    }));
+
+  test(`suggests no floor below ${MIN_BUCKET_SUPPORT} answers and one at it`, () => {
+    const [under] = runLanguageBenchmark(samples(MIN_BUCKET_SUPPORT - 1), [
+      always,
+    ]).detectors;
+    expect(under.suggestedFloor.minChars).toBeNull();
+    expect(under.suggestedFloor.minConfidence).toBeNull();
+    const [at] = runLanguageBenchmark(samples(MIN_BUCKET_SUPPORT), [
+      always,
+    ]).detectors;
+    expect(at.suggestedFloor.minConfidence).toBe(0.9);
+    expect(at.suggestedFloor.precisionAtFloor).toBe(1);
+  });
+});
+
+describe("loadLanguageCorpus labels", () => {
+  // join() inside the walker normalises "./c" to "c", so a label sliced off by
+  // the directory argument's length lost its first characters.
+  test.each([["./corpus"], ["./c"], ["./c/"], ["c"]])(
+    "labels files by their top-level directory under %s",
+    (arg) => {
+      const root = mkdtempSync(join(tmpdir(), "content-language-labels-"));
+      const corpus = join(root, arg.replace(/^\.\//, "").replace(/\/$/, ""));
+      mkdirSync(join(corpus, "fra"), { recursive: true });
+      mkdirSync(join(corpus, "en", "nested"), { recursive: true });
+      writeFileSync(join(corpus, "fra", "a.txt"), FR);
+      writeFileSync(join(corpus, "en", "nested", "b.txt"), EN);
+      writeFileSync(join(corpus, "top.txt"), EN);
+      const cwd = process.cwd();
+      try {
+        process.chdir(root);
+        const labels = [...loadLanguageCorpus(arg)].map((s) => s.lang);
+        expect(labels).toEqual(["en", "fra"]);
+      } finally {
+        process.chdir(cwd);
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
 });
 
 const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
