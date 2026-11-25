@@ -16,6 +16,7 @@ import {
   BASE,
   json,
   robots,
+  html,
   ruleCtx,
   stubFetch,
   type Route,
@@ -73,6 +74,39 @@ describe("candidate selection", () => {
     expect(nextDataPath("/blog/post/", BUILD)).toBe(
       `/_next/data/${BUILD}/blog/post.json`
     );
+  });
+
+  test("an i18n page's data file sits under its locale", () => {
+    // Default locale: the page URL has no prefix, the data file has one.
+    expect(nextDataPath("/about", BUILD, "en")).toBe(
+      `/_next/data/${BUILD}/en/about.json`
+    );
+    expect(nextDataPath("/", BUILD, "en")).toBe(`/_next/data/${BUILD}/en.json`);
+    // Other locales: the URL prefix is not doubled.
+    expect(nextDataPath("/fr/about/", BUILD, "fr")).toBe(
+      `/_next/data/${BUILD}/fr/about.json`
+    );
+    expect(nextDataPath("/fr", BUILD, "fr")).toBe(
+      `/_next/data/${BUILD}/fr.json`
+    );
+    // A path that only starts with the same letters keeps them.
+    expect(nextDataPath("/french", BUILD, "fr")).toBe(
+      `/_next/data/${BUILD}/fr/french.json`
+    );
+  });
+
+  test("the locale in __NEXT_DATA__ is used, and an unsafe one is not requested", () => {
+    const sel = selectNextDataCandidates(
+      ctxFor([
+        nextPage("/fr/a", { gssp: true, locale: "fr" }),
+        nextPage("/b", { gssp: true, locale: "en-US" }),
+        nextPage("/c", { gssp: true, locale: "../x" }),
+      ])
+    );
+    expect(sel.candidates.map((c) => c.url)).toEqual([
+      `${BASE}/_next/data/${BUILD}/fr/a.json`,
+      `${BASE}/_next/data/${BUILD}/en-US/b.json`,
+    ]);
   });
 
   test("only server-rendered pages with a safe buildId are requested", () => {
@@ -210,9 +244,41 @@ describe("run", () => {
     expect(checks[0]?.status).toBe("pass");
   });
 
-  test("a 404 (stale buildId) is answered and clean", async () => {
-    const { checks } = await run({}, [nextPage("/a")]);
-    expect(checks[0]?.status).toBe("pass");
+  test("a 404 (stale buildId) is not checked", async () => {
+    const { checks, sent } = await run({}, [nextPage("/a")]);
+    expect(sent).toHaveLength(1);
+    expect(checks).toHaveLength(1);
+    expect(checks[0]?.status).toBe("skipped");
+    expect(checks[0]?.value).toBe("not-checked");
+  });
+
+  test("a redirect or an HTML page is not checked", async () => {
+    for (const reply of [
+      () =>
+        new Response(null, {
+          status: 307,
+          headers: { location: `${BASE}/login` },
+        }),
+      () => html("<!doctype html><title>Home</title>", 200),
+    ]) {
+      const { checks } = await run({ [dataUrl("/a")]: reply }, [
+        nextPage("/a"),
+      ]);
+      expect(checks).toHaveLength(1);
+      expect(checks[0]?.status).toBe("skipped");
+      expect(checks[0]?.value).toBe("not-checked");
+      restore?.();
+      restore = undefined;
+    }
+  });
+
+  test("one JSON file and one 404 is not a pass", async () => {
+    const { checks } = await run(
+      { [dataUrl("/a")]: () => json({ pageProps: { title: "x" } }) },
+      [nextPage("/a"), nextPage("/b")]
+    );
+    expect(checks.some((c) => c.status === "pass")).toBe(false);
+    expect(checks[0]?.value).toBe("not-checked");
   });
 
   test("a 5xx leaves the run not checked", async () => {

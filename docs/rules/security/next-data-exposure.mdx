@@ -14,6 +14,7 @@ This is a probing rule. It runs only when [probing intensity](/configuration/sec
 ### Which data files are requested
 
 - The `buildId` is read from the crawled page's own `__NEXT_DATA__` script, and only for a page that script marks as server-rendered (`gssp` or `gsp`). An auto-exported page has no data file. No path is guessed.
+- On a site with internationalized routing, the `locale` in `__NEXT_DATA__` is part of the path, as Next.js builds it: `/_next/data/<buildId>/<locale>/<path>.json`. A locale that is not made of letters, digits and `-` means the page is not requested.
 - The page must have the same origin as the audited URL. A `buildId` that is not made of letters, digits, `_` and `-` is ignored.
 - Below `aggressive`, a path that `robots.txt` disallows is skipped.
 - At most ten pages are requested.
@@ -28,8 +29,8 @@ Only `pageProps` is judged, with the same field walker and secret patterns as [s
 
 - **Fail, `next-data-sensitive-fields`**: a credential in `pageProps`: a password hash by its format, a server-side key the [leaked-secrets](/rules/security/leaked-secrets) patterns recognise, or a password, secret, token, API key, social security number, card number or CVV under a field named for it. Message: `<data file URL> carries <kinds> in pageProps, readable without credentials`.
 - **Warn, `next-data-bulk-pii`**: personal data for five or more records (emails, phone numbers, addresses or dates of birth). Message: `<data file URL> carries personal data for many records in pageProps, readable without credentials: <summary>`.
-- **Pass, `next-data-exposure`**: every requested data file was verified and none carried either.
-- **Skipped**: probing is passive (`probing-passive`), no crawled page is a server-rendered Next.js page (`no-next-data`), the probe budget ran out (`probe-budget`), or some files were not verified (`probe-incomplete`): a `429`, a bot challenge, a `5xx`, a timeout, or an answer over 1 MB. A run cut short is never a pass.
+- **Pass, `next-data-exposure`**: every requested data file answered with JSON `pageProps` and none carried either.
+- **Skipped**: probing is passive (`probing-passive`), no crawled page is a server-rendered Next.js page (`no-next-data`), the probe budget ran out (`probe-budget`), or some files were not verified (`probe-incomplete`): a `429`, a bot challenge, a `5xx`, a timeout, an answer over 1 MB, or an answer that is not JSON `pageProps` (a `404`, for example after a redeploy changed the `buildId`, a redirect or an HTML page). A run cut short is never a pass.
 
 Values are never reported. Each item names the data file, the field path under `pageProps`, the kind of value and its length.
 
@@ -38,7 +39,6 @@ Values are never reported. Each item names the data file, the field path under `
 - Ordinary public props such as titles, slugs, excerpts and a single contact email.
 - Placeholders, empty values and public-by-design keys, as in the JSON rule.
 - Anything outside `pageProps`.
-- A `404` (for example a stale `buildId`), a redirect, an HTML page or a network error.
 
 ### Limits
 

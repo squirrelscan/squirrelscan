@@ -9,9 +9,10 @@
 // (`ctx.probe`) and sends nothing on a passive run.
 //
 // What may be requested:
-//  - The buildId comes from the crawled page's own `__NEXT_DATA__` script, and
-//    only for a page that script marks as server-rendered (`gssp` or `gsp`),
-//    since an auto-exported page has no data file. No path is guessed.
+//  - The buildId (and the locale, on an i18n site) comes from the crawled
+//    page's own `__NEXT_DATA__` script, and only for a page that script marks
+//    as server-rendered (`gssp` or `gsp`), since an auto-exported page has no
+//    data file. No path is guessed.
 //  - Same origin as the audited base URL, checked again here.
 //  - Not disallowed by robots.txt, unless the run is aggressive.
 //  - At most MAX_NEXT_DATA_PAGES pages per run, one GET each, no cookies, no
@@ -23,7 +24,9 @@
 // bulk personal data a warn. Values never reach the report.
 //
 // Not checked is never clean (#1920): a throttle, bot challenge, 5xx, timeout,
-// an answer over the read cap or an exhausted budget leaves the run not checked.
+// an answer over the read cap, an exhausted budget, or a reply that is not a
+// JSON data file (a 404 after a redeploy changed the buildId, a redirect, an
+// HTML page) leaves the run not checked. A pass needs every file read as JSON.
 
 import {
   type CheckItem,
@@ -60,6 +63,8 @@ const MAX_BUILD_ID_CHARS = 64;
 /** Largest `__NEXT_DATA__` script parsed. */
 const MAX_NEXT_DATA_CHARS = 2 * 1024 * 1024;
 const BUILD_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** BCP 47 shaped: letters, digits and `-`, short enough for any real tag. */
+const LOCALE_RE = /^[A-Za-z0-9-]{1,35}$/;
 
 export interface NextDataCandidate {
   /** The crawled page the data file belongs to. */
@@ -67,6 +72,12 @@ export interface NextDataCandidate {
   /** The `_next/data` URL requested. */
   url: string;
   buildId: string;
+}
+
+export interface NextDataInfo {
+  buildId: string;
+  /** Active locale on an i18n site, or null. Part of the data file path. */
+  locale: string | null;
 }
 
 export interface NextDataSelection {
@@ -79,8 +90,10 @@ export interface NextDataSelection {
 
 type SitePage = NonNullable<RuleContext["site"]>["pages"][number];
 
-/** buildId of a page whose props are server-rendered, or null. */
-export function readServerRenderedBuildId(page: SitePage): string | null {
+/** buildId and locale of a page whose props are server-rendered, or null. */
+export function readServerRenderedNextData(
+  page: SitePage
+): NextDataInfo | null {
   const doc = page.parsed?.document;
   if (!doc) return null;
   let el: Element | null;
@@ -108,12 +121,38 @@ export function readServerRenderedBuildId(page: SitePage): string | null {
     return null;
   // Auto-exported pages have no data file to request.
   if (rec.gssp !== true && rec.gsp !== true) return null;
-  return id;
+  // On an i18n site the data file sits under the locale, so a page whose
+  // locale cannot be used safely is not requested rather than guessed.
+  let locale: string | null = null;
+  if (rec.locale !== undefined && rec.locale !== null) {
+    if (typeof rec.locale !== "string" || !LOCALE_RE.test(rec.locale))
+      return null;
+    locale = rec.locale;
+  }
+  return { buildId: id, locale };
 }
 
-/** `/` becomes `/index.json`, `/blog/post/` becomes `/blog/post.json`. */
-export function nextDataPath(pathname: string, buildId: string): string {
-  const trimmed = pathname.replace(/\/+$/, "");
+/**
+ * The data file path, as Next.js builds it: `/` becomes `/index.json`,
+ * `/blog/post/` becomes `/blog/post.json`. With a locale, the locale prefix of
+ * the page URL (absent for the default locale) is replaced by the locale
+ * itself: `/fr/about` and `/about` with locale `fr` become `/fr/about.json`,
+ * and `/` with locale `en` becomes `/en.json`.
+ */
+export function nextDataPath(
+  pathname: string,
+  buildId: string,
+  locale: string | null = null
+): string {
+  let trimmed = pathname.replace(/\/+$/, "");
+  if (locale !== null) {
+    const prefix = `/${locale}`.toLowerCase();
+    const lower = trimmed.toLowerCase();
+    if (lower === prefix) trimmed = "";
+    else if (lower.startsWith(`${prefix}/`))
+      trimmed = trimmed.slice(prefix.length);
+    trimmed = `/${locale}${trimmed}`;
+  }
   return `/_next/data/${buildId}${trimmed === "" ? "/index" : trimmed}.json`;
 }
 
@@ -153,10 +192,11 @@ export function selectNextDataCandidates(
     }
     if (u.origin !== siteOrigin || u.username || u.password) continue;
     if (isNextInternalPath(u.pathname)) continue;
-    const buildId = readServerRenderedBuildId(page);
-    if (buildId === null) continue;
+    const next = readServerRenderedNextData(page);
+    if (next === null) continue;
+    const { buildId } = next;
     selection.nextPages++;
-    const url = `${u.origin}${nextDataPath(u.pathname, buildId)}`;
+    const url = `${u.origin}${nextDataPath(u.pathname, buildId, next.locale)}`;
     if (seen.has(url)) continue;
     seen.add(url);
     if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
@@ -274,6 +314,7 @@ export const nextDataExposureRule: Rule = {
     let serverErrors = 0;
     let truncated = 0;
     let jsonAnswers = 0;
+    let notJson = 0;
     let budgetStopped = false;
     let pushback = false;
     let flagged = 0;
@@ -308,8 +349,13 @@ export const nextDataExposureRule: Rule = {
         truncated++;
         continue;
       }
+      // A 404 (stale buildId), a redirect or an HTML page says nothing about
+      // the props, so the file is not verified.
       const scan = scanNextDataResponse(response, candidate.url);
-      if (!scan) continue;
+      if (!scan) {
+        notJson++;
+        continue;
+      }
       jsonAnswers++;
       const meta = {
         endpoint: candidate.url,
@@ -372,12 +418,18 @@ export const nextDataExposureRule: Rule = {
 
     const total = selection.candidates.length;
     const verified =
-      probed - errored - serverErrors - truncated - (pushback ? 1 : 0);
+      probed -
+      errored -
+      serverErrors -
+      truncated -
+      notJson -
+      (pushback ? 1 : 0);
     const unverified = total - verified;
     const runDetails = {
       ...details,
       probed,
       jsonAnswers,
+      notJson,
       errored,
       serverErrors,
       truncated,
@@ -406,12 +458,17 @@ export const nextDataExposureRule: Rule = {
         );
       if (truncated > 0)
         why.push(`${truncated} data file(s) were too large to read in full`);
+      if (notJson > 0)
+        why.push(
+          `${notJson} data file(s) did not answer with JSON pageProps (a 404, a redirect or an HTML page, for example after a redeploy changed the buildId)`
+        );
       const onlyBudget =
         budgetStopped &&
         !pushback &&
         errored === 0 &&
         serverErrors === 0 &&
-        truncated === 0;
+        truncated === 0 &&
+        notJson === 0;
       checks.push({
         name: CHECK_CLEAN,
         status: "skipped",
