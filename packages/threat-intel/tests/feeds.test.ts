@@ -175,7 +175,7 @@ describe("refreshFeeds + lookupInSnapshot", () => {
   });
 });
 
-describe("refreshFeeds — failed pulls", () => {
+describe("refreshFeeds, failed pulls", () => {
   const failing: IntelTransport = () =>
     Promise.resolve({
       ok: false,
