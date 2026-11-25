@@ -25,6 +25,7 @@ beforeAll(() => {
       const path = new URL(req.url).pathname;
       hits.push(path);
       if (path === "/live.js.map") return new Response(MAP_BODY);
+      if (path === "/guarded.js.map") return new Response(`)]}'\n${MAP_BODY}`);
       if (path === "/spa.js.map")
         return new Response("<!doctype html><html></html>", {
           headers: { "content-type": "text/html" },
@@ -75,6 +76,14 @@ describe("perf/source-maps: reachability probe (#2333)", () => {
     expect(ids(checks)).toEqual([]);
     expect(checks.map((c) => c.name)).toEqual(["source-maps"]);
     expect(checks[0]?.status).toBe("pass");
+    // The engine reads this to keep a probed pass out of cache replay.
+    expect(checks[0]?.details?.unreachable).toBe(1);
+  });
+
+  test("a map behind the spec's )]}' guard line is still a map", async () => {
+    const checks = await run(["/guarded.js.map"], "active");
+    expect(ids(checks)).toEqual([`${origin}/guarded.js.map`]);
+    expect(checks[0]?.details?.confirmed).toBe(1);
   });
 
   test("a 200 that is not a map (single-page app fallback) is not flagged", async () => {

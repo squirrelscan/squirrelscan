@@ -225,8 +225,16 @@ const probeCache = new WeakMap<
   { reach: Map<string, Promise<MapReach>>; sent: number }
 >();
 
+// The source map spec lets a map open with a `)]}'` line (an XSSI guard) that
+// a reader skips, so a guarded map is still a map.
+const XSSI_GUARD = ")]}'";
+
 function looksLikeMap(bytes: Uint8Array): boolean {
-  const head = new TextDecoder().decode(bytes).trimStart();
+  let head = new TextDecoder().decode(bytes).trimStart();
+  if (head.startsWith(XSSI_GUARD)) {
+    const eol = head.indexOf("\n");
+    head = eol === -1 ? "" : head.slice(eol + 1).trimStart();
+  }
   return head.startsWith("{");
 }
 
@@ -579,6 +587,9 @@ function finish(
         unreachable > 0
           ? `${unreachable} referenced source map(s) not reachable`
           : "No exposed source maps detected",
+      // The engine reads this to tell a probed pass from a page with no map,
+      // because only the first depends on a live answer (rule-cache.ts).
+      ...(unreachable > 0 ? { details: { unreachable } } : {}),
     });
   }
 

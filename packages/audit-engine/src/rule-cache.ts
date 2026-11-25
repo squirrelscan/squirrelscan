@@ -286,7 +286,6 @@ export interface PageRuleCacheEntry {
  */
 export type RuleCacheDisabledReason =
   | "threat-intel-enabled"
-  | "active-probing"
   | "plugin-rules"
   | "unhashable-run-context";
 
@@ -461,6 +460,14 @@ export interface RunContextInput {
    * answer.
    */
   readonly timeZone: string;
+  /**
+   * True when the probe level lets a page rule send a request (`active` or
+   * higher). `perf/source-maps` then drops a referenced map that answers 404,
+   * so an entry written by a probing run must never replay into one that does
+   * not probe, or the reverse. Hashed only when true, so a run that does not
+   * probe keeps the key it had before this field existed.
+   */
+  readonly probing?: boolean;
 }
 
 /**
@@ -496,6 +503,7 @@ export async function computeRunContextHash(
       input.utcYear,
       input.utcMonth,
       input.timeZone,
+      ...(input.probing ? ["probing"] : []),
     ]);
     // A cache that quietly stops hitting looks exactly like a cache that is
     // working, so the one question worth answering cheaply is "which ingredient
@@ -521,6 +529,7 @@ export async function computeRunContextHash(
         ["utcYear", input.utcYear],
         ["utcMonth", input.utcMonth],
         ["timeZone", input.timeZone],
+        ["probing", input.probing === true],
       ];
       for (const [name, value] of parts) {
         const digest = (await sha256Hex(canonicalJson(value))).slice(0, 16);
@@ -862,6 +871,50 @@ export function withoutStoringAfterIgnoreTimeout(
     putFresh(key, page, entry) {
       if (timedOut() > 0) return;
       cache.putFresh(key, page, entry);
+    },
+  };
+}
+
+/** The page rule that confirms a referenced map with a live request (#2333). */
+export const PROBING_PAGE_RULE_ID = "perf/source-maps";
+
+/**
+ * True when a stored `perf/source-maps` verdict came from, or would change
+ * with, a live answer: it reports a map (status not pass) or passes only
+ * because every map it found answered 404 (`details.unreachable`). A page with
+ * no map reference passes without either, and its verdict needs no request.
+ */
+function dependsOnProbe(entry: PageRuleCacheEntry): boolean {
+  for (const [ruleId, checks] of entry.ruleResults) {
+    if (ruleId !== PROBING_PAGE_RULE_ID) continue;
+    for (const c of checks) {
+      if (c.status !== "pass") return true;
+      const details = c.details as { unreachable?: unknown } | undefined;
+      if (details?.unreachable !== undefined) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * For a probing run: a page whose stored `perf/source-maps` verdict depends on
+ * a live answer runs fresh instead of replaying, because a map that answered
+ * 404 last time may answer 200 now and the answer is not in the key. Every
+ * other page replays as usual, so probing costs the cache only the pages that
+ * reference a source map. A run that does not probe never reads these
+ * entries, because the run-context key hashes `probing`.
+ */
+export function withoutReplayingProbedVerdicts(
+  cache: StreamRuleCache
+): StreamRuleCache {
+  return {
+    ...cache,
+    async load(keys) {
+      const loaded = await cache.load(keys);
+      const kept = new Map<string, PageRuleCacheEntry>();
+      for (const [key, entry] of loaded)
+        if (!dependsOnProbe(entry)) kept.set(key, entry);
+      return kept;
     },
   };
 }

@@ -19,9 +19,15 @@
 import type { PreFetchedAssets } from "@squirrelscan/audit-engine";
 import type { Config } from "@squirrelscan/config";
 import type { ContentStoreAdapter } from "@squirrelscan/crawler";
+import type { RunnerScope } from "@squirrelscan/rules";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
-import { createRunner, fingerprintPage, RuleRunner } from "@squirrelscan/rules";
+import {
+  createProbeBudget,
+  createRunner,
+  fingerprintPage,
+  RuleRunner,
+} from "@squirrelscan/rules";
 import {
   generateSiteModel,
   writeCrawlToStorage,
@@ -186,12 +192,13 @@ async function runOnce(
     engineVersion?: string;
     rulesVersion?: string;
     config?: Config;
+    scope?: RunnerScope;
   } = {}
 ): Promise<RunOutcome> {
   return withStorage(dbPath, async (storage) => {
     const config = opts.config ?? getGoldenBaselineConfig();
     const results = await run(
-      runStreamingRules(storage, crawlId, config, emptyAssets(), undefined, {
+      runStreamingRules(storage, crawlId, config, emptyAssets(), opts.scope, {
         ...(opts.store
           ? {
               ruleCache: {
@@ -625,6 +632,59 @@ describe("per-page rule-result cache — replay parity", () => {
     });
     expect(second.replayedPages).toBe(0);
     expect(second.freshPages).toBe(first.freshPages);
+  }, 120_000);
+
+  // #2333: perf/source-maps confirms a referenced map with a live request when
+  // the probe level allows one. That must not turn the cache off for the audit:
+  // only a page whose stored verdict depends on a live answer runs again, and a
+  // probing run never shares entries with one that does not probe.
+  test("an active probe re-runs only pages that reference a source map", async () => {
+    const { dbPath, crawlId } = await buildCrawl("probing-2333");
+    // A `data:` map is reported without a request, so the probe sends nothing
+    // and the test needs no network, but the stored verdict still names a map.
+    const mapUrl = await withStorage(dbPath, async (storage) => {
+      const pages = await run(
+        storage.getPages(crawlId, { limit: 1, offset: 0 })
+      );
+      const page = pages[0]!;
+      const edited = {
+        ...page,
+        html: page.html!.replace(
+          "</head>",
+          "<script>//# sourceMappingURL=data:application/json;base64,e30=</script></head>"
+        ),
+      };
+      await run(storage.upsertPage(crawlId, edited));
+      return page.normalizedUrl;
+    });
+    expect(mapUrl).toBeTruthy();
+
+    const probing = (): RunnerScope => ({
+      probe: createProbeBudget({ level: "active", budgetMs: 10_000 }),
+    });
+    const cache = memoryCacheStore();
+    const first = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      scope: probing(),
+    });
+    expect(first.disabledReason).toBeUndefined();
+    expect(first.storedEntries).toBe(first.freshPages);
+
+    const second = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+      scope: probing(),
+    });
+    expect(second.disabledReason).toBeUndefined();
+    expect(second.freshPages).toBe(1);
+    expect(second.replayedPages).toBe(first.freshPages - 1);
+
+    // A run that does not probe keys apart, in both directions.
+    const passive = await runOnce(dbPath, crawlId, { store: cache.store });
+    expect(passive.replayedPages).toBe(0);
+    const passiveAgain = await runOnce(dbPath, crawlId, {
+      store: cache.store,
+    });
+    expect(passiveAgain.replayedPages).toBe(first.freshPages);
   }, 120_000);
 
   test("a new engine version invalidates every entry", async () => {
