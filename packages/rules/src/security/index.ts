@@ -23,6 +23,7 @@ import { leakedSecretsRule } from "./leaked-secrets";
 import { mixedContentRule } from "./mixed-content";
 import { newTabRule } from "./new-tab";
 import { openRedirectRule } from "./open-redirect";
+import { getStateChangeRule } from "./get-state-change";
 import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { queryErrorFuzzRule } from "./query-error-fuzz";
@@ -55,6 +56,7 @@ export const rules: Rule[] = [
   formCaptchaRule,
   newTabRule,
   passwordFormGetRule,
+  getStateChangeRule,
   leakedSecretsRule,
   tokenStorageRule,
   thirdPartyCookiesRule,
@@ -97,6 +99,7 @@ export {
   leakedSecretsRule,
   mixedContentRule,
   newTabRule,
+  getStateChangeRule,
   openRedirectRule,
   passwordFormGetRule,
   permissionsPolicyRule,

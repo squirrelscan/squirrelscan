@@ -31,7 +31,7 @@ function isSubmitControl(el: Element): boolean {
 }
 
 /** A control belongs to its `form` attribute's form, else to its nearest form ancestor. */
-function belongsTo(el: Element, form: Element): boolean {
+export function belongsTo(el: Element, form: Element): boolean {
   const owner = el.getAttribute("form");
   if (owner !== null) {
     const id = form.getAttribute("id");
@@ -79,7 +79,7 @@ export function submitMethods(form: Element, controls: Element[]): Method[] {
  * addEventListener are not visible in markup, so those forms are assessed on
  * their attributes.
  */
-function scriptSubmits(form: Element, controls: Element[]): boolean {
+export function scriptSubmits(form: Element, controls: Element[]): boolean {
   if (!hasNoUsableAction(form)) return false;
   return (
     form.hasAttribute("onsubmit") ||
@@ -88,7 +88,7 @@ function scriptSubmits(form: Element, controls: Element[]): boolean {
 }
 
 /** No `action`, an empty one, or a `javascript:` one (what React puts there for a form action function). */
-function hasNoUsableAction(form: Element): boolean {
+export function hasNoUsableAction(form: Element): boolean {
   const action = (form.getAttribute("action") ?? "").trim();
   return action === "" || /^javascript:/i.test(action);
 }
@@ -112,7 +112,7 @@ export function describeAction(form: Element): string {
  * the shared snippet helper prints every attribute whole, and the action is the one that can carry a
  * token. Same cap and whitespace handling as that helper.
  */
-function safeFormSnippet(form: Element, max: number): string {
+export function safeFormSnippet(form: Element, max: number): string {
   let out = "<form";
   for (const attr of form.attributes) {
     const value =
@@ -127,7 +127,7 @@ function safeFormSnippet(form: Element, max: number): string {
 }
 
 /** The form's selector, with an `action`-based one carrying the bare action, never its query or credentials. */
-function safeFormSelector(form: Element, index: number): string {
+export function safeFormSelector(form: Element, index: number): string {
   const selector = formSelector(form, index);
   const action = form.getAttribute("action");
   return action && selector === `form[action="${action}"]`

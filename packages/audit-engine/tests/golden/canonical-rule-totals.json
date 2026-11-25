@@ -318,6 +318,7 @@
   "security/exposed-files": 1,
   "security/form-captcha": 500,
   "security/form-https": 500,
+  "security/get-state-change": 500,
   "security/graphql-get-mutations": 1,
   "security/graphql-introspection": 1,
   "security/hsts": 1,

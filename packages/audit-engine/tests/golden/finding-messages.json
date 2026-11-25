@@ -3956,6 +3956,12 @@
    "form-https|info|No forms detected||"
   ]
  },
+ "security/get-state-change": {
+  "digest": "248415181239838",
+  "lines": [
+   "get-state-change|pass|No form that looks state-changing submits by GET||"
+  ]
+ },
  "security/graphql-get-mutations": {
   "digest": "128221944866545",
   "lines": [

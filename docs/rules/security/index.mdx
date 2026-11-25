@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (35 rules).
+HTTPS, headers, and safe link practices (36 rules).
 
 ## Run only these rules
 
@@ -66,6 +66,7 @@ These carry the highest severity and weight in the category.
 | [Exposed backup copies: page.php.bak, page.php~ and .page.php.swp](/rules/security/exposed-backups) | An editor or deploy script that leaves page.php.bak next to page.php publishes its source code. On an aggressive run squirrel requests backup and temporary siblings of the files it crawled and confirms each hit by its content. | error | Site-wide |
 | [Exposed Spring Boot Actuator: env, heapdump and other open endpoints](/rules/security/exposed-actuator) | An open /actuator/env or /actuator/heapdump hands anyone your secrets. squirrel sends read-only GET requests to the actuator paths and flags the ones that answer. | error | Site-wide |
 | [Form action over HTTP: the insecure form submission warning](/rules/security/form-https) | A form on an HTTPS page that posts to http:// sends the data in the clear and browsers interstitial it. squirrel checks action and formaction. | error | Per-page |
+| [Forms that change state sent by GET: delete, pay and logout in a URL](/rules/security/get-state-change) | A form that deletes, pays or logs out over GET can be triggered by prefetch, crawlers and link previews. squirrel flags GET forms that look state-changing. | warning | Per-page |
 | [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection) | Open introspection hands anyone a map of every type in your API. squirrel sends one read-only introspection query per endpoint and counts the types it gets back. | warning | Site-wide |
 | [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations) | A server that runs a mutation sent as a GET lets any site fire it with your visitors' cookies. squirrel sends a no-op mutation that cannot write and checks the answer. | error | Site-wide |
 | [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts) | A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age. | warning | Site-wide |
