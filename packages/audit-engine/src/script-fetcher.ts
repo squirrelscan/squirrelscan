@@ -550,9 +550,7 @@ function fetchSingleScript(
     // A refusal is an answer for the budget: only its latency strikes (see the
     // resource checker).
     const outcome =
-      result.error === ASSET_FETCH_REFUSED_ERROR
-        ? "ok"
-        : scriptOutcome(result);
+      result.error === ASSET_FETCH_REFUSED_ERROR ? "ok" : scriptOutcome(result);
     const elapsed = Date.now() - startedAt;
     options.budget?.record(url, elapsed, outcome);
     // A hit replays the body with its content type, content-encoding, caching
