@@ -2,7 +2,7 @@ import { parsePage } from "@squirrelscan/parser";
 // #1741: a rule that ran says so. Every page-scope rule is run on a clean page and must emit at least one
 // check. Six rules still return an empty list when the page has nothing in their scope (no password form, no
 // svg role="img", no WebSite schema, no input field, no button); `fixtures/rule-clean-run-empty.json`
-// lists them. It only shrinks: a rule that now emits a check must be removed from it, and a new rule that
+// maps each to a one-line reason. It only shrinks: a rule that now emits a check must be removed from it, and a new rule that
 // returns an empty list fails. A declared rule (`meta.checks`) must emit only names it declares.
 //
 // Site-scope rules need a crawl context, not a single page, and are not run here. Tracked as a follow-up.
@@ -47,7 +47,8 @@ describe("a rule that ran emits a check (#1741)", () => {
       })
       .map((r) => r.meta.id)
       .sort();
-    const baseline = new Set<string>(emptyBaseline);
+    const reasons: Record<string, string> = emptyBaseline;
+    const baseline = new Set<string>(Object.keys(reasons));
     expect(
       empty.filter((id) => !baseline.has(id)),
       "a rule that ran must emit a pass or info check"
@@ -56,7 +57,11 @@ describe("a rule that ran emits a check (#1741)", () => {
       [...baseline].filter((id) => !empty.includes(id)),
       "now emits a check: remove from fixtures/rule-clean-run-empty.json"
     ).toEqual([]);
-    expect([...emptyBaseline]).toEqual([...new Set(emptyBaseline)].sort());
+    expect(Object.keys(reasons)).toEqual(Object.keys(reasons).sort());
+    expect(
+      Object.entries(reasons).filter(([, why]) => why.trim() === ""),
+      "every baseline entry needs a one-line reason"
+    ).toEqual([]);
   });
 
   test("a declared rule emits only declared check names on a clean page", () => {

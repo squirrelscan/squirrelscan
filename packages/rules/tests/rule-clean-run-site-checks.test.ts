@@ -2,7 +2,7 @@ import { parsePage } from "@squirrelscan/parser";
 // #1741: a site-scope rule that ran says so, like the page rules in rule-clean-run-checks.test.ts. Every
 // site-scope rule is run over a small clean site and must emit at least one check. The rules that still
 // return an empty list there, or that need more than this fixture,
-// are listed in `fixtures/rule-clean-run-site-empty.json`. It only shrinks: a rule that now emits a check
+// are mapped to a one-line reason in `fixtures/rule-clean-run-site-empty.json`. It only shrinks: a rule that now emits a check
 // must be removed from it, and a new site rule that returns an empty list fails.
 import { describe, expect, test } from "bun:test";
 
@@ -84,7 +84,8 @@ describe("a site rule that ran emits a check (#1741)", () => {
       })
       .map((r) => r.meta.id)
       .sort();
-    const baseline = new Set<string>(emptyBaseline);
+    const reasons: Record<string, string> = emptyBaseline;
+    const baseline = new Set<string>(Object.keys(reasons));
     expect(
       unjudged.filter((id) => !baseline.has(id)),
       "a site rule that ran must emit a pass or info check"
@@ -93,7 +94,11 @@ describe("a site rule that ran emits a check (#1741)", () => {
       [...baseline].filter((id) => !unjudged.includes(id)),
       "now emits a check: remove from fixtures/rule-clean-run-site-empty.json"
     ).toEqual([]);
-    expect([...emptyBaseline]).toEqual([...new Set(emptyBaseline)].sort());
+    expect(Object.keys(reasons)).toEqual(Object.keys(reasons).sort());
+    expect(
+      Object.entries(reasons).filter(([, why]) => why.trim() === ""),
+      "every baseline entry needs a one-line reason"
+    ).toEqual([]);
   });
 
   test("a declared site rule emits only declared check names on a clean site", () => {

@@ -1,4 +1,4 @@
-[
-  "crawl/single-page-site",
-  "security/wordpress-exposure"
-]
+{
+  "crawl/single-page-site": "not applicable unless the site is one page; a check here would enter scoring",
+  "security/wordpress-exposure": "not applicable unless the site is WordPress; a check here would enter scoring"
+}
