@@ -22,6 +22,8 @@
 
 import { parseHTML } from "@squirrelscan/parser/dom";
 
+import { isRootPath } from "./root-path";
+
 // ---------------------------------------------------------------------------
 // Versioning. Any change to the feature list, the vocabulary, the hash or the
 // candidate rule MUST bump this: the dataset and the trained artifact both
@@ -1884,7 +1886,7 @@ function emitPageVector(
   const values: Record<string, number> = {
     urlPathDepth: segments.length,
     urlSegmentCount: segments.length,
-    urlIsRoot: path === "/" || path === "" ? 1 : 0,
+    urlIsRoot: isRootPath(url) ? 1 : 0,
     urlHasDate: /\/(19|20)\d{2}\/(0?[1-9]|1[0-2])(\/|$)/.test(path) ? 1 : 0,
     urlHasNumericId: /(^|\/|-)\d{2,}(\/|$|[-.])/.test(path) ? 1 : 0,
     urlHasQuery: query ? 1 : 0,
