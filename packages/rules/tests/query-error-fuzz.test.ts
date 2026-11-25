@@ -283,9 +283,47 @@ describe("security/query-error-fuzz", () => {
     );
     expect(sent.some((h) => h.path === "/logout")).toBe(false);
     expect(sent.length).toBeLessThanOrEqual(MAX_FUZZ_REQUESTS);
+    const mixed = selectFuzzCandidates(
+      ctxFor({
+        pages: [
+          page("/", [
+            link("/logout?id=1"),
+            { url: "https://example.com/x?id=1", text: "x", isInternal: true },
+            link("/product?id=5"),
+          ]),
+        ],
+      })
+    );
+    expect(mixed.candidates.map((c) => c.page)).toEqual([`${BASE}/product`]);
+    expect(mixed.skippedStateChanging).toBe(1);
     expect(
       selectFuzzCandidates(ctxFor({ pages: [page("/", many)] })).candidates
     ).toHaveLength(MAX_FUZZ_PARAMS);
+  });
+
+  test("action and one-time links are never replayed", async () => {
+    const actions = [
+      "/item?action=delete&id=5",
+      `/verify?token=${"a1".repeat(16)}`,
+      "/news?unsubscribe=1",
+      "/cart?add=12",
+    ];
+    const { sent } = await run(
+      ctxFor({
+        pages: [page("/", [...actions.map(link), link("/product?id=5")])],
+      })
+    );
+    // The plain link alongside is still probed, so the run did send.
+    expect(sent.some((h) => h.path === "/product")).toBe(true);
+    for (const path of ["/item", "/verify", "/news", "/cart"]) {
+      expect(sent.some((h) => h.path === path)).toBe(false);
+    }
+    const selection = selectFuzzCandidates(
+      ctxFor({ pages: [page("/", actions.map(link))] })
+    );
+    expect(selection.candidates).toHaveLength(0);
+    // One per (page, parameter): `/item` carries two.
+    expect(selection.skippedStateChanging).toBe(5);
   });
 
   test("the worst case stays inside the hard cap", () => {

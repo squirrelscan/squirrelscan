@@ -12,7 +12,9 @@
 //
 //  - Same origin as the audited base URL (scheme, host and port).
 //  - Not a state-changing path (`isStateChangingPath`, shared with the GraphQL
-//    and open-redirect probes).
+//    and open-redirect probes), and not an action or credential link
+//    (`looksLikeAnAction`, shared with the link checkers): `?action=delete`,
+//    `?unsubscribe=1`, `/cart?add=12` and `?token=` links are never replayed.
 //  - At most MAX_FUZZ_PARAMS candidates, deduped on origin, path and parameter
 //    name. The robots.txt group is not consulted: loud probes run only on an
 //    aggressive audit, which ignores it everywhere else too.
@@ -36,6 +38,7 @@ import {
   PROBE_LEVEL_TOO_LOW_SKIP_REASON,
 } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { looksLikeAnAction } from "@squirrelscan/utils/link-actions";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
 import type { ProbeBudget } from "../probe-budget";
@@ -248,7 +251,10 @@ export function selectFuzzCandidates(
     if (u.username || u.password) return;
     u.hash = "";
     const page = `${u.origin}${u.pathname}`;
-    const unsafe = isStateChangingPath(u.pathname);
+    // The path check alone misses actions in the query (`?action=delete`,
+    // `?unsubscribe=1`) and one-time links (`?token=`), which a replay would
+    // trigger or burn.
+    const unsafe = isStateChangingPath(u.pathname) || looksLikeAnAction(u.href);
     for (const param of new Set(u.searchParams.keys())) {
       const key = JSON.stringify([page, param.toLowerCase()]);
       if (seen.has(key)) continue;

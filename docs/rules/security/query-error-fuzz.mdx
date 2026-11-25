@@ -13,7 +13,7 @@ This is a loud probing rule. It sends more requests than the crawl does, so it r
 
 ### Which URLs are probed
 
-The rule uses the URLs the audit already found: the crawled page URLs and the internal links on those pages. Finding them sends no request. A URL qualifies when it has a query string and the same origin as the audited URL. A path that names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed. Each path and parameter name is probed once, and at most eight parameters are probed per audit. Aggressive probing ignores `robots.txt`, as it does for the other probing rules.
+The rule uses the URLs the audit already found: the crawled page URLs and the internal links on those pages. Finding them sends no request. A URL qualifies when it has a query string and the same origin as the audited URL. A path that names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed. Neither is a URL that looks like an action or carries a one-time value, such as `?action=delete`, `?unsubscribe=1`, `/cart?add=12` or `?token=`: a replay could trigger it or use it up. Each path and parameter name is probed once, and at most eight parameters are probed per audit. Aggressive probing ignores `robots.txt`, as it does for the other probing rules.
 
 ### What is sent
 
