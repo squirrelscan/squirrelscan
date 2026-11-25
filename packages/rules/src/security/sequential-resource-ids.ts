@@ -85,6 +85,7 @@ const LINK_VIA = new Set(["link-href", "script-src", "form-action"]);
 const ALWAYS_SKIP_VIA = new Set(["link-href", "script-src"]);
 
 // Cursor and pagination keys page through results; they name no record.
+// Compared with case, `-` and `_` folded away (`sinceId`, `since_id`, `since-id`).
 const CURSOR_KEYS = new Set([
   "maxid",
   "sinceid",
@@ -94,14 +95,22 @@ const CURSOR_KEYS = new Set([
   "beforeid",
   "lastid",
   "cursorid",
-  "max_id",
-  "since_id",
-  "min_id",
-  "start_id",
-  "after_id",
-  "before_id",
-  "last_id",
-  "cursor_id",
+  "nextid",
+  "previd",
+  "untilid",
+]);
+
+const cursorKey = (key: string): string =>
+  key.toLowerCase().replaceAll("-", "").replaceAll("_", "");
+
+// API words that never name a collection: `/api/42` is not a record of `api`.
+// `services` is left out, since `/api/services/42` is a services record.
+const NON_COLLECTION_API_WORDS = new Set([
+  "api",
+  "rest",
+  "rpc",
+  "json",
+  "ajax",
 ]);
 
 export interface SequentialIdHit {
@@ -155,7 +164,7 @@ export function findSequentialId(
     const seg = isJson ? raw.slice(0, -5) : raw;
     if (!SMALL_INT.test(seg)) continue;
     const prev = segments[i - 1]!.toLowerCase();
-    if (API_WORDS.has(prev)) continue;
+    if (NON_COLLECTION_API_WORDS.has(prev)) continue;
     if (COUNTER_WORDS.has(prev) || /^v\d{1,3}$/.test(prev)) continue;
     // The collection word must be a word, not another number or an id.
     if (!/^[a-z][a-z0-9_-]{1,63}$/.test(prev)) continue;
@@ -173,9 +182,8 @@ export function findSequentialId(
   let n = 0;
   for (const [key, value] of u.searchParams) {
     if (++n > MAX_QUERY_PARAMS) break;
-    if (key.length > 64 || !ID_KEY.test(key) ||
-      CURSOR_KEYS.has(key.toLowerCase()) || !SMALL_INT.test(value))
-      continue;
+    if (key.length > 64 || !ID_KEY.test(key)) continue;
+    if (CURSOR_KEYS.has(cursorKey(key)) || !SMALL_INT.test(value)) continue;
     return {
       url: `${u.origin}${u.pathname}?${key}=${value}`,
       pattern: `${u.pathname}?${key}={id}`,

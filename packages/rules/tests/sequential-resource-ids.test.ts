@@ -1,8 +1,13 @@
 // security/sequential-resource-ids: a passive advisory on endpoints keyed by a
 // small integer. Opaque ids and counters are not flagged, and nothing is sent.
 
+import { parseHTML } from "@squirrelscan/parser/dom";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  buildEndpointSurface,
+  extractEndpointRefsFromDocument,
+} from "../src/endpoint-surface";
 import {
   findSequentialId,
   MAX_SEQUENTIAL_ID_FINDINGS,
@@ -77,6 +82,11 @@ describe("findSequentialId", () => {
     "/api/orders?maxId=10",
     "/api/orders?sinceId=10",
     "/api/orders?since_id=10",
+    "/api/orders?since-id=10",
+    "/api/orders?next_id=10",
+    "/api/orders?prevId=10",
+    "/api/orders?until_id=10",
+    "/rest/42",
   ])("does not flag %s", (path) => {
     expect(findSequentialId(get(path), BASE)).toBeNull();
   });
@@ -92,6 +102,15 @@ describe("findSequentialId", () => {
       )
     ).toBeNull();
   });
+
+  test.each(["/api/services/42", "/v1/services/7"])(
+    "flags a services record in %s",
+    (path) => {
+      expect(findSequentialId(get(path), BASE)?.pattern).toContain(
+        "services/{id}"
+      );
+    }
+  );
 
   test("flags an id before a .json ending", () => {
     const hit = findSequentialId(get("/api/orders/42.json"), BASE);
@@ -133,6 +152,29 @@ describe("rule", () => {
       get("/api/orders/3f2b8c1e-9d4a-4b6e-8f10-2a7c5e9d1b34"),
       get("/api/users"),
     ]);
+    expect(checks.map((c) => c.status)).toEqual(["pass"]);
+  });
+
+  test("passes on WordPress head markup built into a surface", () => {
+    const pageUrl = `${BASE}/hello-world/`;
+    const { document } = parseHTML(`<!doctype html><html><head>
+      <link rel="alternate" type="application/json" href="${BASE}/wp-json/wp/v2/posts/18066">
+      <link rel="alternate" type="application/json" href="/wp-json/wp/v2/pages/42">
+      <script src="/api/v1/widgets/7"></script>
+    </head><body><p>Hello</p></body></html>`);
+    const refs = extractEndpointRefsFromDocument(document, pageUrl);
+    expect(refs.map((r) => r.discoveredVia).sort()).toEqual([
+      "link-href",
+      "link-href",
+      "script-src",
+    ]);
+    const built = buildEndpointSurface({
+      baseUrl: BASE,
+      pages: [{ pageUrl, refs }],
+    });
+    const { checks } = sequentialResourceIdsRule.run(
+      ruleCtx({ surface: built })
+    ) as { checks: Array<import("../src/types").CheckResult> };
     expect(checks.map((c) => c.status)).toEqual(["pass"]);
   });
 
