@@ -17,6 +17,7 @@
   "security/http-to-https",
   "security/json-sensitive-fields",
   "security/open-redirect",
+  "security/query-error-fuzz",
   "security/supabase-rls",
   "security/tls-certificate",
   "security/unauthenticated-api"

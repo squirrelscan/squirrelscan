@@ -673,6 +673,7 @@
                   "rules/security/exposed-backups",
                   "rules/security/auth-endpoint-disclosure",
                   "rules/security/open-redirect",
+                  "rules/security/query-error-fuzz",
                   "rules/security/client-side-authz",
                   "rules/security/exposed-actuator",
                   "rules/security/supabase-rls",

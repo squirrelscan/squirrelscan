@@ -1,0 +1,109 @@
+---
+title: "Query error pages: malformed values that leak a stack trace"
+description: "A quote, a NUL byte or a huge number in a query value that makes a page print a PHP, database or framework error. squirrel sends a fixed list of harmless tokens with GET only, one value at a time, on aggressive probing."
+---
+
+## Why an error page is a problem
+
+A site that crashes on malformed input often prints the crash: a PHP warning with a file path, an SQL syntax error with part of the query, a framework stack trace. Those pages tell an attacker which database and framework you run, where your code lives and, for an SQL error, that a value reaches a query unescaped. The [OWASP testing guide on error handling](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_for_Improper_Error_Handling) covers it in detail.
+
+## What squirrel checks
+
+This is a loud probing rule. It sends more requests than the crawl does, so it runs only when [probing intensity](/configuration/security) is `aggressive`. On a `passive` or `active` run it sends nothing and records one skipped check.
+
+### Which URLs are probed
+
+The rule uses the URLs the audit already found: the crawled page URLs and the internal links on those pages. Finding them sends no request. A URL qualifies when it has a query string and the same origin as the audited URL. A path that names a state-changing action, such as `logout`, `delete`, `update` or `reset`, is never probed. Each path and parameter name is probed once, and at most eight parameters are probed per audit. Aggressive probing ignores `robots.txt`, as it does for the other probing rules.
+
+### What is sent
+
+First one unmodified request per URL, the baseline. Then, for each parameter, the same URL with only that one value replaced, once per token, in this order:
+
+| Token | Sent as |
+|---|---|
+| quote | `'` |
+| double quote | `"` |
+| NUL byte | `%00` |
+| empty array | `[]` |
+| very large number | `99999999999999999999` |
+| negative number | `-1` |
+
+The list is fixed in code and is the only source of values. Requests use `GET` only: never `POST`, `PUT` or `DELETE`, never a request body, and never a host other than the audited origin. They carry no cookies and do not follow redirects. At most 64 KB of each response is read. A parameter stops at its first finding. The whole rule sends at most 60 requests, baselines included, and shares the audit's probe budget with the other probing rules. A `429` or a bot challenge stops it.
+
+### Results
+
+The rule emits checks named `query-error-fuzz`:
+
+- Warn, one check per page and parameter, when a response carries an error signature that the baseline response did not. The message names the page by origin and path (never the query string), the parameter, the kind of error (PHP, database or framework) and the token that triggered it.
+- Pass (`query-error-fuzz-clean`) when no fuzzed parameter answered an error page.
+- Skipped (`query-error-fuzz-not-checked`) when probing is below `aggressive`, or under `squirrel analyze`, which sends no requests.
+- Skipped (`query-error-fuzz-incomplete`) when the run stopped early with no finding: the site rate limited or challenged it, the probe budget ran out, or no baseline request succeeded. A run cut short is never reported as a pass.
+
+### What is not flagged
+
+- A clean `400` or `404` page. The rule looks for error signatures in the answer, not for an error status.
+- An error that the unmodified request already shows. It is not caused by the token.
+- A page that talks about errors without matching a signature.
+
+The signatures cover PHP fatal errors, warnings and stack traces, MySQL, PostgreSQL, Oracle, SQL Server and SQLite errors, PDO `SQLSTATE` codes, Python tracebacks, Django debug pages, Laravel error pages, Rails exceptions, ASP.NET error pages, and Java and Node stack traces.
+
+### Limits
+
+Only parameters that appear in a URL the audit saw are tried. A form field, a parameter only a script adds, and a value that only breaks after a login are not checked.
+
+## How to fix it
+
+Validate and cast every query value before it reaches a query or a function: use prepared statements, parse numbers and reject what does not fit, and answer malformed input with a plain `400` or `404`. Turn off detailed error output in production (`display_errors` off in PHP, `DEBUG` off in Django and Laravel, custom error pages in ASP.NET and Spring) and log the details on the server.
+
+| | |
+|---|---|
+| **Rule ID** | `security/query-error-fuzz` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 6/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/query-error-fuzz"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/query-error-fuzz"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `query-error-fuzz` | Problem |  |
+| `query-error-fuzz-clean` | Clean | `query-error-fuzz` |
+| `query-error-fuzz-not-checked` | Not checked |  |
+| `query-error-fuzz-incomplete` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/open-redirect](/rules/security/open-redirect): another probing rule that changes one query value and never probes a state-changing path.
+- [security/version-disclosure](/rules/security/version-disclosure): other ways a site tells visitors what it runs.

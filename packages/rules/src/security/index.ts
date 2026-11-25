@@ -25,6 +25,7 @@ import { newTabRule } from "./new-tab";
 import { openRedirectRule } from "./open-redirect";
 import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
+import { queryErrorFuzzRule } from "./query-error-fuzz";
 import { referrerPolicyRule } from "./referrer-policy";
 import { securityTxtRule } from "./security-txt";
 import { sriRule } from "./sri";
@@ -72,6 +73,7 @@ export const rules: Rule[] = [
   supabaseRlsRule,
   securityTxtRule,
   versionDisclosureRule,
+  queryErrorFuzzRule,
 ];
 
 export {
@@ -98,6 +100,7 @@ export {
   openRedirectRule,
   passwordFormGetRule,
   permissionsPolicyRule,
+  queryErrorFuzzRule,
   referrerPolicyRule,
   securityTxtRule,
   sriRule,

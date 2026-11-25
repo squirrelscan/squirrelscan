@@ -1,0 +1,1 @@
+- Added `security/query-error-fuzz`, an aggressive-probing rule that changes one query value at a time to a fixed list of harmless tokens (a quote, a double quote, `%00`, `[]`, a very large number, a negative number) with GET only, and reports PHP, database or framework error pages the unmodified request did not show (#2335)

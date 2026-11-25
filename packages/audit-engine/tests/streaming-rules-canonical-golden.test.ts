@@ -199,6 +199,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       "security/exposed-backups",
       "security/auth-endpoint-disclosure",
       "security/open-redirect",
+      "security/query-error-fuzz",
       "security/client-side-authz",
       "security/exposed-actuator",
     ]) {
