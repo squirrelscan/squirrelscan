@@ -72,7 +72,10 @@ const COUNTER_WORDS = new Set([
 const API_WORDS = new Set(["api", "rest", "rpc", "json", "ajax", "services"]);
 
 // Query keys that name a record id (`id`, `userId`, `order_id`, `uid`).
-const ID_KEY = /^(?:id|uid|[a-z]{1,32}[-_]?id)$/i;
+// Case-sensitive on purpose: a lowercase word ending in "id" (`paid`, `valid`,
+// `grid`) is not an id key, so a bare suffix needs a separator or a capital I.
+const ID_KEY =
+  /^(?:id|uid|ID|UID|[a-z][a-z0-9]{0,31}[-_](?:id|ID)|[A-Z][A-Z0-9]{0,31}_ID|[a-z][a-z0-9]{0,31}I[dD])$/;
 
 // Link-like discovery; a navigation link to `/blog/3` is a page, not an API.
 const LINK_VIA = new Set(["link-href", "script-src", "form-action"]);

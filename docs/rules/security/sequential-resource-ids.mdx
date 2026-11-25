@@ -18,7 +18,7 @@ The rule is passive. It reads the endpoint discovery results: URLs the crawl alr
 An endpoint on the audited website's own origin that looks like an API (a path word such as `api`, `rest`, `rpc` or `json`, a `v1`-style segment, a `.json` ending, or a call found in script rather than a plain link), and either of:
 
 - A path segment of 1 to 6 digits without a leading zero, right after a collection word: `/api/orders/42`.
-- On an API path, a query key that names an id (`id`, `uid`, `userId`, `order_id`) with such a value: `/api/orders?id=42`.
+- On an API path, a query key that names an id (`id`, `uid`, `userId`, `order_id`) with such a value: `/api/orders?id=42`. The key match is case-sensitive, so a word that only ends in "id" (`paid`, `valid`, `grid`) is not an id key.
 
 Endpoints are grouped by pattern. `/api/orders/1` and `/api/orders/2` are one finding that lists the ids seen. At most 20 patterns are reported per audit.
 

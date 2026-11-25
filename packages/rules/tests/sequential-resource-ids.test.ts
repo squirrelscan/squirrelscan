@@ -47,6 +47,17 @@ describe("findSequentialId", () => {
   });
 
   test.each([
+    "/api/orders?id=7",
+    "/api/orders?ID=7",
+    "/api/orders?uid=7",
+    "/api/orders?userId=7",
+    "/api/orders?order-id=7",
+    "/api/orders?ORDER_ID=7",
+  ])("flags the id query key in %s", (path) => {
+    expect(findSequentialId(get(path), BASE)?.where).toBe("query");
+  });
+
+  test.each([
     "/api/orders/3f2b8c1e-9d4a-4b6e-8f10-2a7c5e9d1b34",
     "/api/orders/01HZX3K9Q2M8N4P6R7S9T1V2W3",
     "/api/orders/5f4dcc3b5aa765d61d8327deb882cf99",
@@ -59,6 +70,9 @@ describe("findSequentialId", () => {
     "/api/items/page/2",
     "/api/archive/year/2024",
     "/api/orders?limit=10",
+    "/api/orders?paid=1",
+    "/api/orders?valid=1",
+    "/api/orders?grid=3",
   ])("does not flag %s", (path) => {
     expect(findSequentialId(get(path), BASE)).toBeNull();
   });
