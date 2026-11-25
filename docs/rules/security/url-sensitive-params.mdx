@@ -13,7 +13,7 @@ The rule runs on every crawled page. It reads the page's own URL, every `a[href]
 
 A parameter is flagged in two ways:
 
-- **By name.** Credential names such as `token`, `access_token`, `api_key`, `secret`, `client_secret`, `password`, `sessionid`, `jwt`, `signature` and `auth`, and any name that ends in `token`, `secret`, `password` or `apikey`. Names are compared without case, `_`, `-` or `.`. Names that mean something else are left alone: pagination cursors (`next_page_token`), CSRF and captcha tokens and nonces. Personal data names such as `email`, `phone` and `ssn`.
+- **By name.** Credential names such as `token`, `access_token`, `api_key`, `secret`, `client_secret`, `password`, `sessionid`, `jwt`, `signature` and `auth`, and any name that ends in `token`, `secret`, `password` or `apikey`. Names are compared without case, `_`, `-` or `.`. Names that mean something else are left alone: pagination cursors (`next_page_token`), CSRF and captcha tokens, nonces and unsubscribe tokens (`unsubscribe_token`). Personal data names such as `email`, `phone` and `ssn`.
 - **By value.** A value shaped like a secret is flagged whatever its parameter is called. The check reuses the detectors of [security/leaked-secrets](/rules/security/leaked-secrets) through the same URL scan it uses to redact its own findings, so the two rules agree on what looks like a key. An email-shaped value is flagged as personal data.
 
 Empty values, template placeholders (`{token}`, `${token}`, `<token>`), `*` masks and flags (`true`, `false`, `yes`, `no`, `0`, `1`) are skipped. Ordinary parameters such as `page`, `utm_*`, `id`, `q` and `sort` are never flagged.

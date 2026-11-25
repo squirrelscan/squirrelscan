@@ -71,6 +71,7 @@ const BENIGN_NAME_PARTS = [
   "captcha",
   "nonce",
   "tokenizer",
+  "unsubscribe",
 ];
 
 const PERSONAL_NAMES: ReadonlySet<string> = new Set([
@@ -215,10 +216,6 @@ function candidates(ctx: RuleContext): Candidates {
   const seen = new Set<string>();
   let capped = false;
   const add = (source: string, raw: string | null | undefined): boolean => {
-    if (list.length >= MAX_QUERY_URLS_PER_PAGE) {
-      capped = true;
-      return false;
-    }
     if (!raw || !raw.includes("?")) return true;
     let url: string;
     try {
@@ -230,6 +227,11 @@ function candidates(ctx: RuleContext): Candidates {
     }
     const key = JSON.stringify([source, url]);
     if (seen.has(key)) return true;
+    // Capped only when a distinct query-bearing URL past the cap exists, so exactly the cap is not capped.
+    if (list.length >= MAX_QUERY_URLS_PER_PAGE) {
+      capped = true;
+      return false;
+    }
     seen.add(key);
     list.push({ source, url });
     return true;

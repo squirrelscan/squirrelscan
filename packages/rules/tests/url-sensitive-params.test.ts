@@ -116,26 +116,52 @@ describe("security/url-sensitive-params", () => {
     expect(sensitiveParamsOf(`https://example.com/?${query}`)).toEqual([]);
   });
 
-  test("reads at most MAX_QUERY_URLS_PER_PAGE query-bearing URLs per page", async () => {
-    const benign = (n: number): string =>
-      Array.from(
-        { length: n },
-        (_, i) => `<a href="/l${i}?page=${i}">x</a>`
-      ).join("");
-    const leak = `<a href="/dash?access_token=abc123def456">x</a>`;
-    // The last URL inside the cap is read...
-    const inside = await runPage(benign(MAX_QUERY_URLS_PER_PAGE - 1) + leak);
-    expect(inside.find((c) => c.name === "url-sensitive-params")?.status).toBe(
-      "fail"
+  test("an unsubscribe token is not reported", async () => {
+    // Opaque one-click unsubscribe ids, the shapes mail platforms put in footers.
+    const checks = await runPage(
+      `<a href="/unsubscribe?unsubscribe_token=9f8e7d6c5b4a39281706f5e4d3c2b1a0">x</a><a href="/u?unsubscribeToken=Zm9vYmFyYmF6cXV4MTIzNDU2">y</a>`
     );
-    // ...the first one past it is not, and the check says the page was cut.
-    const past = await runPage(benign(MAX_QUERY_URLS_PER_PAGE) + leak);
-    const check = past.find((c) => c.name === "url-sensitive-params");
-    expect(check?.status).toBe("pass");
+    expect(checks.map((c) => [c.name, c.status])).toEqual([
+      ["url-sensitive-params", "pass"],
+    ]);
+  });
+
+  test("the cap is 500 query-bearing URLs per page", () => {
+    expect(MAX_QUERY_URLS_PER_PAGE).toBe(500);
+  });
+
+  const benign = (n: number): string =>
+    Array.from(
+      { length: n },
+      (_, i) => `<a href="/l${i}?page=${i}">x</a>`
+    ).join("");
+  const leak = `<a href="/dash?access_token=abc123def456">x</a>`;
+
+  test("exactly 500 query-bearing URLs are all read and the page is not capped", async () => {
+    const checks = await runPage(benign(499) + leak);
+    const check = checks.find((c) => c.name === "url-sensitive-params");
+    expect(check?.status).toBe("fail");
     expect(check?.details).toEqual({
-      urlsChecked: MAX_QUERY_URLS_PER_PAGE,
-      capped: true,
+      urlsChecked: 500,
+      total: 1,
+      capped: false,
     });
+  });
+
+  test("500 query-bearing URLs plus repeats and query-less links are not capped", async () => {
+    const checks = await runPage(
+      benign(500) + benign(3) + `<a href="/plain">x</a><a href="#top">y</a>`
+    );
+    expect(
+      checks.find((c) => c.name === "url-sensitive-params")?.details
+    ).toEqual({ urlsChecked: 500, capped: false });
+  });
+
+  test("the 501st query-bearing URL is not read and the page is capped", async () => {
+    const checks = await runPage(benign(500) + leak);
+    const check = checks.find((c) => c.name === "url-sensitive-params");
+    expect(check?.status).toBe("pass");
+    expect(check?.details).toEqual({ urlsChecked: 500, capped: true });
   });
 
   test("ignores non-http URLs and oversized input", () => {
