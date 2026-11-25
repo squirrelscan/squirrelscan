@@ -313,6 +313,7 @@
   "security/csp": 1,
   "security/csp-blocks-own-resources": 500,
   "security/csp-violations": 500,
+  "security/debug-endpoints": 1,
   "security/exposed-actuator": 1,
   "security/exposed-files": 1,
   "security/form-captcha": 500,

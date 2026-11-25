@@ -200,6 +200,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       "security/open-redirect",
       "security/client-side-authz",
       "security/exposed-actuator",
+      "security/debug-endpoints",
     ]) {
       expect(v1.perRuleTally.find((t) => t.ruleId === ruleId)).toEqual({
         ruleId,
