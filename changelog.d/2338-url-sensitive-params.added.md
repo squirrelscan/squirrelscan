@@ -1,0 +1,1 @@
+- New rule `security/url-sensitive-params` flags tokens, API keys, passwords, session ids and email addresses in URL query parameters of the page URL, links, form actions and canonical URLs, by parameter name and by secret-shaped value (reusing the leaked-secrets detectors). Credentials fail and personal data warns. Values are never printed. (#2338)

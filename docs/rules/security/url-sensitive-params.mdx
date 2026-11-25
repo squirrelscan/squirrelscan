@@ -1,0 +1,103 @@
+---
+title: "Sensitive data in URLs: tokens and emails in query parameters"
+description: "A token, API key, password or email address in a query string is copied into logs, history and Referer headers. squirrel checks the page URL, links, form actions and canonical URLs."
+---
+
+## What sensitive data in a URL is
+
+Query strings travel far. A URL is written to server and proxy access logs, kept in browser history, sent to analytics, shared in chat and passed in the `Referer` header to other sites. A token, API key, session id, password or email address in the query string spreads to all of them, and cannot be taken back. [security/password-form-get](/rules/security/password-form-get) covers one way a password gets there. This rule looks at every URL the page shows.
+
+## What squirrel checks
+
+The rule runs on every crawled page. It reads the page's own URL, every `a[href]` link, every `form[action]`, the canonical URL and the `og:url`, resolved against the page. Only `http:` and `https:` URLs with a query string are assessed. It sends no requests.
+
+A parameter is flagged in two ways:
+
+- **By name.** Credential names such as `token`, `access_token`, `api_key`, `secret`, `client_secret`, `password`, `sessionid`, `jwt`, `signature` and `auth`, and any name that ends in `token`, `secret`, `password` or `apikey`. Names are compared without case, `_`, `-` or `.`. Names that mean something else are left alone: pagination cursors (`next_page_token`), CSRF and captcha tokens and nonces. Personal data names such as `email`, `phone` and `ssn`.
+- **By value.** A value shaped like a secret is flagged whatever its parameter is called. The check reuses the detectors of [security/leaked-secrets](/rules/security/leaked-secrets) through the same URL scan it uses to redact its own findings, so the two rules agree on what looks like a key. An email-shaped value is flagged as personal data.
+
+Empty values, template placeholders (`{token}`, `${token}`, `<token>`), `*` masks and flags (`true`, `false`, `yes`, `no`, `0`, `1`) are skipped. Ordinary parameters such as `page`, `utm_*`, `id`, `q` and `sort` are never flagged.
+
+- Fail with `N URL parameter(s) carry a token, key, password or other secret` (check `url-sensitive-params`). Severity error.
+- Warn with `N URL parameter(s) carry personal data such as an email address` (check `url-personal-params`).
+- Pass with `No sensitive data found in URL query parameters`.
+
+Each item names where the URL was found (page URL, link, form action, canonical or og:url), its origin and path, and the parameter. At most 25 items are kept per check. The value is never printed, and neither is the rest of the query string: an item shows `?<param>=[redacted]`.
+
+## How to fix it
+
+Move the data out of the URL. Send tokens and API keys in an `Authorization` header, keep sessions in a `Secure`, `HttpOnly` cookie, and submit passwords and email addresses with `method="post"`. For a one-time link such as a password reset, exchange the token for a session on arrival and redirect to a URL without it. Rotate any credential that has already appeared in a URL, and check logs and analytics for copies.
+
+| | |
+|---|---|
+| **Rule ID** | `security/url-sensitive-params` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/url-sensitive-params"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/url-sensitive-params"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `url-sensitive-params` | Problem |  |
+| `url-personal-params` | Problem |  |
+| `url-sensitive-params` | Clean | `url-sensitive-params`, `url-personal-params` |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/leaked-secrets](/rules/security/leaked-secrets): secrets in page markup and scripts.
+- [security/password-form-get](/rules/security/password-form-get): password forms submitted by GET.
+- [security/referrer-policy](/rules/security/referrer-policy): limits what the Referer header carries to other sites.
+- [url/session-ids](/rules/url/session-ids): session ids in URLs, as a crawl and duplicate content problem.
+
+Security findings ship in every audit next to the SEO, performance and agent experience rules. See [Website security scan with AI](https://squirrelscan.com/learn/audit-website-security-with-ai) for how an agent works through a report.
+
+## References
+
+- [Information exposure through query strings in GET requests, CWE-598](https://cwe.mitre.org/data/definitions/598.html)
+- [Sensitive data in URLs, OWASP Web Security Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
+
+## Check your site
+
+Run `squirrel audit https://nutshop.squirrelscan.com` and open the Security section of the report. Every URL parameter that carries a secret or personal data is listed by page. Signed-out local audits need no account and cost nothing. Signed-in audits spend credits.
+
+<CardGroup cols={2}>
+  <Card title="Install squirrel" icon="terminal" href="/quickstart">
+    One command to install, one to run your first audit.
+  </Card>
+  <Card title="See a sample report" icon="file-text" href="https://squirrelscan.com/reports/squirrelscan-sample">
+    What the Security section looks like on a real site.
+  </Card>
+</CardGroup>

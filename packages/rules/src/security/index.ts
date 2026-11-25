@@ -33,6 +33,7 @@ import { thirdPartyCookiesRule } from "./third-party-cookies";
 import { tlsCertificateRule } from "./tls-certificate";
 import { tokenStorageRule } from "./token-storage";
 import { unauthenticatedApiRule } from "./unauthenticated-api";
+import { urlSensitiveParamsRule } from "./url-sensitive-params";
 import { versionDisclosureRule } from "./version-disclosure";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
@@ -54,6 +55,7 @@ export const rules: Rule[] = [
   formCaptchaRule,
   newTabRule,
   passwordFormGetRule,
+  urlSensitiveParamsRule,
   leakedSecretsRule,
   tokenStorageRule,
   thirdPartyCookiesRule,

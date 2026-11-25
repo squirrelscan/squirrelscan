@@ -4070,6 +4070,12 @@
    "unauthenticated-api-unchecked|skipped|Probing is passive, so no API endpoint was probed. Run with --probe active to check for API endpoints that answer without authentication.||"
   ]
  },
+ "security/url-sensitive-params": {
+  "digest": "216985917874707",
+  "lines": [
+   "url-sensitive-params|pass|No sensitive data found in URL query parameters||"
+  ]
+ },
  "security/version-disclosure": {
   "digest": "73157584638604",
   "lines": [

@@ -338,6 +338,7 @@
   "security/tls-certificate": 1,
   "security/token-storage": 500,
   "security/unauthenticated-api": 1,
+  "security/url-sensitive-params": 500,
   "security/version-disclosure": 1,
   "security/x-content-type": 1,
   "security/x-frame-options": 1,
