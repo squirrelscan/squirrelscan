@@ -265,6 +265,21 @@ export const linkTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "link-text-empty", outcome: "problem" },
+      { name: "link-text-unconfirmed", outcome: "problem" },
+      { name: "link-text-generic", outcome: "problem" },
+      {
+        name: "link-text",
+        outcome: "clean",
+        clears: [
+          "link-text-empty",
+          "link-text-unconfirmed",
+          "link-text-generic",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

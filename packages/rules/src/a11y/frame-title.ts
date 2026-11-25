@@ -21,6 +21,17 @@ export const frameTitleRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "frame-title", outcome: "problem" },
+      { name: "frame-title-unconfirmed", outcome: "problem" },
+      {
+        name: "frame-title",
+        outcome: "clean",
+        clears: ["frame-title", "frame-title-unconfirmed"],
+      },
+      { name: "frame-title", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

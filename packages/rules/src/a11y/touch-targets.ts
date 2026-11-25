@@ -18,6 +18,13 @@ export const touchTargetsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    // The rule only ever returns an inconclusive info today, so its clean check is declared but not yet emitted.
+    checks: [
+      { name: "touch-targets", outcome: "problem" },
+      { name: "touch-targets", outcome: "clean", clears: ["touch-targets"] },
+      { name: "touch-targets", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -78,6 +78,19 @@ Related (not tested): [1.3.1 Info and Relationships](https://www.w3.org/WAI/WCAG
 
 {/* rule-wcag:end */}
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `landmark-one-main` | Problem |  |
+| `landmark-one-main` | Clean | `landmark-one-main` |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [a11y/landmark-regions](/rules/a11y/landmark-regions): the wider sweep across `main`, `nav` and `footer`.

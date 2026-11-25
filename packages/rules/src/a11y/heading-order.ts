@@ -20,6 +20,12 @@ export const headingOrderRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "heading-order", outcome: "problem" },
+      { name: "heading-order", outcome: "clean", clears: ["heading-order"] },
+      { name: "heading-order", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

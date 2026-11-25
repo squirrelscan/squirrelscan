@@ -46,6 +46,11 @@ export const skipLinkRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "skip-link", outcome: "problem" },
+      { name: "skip-link", outcome: "clean", clears: ["skip-link"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

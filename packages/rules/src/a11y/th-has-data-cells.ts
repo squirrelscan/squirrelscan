@@ -106,6 +106,16 @@ export const thHasDataCellsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "th-has-data-cells", outcome: "problem" },
+      {
+        name: "th-has-data-cells",
+        outcome: "clean",
+        clears: ["th-has-data-cells"],
+      },
+      { name: "th-has-data-cells", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

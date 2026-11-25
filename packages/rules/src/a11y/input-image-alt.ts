@@ -20,6 +20,17 @@ export const inputImageAltRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "input-image-alt", outcome: "problem" },
+      { name: "input-image-alt-unconfirmed", outcome: "problem" },
+      {
+        name: "input-image-alt",
+        outcome: "clean",
+        clears: ["input-image-alt", "input-image-alt-unconfirmed"],
+      },
+      { name: "input-image-alt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

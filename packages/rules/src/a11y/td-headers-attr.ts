@@ -20,6 +20,16 @@ export const tdHeadersAttrRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "td-headers-attr", outcome: "problem" },
+      {
+        name: "td-headers-attr",
+        outcome: "clean",
+        clears: ["td-headers-attr"],
+      },
+      { name: "td-headers-attr", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

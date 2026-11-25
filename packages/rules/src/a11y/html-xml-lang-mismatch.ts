@@ -19,6 +19,15 @@ export const htmlXmlLangMismatchRule: Rule = {
     verdictScope: "template",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "html-xml-lang-mismatch", outcome: "problem" },
+      {
+        name: "html-xml-lang-mismatch",
+        outcome: "clean",
+        clears: ["html-xml-lang-mismatch"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

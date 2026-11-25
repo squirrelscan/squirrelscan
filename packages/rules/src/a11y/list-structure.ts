@@ -19,6 +19,12 @@ export const listStructureRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "list-structure", outcome: "problem" },
+      { name: "list-structure", outcome: "clean", clears: ["list-structure"] },
+      { name: "list-structure", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

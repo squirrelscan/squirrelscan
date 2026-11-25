@@ -20,6 +20,12 @@ export const tableHeadersRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "table-headers", outcome: "problem" },
+      { name: "table-headers", outcome: "clean", clears: ["table-headers"] },
+      { name: "table-headers", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

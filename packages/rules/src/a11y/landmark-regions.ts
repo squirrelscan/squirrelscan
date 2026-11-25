@@ -20,6 +20,19 @@ export const landmarkRegionsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "landmark-main", outcome: "problem" },
+      { name: "landmark-nav", outcome: "problem" },
+      { name: "landmark-footer", outcome: "problem" },
+      { name: "landmark-main", outcome: "clean", clears: ["landmark-main"] },
+      { name: "landmark-nav", outcome: "clean", clears: ["landmark-nav"] },
+      {
+        name: "landmark-footer",
+        outcome: "clean",
+        clears: ["landmark-footer"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -23,6 +23,12 @@ export const zoomDisabledRule: Rule = {
     verdictScope: "template",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "zoom-disabled", outcome: "problem" },
+      { name: "zoom-disabled", outcome: "clean", clears: ["zoom-disabled"] },
+      { name: "zoom-disabled", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

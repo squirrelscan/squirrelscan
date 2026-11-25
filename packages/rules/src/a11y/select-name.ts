@@ -52,6 +52,17 @@ export const selectNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "select-name", outcome: "problem" },
+      { name: "select-name-unconfirmed", outcome: "problem" },
+      {
+        name: "select-name",
+        outcome: "clean",
+        clears: ["select-name", "select-name-unconfirmed"],
+      },
+      { name: "select-name", outcome: "skipped" },
+    ],
     messageCountsItems: true,
     itemSelectors: true,
   },

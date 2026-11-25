@@ -81,6 +81,22 @@ No WCAG success criterion: It flags data tables on one page that share an access
 
 {/* rule-wcag:end */}
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `table-duplicate-name` | Problem |  |
+| `table-duplicate-name-unconfirmed` | Problem |  |
+| `tables-without-names` | Problem |  |
+| `table-duplicate-name` | Clean | `table-duplicate-name`, `table-duplicate-name-unconfirmed`, `tables-without-names` |
+| `table-duplicate-name` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [a11y/table-headers](/rules/a11y/table-headers): whether those tables have `<th>` cells at all.

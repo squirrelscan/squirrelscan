@@ -95,6 +95,23 @@ The WCAG success criteria this rule's findings map to. These automated checks co
 
 {/* rule-wcag:end */}
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `meta-refresh-redirect` | Problem |  |
+| `meta-refresh-auto` | Problem |  |
+| `refresh-header-redirect` | Problem |  |
+| `refresh-header-reload` | Problem |  |
+| `refresh-header-and-meta` | Problem |  |
+| `meta-refresh` | Clean | `meta-refresh-redirect`, `meta-refresh-auto`, `refresh-header-redirect`, `refresh-header-reload`, `refresh-header-and-meta` |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [links/redirect-chains](/rules/links/redirect-chains): URLs that redirect and links pointing at them, once the redirect moves to the server.

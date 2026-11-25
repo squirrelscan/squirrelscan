@@ -121,6 +121,22 @@ export const inputTypesRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "input-types", outcome: "problem" },
+      { name: "input-types", outcome: "clean", clears: ["input-types"] },
+      { name: "input-types", outcome: "skipped" },
+      { name: "enterkeyhint", outcome: "problem" },
+      { name: "enterkeyhint", outcome: "clean", clears: ["enterkeyhint"] },
+      { name: "enterkeyhint", outcome: "skipped" },
+      { name: "form-novalidate", outcome: "problem" },
+      {
+        name: "form-novalidate",
+        outcome: "clean",
+        clears: ["form-novalidate"],
+      },
+      { name: "form-novalidate", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

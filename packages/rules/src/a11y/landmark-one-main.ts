@@ -21,6 +21,15 @@ export const landmarkOneMainRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "landmark-one-main", outcome: "problem" },
+      {
+        name: "landmark-one-main",
+        outcome: "clean",
+        clears: ["landmark-one-main"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
