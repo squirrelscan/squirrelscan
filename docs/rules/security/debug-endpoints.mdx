@@ -1,0 +1,123 @@
+---
+title: "Exposed debug, config and metrics endpoints: env vars, secrets and internal hosts"
+description: "An open /api/env, /api/debug or /metrics can hand anyone your environment variables, internal hosts or metrics. squirrel sends anonymous GET requests to these paths and flags the answers that disclose internal state."
+---
+
+## What an exposed debug endpoint is
+
+Frameworks and teams add endpoints for operators: a debug dump, a config or env endpoint, a Prometheus `/metrics` page, a detailed health check. They are meant for the people who run the website. When one ships to production without authentication, anyone can read it, and some of them disclose what an attacker needs next:
+
+- An env or debug endpoint can list environment variables: database URLs, API keys and passwords.
+- A config endpoint can return the application's configuration, secrets included.
+- A detailed health check or a metrics page can name private IP addresses and internal service hosts, which maps your network.
+- A Prometheus `/metrics` page or Go's `/debug/vars` describes the process, its traffic and its internals.
+
+A bare health check such as `{"status":"ok"}` discloses nothing and is not a finding.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check. `squirrel analyze` sends nothing either: it re-reads stored data.
+
+### Which paths are probed
+
+- A fixed list: `/api/debug`, `/debug`, `/debug/vars`, `/api/config`, `/api/env`, `/env`, `/metrics`, `/healthz`, `/health` and `/api/health`.
+- Endpoints the audit found in your pages and scripts whose path has a segment named `debug`, `config`, `configuration`, `env`, `environment`, `metrics`, `prometheus`, `health`, `healthz`, `healthcheck`, `livez`, `readyz`, `vars` or `diagnostics` (a trailing `.json` is ignored). Finding them sends no request. At most five are probed.
+
+Every path is on the audited URL's origin (scheme, host and port). An endpoint on another host is never probed. A discovered endpoint whose call site declares `POST`, `PUT`, `PATCH` or `DELETE`, or whose path names a state-changing action (`logout`, `delete`, `update`, `reset` and similar), is never used. GraphQL paths are left to [security/graphql-introspection](/rules/security/graphql-introspection) and actuator paths to [security/exposed-actuator](/rules/security/exposed-actuator). Below `aggressive`, a path that `robots.txt` disallows is skipped.
+
+### What is sent
+
+One anonymous `GET` per endpoint, the same request [security/unauthenticated-api](/rules/security/unauthenticated-api) and [security/auth-endpoint-disclosure](/rules/security/auth-endpoint-disclosure) send, so an endpoint two of these rules read is requested once per audit. The query string is dropped, and the request carries no cookies and no `Authorization` header. Redirects are not followed. Each request uses one quiet probe from the shared probe budget and has a 10 second timeout, and at most 256 KB of each answer is read, counted after decompression.
+
+A `429` answer or a bot or WAF challenge stops the rule, as does the first request that times out: no further request is sent. A server error (5xx) leaves that endpoint not checked.
+
+### How a leak is confirmed
+
+A status code alone never counts. Only a 2xx answer is read, and never one served as HTML or that opens with a tag, so a single-page app that answers every path with its 200 page is not a finding. The answer is read for five classes of data, each by its shape:
+
+| Class | Severity | What counts |
+|---|---|---|
+| Environment variables | fail | An object, or `NAME=value` lines, with at least three upper-case variable names holding plain values, where these are at least half the entries and at least one is a well-known variable (`PATH`, `HOME`, `NODE_ENV`, `DATABASE_URL`, `AWS_REGION` and others) or a credential name (ending in `_SECRET`, `_TOKEN`, `_PASSWORD`, `_API_KEY` and similar). |
+| Configuration secrets | fail | A string under a field whose name ends in `password`, `passwd`, `secret`, `secretKey`, `privateKey`, `secretAccessKey`, `connectionString`, `signingKey`, `encryptionKey` or `masterKey` (a field starting with `public` or `publishable` is not one), or a URL that carries a user name and password. A value shorter than four characters, or a placeholder such as `****`, `[REDACTED]`, `<hidden>` or `${DB_PASSWORD}`, is not a secret. Neither is text with spaces (unless it holds a PEM block or a `key=value` pair, as a connection string does), a site-relative path such as `/account/reset-password`, or a setting such as `true`, `false`, `enabled` or `off`. |
+| Internal hosts or addresses | warn | A private IP address (such as `10.x.x.x` or `192.168.x.x`), a host in an internal-only zone (`.internal`, `.local`, `.svc.cluster.local` and the like), or a dotless service name in a URL (`http://billing:8080`). Loopback (`localhost`, `127.0.0.1`), `0.0.0.0`, the audited host itself and values under a `version`, `build` or `commit` key or label are not counted. When the audited website is itself on a private host, this class is not judged. |
+| Prometheus metrics | warn | The Prometheus or OpenMetrics text format: at least one `# TYPE` line and one sample line. |
+| Process command line and memory statistics | warn | Go expvar output: a `cmdline` array and a `memstats` object. |
+
+When several endpoints answer with the same body, as a catch-all route does, they are one finding that lists the other URLs.
+
+### Results
+
+Findings name the endpoint, its status, and the class of data with a count: how many variables, fields, hosts or metric families. For environment variables and configuration secrets the finding also names up to five fields. squirrel never stores or reports a value, a host name or an address from the answer.
+
+- `debug-endpoint-exposed` (fail when the answer discloses environment variables or configuration secrets, warn otherwise): one per endpoint, with the message `<url> discloses internal state to anyone: <classes>. Values are not shown.` Each item has `status`, `classes`, `leaks` (class, count and names), `source` (`curated` or `discovered`) and, for a catch-all, `alsoAt`.
+- `debug-endpoints-none` (pass) when every endpoint was requested and got an answer, and none disclosed internal state.
+- `debug-endpoints-incomplete` (skipped, reason `probe-incomplete`) names each endpoint that was not checked and why: disallowed by `robots.txt`, the probe budget ran out, a request timed out or failed, a 5xx, a `429` or bot challenge, or more than five discovered endpoints. It can appear beside a finding, and the run never passes while it is there.
+- `debug-endpoints-not-checked` (skipped) on a `passive` run (reason `probe-level-too-low`) or under `squirrel analyze` (reason `analyze-offline`).
+
+### Limits
+
+Endpoints open only to signed-in users are not seen, because the probes carry no cookies. An endpoint at a path that is not on the list and that the crawl never referenced is not found. The classes are read by shape, so a secret under a field with an unusual name, or an internal host written in a form the rule does not parse, is missed.
+
+## How to fix it
+
+Turn off debug, config and env endpoints in production, or put them behind authentication. Serve metrics and detailed health checks on an internal port or path that the internet cannot reach: a separate listener, a network policy, or an allowlist at the proxy. Keep the public health check to a bare status:
+
+```json
+{"status":"ok"}
+```
+
+If environment variables or secrets were readable, treat them as leaked and rotate them: database passwords, API keys, signing keys and cloud credentials.
+
+| | |
+|---|---|
+| **Rule ID** | `security/debug-endpoints` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/debug-endpoints"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/debug-endpoints"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `debug-endpoint-exposed` | Problem |  |
+| `debug-endpoints-none` | Clean | `debug-endpoint-exposed` |
+| `debug-endpoints-not-checked` | Not checked |  |
+| `debug-endpoints-incomplete` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/exposed-actuator](/rules/security/exposed-actuator): the same kind of leak from Spring Boot Actuator endpoints.
+- [security/exposed-files](/rules/security/exposed-files): `.env` files, server-status pages and backups served from the web root.
+- [security/json-sensitive-fields](/rules/security/json-sensitive-fields): credentials and personal data in your own JSON API responses.

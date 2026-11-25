@@ -3926,6 +3926,12 @@
    "csp-violations|skipped|CSP violations were not checked: the page was fetched as plain HTML, not rendered in a browser||"
   ]
  },
+ "security/debug-endpoints": {
+  "digest": "119356660417570",
+  "lines": [
+   "debug-endpoints-not-checked|skipped|Debug, config and metrics endpoints not checked: probing is passive. Run with --probe active to check them.|\"not-checked\"|"
+  ]
+ },
  "security/exposed-actuator": {
   "digest": "111694927425978",
   "lines": [

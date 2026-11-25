@@ -8,6 +8,7 @@ import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { cspViolationsRule } from "./csp-violations";
+import { debugEndpointsRule } from "./debug-endpoints";
 import { exposedActuatorRule } from "./exposed-actuator";
 import { exposedFilesRule } from "./exposed-files";
 import { formCaptchaRule } from "./form-captcha";
@@ -67,6 +68,7 @@ export const rules: Rule[] = [
   openRedirectRule,
   clientSideAuthzRule,
   exposedActuatorRule,
+  debugEndpointsRule,
   supabaseRlsRule,
   securityTxtRule,
   versionDisclosureRule,
@@ -79,6 +81,7 @@ export {
   cspBlocksOwnResourcesRule,
   cspRule,
   cspViolationsRule,
+  debugEndpointsRule,
   exposedFilesRule,
   exposedActuatorRule,
   formCaptchaRule,

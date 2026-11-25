@@ -655,6 +655,7 @@
                   "rules/security/open-redirect",
                   "rules/security/client-side-authz",
                   "rules/security/exposed-actuator",
+                  "rules/security/debug-endpoints",
                   "rules/security/supabase-rls",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
