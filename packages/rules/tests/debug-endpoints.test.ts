@@ -156,6 +156,30 @@ describe("security/debug-endpoints: classification", () => {
     ).toEqual([]);
   });
 
+  test("UI copy and route paths under password-named keys are not secrets", () => {
+    expect(
+      classes(JSON.stringify({ forgotPassword: "Forgot your password?" }))
+    ).toEqual([]);
+    expect(
+      classes(JSON.stringify({ resetPassword: "/account/reset-password" }))
+    ).toEqual([]);
+    // A PEM block and a connection string keep their whitespace and still count.
+    expect(
+      classes(
+        JSON.stringify({
+          privateKey: `-----BEGIN PRIVATE KEY-----\n${SECRET}\n-----END PRIVATE KEY-----`,
+        })
+      )
+    ).toEqual(["config-secrets"]);
+    expect(
+      classes(
+        JSON.stringify({
+          connectionString: `Server=db; User Id=app; Password=${SECRET}`,
+        })
+      )
+    ).toEqual(["config-secrets"]);
+  });
+
   test("a connection URL with credentials is a config secret", () => {
     expect(
       classes(

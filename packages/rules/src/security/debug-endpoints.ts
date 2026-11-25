@@ -324,6 +324,8 @@ const PUBLIC_KEY_PREFIXES = ["public", "publishable"];
 const PLACEHOLDER_RE =
   /^(?:[*x\u2022.\-_ ]{1,256}|<[^>]{0,64}>|\$\{[^}]{0,128}\}|%[^%]{0,128}%|null|none|undefined|string|text|password|secret|required|optional|hidden|\*{3}.{0,256})$/i;
 const PLACEHOLDER_WORDS = ["redact", "masked"];
+// A site-relative path such as a route, never a credential.
+const PATH_VALUE_RE = /^\/[a-z0-9\-_/.]*$/i;
 // Keys whose values look like addresses but are versions or digests.
 const VERSION_KEY_RE = /version|build|release|commit|sha|hash|checksum/i;
 
@@ -345,6 +347,13 @@ function isSecretValue(value: unknown): boolean {
   if (typeof value !== "string") return false;
   const v = value.trim();
   if (v.length < 4) return false;
+  // UI copy and route paths ("Forgot your password?", "/account/reset-password")
+  // sit under password-named keys in i18n bundles and route maps. A secret has
+  // no spaces, except a PEM block or a key=value connection string.
+  if (/\s/.test(v) && !v.includes("-----BEGIN") && !v.includes("=")) {
+    return false;
+  }
+  if (PATH_VALUE_RE.test(v)) return false;
   if (v.length > 512) return true;
   const lower = v.toLowerCase();
   if (PLACEHOLDER_WORDS.some((w) => lower.includes(w))) return false;
