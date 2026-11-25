@@ -33,7 +33,7 @@ function only(checks: CheckResult[]): CheckResult {
   return checks[0]!;
 }
 
-const SKIPPED = [
+const SKIPPED: CheckResult[] = [
   {
     name: "input-zoom",
     status: "skipped",

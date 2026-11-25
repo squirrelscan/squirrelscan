@@ -98,7 +98,12 @@ export const svgImgAltRule: Rule = {
     itemSelectors: true,
     checks: [
       { name: "svg-img-alt", outcome: "problem" },
-      { name: "svg-img-alt", outcome: "clean", clears: ["svg-img-alt"] },
+      { name: "svg-img-alt-unconfirmed", outcome: "problem" },
+      {
+        name: "svg-img-alt",
+        outcome: "clean",
+        clears: ["svg-img-alt", "svg-img-alt-unconfirmed"],
+      },
       { name: "svg-img-alt", outcome: "skipped" },
     ],
   },

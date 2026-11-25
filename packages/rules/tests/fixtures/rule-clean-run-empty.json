@@ -1,5 +1,5 @@
 {
-  "a11y/aria-labels": "returns no checks when the page has no document root; nothing to judge",
-  "integrity/kit-signature": "emits a check only when a known kit signature matches; a clean page has none",
-  "schema/website-search": "returns no checks when the page declares no WebSite schema"
+  "a11y/aria-labels": "returns no checks when the page has no button and no interactive svg in scope; not yet converted to a not-applicable skipped check (follow-up to #2350)",
+  "integrity/kit-signature": "returns no checks when ctx.intel is unset (the opt-in threat intel feature is off); there is nothing to judge, so it cannot emit a clean check",
+  "schema/website-search": "returns no checks off the home page when there is no WebSite schema; not yet converted to a not-applicable skipped check (follow-up to #2350)"
 }

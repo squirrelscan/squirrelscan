@@ -31,7 +31,7 @@ const failOf = (checks: CheckResult[]) =>
 const isPass = (checks: CheckResult[]) =>
   checks.length === 1 && checks[0]?.status === "pass";
 
-const SKIPPED = [
+const SKIPPED: CheckResult[] = [
   {
     name: "password-form-get",
     status: "skipped",
