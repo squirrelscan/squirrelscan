@@ -1,0 +1,1 @@
+- Threat-intel feeds that fail to download no longer count as consulted: a failed pull keeps the last good list, or the provider is skipped. URLhaus now uses the keyed CSV export and PhishTank requires a key. (#2366)

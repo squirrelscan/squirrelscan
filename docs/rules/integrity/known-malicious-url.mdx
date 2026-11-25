@@ -29,7 +29,15 @@ When no provider was consulted for any candidate, because the feature is off or 
 
 ## Enable the feature
 
-Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against. URLhaus, ThreatFox, OpenPhish and PhishTank are daily-pull feeds; Safe Browsing, urlscan and VirusTotal are on-demand lookups. URLhaus and ThreatFox both take an abuse.ch key, which squirrel sends as the `Auth-Key` header.
+Threat-intel is off by default. Turn it on and configure at least one provider so this rule has feeds to check against. URLhaus, ThreatFox, OpenPhish and PhishTank are daily-pull feeds; Safe Browsing, urlscan and VirusTotal are on-demand lookups. Which providers need a key:
+
+- OpenPhish needs no key. Set `enabled = true`.
+- URLhaus needs an abuse.ch key. squirrel puts it in the export URL path.
+- ThreatFox needs an abuse.ch key, sent as the `Auth-Key` header.
+- PhishTank needs an application key. There is no keyless dump.
+- Safe Browsing, urlscan and VirusTotal need their own keys.
+
+A feed whose pull fails (a non-2xx status, a missing key or an unexpected body) is skipped. If an earlier pull is cached, squirrel keeps using that list. If not, the provider is left out of the consulted providers, so a dead feed never produces a clean result.
 
 ```toml squirrel.toml
 [intel]

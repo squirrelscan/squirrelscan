@@ -174,3 +174,86 @@ describe("refreshFeeds + lookupInSnapshot", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("refreshFeeds — failed pulls", () => {
+  const failing: IntelTransport = () =>
+    Promise.resolve({
+      ok: false,
+      status: 410,
+      text: () => Promise.resolve("gone"),
+      json: () => Promise.resolve({}),
+    });
+  const cfg = (providers: IntelConfig["providers"]): IntelConfig => ({
+    enabled: true,
+    feedTtlMs: 1000,
+    providers,
+  });
+
+  test("a failed pull with no cached list is not counted as consulted", async () => {
+    const snap = await refreshFeeds(
+      cfg({ openphish: { enabled: true }, urlhaus: { apiKey: "k" } }),
+      { transport: failing, kv: new MemoryKvStore(), now: 0 }
+    );
+    expect(snap.providers).toEqual([]);
+  });
+
+  test("a failed refresh keeps serving the last good list", async () => {
+    const kv = new MemoryKvStore();
+    const good: IntelTransport = () =>
+      jsonResponse("https://evil-collector.tk/grab");
+    const config = cfg({ openphish: { enabled: true } });
+    await refreshFeeds(config, { transport: good, kv, now: 0 });
+    const snap = await refreshFeeds(config, {
+      transport: failing,
+      kv,
+      now: 5000, // past the TTL, so a refresh is attempted and fails
+    });
+    expect(snap.providers).toEqual(["openphish"]);
+    expect(
+      lookupInSnapshot(snap, "https://evil-collector.tk/grab").length
+    ).toBeGreaterThan(0);
+  });
+
+  test("keyed feeds are skipped without a key, not consulted as empty", async () => {
+    let called = false;
+    const t: IntelTransport = (...args) => {
+      called = true;
+      return failing(...args);
+    };
+    const snap = await refreshFeeds(
+      cfg({ phishtank: { enabled: true }, urlhaus: { enabled: true } }),
+      { transport: t, kv: new MemoryKvStore(), now: 0 }
+    );
+    expect(snap.providers).toEqual([]);
+    expect(called).toBe(false);
+  });
+
+  test("URLhaus CSV export is parsed; offline rows are dropped", async () => {
+    const csv = [
+      "# id,dateadded,url,url_status,last_online,threat,tags,urlhaus_link,reporter",
+      '"1","2026-01-01","https://live.example.com/a.exe","online","","malware_download","","https://urlhaus.abuse.ch/url/1/","r"',
+      '"2","2026-01-01","https://dead.example.com/b.exe","offline","","malware_download","","","r"',
+    ].join("\n");
+    const snap = await refreshFeeds(cfg({ urlhaus: { apiKey: "k" } }), {
+      transport: () => jsonResponse(csv),
+      kv: new MemoryKvStore(),
+      now: 0,
+    });
+    expect(snap.providers).toEqual(["urlhaus"]);
+    expect(
+      lookupInSnapshot(snap, "https://live.example.com/a.exe")
+    ).toHaveLength(1);
+    expect(
+      lookupInSnapshot(snap, "https://dead.example.com/b.exe")
+    ).toHaveLength(0);
+  });
+
+  test("a body that is not the expected format is treated as a failed pull", async () => {
+    const snap = await refreshFeeds(cfg({ urlhaus: { apiKey: "k" } }), {
+      transport: () => jsonResponse("<html>retired</html>"),
+      kv: new MemoryKvStore(),
+      now: 0,
+    });
+    expect(snap.providers).toEqual([]);
+  });
+});
