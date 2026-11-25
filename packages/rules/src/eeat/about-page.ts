@@ -22,6 +22,7 @@ import {
   findLinkedUncrawledPage,
   linkedUncrawledCheck,
 } from "../shared/linked-uncrawled-page";
+import { sitePageViews } from "../shared/site-page-view";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
@@ -49,7 +50,7 @@ export const aboutPageRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -69,10 +70,10 @@ export const aboutPageRule: Rule = {
 
     for (const page of pages) {
       const matchesUrl = isAboutPath(page.url, paths);
-      const matchesSchema = page.parsed.schemas.hasType("AboutPage");
+      const matchesSchema = page.aboutSchema;
       if (matchesUrl || matchesSchema) {
         aboutPage = page.url;
-        aboutPageWordCount = page.parsed.content.wordCount;
+        aboutPageWordCount = page.wordCount;
         break;
       }
     }
@@ -124,9 +125,12 @@ export const aboutPageRule: Rule = {
       const probed = probedConfiguredPages(ctx.site, paths);
       const probedFound = probed.find((p) => p.outcome === "found");
       const linked = ctx.site
-        ? findLinkedUncrawledPage(ctx.site, {
-            href: (url) => isAboutPath(url, paths),
-          })
+        ? findLinkedUncrawledPage(
+            { ...ctx.site, pages },
+            {
+              href: (url) => isAboutPath(url, paths),
+            }
+          )
         : null;
       if (probedFound) {
         // #1428: the crawl did not reach it, the probe did.

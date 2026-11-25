@@ -15,11 +15,12 @@ import {
   linkedUncrawledCheck,
 } from "../shared/linked-uncrawled-page";
 import {
-  findPrivacyPage,
+  findPrivacyView,
   isPrivacyLinkText,
   isPrivacyPath,
-  pageLinksToPrivacyHref,
+  viewLinksToPrivacyHref,
 } from "../shared/privacy-page";
+import { sitePageViews } from "../shared/site-page-view";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
@@ -42,7 +43,7 @@ export const privacyPolicyRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -58,7 +59,7 @@ export const privacyPolicyRule: Rule = {
     // catches redirects/unusual slugs (#1098). Unlike about/contact, there is no
     // standard Schema.org @type for privacy pages, so no schema fallback (#121).
     let linkedFromPages = 0;
-    const privacyPage = findPrivacyPage(pages, paths);
+    const privacyPage = findPrivacyView(pages, paths);
 
     if (privacyPage) {
       checks.push({
@@ -72,11 +73,14 @@ export const privacyPolicyRule: Rule = {
       // excluded `/policies/**`, or past the page budget) is unverified, not
       // missing. Same link acceptance as legal/privacy-policy: slug, then text.
       const linked = ctx.site
-        ? findLinkedUncrawledPage(ctx.site, {
-            href: (url) =>
-              matchesConfiguredPaths(url, paths) || isPrivacyPath(url),
-            text: isPrivacyLinkText,
-          })
+        ? findLinkedUncrawledPage(
+            { ...ctx.site, pages },
+            {
+              href: (url) =>
+                matchesConfiguredPaths(url, paths) || isPrivacyPath(url),
+              text: isPrivacyLinkText,
+            }
+          )
         : null;
       const probed = probedConfiguredPages(ctx.site, paths);
       const probedFound = probed.find((p) => p.outcome === "found");
@@ -120,7 +124,7 @@ export const privacyPolicyRule: Rule = {
     // Check how many pages link to it (href-slug only — the original metric, not
     // widened by anchor-text matching which belongs to the legal rule).
     for (const page of pages) {
-      if (pageLinksToPrivacyHref(page, paths)) linkedFromPages++;
+      if (viewLinksToPrivacyHref(page, paths)) linkedFromPages++;
     }
 
     const linkPercentage = Math.round((linkedFromPages / pages.length) * 100);

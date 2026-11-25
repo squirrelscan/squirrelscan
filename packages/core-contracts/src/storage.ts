@@ -1345,6 +1345,81 @@ export interface ClickDepthResult {
   truncated: "maxDepth" | "maxNodes" | null;
 }
 
+/** One link of a {@link SitePageView}: the raw href as parsed, its anchor text and whether it is internal. */
+export interface SitePageViewLink {
+  url: string;
+  text: string;
+  isInternal: boolean;
+}
+
+/**
+ * The bounded scalars the sitemap, hreflang and E-E-A-T site rules read from one page
+ * (#2309): everything `site.pages[]` gave them, without the parsed page. Built by
+ * `buildSitePageView` (@squirrelscan/rules) so the streaming engine and the legacy path
+ * derive the same record from the same page.
+ */
+export interface SitePageView {
+  url: string;
+  finalUrl?: string;
+  /** HTTP status of the stored response. */
+  status: number;
+  /** A URL that redirected: kept for the redirect-aware rules, not a page. */
+  redirectSource: boolean;
+  /** The page has a parse (hreflang-targets treats a page without one as not checked). */
+  hasParsed: boolean;
+  /** `documentUrl(page)`: the stored document's URL once an observed redirect is followed. */
+  documentUrl: string;
+  /** `didRedirect(url, finalUrl, redirectChain)`. */
+  redirected: boolean;
+  /** `redirectChain.finalUrl ?? finalUrl`, for the hreflang message. */
+  redirectFinalUrl: string | null;
+  title: string | null;
+  description: string | null;
+  h1: string[];
+  wordCount: number;
+  /** Distinct `parsed.schema.types`. */
+  schemaTypes: string[];
+  /** `schemas.hasType("AboutPage")` (case-insensitive, unlike `schemaTypes`). */
+  aboutSchema: boolean;
+  /** `schemas.hasType("ContactPage")`. */
+  contactSchema: boolean;
+  /** Distinct links by (href, text, internal), in document order. */
+  links: SitePageViewLink[];
+  /** The page has a `mailto:` link. */
+  hasMailto: boolean;
+  /** The page has a `tel:` link. */
+  hasTel: boolean;
+  /** External links to an authoritative domain, duplicates counted (eeat/citations). */
+  authoritativeLinks: number;
+  /** The page is a Product or ProductGroup page (crawl/product-discovery). */
+  productPage: boolean;
+  /** The page links to a cart or checkout path. */
+  cartLink: boolean;
+  /** Some link matches an affiliate network pattern (eeat/affiliate-disclosure). */
+  affiliateLink: boolean;
+  /** `parsed.author !== null`. */
+  hasAuthor: boolean;
+  /** Some flattened JSON-LD node carries an `author`. */
+  schemaAuthor: boolean;
+  schemaDatePublished: boolean;
+  schemaDateModified: boolean;
+  /** `parsed.visibleAuthor`; null when absent (the rules tell "" from absent). */
+  visibleAuthor: string | null;
+  visibleDatePublished: string | null;
+  visibleDateModified: string | null;
+  /** `parsed.pageType`. */
+  pageType: string | null;
+  /** The page's strongest own date (sitemap-lastmod-drift), or null. */
+  pageDate: { value: string; source: "schema" | "meta" | "visible" } | null;
+  /** Where the page's noindex comes from, or null. */
+  noindex: "robots meta tag" | "X-Robots-Tag header" | null;
+  hreflang: {
+    alternates: HreflangAlternate[];
+    noindex: "robots meta tag" | "X-Robots-Tag header" | null;
+    canonical: string | null;
+  };
+}
+
 export interface SiteQuery {
   /** Number of accumulated page rows for the crawl. */
   pageCount(): number;
@@ -1428,6 +1503,12 @@ export interface SiteQuery {
   pagesMatching(
     pred: (row: PageFeatureRow) => boolean
   ): AsyncIterable<PageFeatureRow>;
+  /**
+   * One {@link SitePageView} per page of the audit universe, redirect sources included, in crawl
+   * order (#2309). Optional: an implementation without it omits it, and the sitemap, hreflang and
+   * E-E-A-T rules derive the same views from `site.pages`.
+   */
+  pageViews?(): readonly SitePageView[];
 }
 
 // ============================================

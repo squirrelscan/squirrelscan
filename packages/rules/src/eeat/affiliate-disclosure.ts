@@ -4,6 +4,8 @@ import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const affiliateDisclosureRule: Rule = {
   meta: {
     id: "eeat/affiliate-disclosure",
@@ -25,7 +27,7 @@ export const affiliateDisclosureRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -57,21 +59,8 @@ export const affiliateDisclosureRule: Rule = {
 
     // Check for affiliate links
     let pagesWithAffiliateLinks = 0;
-    const affiliatePatterns = [
-      /amazon\.[a-z]+\/.*tag=/i,
-      /shareasale\.com/i,
-      /go\.redirectingat\.com/i,
-      /awin1\.com/i,
-      /commission-junction/i,
-      /\?ref=/i,
-      /\?affiliate=/i,
-    ];
-
     for (const page of pages) {
-      const hasAffiliateLink = page.parsed.links.some((l) =>
-        affiliatePatterns.some((p) => p.test(l.url))
-      );
-      if (hasAffiliateLink) pagesWithAffiliateLinks++;
+      if (page.affiliateLink) pagesWithAffiliateLinks++;
     }
 
     if (pagesWithAffiliateLinks > 0) {

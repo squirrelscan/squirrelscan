@@ -17,6 +17,7 @@ import {
   findLinkedUncrawledPage,
   linkedUncrawledCheck,
 } from "../shared/linked-uncrawled-page";
+import { sitePageViews } from "../shared/site-page-view";
 
 export const optionsSchema = z.object({ paths: eeatPathsSchema });
 
@@ -43,7 +44,7 @@ export const contactPageRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const { paths } = optionsSchema.parse(ctx.options);
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -64,14 +65,19 @@ export const contactPageRule: Rule = {
     // signal that THIS page is the contact page.
     let contactPage: {
       url: string;
-      links: (typeof pages)[0]["parsed"]["links"];
+      hasEmail: boolean;
+      hasPhone: boolean;
     } | null = null;
 
     for (const page of pages) {
       const matchesUrl = isContactPath(page.url, paths);
-      const matchesSchema = page.parsed.schemas.hasType("ContactPage");
+      const matchesSchema = page.contactSchema;
       if (matchesUrl || matchesSchema) {
-        contactPage = { url: page.url, links: page.parsed.links };
+        contactPage = {
+          url: page.url,
+          hasEmail: page.hasMailto,
+          hasPhone: page.hasTel,
+        };
         break;
       }
     }
@@ -110,9 +116,12 @@ export const contactPageRule: Rule = {
       // pub#740: a Contact page the pages link to but the crawl never fetched
       // is unverified, not missing. Its contact methods cannot be read.
       const linked = ctx.site
-        ? findLinkedUncrawledPage(ctx.site, {
-            href: (url) => isContactPath(url, paths),
-          })
+        ? findLinkedUncrawledPage(
+            { ...ctx.site, pages },
+            {
+              href: (url) => isContactPath(url, paths),
+            }
+          )
         : null;
       checks.push(
         linked
@@ -135,8 +144,7 @@ export const contactPageRule: Rule = {
     });
 
     // Check for contact methods
-    const hasEmail = contactPage.links.some((l) => l.url.startsWith("mailto:"));
-    const hasPhone = contactPage.links.some((l) => l.url.startsWith("tel:"));
+    const { hasEmail, hasPhone } = contactPage;
 
     const methods: string[] = [];
     if (hasEmail) methods.push("email");

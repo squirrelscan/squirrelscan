@@ -6,6 +6,8 @@
 // fetched, from the records it holds. It makes no request of its own, and a
 // target the crawl did not fetch is counted as not checked, never passed or failed.
 
+import type { SitePageView } from "@squirrelscan/core-contracts";
+
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 
 import type {
@@ -14,19 +16,13 @@ import type {
   Rule,
   RuleContext,
   RuleResult,
-  SiteData,
 } from "../types";
+import type { HreflangPageSignal } from "./hreflang-signal";
 
-import { didRedirect, documentUrl } from "../shared/redirect-evidence";
-import {
-  buildHreflangSignal,
-  type HreflangPageSignal,
-} from "./hreflang-signal";
+import { sitePageViews } from "../shared/site-page-view";
 
 /** Items kept per check; the count in `value` is always the full total. */
 const MAX_ITEMS = 200;
-
-type SitePage = NonNullable<SiteData["pages"]>[number];
 
 interface Finding {
   source: string;
@@ -36,14 +32,14 @@ interface Finding {
 
 /** What the crawl knows about one target URL. */
 type Target =
-  | { kind: "page"; page: SitePage; signal: HreflangPageSignal }
+  | { kind: "page"; page: SitePageView; signal: HreflangPageSignal }
   | { kind: "fetched"; status: number }
   | { kind: "unchecked" };
 
-function pageIdentities(page: SitePage): Set<string> {
+function pageIdentities(page: SitePageView): Set<string> {
   const ids = new Set<string>([
     normalizePageUrl(page.url),
-    normalizePageUrl(documentUrl(page)),
+    normalizePageUrl(page.documentUrl),
   ]);
   if (page.finalUrl) ids.add(normalizePageUrl(page.finalUrl));
   return ids;
@@ -134,13 +130,9 @@ export const hreflangTargetsRule: Rule = {
   },
 
   run(ctx: RuleContext): RuleResult {
-    const pages = ctx.site?.pages ?? [];
-    const collected = new Map(
-      (ctx.collectedSignals?.pages ?? []).map((r) => [r.url, r.hreflang])
-    );
-    const signalOf = (page: SitePage): HreflangPageSignal =>
-      collected.get(page.url) ??
-      buildHreflangSignal(page.parsed, page.headers, page.url);
+    const pages = sitePageViews(ctx, { redirectAware: true }) ?? [];
+    // The view carries the page's hreflang signal, built from its parse and headers.
+    const signalOf = (page: SitePageView): HreflangPageSignal => page.hreflang;
 
     // Every page the crawl holds, by the URL the crawl requested. Sorted so the
     // first claimant of an identity does not depend on crawl order.
@@ -149,7 +141,7 @@ export const hreflangTargetsRule: Rule = {
     );
     const byIdentity = new Map<string, Target>();
     for (const page of sorted) {
-      const target: Target = page.parsed
+      const target: Target = page.hasParsed
         ? { kind: "page", page, signal: signalOf(page) }
         : { kind: "unchecked" };
       const own = normalizePageUrl(page.url);
@@ -179,7 +171,7 @@ export const hreflangTargetsRule: Rule = {
     let linkCount = 0;
 
     for (const source of sorted) {
-      if (!source.parsed || source.statusCode >= 400) continue;
+      if (!source.hasParsed || source.status >= 400) continue;
       const alternates = signalOf(source).alternates;
       if (alternates.length === 0) continue;
       const sourceIds = pageIdentities(source);
@@ -216,19 +208,16 @@ export const hreflangTargetsRule: Rule = {
 
         const { page, signal } = target;
         checked.add(alt.href);
-        if (page.statusCode >= 400) {
+        if (page.status >= 400) {
           broken.push({
             source: source.url,
             target: alt.href,
-            label: `${source.url} links ${alt.href} (${alt.hreflang}), which returns ${page.statusCode}`,
+            label: `${source.url} links ${alt.href} (${alt.hreflang}), which returns ${page.status}`,
           });
           continue;
         }
-        if (
-          page.statusCode >= 300 ||
-          didRedirect(page.url, page.finalUrl, page.redirectChain)
-        ) {
-          const finalUrl = page.redirectChain?.finalUrl ?? page.finalUrl;
+        if (page.status >= 300 || page.redirected) {
+          const finalUrl = page.redirectFinalUrl ?? undefined;
           redirects.push({
             source: source.url,
             target: alt.href,

@@ -1,9 +1,9 @@
 // eeat/content-dates - Published and updated date signals
 
-import { flattenJsonLdNodes } from "@squirrelscan/utils";
-
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { skipsNoindexPages } from "../shared/noindex";
+import { sitePageViews } from "../shared/site-page-view";
 import {
   bylineConsistencyDeviants,
   defersToBylineConsistency,
@@ -31,7 +31,7 @@ export const contentDatesRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -45,7 +45,7 @@ export const contentDatesRule: Rule = {
     // Precedence (#1364): a page that breaks its page type's own date convention is
     // reported by eeat/byline-consistency, so it is not counted undated here too.
     const deferred = defersToBylineConsistency(ctx)
-      ? bylineConsistencyDeviants(ctx.site).date
+      ? bylineConsistencyDeviants(pages, skipsNoindexPages(ctx.site)).date
       : new Set<string>();
     let deferredPages = 0;
 
@@ -54,39 +54,32 @@ export const contentDatesRule: Rule = {
     let contentPages = 0;
 
     for (const page of pages) {
-      const hasArticleSchema = page.parsed.schema.types.some((t) =>
+      const hasArticleSchema = page.schemaTypes.some((t) =>
         ["Article", "BlogPosting", "NewsArticle"].includes(t)
       );
       // A page with visible byline/date markup (Kadence-style entry pages) is
       // article content even without JSON-LD Article schema — otherwise we'd
       // skip the very pages this fix is meant to detect.
       const hasVisibleContentSignal =
-        page.parsed.visibleDatePublished != null ||
-        page.parsed.visibleAuthor != null;
+        page.visibleDatePublished != null || page.visibleAuthor != null;
 
       if (!hasArticleSchema && !hasVisibleContentSignal && pages.length > 5)
         continue;
       contentPages++;
 
       // Check for date schema
-      let hasDatePublished = false;
-      let hasDateModified = false;
-
-      if (page.parsed.schema.raw) {
-        // Flattened nodes include @graph children — top-level-only checks
-        // miss every date on Yoast-style sites.
-        const nodes = flattenJsonLdNodes(page.parsed.schema.raw);
-        hasDatePublished = nodes.some((s) => s["datePublished"]);
-        hasDateModified = nodes.some((s) => s["dateModified"]);
-      }
+      // The view flattens the JSON-LD graph, so a date on an @graph child counts
+      // (a top-level-only check misses every date on Yoast-style sites).
+      let hasDatePublished = page.schemaDatePublished;
+      let hasDateModified = page.schemaDateModified;
 
       // Fall back to visible entry-meta `<time>` markup (`entry-date published`,
       // `[itemprop="datePublished"]`, `updated`) for themes that omit JSON-LD
       // dates. Footer/header dates are already filtered by the parser.
-      if (!hasDatePublished && page.parsed.visibleDatePublished) {
+      if (!hasDatePublished && page.visibleDatePublished) {
         hasDatePublished = true;
       }
-      if (!hasDateModified && page.parsed.visibleDateModified) {
+      if (!hasDateModified && page.visibleDateModified) {
         hasDateModified = true;
       }
 

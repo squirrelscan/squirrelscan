@@ -4,12 +4,9 @@ import { normalizeUrl } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-import {
-  excludesNoindexPage,
-  noindexSource,
-  skipsNoindexPages,
-} from "../shared/noindex";
+import { skipsNoindexPages } from "../shared/noindex";
 import { sampleUrlItems } from "../shared/sample-items";
+import { sitePageViews } from "../shared/site-page-view";
 import { productDiscoveryCheck } from "./product-discovery";
 
 function normalizedOrNull(url: string): string | null {
@@ -61,7 +58,7 @@ const coverageRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
     const sitemaps = ctx.site?.sitemaps;
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx, { redirectAware: true });
 
     if (!sitemaps || sitemaps.discovered.length === 0) {
       checks.push({
@@ -122,8 +119,7 @@ const coverageRule: Rule = {
       const noindexUrls = new Set<string>();
       if (skipNoindex) {
         for (const page of pages) {
-          if (!excludesNoindexPage(ctx.site, page.parsed, page.headers))
-            continue;
+          if (page.noindex === null) continue;
           for (const candidate of [page.url, page.finalUrl]) {
             const normalized = candidate ? normalizedOrNull(candidate) : null;
             if (normalized) noindexUrls.add(normalized);
@@ -141,12 +137,12 @@ const coverageRule: Rule = {
     } else {
       for (const page of pages) {
         // Skip non-200 pages
-        if (page.statusCode !== 200) continue;
+        if (page.status !== 200) continue;
 
         // Unchanged where the gate is closed: the fallback has always left out
         // meta-noindex pages, and still does (header noindex is only read when
         // the site is known to be indexable).
-        const source = noindexSource(page.parsed, page.headers);
+        const source = page.noindex;
         if (skipNoindex ? source !== null : source === "robots meta tag")
           continue;
 

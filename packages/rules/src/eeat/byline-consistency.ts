@@ -33,29 +33,27 @@
 // Precedence over eeat/author-byline and eeat/content-dates (#1364): a page this
 // rule reports is one the site's own convention says should carry the signal, so it
 // is reported ONCE, here. Both per-page rules call {@link bylineConsistencyDeviants}
-// over the same `site.pages` and leave those pages out of their share (only when the
+// over the same page views and leave those pages out of their share (only when the
 // page would otherwise count as missing the signal, and only when this rule is
 // enabled for the run). A page that breaks no convention is still theirs.
 //
 // Dual path: `ctx.siteQuery` streams (normalizedUrl, status, pageType, visibleAuthor,
 // visibleDate, robotsNoindex) off page_features; the legacy path derives the same
-// fields from `ctx.site.pages` exactly as audit-engine's page-features extractor
+// fields from the page views (`ctx.siteQuery.pageViews()`, else derived from the crawled pages) as audit-engine's page-features extractor
 // does. Both feed ONE accumulator and ONE check builder, and every list is sorted
 // before it is emitted, so the output is byte-identical by construction and
 // independent of crawl order (same shape as content/duplicate-title, #1021/#1022).
 
-import type { CheckItem, SiteQuery } from "@squirrelscan/core-contracts";
-
 import type {
-  Rule,
-  RuleContext,
-  RuleResult,
-  CheckResult,
-  ParsedPage,
-  SiteData,
-} from "../types";
+  CheckItem,
+  SitePageView,
+  SiteQuery,
+} from "@squirrelscan/core-contracts";
 
-import { excludesNoindexPage, skipsNoindexPages } from "../shared/noindex";
+import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
+
+import { skipsNoindexPages } from "../shared/noindex";
+import { sitePageViews } from "../shared/site-page-view";
 
 export const BYLINE_CONSISTENCY_RULE_ID = "eeat/byline-consistency";
 
@@ -311,46 +309,47 @@ function buildChecks(
   ];
 }
 
-/** The legacy record for one `site.pages` entry, derived as page_features does. */
-function legacyRecord(
-  site: SiteData | undefined,
-  page: SiteData["pages"][number]
+/** The record for one page view, derived as page_features does. */
+function viewRecord(
+  view: SitePageView,
+  skipNoindex: boolean
 ): BylinePageRecord {
-  const parsed: ParsedPage | undefined = page.parsed;
   return {
-    url: page.url,
-    status: page.statusCode,
-    pageType: parsed?.pageType ?? null,
-    visibleAuthor: parsed?.visibleAuthor != null,
+    url: view.url,
+    status: view.status,
+    pageType: view.pageType,
+    visibleAuthor: view.visibleAuthor != null,
     visibleDate:
-      parsed?.visibleDatePublished != null ||
-      parsed?.visibleDateModified != null,
-    excluded: excludesNoindexPage(site, parsed, page.headers),
+      view.visibleDatePublished != null || view.visibleDateModified != null,
+    excluded: skipNoindex && view.noindex !== null,
   };
 }
 
-function legacyRollup(site: SiteData | undefined): BylineRollup {
+function viewRollup(
+  views: readonly SitePageView[],
+  skipNoindex: boolean
+): BylineRollup {
   const rollup = emptyRollup();
-  for (const page of site?.pages ?? [])
-    accumulatePage(rollup, legacyRecord(site, page));
+  for (const view of views)
+    accumulatePage(rollup, viewRecord(view, skipNoindex));
   return rollup;
 }
 
 /**
- * The pages this rule reports, per signal, over `site.pages` (empty when it would
+ * The pages this rule reports, per signal, over the page views (empty when it would
  * skip or pass). eeat/author-byline and eeat/content-dates use it to leave those
  * pages to this rule, so a page is reported once (#1364).
  */
 export function bylineConsistencyDeviants(
-  site: SiteData | undefined
+  views: readonly SitePageView[],
+  skipNoindex: boolean
 ): Record<BylineSignal, Set<string>> {
   const out: Record<BylineSignal, Set<string>> = {
     author: new Set(),
     date: new Set(),
   };
-  const pages = site?.pages;
-  if (!pages || pages.length === 0) return out;
-  const verdict = judge(legacyRollup(site), pages.length);
+  if (views.length === 0) return out;
+  const verdict = judge(viewRollup(views, skipNoindex), views.length);
   if (verdict.kind === "skip") return out;
   for (const norm of verdict.norms) {
     for (const url of norm.deviants) out[norm.signal].add(url);
@@ -418,12 +417,12 @@ export const bylineConsistencyRule: Rule = {
       return runViaSiteQuery(ctx.siteQuery, skipsNoindexPages(ctx.site));
     }
 
-    const pages = ctx.site?.pages;
-    if (!pages || pages.length === 0) {
+    const views = sitePageViews(ctx);
+    if (!views || views.length === 0) {
       return { checks: [skip("No pages available for analysis")] };
     }
 
-    const rollup = legacyRollup(ctx.site);
+    const rollup = viewRollup(views, skipsNoindexPages(ctx.site));
     return { checks: buildChecks(rollup, rollup.pageCount) };
   },
 };

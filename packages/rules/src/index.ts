@@ -2,6 +2,7 @@
 
 export * from "./types";
 export * from "./collected-signals";
+export { buildSitePageView, sitePageViews } from "./shared/site-page-view";
 export * from "./endpoint-surface";
 export * from "./categories";
 export * from "./filter";

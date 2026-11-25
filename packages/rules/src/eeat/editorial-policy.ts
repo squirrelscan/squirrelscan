@@ -5,6 +5,8 @@ import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const editorialPolicyRule: Rule = {
   meta: {
     id: "eeat/editorial-policy",
@@ -27,7 +29,7 @@ export const editorialPolicyRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({

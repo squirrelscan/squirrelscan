@@ -25,6 +25,13 @@ export interface LinkTargetMatcher {
   text?: (text: string) => boolean;
 }
 
+/** The slice of a page view the search reads: where it is and the links it carries. */
+export interface LinkSourcePage {
+  url: string;
+  finalUrl?: string;
+  links: ReadonlyArray<{ url: string; text: string }>;
+}
+
 export interface LinkedUncrawledPage {
   /** Resolved URL of the link target. */
   url: string;
@@ -66,7 +73,9 @@ function sameSiteUrl(href: string, pageUrl: string): string | null {
  * own page test already judged it.
  */
 export function findLinkedUncrawledPage(
-  site: Pick<SiteData, "pages" | "linkTargetStatuses">,
+  site: Pick<SiteData, "linkTargetStatuses"> & {
+    pages: readonly LinkSourcePage[];
+  },
   matcher: LinkTargetMatcher
 ): LinkedUncrawledPage | null {
   const crawled = new Set<string>();
@@ -79,7 +88,7 @@ export function findLinkedUncrawledPage(
     accepts: (link: { url: string; text: string }, resolved: string) => boolean
   ): { url: string; linkedFrom: string } | null => {
     for (const page of site.pages) {
-      for (const link of page.parsed?.links ?? []) {
+      for (const link of page.links) {
         const resolved = sameSiteUrl(link.url, page.url);
         if (!resolved || crawled.has(normalizeUrl(resolved))) continue;
         if (accepts(link, resolved))
