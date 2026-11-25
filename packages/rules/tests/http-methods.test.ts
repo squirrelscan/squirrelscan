@@ -62,9 +62,18 @@ describe("parseAllow", () => {
     expect(parseAllow(null)).toEqual([]);
   });
   test("covers every method the rule documents", () => {
-    expect(parseAllow(DANGEROUS_METHODS.join(","))).toEqual([
-      ...DANGEROUS_METHODS,
-    ]);
+    // Literal on purpose: a test built from DANGEROUS_METHODS still passes
+    // when a method is dropped from the constant.
+    const documented = [
+      "TRACE",
+      "TRACK",
+      "PUT",
+      "DELETE",
+      "PATCH",
+      "CONNECT",
+    ] as const;
+    expect([...DANGEROUS_METHODS]).toEqual([...documented]);
+    expect(parseAllow(documented.join(","))).toEqual([...documented]);
   });
 });
 
