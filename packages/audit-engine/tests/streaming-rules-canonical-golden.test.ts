@@ -194,6 +194,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       "security/graphql-introspection",
       "security/graphql-get-mutations",
       "security/unauthenticated-api",
+      "security/unpaginated-api",
       "security/json-sensitive-fields",
       "security/exposed-files",
       "security/exposed-backups",

@@ -1,0 +1,130 @@
+---
+title: "Unpaginated API endpoints: when one request returns a whole table"
+description: "A collection endpoint that answers every full record in one response, and ignores limit and page parameters, slows pages and hands out the whole table. squirrel reports the row count and response size, never a record value."
+---
+
+## Why an unpaginated endpoint matters
+
+Generated CRUD backends often expose `GET /api/<table>` that selects every row and returns it. It works with ten rows. With ten thousand it makes pages slow, costs bandwidth, loads your database on every call, and gives anyone who finds the route the whole table in one request, where pagination and filters would limit what a single call can read.
+
+## What squirrel checks
+
+This is a probing rule. It sends requests beyond the crawl, so it runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check. A cloud audit stays `passive` until you verify that you own the website.
+
+### Which endpoints are probed
+
+The same endpoints, with the same limits, as [security/unauthenticated-api](/rules/security/unauthenticated-api): endpoints found in your own pages and scripts, never a guessed path, and:
+
+- only the audited origin (scheme, host and port), never another host;
+- only `GET`: a path whose only call sites send `POST`, `PUT`, `PATCH` or `DELETE` is never probed;
+- never a path that names a state-changing or session action, a GraphQL endpoint, or a health, metrics or API-spec path;
+- below `aggressive`, never a path that `robots.txt` disallows;
+- at most ten endpoints.
+
+### What is sent
+
+The first request is the anonymous `GET` that `security/unauthenticated-api` sends, with no cookies and no `Authorization` header. One audit sends it once and both rules read the answer. At most 256 KB of the answer is read, counted after decompression.
+
+Only an endpoint that is over the threshold and shows no pagination gets a second `GET`: the same URL with these query parameters, which ask for one row under the common names for a page size:
+
+```text
+?limit=1&per_page=1&page_size=1&pageSize=1&size=1&take=1&top=1&_limit=1&page=1
+```
+
+Both requests count against the shared probe budget.
+
+### What is flagged
+
+An endpoint is flagged when all of these hold:
+
+- the answer is a 2xx JSON list of full records: an array of objects, or an array under a wrapper key such as `data`, `items` or `results`, with at least three fields per record;
+- the list has at least 100 rows, or the body is at least 128 KB with at least 10 rows, or the body is longer than the 256 KB read limit;
+- the answer shows no pagination: no next link or cursor, no `has_more`, no total pages or page size in the body or its `meta` and `links` objects, and no `Link` header with `rel="next"`;
+- the second `GET` still returns as many rows, so the endpoint ignores `limit` and `page`.
+
+### What a finding shows
+
+The endpoint, the row count and the response size:
+
+```text
+GET https://example.com/api/orders: N rows, N KB, no pagination
+```
+
+The item meta carries `rows`, `bytes` and the status. It never carries a record value, a field name or a sample. When the answer is longer than the read limit, the row count is unknown, the size reads `at least`, and the item meta has `truncated: true` and `confidence: "lower"`.
+
+### Results
+
+- `unpaginated-api-list` (warn): at least one endpoint returns a whole table.
+- `unpaginated-api` (pass): every probed endpoint answered and none returned an unpaginated whole table.
+- `unpaginated-api-unchecked` (skipped): probing is passive (`probing-passive`), no API endpoint was found in page code (`no-endpoints`), the probe budget ran out (`probe-budget`), or some endpoints were not verified (`probe-incomplete`). An endpoint is not verified when it answers with an HTTP `429`, a bot challenge or a `5xx`, when a probe fails, or when the second `GET` gets an answer that cannot say whether paging is honoured. A run with any endpoint not verified is never a pass.
+
+### What is not flagged
+
+- A list under the row and size thresholds.
+- An endpoint that returns fewer rows when it is given `limit` and `page`.
+- An endpoint that shows pagination metadata or a `Link` header.
+- A list of bare ids or labels (fewer than three fields per record).
+- An error, a redirect, an HTML page or a body that is not JSON.
+
+### Limits
+
+A complete lookup table that is meant to be returned whole, such as a list of countries or currencies, can be over the threshold. The finding is advice to confirm that, not proof of a fault. An endpoint that needs a query parameter the audit could not see may answer with an error and is not flagged. An endpoint the crawl never referenced is not found.
+
+## How to fix it
+
+- Accept `limit` and `page` (or a cursor) on every collection route, and cap the page size on the server so a client cannot ask for everything.
+- Return a next link or cursor, and a total where it is cheap, so clients can walk the list.
+- Add filters, so a client asks for the rows it needs.
+- Select only the columns the caller needs instead of returning whole rows.
+
+| | |
+|---|---|
+| **Rule ID** | `security/unpaginated-api` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/unpaginated-api"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/unpaginated-api"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `unpaginated-api-list` | Problem |  |
+| `unpaginated-api` | Clean | `unpaginated-api-list` |
+| `unpaginated-api-unchecked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/unauthenticated-api](/rules/security/unauthenticated-api): the same endpoints, graded by whether they answer without a login.
+- [security/json-sensitive-fields](/rules/security/json-sensitive-fields): credentials and bulk personal data in JSON API responses.
