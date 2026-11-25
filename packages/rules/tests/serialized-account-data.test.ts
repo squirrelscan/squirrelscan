@@ -131,12 +131,14 @@ describe("security/serialized-account-data", () => {
     const google = `AIza${"Sy0invented0invented0invented0inv".slice(0, 35)}`;
     const { findings } = scanAccountData({
       firebase: {
+        id: 1,
         apiKey: google,
         authDomain: "example.firebaseapp.com",
         projectId: "example",
         appId: "1:000000000000:web:0000000000000000",
       },
       algolia: {
+        id: 2,
         appId: "EXAMPLEAPP",
         apiKey: "0123456789abcdef0123456789abcdef",
       },
@@ -233,6 +235,25 @@ describe("security/serialized-account-data", () => {
       `<astro-island props='${JSON.stringify(user)}'></astro-island>`
     );
     expect(astro.status).toBe("fail");
+  });
+
+  test("__NUXT_DATA__ (devalue) is not read: its numbers are slot indices", async () => {
+    // Nuxt 3 devalue output: `1050` and `4` are indices into the array, not values.
+    const devalue = [
+      { data: 1 },
+      { user: 2 },
+      { id: 4, email: 5, verificationCode: 1050 },
+      "unused",
+      7,
+      "a@example.com",
+    ];
+    // Read as plain JSON the slot index would look like a code.
+    expect(scanAccountData(devalue).findings.length).toBeGreaterThan(0);
+    const check = await run(
+      `<script type="application/json" id="__NUXT_DATA__">${JSON.stringify(devalue)}</script>`
+    );
+    expect(check.status).toBe("pass");
+    expect(check.items ?? []).toEqual([]);
   });
 
   test("a clean payload passes and no payload passes", async () => {

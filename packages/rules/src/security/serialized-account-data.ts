@@ -595,6 +595,10 @@ export const serializedAccountDataRule: Rule = {
     const seen = new Set<string>();
     const now = Date.now();
     for (const source of frameworkPayloadSources(doc)) {
+      // Nuxt 3 serialises with devalue: values are slot indices into a flat
+      // array, so `{ id: 4, verificationCode: 1050 }` would be read as a code
+      // and an id. References are not resolved, so the source is skipped.
+      if (source.label === "__NUXT_DATA__") continue;
       const value = parsePayload(source);
       if (value === null) continue;
       for (const f of scanAccountData(value, now).findings) {

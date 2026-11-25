@@ -9,7 +9,7 @@ A server-rendered page hands its state to the browser as JSON or script, so the 
 
 ## What squirrel checks
 
-The rule is passive. It parses the framework payloads already in each crawled page's HTML and makes no request. It reads `<script id="__NEXT_DATA__">`, `<script id="__NUXT_DATA__">`, Qwik `qwik/json` state, scripts that assign `window.__NUXT__`, `__INITIAL_STATE__`, `__PRELOADED_STATE__`, `__APOLLO_STATE__`, `__remixContext` or `__staticRouterHydrationData` to a JSON object, and the `props` of `<astro-island>` elements. Next.js app router flight chunks are not JSON and are not read. A payload longer than 2,000,000 characters is skipped.
+The rule is passive. It parses the framework payloads already in each crawled page's HTML and makes no request. It reads `<script id="__NEXT_DATA__">`, Qwik `qwik/json` state, scripts that assign `window.__NUXT__`, `__INITIAL_STATE__`, `__PRELOADED_STATE__`, `__APOLLO_STATE__`, `__remixContext` or `__staticRouterHydrationData` to a JSON object, and the `props` of `<astro-island>` elements. Next.js app router flight chunks are not JSON and are not read. Nuxt 3's `<script id="__NUXT_DATA__">` is not read either: its devalue format stores references as array indices, which the rule does not resolve. A payload longer than 2,000,000 characters is skipped.
 
 The rule emits checks named `serialized-account-data`:
 
