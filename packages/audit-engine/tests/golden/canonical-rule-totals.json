@@ -327,6 +327,7 @@
   "security/leaked-secrets": 1,
   "security/mixed-content": 500,
   "security/new-tab": 500,
+  "security/next-data-exposure": 1,
   "security/open-redirect": 1,
   "security/password-form-get": 0,
   "security/permissions-policy": 1,

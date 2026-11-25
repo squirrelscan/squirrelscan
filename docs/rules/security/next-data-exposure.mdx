@@ -1,0 +1,104 @@
+---
+title: "Sensitive data in Next.js data files: tokens and records in pageProps"
+description: "Next.js serves getServerSideProps output as JSON at /_next/data. squirrel requests the data file of each crawled page without cookies and flags secrets and personal data in pageProps."
+---
+
+## What the exposure is
+
+A Next.js pages-router page that uses `getServerSideProps` or `getStaticProps` hands the props it returns to the browser twice: inside the HTML, in a `__NEXT_DATA__` script, and as JSON at `/_next/data/<buildId>/<path>.json`. Everything in the props is public, whether or not the page renders it. Passing a whole database row, a session object or a list of users as props therefore publishes password hashes, tokens and other people's data.
+
+## What squirrel checks
+
+This is a probing rule. It runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### Which data files are requested
+
+- The `buildId` is read from the crawled page's own `__NEXT_DATA__` script, and only for a page that script marks as server-rendered (`gssp` or `gsp`). An auto-exported page has no data file. No path is guessed.
+- The page must have the same origin as the audited URL. A `buildId` that is not made of letters, digits, `_` and `-` is ignored.
+- Below `aggressive`, a path that `robots.txt` disallows is skipped.
+- At most ten pages are requested.
+
+### What is sent
+
+One `GET` per page, to `/_next/data/<buildId>/<path>.json` (`/` becomes `index.json`), with `Accept: application/json`. It carries no cookies and no credentials and does not follow redirects. It runs inside the shared probe budget. At most 1 MB of the answer is read.
+
+### What is flagged
+
+Only `pageProps` is judged, with the same field walker and secret patterns as [security/json-sensitive-fields](/rules/security/json-sensitive-fields):
+
+- **Fail, `next-data-sensitive-fields`**: a credential in `pageProps`: a password hash by its format, a server-side key the [leaked-secrets](/rules/security/leaked-secrets) patterns recognise, or a password, secret, token, API key, social security number, card number or CVV under a field named for it. Message: `<data file URL> carries <kinds> in pageProps, readable without credentials`.
+- **Warn, `next-data-bulk-pii`**: personal data for five or more records (emails, phone numbers, addresses or dates of birth). Message: `<data file URL> carries personal data for many records in pageProps, readable without credentials: <summary>`.
+- **Pass, `next-data-exposure`**: every requested data file was verified and none carried either.
+- **Skipped**: probing is passive (`probing-passive`), no crawled page is a server-rendered Next.js page (`no-next-data`), the probe budget ran out (`probe-budget`), or some files were not verified (`probe-incomplete`): a `429`, a bot challenge, a `5xx`, a timeout, or an answer over 1 MB. A run cut short is never a pass.
+
+Values are never reported. Each item names the data file, the field path under `pageProps`, the kind of value and its length.
+
+### What is not flagged
+
+- Ordinary public props such as titles, slugs, excerpts and a single contact email.
+- Placeholders, empty values and public-by-design keys, as in the JSON rule.
+- Anything outside `pageProps`.
+- A `404` (for example a stale `buildId`), a redirect, an HTML page or a network error.
+
+### Limits
+
+The check sees what an anonymous request gets. It cannot prove that one signed-in user can read another's data. Pages that are not in the crawl are not requested.
+
+## How to fix it
+
+- Return only the fields the page renders from `getServerSideProps` and `getStaticProps`. Pick them explicitly.
+- Keep tokens, secrets and other users' data on the server, and rotate any secret that was served.
+- Treat exposed personal data as a possible breach.
+
+| | |
+|---|---|
+| **Rule ID** | `security/next-data-exposure` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 7/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/next-data-exposure"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/next-data-exposure"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `next-data-sensitive-fields` | Problem |  |
+| `next-data-bulk-pii` | Problem |  |
+| `next-data-exposure` | Clean | `next-data-sensitive-fields`, `next-data-bulk-pii` |
+| `next-data-exposure` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/json-sensitive-fields](/rules/security/json-sensitive-fields): the same checks on API endpoints found in your scripts.
+- [security/leaked-secrets](/rules/security/leaked-secrets): the same key patterns, applied to your HTML and JavaScript.

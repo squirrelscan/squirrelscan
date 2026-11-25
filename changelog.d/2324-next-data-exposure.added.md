@@ -1,0 +1,1 @@
+- New rule `security/next-data-exposure` requests the `/_next/data` JSON file of each crawled server-rendered Next.js page, without cookies, and flags tokens, secrets, password hashes and bulk personal data in `pageProps`. It runs only with `--probe active` or `aggressive` (#2324)

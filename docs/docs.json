@@ -667,6 +667,7 @@
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",
                   "rules/security/json-sensitive-fields",
+                  "rules/security/next-data-exposure",
                   "rules/security/graphql-get-mutations",
                   "rules/security/unauthenticated-api",
                   "rules/security/exposed-files",

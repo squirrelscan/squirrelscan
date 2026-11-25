@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (35 rules).
+HTTPS, headers, and safe link practices (36 rules).
 
 ## Run only these rules
 
@@ -81,6 +81,7 @@ These carry the highest severity and weight in the category.
 | [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info | Site-wide |
 | [rel=noopener: external target=_blank links and tabnabbing](/rules/security/new-tab) | An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page. | warning | Per-page |
 | [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt) | Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages. | warning | Site-wide |
+| [Sensitive data in Next.js data files: tokens and records in pageProps](/rules/security/next-data-exposure) | Next.js serves getServerSideProps output as JSON at /_next/data. squirrel requests the data file of each crawled page without cookies and flags secrets and personal data in pageProps. | error | Site-wide |
 | [Sensitive fields in JSON API responses: password hashes, tokens and PII](/rules/security/json-sensitive-fields) | An API that returns whole database rows can hand anyone password hashes, tokens and other users' emails. squirrel requests your own API endpoints without cookies and flags them. | error | Site-wide |
 | [Subresource Integrity: which scripts need an integrity hash](/rules/security/sri) | Cross-origin scripts and stylesheets with no integrity hash can be swapped by a compromised CDN. squirrel lists every one, page by page. | warning | Per-page |
 | [Supabase Row Level Security off: tables the anon key can read](/rules/security/supabase-rls) | A Supabase table without Row Level Security answers anyone who holds the public anon key. squirrel counts the rows each table your code queries shows that key, with a HEAD request that reads no data. | error | Site-wide |

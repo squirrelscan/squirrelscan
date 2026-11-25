@@ -4010,6 +4010,12 @@
    "new-tab-security|info|No external target=\"_blank\" links found||"
   ]
  },
+ "security/next-data-exposure": {
+  "digest": "170510316534770",
+  "lines": [
+   "next-data-exposure|skipped|Probing is passive, so no Next.js data file was requested. Run with --probe active to check pageProps for sensitive data.||"
+  ]
+ },
  "security/open-redirect": {
   "digest": "163295195601176",
   "lines": [

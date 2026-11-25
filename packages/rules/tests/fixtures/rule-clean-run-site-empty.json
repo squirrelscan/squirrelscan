@@ -16,6 +16,7 @@
   "security/graphql-introspection",
   "security/http-to-https",
   "security/json-sensitive-fields",
+  "security/next-data-exposure",
   "security/open-redirect",
   "security/query-error-fuzz",
   "security/supabase-rls",
