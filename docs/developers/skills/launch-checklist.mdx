@@ -7,7 +7,7 @@ icon: "brain"
 
 `launch-checklist` is an Agent Skills `SKILL.md` from squirrelscan: a pre-launch website check for a new website, a redesign or a migration. It runs one full baseline audit through the squirrel CLI or the hosted squirrelscan MCP server. Then it works through the other squirrelscan skills in launch order and ends with a go or no-go list. It runs in Claude Code, Codex, Cursor and other coding agents.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -45,10 +45,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -75,11 +82,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Is my website ready to launch? Check https://staging.example.com
+```
+
+```text
 Run a pre-launch website check and give me a go or no-go list
+```
+
+```text
 Audit my migration before cutover and compare the live website with the baseline
 ```
+
+</div>
 
 The agent audits staging first and works through the blockers with the matching skills. It re-audits the live URL after DNS and deploy. Then it gives you the go or no-go table.
 

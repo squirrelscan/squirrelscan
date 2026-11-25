@@ -7,7 +7,7 @@ icon: "brain"
 
 `audit-website` is an Agent Skills `SKILL.md` from squirrelscan: the website audit agent skill. It audits a website and maps each issue to the code or content behind it. It fixes in batches and re-audits until the website scores well. It runs 350+ audit rules across SEO, performance, security, technical, content, accessibility and more, through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents, and is the general fix loop the narrower squirrelscan skills hand back to.
 
-Version 3.4.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -58,10 +58,17 @@ squirrel skills install audit-website
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -88,11 +95,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Audit this website and fix all errors and warnings
+```
+
+```text
 Run an audit on example.com and show me the top 5 critical issues
+```
+
+```text
 Re-audit after the deploy and diff against the last report
 ```
+
+</div>
 
 The agent asks which website to audit, tells you the cost and runs the audit. It proposes fixes for your approval and edits the source files. Then it re-audits and shows the score change.
 

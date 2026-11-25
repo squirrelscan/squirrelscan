@@ -54,6 +54,16 @@ squirrel audit https://example.com --rule-include ax,performance
 ```
 ```
 
+## Copyable commands and prompts
+
+One thing the reader types gets one code block, so each has its own Copy button.
+
+- Commands typed one at a time into a coding agent, such as `/plugin marketplace add squirrelscan/skills` and then `/plugin install squirrelscan@squirrelscan`, go in separate blocks, never stacked in one.
+- Example prompts go one per block. On a docs page, wrap the run in `<div class="sq-prompts">` so the Copy button is always visible, not only on hover. For slash commands, use `<div class="sq-install">`.
+- A shell script that runs as a unit can stay in one block.
+
+The same rule applies to `README.md` files, here and in squirrelscan/skills.
+
 ## Punctuation
 
 No em-dashes anywhere in public copy. Use a colon, a comma, or a full stop. This predates this document and still holds.

@@ -7,7 +7,7 @@ icon: "brain"
 
 `website-ci-gate` is an Agent Skills `SKILL.md` from squirrelscan that adds a website audit check to CI: a GitHub Actions website audit and preview deploy gate for coding agents. It uses the squirrel CLI in Claude Code, Codex, Cursor and other agents to fail builds on a score threshold, error issues or new issues. It writes pipeline config and picks thresholds from a real baseline. It does not fix issues.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -46,10 +46,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -76,11 +83,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Add squirrelscan to GitHub Actions for https://staging.example.com
+```
+
+```text
 Fail CI on website audit errors and score drops below 85
+```
+
+```text
 Gate preview deploys on audit scores
 ```
+
+</div>
 
 The agent runs a baseline and proposes thresholds. It shows you the workflow diff and tells you which secret to create. Then it checks the job is green on main.
 

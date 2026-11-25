@@ -1,8 +1,16 @@
-/* Install commands are made to be copied: in an install CodeGroup the Copy
+/* Install commands and example prompts (`.sq-prompts`, the skills pages) are made to be copied: in an install CodeGroup the Copy
    button is always shown, not only on hover (docs.json sets copyButton to
    "hover" for every other block). The selectors repeat tangly's own, one class
    more specific, so they win over its hover rule. */
 :root[data-copy] .sq-install .tangly-code-group .tangly-code-figure .tangly-code-copy,
-:root[data-copy] .sq-install .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy {
+:root[data-copy] .sq-install .tangly-code-figure[data-chrome="bare"] > .tangly-code-copy,
+:root[data-copy] .sq-prompts .tangly-code-figure .tangly-code-copy {
   opacity: 1;
+}
+
+/* Example prompts are prose, so long ones wrap instead of scrolling sideways. */
+.sq-prompts .tangly-code-figure pre,
+.sq-prompts .tangly-code-figure code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

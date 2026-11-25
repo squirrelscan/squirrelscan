@@ -7,7 +7,7 @@ icon: "brain"
 
 `accessibility-audit` is an Agent Skills `SKILL.md` from squirrelscan, the skill people look for as a WCAG audit skill or an accessibility checker for coding agents. It runs squirrelscan's accessibility audit rules through the squirrel CLI or the hosted squirrelscan MCP server, then fixes what it finds by component and template. It works in Claude Code, Codex, Cursor and other coding agents, and it says plainly that automated checks cover only part of WCAG.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -47,10 +47,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -77,11 +84,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Run a WCAG AA audit on https://example.com and fix the issues in this repo
+```
+
+```text
 Check my website's accessibility and group the findings by component
+```
+
+```text
 Print the WCAG checklist for the last audit
 ```
+
+</div>
 
 The agent runs `squirrel audit` with the accessibility rules and maps each issue to a component or template. It fixes in batches and re-audits. Then it gives you the list of checks a person still has to do.
 

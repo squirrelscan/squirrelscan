@@ -7,7 +7,7 @@ icon: "brain"
 
 `security-headers` is an Agent Skills `SKILL.md` from squirrelscan that writes HTTP security header configs: a CSP, HSTS and security headers generator for coding agents. It covers Cloudflare, Vercel, Netlify, nginx and Next.js in Claude Code, Codex, Cursor and other agents. It is standalone: it needs neither the squirrel CLI nor the hosted squirrelscan MCP server, and verifies live headers with `curl`.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -46,10 +46,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -70,11 +77,21 @@ None. This skill needs neither the squirrel CLI nor the hosted squirrelscan MCP 
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Add security headers to my Next.js app
+```
+
+```text
 Set up a CSP for https://example.com, report-only first
+```
+
+```text
 Fix missing HSTS and Referrer-Policy headers on our nginx config
 ```
+
+</div>
 
 The agent checks the live headers with `curl`, writes the config for your platform, rolls CSP out in report-only mode and re-checks the live response.
 

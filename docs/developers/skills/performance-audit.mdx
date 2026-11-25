@@ -7,7 +7,7 @@ icon: "brain"
 
 `performance-audit` is an Agent Skills `SKILL.md` from squirrelscan: a page speed and Core Web Vitals audit skill for coding agents. It runs squirrelscan's performance audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It then fixes slow-loading causes by template in Claude Code, Codex, Cursor and other agents. It reads markup, headers and fetched resources, so it finds causes, not real-user measurements.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -47,10 +47,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -77,11 +84,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Why is my website slow? Audit https://example.com and fix what you can in this repo
+```
+
+```text
 Fix layout shift on my product pages
+```
+
+```text
 Re-audit after the deploy and show the before and after performance score
 ```
+
+</div>
 
 The agent runs the performance and image rules at surface level, fixes the template-level causes in order, then re-audits and reports which rules cleared.
 

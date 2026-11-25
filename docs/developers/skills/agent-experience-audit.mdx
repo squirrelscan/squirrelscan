@@ -7,7 +7,7 @@ icon: "brain"
 
 `agent-experience-audit` is an Agent Skills `SKILL.md` from squirrelscan that checks how well a website works for AI agents and crawlers: the AX audit, an `llms.txt` checker and an AI crawler access check in one skill. It runs squirrelscan's agent experience audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents. It is about access and readability, not rankings or visibility in AI answers.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -45,10 +45,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -75,11 +82,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 How well does my website work for AI agents? Audit https://example.com
+```
+
+```text
 Audit my llms.txt and tell me what is wrong with it
+```
+
+```text
 Which AI bots can reach my website, and which ones does my CDN block?
 ```
+
+</div>
 
 The agent runs the `ax` audit rules and shows you the per-bot verdicts. It asks which bots you want in. Then it fixes server rendering and discovery files and records the policy in the repo.
 

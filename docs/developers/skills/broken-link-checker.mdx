@@ -7,7 +7,7 @@ icon: "brain"
 
 `broken-link-checker` is an Agent Skills `SKILL.md` from squirrelscan: a broken link checker, 404 finder and redirect chain cleaner for coding agents. It runs squirrelscan's link audit rules through the squirrel CLI or the hosted squirrelscan MCP server in Claude Code, Codex, Cursor and other agents. Broken links are usually a decision, not a mechanical fix, so it gives each issue a decision.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -46,10 +46,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -76,11 +83,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Find broken links on https://example.com and tell me what to do with each one
+```
+
+```text
 Check for 404s and redirect chains, internal links only
+```
+
+```text
 Clean up dead sitemap URLs in this repo
 ```
+
+</div>
 
 The agent runs the link audit rules and exports every broken link with the pages it appears on. It proposes a decision for each. It edits links or redirects only after you agree.
 

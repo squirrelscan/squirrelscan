@@ -7,7 +7,7 @@ icon: "brain"
 
 `security-audit` is an Agent Skills `SKILL.md` from squirrelscan: a Claude Code security audit and leaked secrets scanner for websites. It runs squirrelscan's security and integrity audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It works in Claude Code, Codex, Cursor and other coding agents. It is not a penetration test: a clean run means these checks found nothing, not that the website is secure.
 
-Version 0.1.1. New to skills? Start with the [skills overview](/developers/skills/overview).
+New to skills? Start with the [skills overview](/developers/skills/overview).
 
 ## What it does
 
@@ -46,10 +46,17 @@ Version 0.1.1. New to skills? Start with the [skills overview](/developers/skill
   <Tab title="Claude Code plugin">
     The plugin installs all the skills and the hosted squirrelscan MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="Codex">
     `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
@@ -76,11 +83,21 @@ curl -fsSL https://install.squirrelscan.com | bash
 
 Paste one of these into your coding agent:
 
+<div class="sq-prompts">
+
 ```text
 Check my website's security: https://example.com
+```
+
+```text
 Find leaked secrets in what my website ships to the browser
+```
+
+```text
 Run a passive security audit on a competitor's website, ephemeral
 ```
+
+</div>
 
 The agent asks about ownership, picks the probe level that fits, exports the full list of issues and fixes them in damage-limiting order. It gives rotation steps for any exposed key.
 
