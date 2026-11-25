@@ -1,0 +1,1 @@
+- A default CLI audit now stops requesting scripts and other assets from a host that is tarpitting it, as `--max-duration` runs already did; `--max-duration` still adds its wall-clock bound on top. (#2340)
