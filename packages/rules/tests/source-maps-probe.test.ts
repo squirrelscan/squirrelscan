@@ -17,6 +17,10 @@ const MAP_BODY = '{"version":3,"sources":["a.ts"],"mappings":""}';
 const hits: string[] = [];
 let server: ReturnType<typeof Bun.serve>;
 let origin: string;
+// A second, live origin: an off-origin map pointed here must never be fetched.
+const otherHits: string[] = [];
+let otherServer: ReturnType<typeof Bun.serve>;
+let otherOrigin: string;
 
 beforeAll(() => {
   server = Bun.serve({
@@ -35,8 +39,19 @@ beforeAll(() => {
     },
   });
   origin = `http://127.0.0.1:${server.port}`;
+  otherServer = Bun.serve({
+    port: 0,
+    fetch(req) {
+      otherHits.push(new URL(req.url).pathname);
+      return new Response("nope", { status: 404 });
+    },
+  });
+  otherOrigin = `http://127.0.0.1:${otherServer.port}`;
 });
-afterAll(() => server.stop(true));
+afterAll(() => {
+  server.stop(true);
+  otherServer.stop(true);
+});
 
 async function run(
   maps: string[],
@@ -108,11 +123,16 @@ describe("perf/source-maps: reachability probe (#2333)", () => {
 
   test("data: maps and off-origin maps are never requested", async () => {
     hits.length = 0;
+    otherHits.length = 0;
+    // The off-origin map lives on a reachable server that answers 404, so a
+    // missing origin check would both record a hit and drop the warning.
+    const offOrigin = `${otherOrigin}/x.js.map`;
     const checks = await run(
-      ["data:application/json;base64,e30=", "https://cdn.example.com/x.js.map"],
+      ["data:application/json;base64,e30=", offOrigin],
       "aggressive"
     );
-    expect(ids(checks)).toEqual(["https://cdn.example.com/x.js.map"]);
+    expect(ids(checks)).toEqual([offOrigin]);
+    expect(otherHits).toEqual([]);
     expect(hits).toEqual([]);
   });
 
