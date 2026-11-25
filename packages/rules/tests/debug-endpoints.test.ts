@@ -163,6 +163,16 @@ describe("security/debug-endpoints: classification", () => {
     expect(
       classes(JSON.stringify({ resetPassword: "/account/reset-password" }))
     ).toEqual([]);
+    // Flag values and validation copy under password-named keys.
+    for (const value of ["false", "enabled", "Password length must be >= 8"]) {
+      for (const key of [
+        "requirePassword",
+        "passwordReset",
+        "invalidPassword",
+      ]) {
+        expect(classes(JSON.stringify({ [key]: value }))).toEqual([]);
+      }
+    }
     // A PEM block and a connection string keep their whitespace and still count.
     expect(
       classes(
@@ -175,6 +185,13 @@ describe("security/debug-endpoints: classification", () => {
       classes(
         JSON.stringify({
           connectionString: `Server=db; User Id=app; Password=${SECRET}`,
+        })
+      )
+    ).toEqual(["config-secrets"]);
+    expect(
+      classes(
+        JSON.stringify({
+          dbPassword: `Server=db; User Id=app; Password=${SECRET}`,
         })
       )
     ).toEqual(["config-secrets"]);

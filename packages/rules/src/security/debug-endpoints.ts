@@ -326,6 +326,12 @@ const PLACEHOLDER_RE =
 const PLACEHOLDER_WORDS = ["redact", "masked"];
 // A site-relative path such as a route, never a credential.
 const PATH_VALUE_RE = /^\/[a-z0-9\-_/.]*$/i;
+// One key=value pair, as in a connection string. The key is bounded so the
+// unanchored match stays linear on a site-supplied string.
+const KEY_VALUE_PAIR_RE = /[A-Za-z_][\w.]{0,64}=\S/;
+// A boolean or toggle setting under a password-named key.
+const FLAG_VALUE_RE =
+  /^(?:true|false|yes|no|on|off|enabled?|disabled?|null|none)$/i;
 // Keys whose values look like addresses but are versions or digests.
 const VERSION_KEY_RE = /version|build|release|commit|sha|hash|checksum/i;
 
@@ -349,11 +355,14 @@ function isSecretValue(value: unknown): boolean {
   if (v.length < 4) return false;
   // UI copy and route paths ("Forgot your password?", "/account/reset-password")
   // sit under password-named keys in i18n bundles and route maps. A secret has
-  // no spaces, except a PEM block or a key=value connection string.
-  if (/\s/.test(v) && !v.includes("-----BEGIN") && !v.includes("=")) {
+  // no spaces, except a PEM block or a key=value connection string. A bare "="
+  // is not enough: validation copy ("Password length must be >= 8") has one.
+  if (/\s/.test(v) && !v.includes("-----BEGIN") && !KEY_VALUE_PAIR_RE.test(v)) {
     return false;
   }
   if (PATH_VALUE_RE.test(v)) return false;
+  // Feature flags ("requirePassword": "false") are settings, not credentials.
+  if (FLAG_VALUE_RE.test(v)) return false;
   if (v.length > 512) return true;
   const lower = v.toLowerCase();
   if (PLACEHOLDER_WORDS.some((w) => lower.includes(w))) return false;
