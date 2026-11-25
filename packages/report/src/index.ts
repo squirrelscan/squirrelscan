@@ -47,6 +47,7 @@ export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
 export {
   pageShare,
+  pageShareTag,
   PAGE_SHARE_SITE_WIDE,
   PAGE_SHARE_TEMPLATE,
 } from "./page-share";

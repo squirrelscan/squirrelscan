@@ -96,22 +96,25 @@ function report(checks: CheckResult[]): AuditReport {
 const SENTENCE =
   "Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 3 pages: /, /about, /pricing";
 
+// 3 of 3 crawled pages.
+const TAG = " (site-wide)";
+
 describe("a shared bundle on every page", () => {
   const full = report(PAGES.map((page) => check(page, SHARED)));
 
   test("llm emits one unit and drops the per-page Pages and Items lines", () => {
     const out = renderLlm(full);
     expect(out).toContain(
-      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`
+      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}${TAG}</fix-once>`
     );
     expect(out).not.toContain("Pages (");
     expect(out).not.toContain("Items (");
   });
 
   test("text, markdown and html say it in the same words", () => {
-    expect(renderText(full)).toContain(`    ${SENTENCE}`);
-    expect(plain(renderMarkdown(full))).toContain(`**${SENTENCE}**`);
-    expect(renderHtml(full)).toContain(SENTENCE);
+    expect(renderText(full)).toContain(`    ${SENTENCE}${TAG}`);
+    expect(plain(renderMarkdown(full))).toContain(`**${SENTENCE}${TAG}**`);
+    expect(renderHtml(full)).toContain(`${SENTENCE}${TAG}`);
   });
 
   test("exactly one unit, however many pages carried the finding", () => {
@@ -148,10 +151,10 @@ describe("a section bundle alongside the shared one", () => {
   test("two units, each with its own exact page count", () => {
     const out = renderLlm(sectioned);
     expect(out).toContain(
-      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}</fix-once>`
+      `<fix-once scope="site-resource" pages="3" resources="2">${SENTENCE}${TAG}</fix-once>`
     );
     expect(out).toContain(
-      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /about, /pricing</fix-once>'
+      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /about, /pricing (template)</fix-once>'
     );
   });
 });

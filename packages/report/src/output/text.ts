@@ -71,6 +71,7 @@ import {
 } from "../grouping";
 import { hostRows } from "../host";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
+import { pageShareTag } from "../page-share";
 import {
   affectedPagesSuffix,
   itemSourceView,
@@ -608,14 +609,18 @@ export function renderText(
         rule
       );
       for (const group of siteResources.groups) {
-        write(`    ${siteResourceFixLine(group, 5, pathOnly)}`);
+        write(
+          `    ${siteResourceFixLine(group, 5, pathOnly)}${pageShareTag(group.affectedPageCount, report.totalPages)}`
+        );
       }
       for (const rollup of fixUnits(
         coverage.groups,
         options?.componentRollup !== false
       )) {
         // One actionable line per REPAIR, not per faulty element in a block.
-        write(`    ${fixRollupLine(rollup, 5, pathOnly)}`);
+        write(
+          `    ${fixRollupLine(rollup, 5, pathOnly)}${pageShareTag(rollup.affectedPageCount, report.totalPages)}`
+        );
       }
       write("");
 

@@ -1,0 +1,1 @@
+- Fix-once lines in the text, markdown, LLM and HTML reports now end with a page-share label (site-wide, template, some pages), and a rule declared `findingScope: "page"` is never collapsed across pages. The health score is unchanged. (squirrelscan/repo#1885)

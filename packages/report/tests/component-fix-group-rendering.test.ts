@@ -117,7 +117,7 @@ describe("full coverage: the group replaces the legacy lines", () => {
   test("llm emits one fix-once line and drops Pages and Items", () => {
     const out = renderLlm(full);
     expect(out).toContain(
-      '<fix-once pages="3">Fix once in the site header: link text &quot;website&quot; is generic, 3 pages: /, /api, /guides [nav:1 &gt; a:1]</fix-once>'
+      '<fix-once pages="3">Fix once in the site header: link text &quot;website&quot; is generic, 3 pages: /, /api, /guides (template) [nav:1 &gt; a:1]</fix-once>'
     );
     expect(out).not.toContain("Pages (");
     expect(out).not.toContain("Items (");
@@ -125,10 +125,10 @@ describe("full coverage: the group replaces the legacy lines", () => {
 
   test("text and markdown say the same thing in the same words", () => {
     expect(renderText(full)).toContain(
-      'Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides'
+      'Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides (template)'
     );
     expect(plain(renderMarkdown(full))).toContain(
-      '**Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides**'
+      '**Fix once in the site header (nav:1 > a:1): link text "website" is generic, 3 pages: /, /api, /guides (template)**'
     );
   });
 

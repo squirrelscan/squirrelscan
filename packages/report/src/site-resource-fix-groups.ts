@@ -127,6 +127,7 @@ export function siteResourceFixGroups(
   rule: GroupedRule
 ): SiteResourceFixGroup[] {
   const groups: SiteResourceFixGroup[] = [];
+  if (rule.findingScope === "page") return groups;
   for (const check of rule.checks) {
     const occurrences = (
       check as { siteResourceOccurrences?: SiteResourceOccurrence[] }

@@ -43,3 +43,15 @@ export function pageShare(
     label,
   };
 }
+
+/**
+ * The tag a fix-once line ends with: " (site-wide)", " (template)", " (some pages)". A label, never a
+ * raw ratio. "" when the crawl size is unknown, so a caller without it prints the line it always did.
+ */
+export function pageShareTag(
+  affectedPageCount: number,
+  crawledPages: number | undefined
+): string {
+  if (crawledPages === undefined || crawledPages <= 0) return "";
+  return ` (${pageShare(affectedPageCount, crawledPages).label})`;
+}

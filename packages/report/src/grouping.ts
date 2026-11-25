@@ -165,6 +165,8 @@ export interface GroupedRule {
   subcategory?: string;
   /** WCAG criteria (a11y rules, repo#3093). */
   wcag?: WcagCriterion[];
+  /** repo#1885: a "page" rule is never collapsed across pages, whatever its locators say. */
+  findingScope?: "page" | "resource";
   checks: GroupedCheck[];
   failCount: number;
   warnCount: number;
@@ -386,6 +388,7 @@ export function groupIssuesByCategory(
       severity: string;
       weight: number;
       messageCountsItems?: boolean;
+      findingScope?: "page" | "resource";
     };
     // Normalize legacy category codes (e.g. stored "adblock" → "blocking").
     const category = normalizeCategoryCode(meta.category);
@@ -749,10 +752,11 @@ export function groupIssuesByCategory(
           ? "warning"
           : metaSeverity;
 
-    const actionableComponentFixGroups = componentFixGroups(
-      ruleId,
-      result.checks
-    );
+    // A rule declared page-scope states facts about single pages: matching locators never merge them.
+    const actionableComponentFixGroups =
+      meta.findingScope === "page"
+        ? []
+        : componentFixGroups(ruleId, result.checks);
     const ruleNote = prevalenceNote(ruleId, prevalence);
     const rule: GroupedRule = {
       id: ruleId,
@@ -769,6 +773,7 @@ export function groupIssuesByCategory(
           ? deriveBlockingSubcategory(ruleId)
           : undefined),
       ...(meta.wcag && meta.wcag.length > 0 ? { wcag: meta.wcag } : {}),
+      ...(meta.findingScope ? { findingScope: meta.findingScope } : {}),
       checks,
       failCount,
       warnCount,

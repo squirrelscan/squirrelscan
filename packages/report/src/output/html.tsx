@@ -49,6 +49,7 @@ import {
   getGroupTitle,
   severityLabel,
 } from "../categories";
+import { pageShareTag } from "../page-share";
 import {
   describeRoot,
   fixRollupLine,
@@ -963,12 +964,19 @@ function PageLinks({
  * exactly what markdown says, and a label the sentence does not contain (or no
  * label at all) renders the sentence untouched.
  */
-function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
-  const sentence = fixRollupLine(
-    unit,
-    REPORT_SOURCE_PAGES_PREVIEW,
-    (page) => getPathname(page) || "/"
-  );
+function FixSentence({
+  unit,
+  totalPages,
+}: {
+  unit: ReturnType<typeof fixUnits>[number];
+  totalPages?: number;
+}) {
+  const sentence =
+    fixRollupLine(
+      unit,
+      REPORT_SOURCE_PAGES_PREVIEW,
+      (page) => getPathname(page) || "/"
+    ) + pageShareTag(unit.affectedPageCount, totalPages);
   const label = describeRoot(unit);
   const at = label ? sentence.indexOf(label) : -1;
   if (!label || at < 0) return <>{sentence}</>;
@@ -998,7 +1006,13 @@ function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
  * directly, rather than reconstructing a seven-slot block through the whole
  * grouping stage to reach the one branch that differs.
  */
-export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
+export function FixGroupCards({
+  coverage,
+  totalPages,
+}: {
+  coverage: FixCoverage;
+  totalPages?: number;
+}) {
   // `ruleFixCoverage` has already applied this filter; re-applying it means the
   // card renderer cannot be made to phrase an attribution it does not know,
   // whatever hands it a coverage.
@@ -1025,7 +1039,7 @@ export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
                   its text can be compared with markdown's, character for
                   character, by a test. */}
               <p className="fix-group-line">
-                <FixSentence unit={unit} />
+                <FixSentence unit={unit} totalPages={totalPages} />
               </p>
             </div>
             <PageLinks
@@ -1052,8 +1066,10 @@ export function FixGroupCards({ coverage }: { coverage: FixCoverage }) {
  */
 export function SiteResourceFixCards({
   coverage,
+  totalPages,
 }: {
   coverage: SiteResourceCoverage;
+  totalPages?: number;
 }) {
   if (coverage.groups.length === 0) return null;
   return (
@@ -1069,7 +1085,7 @@ export function SiteResourceFixCards({
                 group,
                 REPORT_SOURCE_PAGES_PREVIEW,
                 (page) => getPathname(page) || "/"
-              )}
+              ) + pageShareTag(group.affectedPageCount, totalPages)}
             </p>
           </div>
           <PageLinks
@@ -1406,8 +1422,11 @@ function IssueRow({
         {rule.prevalenceNote && (
           <p className="text-xs text-muted-foreground">{rule.prevalenceNote}</p>
         )}
-        <SiteResourceFixCards coverage={siteResources} />
-        <FixGroupCards coverage={coverage} />
+        <SiteResourceFixCards
+          coverage={siteResources}
+          totalPages={totalPages}
+        />
+        <FixGroupCards coverage={coverage} totalPages={totalPages} />
         <div className="grid gap-3">
           {rule.checks.map((c, i) => (
             <CheckBlock

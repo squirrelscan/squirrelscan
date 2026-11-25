@@ -138,7 +138,7 @@ describe("component-aware actionable groups (#2307)", () => {
     // carries no hashes, signatures or internal keys.
     const llm = renderLlm(r);
     expect(llm).toContain(
-      '<fix-once pages="2">Fix once in the site footer: link text &quot;Read more&quot; is generic, 2 pages: /a, /b [a:1]</fix-once>'
+      '<fix-once pages="2">Fix once in the site footer: link text &quot;Read more&quot; is generic, 2 pages: /a, /b (template) [a:1]</fix-once>'
     );
     expect(llm).not.toContain("Pages (2)");
     expect(llm).not.toContain("s128:");

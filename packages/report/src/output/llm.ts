@@ -37,6 +37,7 @@ import { getScoreGrade } from "../scoring";
 /** "in the site footer, ..." from "In the site footer, ...", to sit inside a sentence. */
 const lowerFirst = (text: string): string =>
   text.charAt(0).toLowerCase() + text.slice(1);
+import { pageShareTag } from "../page-share";
 import {
   describeSlot,
   fixRollupLine,
@@ -854,7 +855,7 @@ export function renderLlm(
           `${indent(2)}<fix-once scope="site-resource" pages="${group.affectedPageCount}" resources="${group.resourceKeys.length}">${escapeXml(
             siteResourceFixLine(group, LLM_FIX_GROUP_PAGES, (page) =>
               compressUrl(page, baseOrigin)
-            )
+            ) + pageShareTag(group.affectedPageCount, report.totalPages)
           )}</fix-once>`
         );
       }
@@ -873,7 +874,7 @@ export function renderLlm(
             // serialize exactly as it did before rollups existed.
             rollup.groups.length > 1 ? ` elements="${rollup.elementCount}"` : ""
           }>${escapeXml(
-            `${fixRollupLine(rollup, LLM_FIX_GROUP_PAGES, (page) => compressUrl(page, baseOrigin), false)}${
+            `${fixRollupLine(rollup, LLM_FIX_GROUP_PAGES, (page) => compressUrl(page, baseOrigin), false)}${pageShareTag(rollup.affectedPageCount, report.totalPages)}${
               // One group is one element; its slot still locates the fix. For a
               // unit spanning several, the block anchor inside the line replaces it.
               rollup.groups.length === 1
