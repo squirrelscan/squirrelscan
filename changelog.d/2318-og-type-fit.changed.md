@@ -1,0 +1,1 @@
+- `core/og-tags` now compares `og:type` with the detected page type: `article` on a pricing, contact, legal or listing page warns, `website` on a blog post and unknown `og:type` values report at info (#2318)
