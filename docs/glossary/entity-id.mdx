@@ -29,8 +29,8 @@ These rules read squirrelscan's site-wide entity map. [schema/entity-identity](/
 | [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity) | Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations. | error |
 | [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity) | Yoast declares your organization under one @id and WordLift under another. A search engine reads two companies, and neither gets the full picture. | error |
 | [A publisher that points at nothing](/rules/schema/entity-dangling) | A reference to an @id that nothing in the crawl declares. squirrel checks against the whole site, so a publisher the homepage declares still resolves. | error |
-| [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format) | A relative @id resolves against the page it sits on, so the same fragment on forty pages is forty identifiers. The markup validates and the entity still never accumulates. | warning |
-| [An @id that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
+| [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format) | A relative @id resolves against its page, so one fragment on forty pages is forty identifiers. The markup validates but the entity never accumulates. | warning |
+| [Orphan @id: a schema entity that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
 
 {/* glossary:rules:end */}
 

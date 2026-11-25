@@ -30,9 +30,9 @@ These rules read markup and inline styles. Nothing is rendered or measured on a 
 | [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size) | Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px. | warning |
 | [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll) | A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes. | warning |
 | [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets) | A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions. | warning |
-| [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads form field sizes from inline styles and style blocks and reports the small ones. | warning |
+| [Form fields under 16px: why iOS Safari zooms on focus](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads field sizes from inline styles and style blocks and reports small ones. | warning |
 | [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials) | A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries. | warning |
-| [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link. | error |
+| [Web app manifest: home-screen icon and name checks](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the linked manifest. | error |
 
 {/* glossary:rules:end */}
 

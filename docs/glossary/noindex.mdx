@@ -1,6 +1,6 @@
 ---
 title: "What does noindex do? Meta tag, header and conflicts"
-description: "noindex is a robots rule, in a meta tag or the X-Robots-Tag header, that keeps a page out of search results. How it works and why robots.txt breaks it."
+description: "The noindex rule, in a meta tag or the X-Robots-Tag header, keeps a page out of search results. How it works and why robots.txt breaks it."
 sidebarTitle: "noindex"
 ---
 
@@ -30,7 +30,7 @@ Three rules catch contradictions. [crawl/robots-meta-conflict](/rules/crawl/robo
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta) | A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set. | warning |
+| [Robots meta and X-Robots-Tag: noindex and nofollow per page](/rules/core/robots-meta) | Find pages declaring noindex or nofollow in a robots meta tag or X-Robots-Tag header. squirrel names the directive and where it was set. | warning |
 | [Page is blocked from indexing: finding the directive](/rules/crawl/indexability) | A page can be excluded from search by a robots meta tag or an X-Robots-Tag header. squirrel reports which one, per page. | info |
 | [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages) | One list of every page a search engine will not index, with the reason. squirrel can raise severity for URL patterns that must never be blocked. | info |
 | [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap) | A sitemap says crawl this, noindex says do not index it. squirrel cross-references every crawled page's robots meta against your sitemap URLs. | warning |

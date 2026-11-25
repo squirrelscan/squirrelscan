@@ -18,10 +18,10 @@ squirrel audit https://nutshop.squirrelscan.com --rule-include i18n
 
 These carry the highest severity and weight in the category.
 
-- [hreflang targets: redirects, errors, noindex and missing return links](/rules/i18n/hreflang-targets): An hreflang link is ignored when its target redirects, errors, is noindex, canonicalises elsewhere or does not link back. squirrel checks each target the crawl fetched.
+- [Hreflang targets: redirects, errors, noindex, return links](/rules/i18n/hreflang-targets): An hreflang link is ignored when its target redirects, errors, is noindex, canonicalizes elsewhere or does not link back. squirrel checks each target.
 - [lang attribute on \<html\>: declaring the page's language](/rules/i18n/lang-attribute): Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format.
-- [Locale mixing: spellings, dates and currency that contradict each other](/rules/i18n/locale-mixing): A page that writes color and colour, 25/03/2026 and 03/25/2026, or a bare $ beside CAD amounts cannot be read reliably. squirrel flags the mix on pages that declare English.
-- [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang): hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them.
+- [Locale mixing: contradicting spellings, dates and currency](/rules/i18n/locale-mixing): A page that writes color and colour, 25/03/2026 and 03/25/2026, or a bare $ beside CAD amounts is hard to trust. squirrel flags the mix on English pages.
+- [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang): Hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has hreflang.
 
 {/* hub:start-here:end */}
 
@@ -31,10 +31,10 @@ These carry the highest severity and weight in the category.
 
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
-| [hreflang targets: redirects, errors, noindex and missing return links](/rules/i18n/hreflang-targets) | An hreflang link is ignored when its target redirects, errors, is noindex, canonicalises elsewhere or does not link back. squirrel checks each target the crawl fetched. | warning | Site-wide |
-| [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang) | hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has them. | info | Per-page |
+| [Hreflang targets: redirects, errors, noindex, return links](/rules/i18n/hreflang-targets) | An hreflang link is ignored when its target redirects, errors, is noindex, canonicalizes elsewhere or does not link back. squirrel checks each target. | warning | Site-wide |
+| [hreflang: x-default and the self-referencing tag](/rules/i18n/hreflang) | Hreflang tells search engines which language version to show. squirrel checks for x-default and a self-reference on any page that has hreflang. | info | Per-page |
 | [lang attribute on \<html\>: declaring the page's language](/rules/i18n/lang-attribute) | Without a lang attribute a screen reader guesses which voice to use and may read the page in the wrong language. squirrel checks it and its format. | warning | Per-page |
-| [Locale mixing: spellings, dates and currency that contradict each other](/rules/i18n/locale-mixing) | A page that writes color and colour, 25/03/2026 and 03/25/2026, or a bare $ beside CAD amounts cannot be read reliably. squirrel flags the mix on pages that declare English. | warning | Per-page |
+| [Locale mixing: contradicting spellings, dates and currency](/rules/i18n/locale-mixing) | A page that writes color and colour, 25/03/2026 and 03/25/2026, or a bare $ beside CAD amounts is hard to trust. squirrel flags the mix on English pages. | warning | Per-page |
 
 {/* hub:rules:end */}
 

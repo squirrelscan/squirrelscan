@@ -7,7 +7,8 @@ validate:
 	bun scripts/rule-checks.ts --check && bun scripts/cloud-rules.ts --check
 	bun scripts/rule-wcag.ts --check
 	bun scripts/check-currency.ts
-	bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts ./scripts/rule-wcag.test.ts ./scripts/cloud-rules.test.ts ./scripts/check-currency.test.ts ./scripts/agent-pill.test.ts
+	bun scripts/check-frontmatter.ts
+	bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts ./scripts/rule-wcag.test.ts ./scripts/cloud-rules.test.ts ./scripts/check-currency.test.ts ./scripts/check-frontmatter.test.ts ./scripts/agent-pill.test.ts
 
 dev:
 	bun x tangly dev

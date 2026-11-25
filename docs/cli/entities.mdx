@@ -1,7 +1,7 @@
 ---
-title: "entities"
+title: "squirrel entities command: query the entity map"
 icon: "share-nodes"
-description: "Query the entity map of a stored audit"
+description: "Query the entity map of a stored audit, the site-wide JSON-LD graph, without re-crawling, with squirrel entities options."
 ---
 
 Every audit builds an **entity map**: the JSON-LD your pages declare, collapsed across the whole site into one graph. Two pages that both describe the same `Organization` become one entity with two declaring pages, and a `publisher` reference that points at an `@id` nothing declares becomes a dangling edge.

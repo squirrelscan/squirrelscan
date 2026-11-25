@@ -1,0 +1,1 @@
+- Docs page titles and descriptions now fit search-result limits (titles 30-60 characters and unique, descriptions 70-155), and `make validate` checks them (#2378).
