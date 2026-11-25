@@ -96,6 +96,11 @@ export const svgImgAltRule: Rule = {
     severity: "error",
     weight: 6,
     itemSelectors: true,
+    checks: [
+      { name: "svg-img-alt", outcome: "problem" },
+      { name: "svg-img-alt", outcome: "clean", clears: ["svg-img-alt"] },
+      { name: "svg-img-alt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -166,6 +171,14 @@ export const svgImgAltRule: Rule = {
         status: "pass",
         message: 'All <svg role="img"> elements have accessible names',
         details: { svgChecked: assessed },
+      });
+    }
+    if (checks.length === 0) {
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        skipReason: "not-applicable",
+        message: 'No <svg role="img"> element in scope on this page',
       });
     }
     return { checks };

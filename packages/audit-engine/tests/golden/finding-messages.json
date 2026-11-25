@@ -315,6 +315,12 @@
    "skip-link|pass|Bypass mechanism available via landmarks||"
   ]
  },
+ "a11y/svg-img-alt": {
+  "digest": "4999108006288",
+  "lines": [
+   "svg-img-alt|skipped|No <svg role=\"img\"> element in scope on this page||"
+  ]
+ },
  "a11y/tabindex": {
   "digest": "130379632330292",
   "lines": [
@@ -3491,6 +3497,12 @@
    "horizontal-scroll|pass|No obvious horizontal scroll issues detected||"
   ]
  },
+ "mobile/input-zoom": {
+  "digest": "225243441640501",
+  "lines": [
+   "input-zoom|skipped|No focusable text field in scope on this page||"
+  ]
+ },
  "mobile/interstitials": {
   "digest": "232013109484871",
   "lines": [
@@ -4026,6 +4038,12 @@
   "digest": "163295195601176",
   "lines": [
    "open-redirect|skipped|Probing is passive, so no redirect parameter was probed. Run with --probe active to check for open redirects.||"
+  ]
+ },
+ "security/password-form-get": {
+  "digest": "102529960812293",
+  "lines": [
+   "password-form-get|skipped|No form with a password field in scope on this page||"
   ]
  },
  "security/permissions-policy": {

@@ -162,6 +162,7 @@ export const passwordFormGetRule: Rule = {
           "password-form-get-no-method",
         ],
       },
+      { name: "password-form-get", outcome: "skipped" },
     ],
   },
 
@@ -269,6 +270,14 @@ export const passwordFormGetRule: Rule = {
         status: "pass",
         message: "Every form with a password field submits by POST",
         details: { formsChecked: forms.length, passwordForms: assessed },
+      });
+    }
+    if (checks.length === 0) {
+      checks.push({
+        name: "password-form-get",
+        status: "skipped",
+        skipReason: "not-applicable",
+        message: "No form with a password field in scope on this page",
       });
     }
     return { checks };

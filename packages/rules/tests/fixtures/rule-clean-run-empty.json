@@ -1,8 +1,5 @@
 {
   "a11y/aria-labels": "returns no checks when the page has no document root; nothing to judge",
-  "a11y/svg-img-alt": "returns no checks when there is no svg with role=\"img\" in scope",
   "integrity/kit-signature": "emits a check only when a known kit signature matches; a clean page has none",
-  "mobile/input-zoom": "returns no checks when the page has no focusable input field in scope",
-  "schema/website-search": "returns no checks when the page declares no WebSite schema",
-  "security/password-form-get": "returns no checks when the page has no password form in scope"
+  "schema/website-search": "returns no checks when the page declares no WebSite schema"
 }

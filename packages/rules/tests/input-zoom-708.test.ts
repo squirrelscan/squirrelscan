@@ -33,6 +33,15 @@ function only(checks: CheckResult[]): CheckResult {
   return checks[0]!;
 }
 
+const SKIPPED = [
+  {
+    name: "input-zoom",
+    status: "skipped",
+    skipReason: "not-applicable",
+    message: "No focusable text field in scope on this page",
+  },
+];
+
 describe("mobile/input-zoom (#708)", () => {
   test("an inline 14px email field is a warning naming the field and its size", async () => {
     const check = only(
@@ -89,7 +98,7 @@ describe("mobile/input-zoom (#708)", () => {
     const body = types
       .map((t) => `<input type="${t}" style="font-size:12px">`)
       .join("");
-    expect(await run("", body)).toEqual([]);
+    expect(await run("", body)).toEqual(SKIPPED);
   });
 
   test("fields styled only by an external stylesheet are not warned about, and are reported as not read", async () => {
@@ -306,7 +315,7 @@ describe("mobile/input-zoom (#708)", () => {
   });
 
   test("a page with no text field gets no check", async () => {
-    expect(await run("", '<input type="submit" value="Go">')).toEqual([]);
+    expect(await run("", '<input type="submit" value="Go">')).toEqual(SKIPPED);
   });
 
   test("hidden and disabled fields cannot be focused and are not checked", async () => {
@@ -324,7 +333,7 @@ describe("mobile/input-zoom (#708)", () => {
       // A later invalid `display` does not undo the hiding.
       '<input style="display:none; display:bogus; font-size:12px" name="g">',
     ].join("");
-    expect(await run("", body)).toEqual([]);
+    expect(await run("", body)).toEqual(SKIPPED);
   });
 
   test("a field a <style> rule hides is not read, and a hidden field part does not count", async () => {

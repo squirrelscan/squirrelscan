@@ -1,0 +1,1 @@
+- Three rules that had nothing in scope on a page now say so with a skipped "not applicable" check instead of emitting nothing: `a11y/svg-img-alt` (no `svg role="img"`), `mobile/input-zoom` (no focusable text field) and `security/password-form-get` (no form with a password field). The skipped check is neutral: scores and findings do not change (#2350)
