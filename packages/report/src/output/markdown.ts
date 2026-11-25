@@ -63,7 +63,7 @@ import {
 } from "../grouping";
 import { hostRows } from "../host";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
-import { pageShareTag } from "../page-share";
+import { pageShareSuffix } from "../page-share";
 import {
   affectedPagesSuffix,
   hasItemSources,
@@ -671,7 +671,9 @@ export function renderMarkdown(
 
   const categoryIssues = groupIssuesByCategory(
     report.ruleResults,
-    report.checkTallies
+    report.checkTallies,
+    undefined,
+    report.totalPages
   );
 
   if (categoryIssues.length > 0) {
@@ -753,7 +755,7 @@ export function renderMarkdown(
       );
       for (const group of siteResources.groups) {
         lines.push(
-          `**${escapeMarkdownText(siteResourceFixLine(group, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/") + pageShareTag(group.affectedPageCount, report.totalPages))}**`
+          `**${escapeMarkdownText(siteResourceFixLine(group, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/") + pageShareSuffix(group.pageShare))}**`
         );
         lines.push("");
       }
@@ -763,7 +765,7 @@ export function renderMarkdown(
       )) {
         // One actionable line per REPAIR, not per faulty element in a block.
         lines.push(
-          `**${escapeMarkdownText(fixRollupLine(rollup, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/") + pageShareTag(rollup.affectedPageCount, report.totalPages))}**`
+          `**${escapeMarkdownText(fixRollupLine(rollup, REPORT_SOURCE_PAGES_PREVIEW, (page) => getPathname(page) || "/") + pageShareSuffix(rollup.pageShare))}**`
         );
         lines.push("");
       }

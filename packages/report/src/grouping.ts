@@ -51,6 +51,7 @@ import {
   type MessageShape,
 } from "./message-merge";
 import { checkOccurrences } from "./occurrences";
+import { unitPageShare } from "./page-share";
 import { prevalenceNote, type RulePrevalenceData } from "./rule-prevalence";
 
 export interface GroupedCheck {
@@ -178,6 +179,11 @@ export interface GroupedRule {
   prevalenceNote?: string;
   /** Additive actionable groups derived only from component occurrence evidence. */
   componentFixGroups?: ComponentFixGroup[];
+  /**
+   * The crawl size the rule's fix-once units take their page share of (repo#1885). Absent when the
+   * caller did not pass one, and then no unit carries a share.
+   */
+  crawledPages?: number;
 }
 
 export interface GroupedCategory {
@@ -369,7 +375,9 @@ export function groupIssuesByCategory(
     | Map<string, ReportRuleResult>,
   checkTallies?: CheckTallies,
   /** Overrides the shipped corpus prevalence (#2491); tests only. */
-  prevalence?: RulePrevalenceData
+  prevalence?: RulePrevalenceData,
+  /** The report's `totalPages`: every fix-once unit carries its page share of it (repo#1885). */
+  crawledPages?: number
 ): GroupedCategory[] {
   const categoryMap = new Map<string, GroupedRule[]>();
   const entries =
@@ -756,7 +764,10 @@ export function groupIssuesByCategory(
     const actionableComponentFixGroups =
       meta.findingScope === "page"
         ? []
-        : componentFixGroups(ruleId, result.checks);
+        : componentFixGroups(ruleId, result.checks).map((group) => {
+            const share = unitPageShare(group.affectedPageCount, crawledPages);
+            return share ? { ...group, pageShare: share } : group;
+          });
     const ruleNote = prevalenceNote(ruleId, prevalence);
     const rule: GroupedRule = {
       id: ruleId,
@@ -781,6 +792,9 @@ export function groupIssuesByCategory(
       ...(ruleNote ? { prevalenceNote: ruleNote } : {}),
       ...(actionableComponentFixGroups.length > 0
         ? { componentFixGroups: actionableComponentFixGroups }
+        : {}),
+      ...(crawledPages !== undefined && crawledPages > 0
+        ? { crawledPages }
         : {}),
     };
 

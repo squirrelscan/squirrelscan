@@ -71,7 +71,7 @@ import {
 } from "../grouping";
 import { hostRows } from "../host";
 import { ignoredLine, ignoredNoteLines } from "../ignored";
-import { pageShareTag } from "../page-share";
+import { pageShareSuffix } from "../page-share";
 import {
   affectedPagesSuffix,
   itemSourceView,
@@ -557,7 +557,9 @@ export function renderText(
 
   const categoryIssues = groupIssuesByCategory(
     report.ruleResults,
-    report.checkTallies
+    report.checkTallies,
+    undefined,
+    report.totalPages
   );
   // Severity → category → weight (#1536): one global order, so everything you
   // must fix sits above everything you might. Categories are labeled per rule
@@ -610,7 +612,7 @@ export function renderText(
       );
       for (const group of siteResources.groups) {
         write(
-          `    ${siteResourceFixLine(group, 5, pathOnly)}${pageShareTag(group.affectedPageCount, report.totalPages)}`
+          `    ${siteResourceFixLine(group, 5, pathOnly)}${pageShareSuffix(group.pageShare)}`
         );
       }
       for (const rollup of fixUnits(
@@ -619,7 +621,7 @@ export function renderText(
       )) {
         // One actionable line per REPAIR, not per faulty element in a block.
         write(
-          `    ${fixRollupLine(rollup, 5, pathOnly)}${pageShareTag(rollup.affectedPageCount, report.totalPages)}`
+          `    ${fixRollupLine(rollup, 5, pathOnly)}${pageShareSuffix(rollup.pageShare)}`
         );
       }
       write("");

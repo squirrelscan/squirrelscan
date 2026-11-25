@@ -45,6 +45,39 @@ export function pageShare(
 }
 
 /**
+ * The page share a fix-once unit carries (repo#1885), set when the unit is built so every renderer and
+ * the JSON report read one value instead of each recomputing it. `share` is the ratio, for machines;
+ * the human reports print only `label`.
+ */
+export interface UnitPageShare {
+  /** affectedPageCount / crawledPages, clamped to 0..1. */
+  share: number;
+  label: PageShareLabel;
+  /** The crawl size the share is of. */
+  crawledPages: number;
+}
+
+/** A unit's page share, or undefined when the crawl size is unknown (an older or bare report). */
+export function unitPageShare(
+  affectedPageCount: number,
+  crawledPages: number | undefined
+): UnitPageShare | undefined {
+  if (crawledPages === undefined || !(crawledPages > 0)) return undefined;
+  const result = pageShare(affectedPageCount, crawledPages);
+  if (result.crawledPages <= 0) return undefined;
+  return {
+    share: result.pageShare,
+    label: result.label,
+    crawledPages: result.crawledPages,
+  };
+}
+
+/** " (template)" for a unit's carried share; "" when it carries none, so the line reads as it always did. */
+export function pageShareSuffix(share: UnitPageShare | undefined): string {
+  return share ? ` (${share.label})` : "";
+}
+
+/**
  * The tag a fix-once line ends with: " (site-wide)", " (template)", " (some pages)". A label, never a
  * raw ratio. "" when the crawl size is unknown, so a caller without it prints the line it always did.
  */
@@ -52,6 +85,5 @@ export function pageShareTag(
   affectedPageCount: number,
   crawledPages: number | undefined
 ): string {
-  if (crawledPages === undefined || crawledPages <= 0) return "";
-  return ` (${pageShare(affectedPageCount, crawledPages).label})`;
+  return pageShareSuffix(unitPageShare(affectedPageCount, crawledPages));
 }
