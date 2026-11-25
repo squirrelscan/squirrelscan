@@ -213,6 +213,13 @@
             "in": "query",
             "required": false,
             "schema": { "type": "string" }
+          },
+          {
+            "name": "includeOneOff",
+            "in": "query",
+            "required": false,
+            "description": "One-off (`ephemeral`) runs are hidden from this list by default. Pass `true` (or `1`) to include them.",
+            "schema": { "type": "string", "enum": ["true", "false", "1", "0"] }
           }
         ],
         "responses": {
@@ -1207,7 +1214,7 @@
           },
           "externalLinksEnabled": { "type": "boolean", "description": "Check external links for this run (each distinct link the cloud verifies costs 1 credit). Overrides the website's setting; a run with no website follows the default, which is on." },
           "render": { "type": "boolean", "description": "Browser-render the pages the crawl fetches. `false` fetches every page over plain HTTP, with no per-page headless browser; `true` renders every page, held to what the plan may render. Omit it to follow the website's setting (a run with no website renders). Same meaning as `render` on the MCP `run_audit`. Price is unchanged." },
-          "ephemeral": { "type": "boolean", "description": "One-shot check, with the exact semantics of `ephemeral` on the MCP `run_audit`: when the run creates the website, that website is exempt from the plan's website cap, is hidden from website listings, and is ARCHIVED automatically once the run finishes. The RUN and its report are NOT purged (a purge is planned, not shipped): `GET /v1/agent-runs/{id}` and `/report` keep working and the run stays in `GET /v1/agent-runs`. At most 5 one-shot websites may be live per organization (429 `EPHEMERAL_LIMIT`), and the credit check happens before the hidden website is created. Ignored when the organization already tracks the domain, or `websiteId` is sent (the run goes against that website, nothing is deleted); the response then carries `ephemeral: false` and an `ephemeralIgnoredReason`. Cannot be combined with `auditId`." },
+          "ephemeral": { "type": "boolean", "description": "One-shot check, with the exact semantics of `ephemeral` on the MCP `run_audit`: when the run creates the website, that website is exempt from the plan's website cap, is hidden from website listings, and is ARCHIVED automatically once the run finishes. The RUN and its report are NOT purged (a purge is planned, not shipped): `GET /v1/agent-runs/{id}` and `/report` keep working, but the run is hidden from `GET /v1/agent-runs` unless the request passes `includeOneOff=true`. A one-shot run sends no email, creates no bell row, opens no tracker issue and fires no webhook. At most 5 one-shot websites may be live per organization (429 `EPHEMERAL_LIMIT`), and the credit check happens before the hidden website is created. Ignored when the organization already tracks the domain, or `websiteId` is sent (the run goes against that website, nothing is deleted); the response then carries `ephemeral: false` and an `ephemeralIgnoredReason`. Cannot be combined with `auditId`." },
           "editorSummary": { "type": "boolean", "description": "Build the editor's summary, an LLM-written overview of the whole report that adds about 30 seconds to a run. Omit it for the default: skipped on a run with `enabledRulePatterns` (a filtered run), built on every other run. `true` builds it on a filtered run; `false` skips it on any run. A skipped summary is absent from the report (`editorSummary` is not set) and the run timeline records the step as skipped. Has no effect on price: the summary carries no credit charge, built or skipped." }
         }
       },
