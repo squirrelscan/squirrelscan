@@ -3974,6 +3974,12 @@
    "hsts-not-applicable|info|HSTS not applicable - site not served over HTTPS||"
   ]
  },
+ "security/http-methods": {
+  "digest": "85143878141028",
+  "lines": [
+   "http-methods-not-checked|skipped|Probing is passive, so no OPTIONS request was sent. Run with --probe active to check for dangerous HTTP methods.||"
+  ]
+ },
  "security/http-to-https": {
   "digest": "246872215480930",
   "lines": [
