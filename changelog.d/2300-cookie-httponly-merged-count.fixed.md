@@ -1,1 +1,0 @@
-- A merged `cookie-httponly` finding no longer states fewer cookies than the items it lists when pages each list different cookies; the count reads as a range up to the merged items. (#2300)

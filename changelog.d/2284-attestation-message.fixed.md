@@ -1,1 +1,0 @@
-- `squirrel self update` no longer says a binary "was not built by the release workflow" when an attestation check fails, and every attestation or signature failure now names the recovery step (re-run the install one-liner) and links the docs (#2284)

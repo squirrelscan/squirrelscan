@@ -1,1 +1,0 @@
-- `security/leaked-secrets` now masks a secret that sits in the URL a finding names, such as a key in a script's query string or a token in a path segment, so the report no longer prints it in plain text. Labels, affected pages, occurrences and the lists of unread scripts all show it as a short prefix and suffix around an ellipsis, in every report format (#2270)
