@@ -9,7 +9,7 @@ Query strings travel far. A URL is written to server and proxy access logs, kept
 
 ## What squirrel checks
 
-The rule runs on every crawled page. It reads the page's own URL, every `a[href]` link, every `form[action]`, the canonical URL and the `og:url`, resolved against the page. Only `http:` and `https:` URLs with a query string are assessed. It sends no requests.
+The rule runs on every crawled page. It reads the page's own URL, every `a[href]` link, every `form[action]`, the canonical URL and the `og:url`, resolved against the page. Only `http:` and `https:` URLs with a query string are assessed, at most 500 distinct ones per page: the page URL, canonical and `og:url` first, then links and form actions in document order. When a page has more, the check's details carry `capped: true`. It sends no requests.
 
 A parameter is flagged in two ways:
 
@@ -22,7 +22,7 @@ Empty values, template placeholders (`{token}`, `${token}`, `<token>`), `*` mask
 - Warn with `N URL parameter(s) carry personal data such as an email address` (check `url-personal-params`).
 - Pass with `No sensitive data found in URL query parameters`.
 
-Each item names where the URL was found (page URL, link, form action, canonical or og:url), its origin and path, and the parameter. At most 25 items are kept per check. The value is never printed, and neither is the rest of the query string: an item shows `?<param>=[redacted]`.
+Each item names where the URL was found (page URL, link, form action, canonical or og:url), its origin and path, and the parameter. At most 25 items are kept per check. The value is never printed, and neither is the rest of the query string: an item shows `?<param>=[redacted]`. A path segment that looks like a secret is masked, and a parameter whose name itself looks like a secret is shown as `[redacted]`.
 
 ## How to fix it
 

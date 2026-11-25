@@ -19,6 +19,12 @@ const MAX_ITEMS = 25;
 /** Query strings longer than this are not parsed: they are attacker-sized input. */
 const MAX_URL_LENGTH = 4096;
 const MAX_PARAMS_PER_URL = 100;
+/**
+ * Query-bearing URLs examined per page. The scan is synchronous and the rule time budget cannot interrupt it, so a
+ * page with hundreds of thousands of links must not block the event loop for seconds.
+ */
+export const MAX_QUERY_URLS_PER_PAGE = 500;
+const MAX_NAME_LENGTH = 100;
 
 /** Names compared without case, `_`, `-` or `.`. */
 const CREDENTIAL_NAMES: ReadonlySet<string> = new Set([
@@ -167,14 +173,25 @@ export function sensitiveParamsOf(url: string): SensitiveParam[] {
   return out;
 }
 
-/** The URL as a finding shows it: origin and path, no credentials, query or fragment. */
+/**
+ * The URL as a finding shows it: origin and path, no credentials, query or fragment. A secret in the path
+ * (`/reset/<jwt>`) is masked by the leaked-secrets matchers before the string is cut.
+ */
 function bareUrl(url: string): string {
   try {
     const u = new URL(url);
-    return `${u.origin}${u.pathname}`.slice(0, 200);
+    return redactSecretsInUrl(`${u.origin}${u.pathname}`).slice(0, 200);
   } catch {
     return "(unparsable URL)";
   }
+}
+
+/** A parameter name as a finding shows it: a name that is itself a secret (`?sk_live_...=1`) is never printed. */
+function shownName(name: string): string {
+  // Without `=`, the leaked-secrets matcher reads the name as a value.
+  const probe = `https://example.com/?${encodeURIComponent(name)}`;
+  if (redactSecretsInUrl(probe) !== probe) return "[redacted]";
+  return name.slice(0, MAX_NAME_LENGTH);
 }
 
 interface Candidate {
@@ -182,31 +199,55 @@ interface Candidate {
   url: string;
 }
 
-function candidates(ctx: RuleContext): Candidate[] {
+interface Candidates {
+  list: Candidate[];
+  /** True when query-bearing URLs past MAX_QUERY_URLS_PER_PAGE were left unread. */
+  capped: boolean;
+}
+
+/**
+ * The distinct query-bearing URLs of a page, at most MAX_QUERY_URLS_PER_PAGE of them. The page URL, canonical and
+ * og:url come first so a page full of links cannot push them past the cap.
+ */
+function candidates(ctx: RuleContext): Candidates {
   const base = ctx.page.url;
-  const out: Candidate[] = [{ source: "page URL", url: base }];
-  const add = (source: string, raw: string | null | undefined): void => {
-    if (!raw) return;
+  const list: Candidate[] = [];
+  const seen = new Set<string>();
+  let capped = false;
+  const add = (source: string, raw: string | null | undefined): boolean => {
+    if (list.length >= MAX_QUERY_URLS_PER_PAGE) {
+      capped = true;
+      return false;
+    }
+    if (!raw || !raw.includes("?")) return true;
+    let url: string;
     try {
-      out.push({ source, url: new URL(raw.trim(), base).href });
+      const parsed = new URL(raw.trim(), base);
+      if (parsed.search.length <= 1) return true;
+      url = parsed.href;
     } catch {
-      /* not a URL */
+      return true;
     }
+    const key = JSON.stringify([source, url]);
+    if (seen.has(key)) return true;
+    seen.add(key);
+    list.push({ source, url });
+    return true;
   };
-  for (const link of ctx.parsed.links) add("link", link.url);
-  const doc = ctx.parsed.document;
-  if (doc) {
-    for (const form of doc.querySelectorAll("form[action]"))
-      add("form action", form.getAttribute("action"));
-    // The parser skips `#...` anchors, but a query-bearing href is still an a[href].
-    for (const a of doc.querySelectorAll("a[href]")) {
-      const href = a.getAttribute("href") ?? "";
-      if (href.includes("?")) add("link", href);
-    }
-  }
+  add("page URL", base);
   add("canonical", ctx.parsed.meta.canonical);
   add("og:url", ctx.parsed.og.url);
-  return out;
+  for (const link of ctx.parsed.links) if (!add("link", link.url)) break;
+  const doc = ctx.parsed.document;
+  if (doc && !capped) {
+    for (const form of doc.querySelectorAll("form[action]"))
+      if (!add("form action", form.getAttribute("action"))) break;
+    // The parser skips `#...` anchors, but a query-bearing href is still an a[href].
+    if (!capped)
+      for (const a of doc.querySelectorAll("a[href]"))
+        if (!add("link", a.getAttribute("href"))) break;
+  }
+  return { list, capped };
 }
 
 export const urlSensitiveParamsRule: Rule = {
@@ -233,30 +274,29 @@ export const urlSensitiveParamsRule: Rule = {
   run(ctx: RuleContext): RuleResult {
     const credentials: CheckItem[] = [];
     const personal: CheckItem[] = [];
-    const reported = new Set<string>();
-    let examined = 0;
     let credentialTotal = 0;
     let personalTotal = 0;
+    const { list, capped } = candidates(ctx);
+    const examined = list.length;
 
-    for (const { source, url } of candidates(ctx)) {
-      const key = JSON.stringify([source, url]);
-      if (reported.has(key)) continue;
-      reported.add(key);
-      examined++;
-      for (const param of sensitiveParamsOf(url)) {
-        const where = bareUrl(url);
+    for (const { source, url } of list) {
+      const params = sensitiveParamsOf(url);
+      if (params.length === 0) continue;
+      const where = bareUrl(url);
+      for (const param of params) {
+        const name = shownName(param.name);
         const why =
           param.reason === "name"
             ? "a parameter name that carries sensitive data"
             : "a value shaped like " +
               (param.kind === "credential" ? "a secret" : "an email address");
         const item: CheckItem = {
-          id: `${source}: ${where}?${param.name}=[redacted]`.slice(0, 300),
-          label: `${source} ${where} has "${param.name}" in its query string: ${why}`,
+          id: `${source}: ${where}?${name}=[redacted]`.slice(0, 300),
+          label: `${source} ${where} has "${name}" in its query string: ${why}`,
           meta: {
             source,
             url: where,
-            param: param.name,
+            param: name,
             reason: param.reason,
             kind: param.kind,
           },
@@ -278,7 +318,7 @@ export const urlSensitiveParamsRule: Rule = {
         status: "fail",
         message: `${credentialTotal} URL parameter(s) carry a token, key, password or other secret`,
         items: credentials,
-        details: { urlsChecked: examined, total: credentialTotal },
+        details: { urlsChecked: examined, total: credentialTotal, capped },
       });
     }
     if (personalTotal > 0) {
@@ -287,7 +327,7 @@ export const urlSensitiveParamsRule: Rule = {
         status: "warn",
         message: `${personalTotal} URL parameter(s) carry personal data such as an email address`,
         items: personal,
-        details: { urlsChecked: examined, total: personalTotal },
+        details: { urlsChecked: examined, total: personalTotal, capped },
       });
     }
     if (credentialTotal === 0 && personalTotal === 0) {
@@ -295,7 +335,7 @@ export const urlSensitiveParamsRule: Rule = {
         name: CHECK,
         status: "pass",
         message: "No sensitive data found in URL query parameters",
-        details: { urlsChecked: examined },
+        details: { urlsChecked: examined, capped },
       });
     }
     return { checks };

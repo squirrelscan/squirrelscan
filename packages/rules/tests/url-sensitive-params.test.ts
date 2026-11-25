@@ -7,6 +7,7 @@ import type { CheckResult, RuleContext } from "../src/types";
 
 import { redactSecretsInUrl } from "../src/security/leaked-secrets";
 import {
+  MAX_QUERY_URLS_PER_PAGE,
   sensitiveParamsOf,
   urlSensitiveParamsRule,
 } from "../src/security/url-sensitive-params";
@@ -56,6 +57,22 @@ describe("security/url-sensitive-params", () => {
     expect(JSON.stringify(checks)).not.toContain(STRIPE);
   });
 
+  test("never prints a secret in the path or a secret used as the parameter name", async () => {
+    const jwt = `${"eyJhbGciOiJIUzI1NiJ9"}.${"eyJzdWIiOiIxMjM0NTY3ODkwIn0"}.${"dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"}`;
+    // Each URL on its own is a finding the matcher sees: a secret path segment, a secret name.
+    expect(
+      redactSecretsInUrl(`https://example.com/reset/${jwt}`)
+    ).not.toContain(jwt);
+    const checks = await runPage(
+      `<a href="/reset/${jwt}?token=abcdefgh1234">x</a><a href="/hook?${STRIPE}=subscribed">y</a>`
+    );
+    const check = checks.find((c) => c.name === "url-sensitive-params");
+    expect(check?.items?.length).toBe(2);
+    const out = JSON.stringify(checks);
+    expect(out).not.toContain(jwt);
+    expect(out).not.toContain(STRIPE);
+  });
+
   test("an email is a lower-severity warning", async () => {
     const checks = await runPage(`<a href="/u?email=jo@example.org">x</a>`);
     expect(checks.map((c) => [c.name, c.status])).toEqual([
@@ -97,6 +114,28 @@ describe("security/url-sensitive-params", () => {
     ["flag", "password=true"],
   ])("skips an inert value: %s", (_label, query) => {
     expect(sensitiveParamsOf(`https://example.com/?${query}`)).toEqual([]);
+  });
+
+  test("reads at most MAX_QUERY_URLS_PER_PAGE query-bearing URLs per page", async () => {
+    const benign = (n: number): string =>
+      Array.from(
+        { length: n },
+        (_, i) => `<a href="/l${i}?page=${i}">x</a>`
+      ).join("");
+    const leak = `<a href="/dash?access_token=abc123def456">x</a>`;
+    // The last URL inside the cap is read...
+    const inside = await runPage(benign(MAX_QUERY_URLS_PER_PAGE - 1) + leak);
+    expect(inside.find((c) => c.name === "url-sensitive-params")?.status).toBe(
+      "fail"
+    );
+    // ...the first one past it is not, and the check says the page was cut.
+    const past = await runPage(benign(MAX_QUERY_URLS_PER_PAGE) + leak);
+    const check = past.find((c) => c.name === "url-sensitive-params");
+    expect(check?.status).toBe("pass");
+    expect(check?.details).toEqual({
+      urlsChecked: MAX_QUERY_URLS_PER_PAGE,
+      capped: true,
+    });
   });
 
   test("ignores non-http URLs and oversized input", () => {
