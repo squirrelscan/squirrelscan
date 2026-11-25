@@ -27,8 +27,9 @@
 // named example, sample, demo, mock or fixture.
 //
 // Values never reach the report. An item holds the JSON field path and a kind.
-// A path key that could be personal data (an email, a number, a username used
-// as a map key of records) is folded to `[*]`; array indices fold to `[]`.
+// A path key that could be personal data (an email, a number, or any key
+// holding an identity record other than a role or container name such as
+// `user` or `account`) is folded to `[*]`; array indices fold to `[]`.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
@@ -228,6 +229,67 @@ function hasIdentity(obj: Record<string, unknown>): boolean {
   return false;
 }
 
+/** Keys that name a role or container, not a person, when they hold an identity record. */
+const RECORD_ROLE_KEYS = new Set([
+  "user",
+  "users",
+  "currentuser",
+  "authuser",
+  "sessionuser",
+  "loggedinuser",
+  "me",
+  "viewer",
+  "account",
+  "accounts",
+  "currentaccount",
+  "profile",
+  "userprofile",
+  "customer",
+  "customers",
+  "member",
+  "members",
+  "owner",
+  "author",
+  "creator",
+  "admin",
+  "data",
+  "props",
+  "pageprops",
+  "initialprops",
+  "state",
+  "initialstate",
+  "session",
+  "auth",
+  "identity",
+  "principal",
+  "record",
+  "row",
+  "result",
+  "item",
+  "node",
+  "entity",
+  "payload",
+  "contact",
+  "person",
+]);
+
+/**
+ * A key whose child is an identity record can be the person's own name (a
+ * username keying a map, even a map of one). Only role and container names
+ * are printed, and never one that equals an identity value of the record.
+ */
+function isPersonalRecordKey(key: string, child: unknown): boolean {
+  if (!isPlainObject(child) || !hasIdentity(child)) return false;
+  const k = norm(key);
+  if (!RECORD_ROLE_KEYS.has(k)) return true;
+  for (const ck of Object.keys(child)) {
+    if (!IDENTITY_KEYS.has(norm(ck))) continue;
+    const v = child[ck];
+    if (typeof v === "string" && norm(v) === k) return true;
+  }
+  return false;
+}
+
 /** A key that is safe to print: an identifier-shaped name with no digit run or id-like body. */
 function isSafeKey(key: string): boolean {
   return (
@@ -264,11 +326,24 @@ function siblingExpiry(obj: Record<string, unknown>): number | null {
   return null;
 }
 
-/** The kind of value under `key` in `record`, or null. `now` is milliseconds. */
+/** Facts about the record a field sits in, computed once per record. */
+export interface RecordFacts {
+  /** The record has a non-empty identity field (email, username, id). */
+  identity: boolean;
+  /** A sibling expiry as milliseconds, or null. */
+  expiry: number | null;
+}
+
+/** Scan a record's keys once. Per-field rescans are quadratic in the key count. */
+export function recordFacts(record: Record<string, unknown>): RecordFacts {
+  return { identity: hasIdentity(record), expiry: siblingExpiry(record) };
+}
+
+/** The kind of value under `key` in a record with `facts`, or null. `now` is milliseconds. */
 export function classifyField(
   key: string,
   value: unknown,
-  record: Record<string, unknown>,
+  facts: RecordFacts,
   now: number
 ): AccountDataKind | null {
   const k = norm(key);
@@ -280,7 +355,7 @@ export function classifyField(
       return DOC_HASHES.has(value.toLowerCase()) ? null : "password-hash";
     if (HASH_KEYS.has(k)) return value.length >= 20 ? "password-hash" : null;
     if (PASSWORD_KEYS.has(k)) {
-      if (!hasIdentity(record)) return null;
+      if (!facts.identity) return null;
       if (LABEL_RE.test(value) || DOC_PASSWORDS.has(value.toLowerCase()))
         return null;
       return "plaintext-password";
@@ -300,14 +375,13 @@ export function classifyField(
   ) {
     const text = String(value);
     if (!OTP_VALUE_RE.test(text) || isPlaceholder(text)) return null;
-    if (!hasIdentity(record)) return null;
-    const expiry = siblingExpiry(record);
-    return expiry !== null && expiry < now ? "otp-expired" : "otp";
+    if (!facts.identity) return null;
+    return facts.expiry !== null && facts.expiry < now ? "otp-expired" : "otp";
   }
   if (typeof value === "string" && SESSION_KEYS.has(k)) {
     if (value.length < 16 || value.length > MAX_VALUE_CHARS) return null;
     if (isPlaceholder(value) || !TOKEN_SHAPE_RE.test(value)) return null;
-    return hasIdentity(record) ? "session-reference" : null;
+    return facts.identity ? "session-reference" : null;
   }
   return null;
 }
@@ -347,15 +421,10 @@ export function scanAccountData(
     }
     if (!isPlainObject(value)) continue;
 
-    // A map of records keyed by something personal (a username, an email).
-    const children = Object.values(value);
-    const isRecordMap =
-      children.length >= 2 &&
-      children.every((c) => isPlainObject(c) && hasIdentity(c));
-
+    const facts = recordFacts(value);
     for (const key of Object.keys(value)) {
       const child = value[key];
-      const safe = !isRecordMap && isSafeKey(key);
+      const safe = isSafeKey(key) && !isPersonalRecordKey(key, child);
       const seg = safe ? `.${key}` : "[*]";
       const childExample = example || EXAMPLE_SEGMENT.test(key);
       if (typeof child === "object" && child !== null) {
@@ -368,7 +437,7 @@ export function scanAccountData(
         continue;
       }
       if (example) continue;
-      const kind = classifyField(key, child, value, now);
+      const kind = classifyField(key, child, facts, now);
       if (!kind) continue;
       const printed = `${path}${isSafeKey(key) ? `.${key}` : "[*]"}`;
       const id = `${printed}\u0000${kind}`;

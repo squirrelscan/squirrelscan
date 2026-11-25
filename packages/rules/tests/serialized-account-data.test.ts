@@ -57,31 +57,37 @@ describe("security/serialized-account-data", () => {
     const { findings } = scanAccountData(
       {
         title: "Account",
-        a: { email: "a@example.com", password: "Tr0ub4dor-invented" },
-        b: { email: "b@example.com", apiKey: "sk_live_invented0123456789" },
-        c: {
+        user: { email: "a@example.com", password: "Tr0ub4dor-invented" },
+        account: {
+          email: "b@example.com",
+          apiKey: "sk_live_invented0123456789",
+        },
+        profile: {
           email: "c@example.com",
           otp: "493021",
           otpExpiresAt: "2020-01-01T00:00:00Z",
         },
-        d: {
+        member: {
           email: "d@example.com",
           otp: "493021",
           otpExpiresAt: "2040-01-01T00:00:00Z",
         },
-        e: { email: "e@example.com", sessionToken: "sess_invented_0123456789" },
-        f: { email: "f@example.com", passwordHash: BCRYPT },
+        customer: {
+          email: "e@example.com",
+          sessionToken: "sess_invented_0123456789",
+        },
+        owner: { email: "f@example.com", passwordHash: BCRYPT },
       },
       now
     );
     const kinds = Object.fromEntries(findings.map((f) => [f.path, f.kind]));
     expect(kinds).toEqual({
-      "$.a.password": "plaintext-password",
-      "$.b.apiKey": "api-key",
-      "$.c.otp": "otp-expired",
-      "$.d.otp": "otp",
-      "$.e.sessionToken": "session-reference",
-      "$.f.passwordHash": "password-hash",
+      "$.user.password": "plaintext-password",
+      "$.account.apiKey": "api-key",
+      "$.profile.otp": "otp-expired",
+      "$.member.otp": "otp",
+      "$.customer.sessionToken": "session-reference",
+      "$.owner.passwordHash": "password-hash",
     });
   });
 
@@ -140,6 +146,48 @@ describe("security/serialized-account-data", () => {
       ["$.users[*].passwordHash", "$[*].passwordHash"].sort()
     );
     expect(JSON.stringify(findings)).not.toMatch(/alice|bob|carol/);
+  });
+
+  test("a single record keyed by a username is folded", () => {
+    const { findings } = scanAccountData({
+      users: { alice: { email: "a@example.com", passwordHash: BCRYPT } },
+      admin: { username: "admin", passwordHash: BCRYPT },
+      user: { id: 7, passwordHash: BCRYPT },
+    });
+    expect(findings.map((f) => f.path).sort()).toEqual(
+      [
+        "$.users[*].passwordHash",
+        "$[*].passwordHash",
+        "$.user.passwordHash",
+      ].sort()
+    );
+    expect(JSON.stringify(findings)).not.toMatch(/alice|admin/);
+  });
+
+  test("a wide record is scanned in linear time", () => {
+    // Many password-named keys in a record with no identity field: a per-field
+    // rescan of the record's keys made this quadratic (seconds at 200 KB).
+    const wide = (n: number) => {
+      const rec: Record<string, string> = {};
+      for (let i = 0; i < n; i++)
+        rec[`${"_".repeat(i % 64)}password${"-".repeat(Math.floor(i / 64))}`] =
+          "Tr0ub4dor-invented";
+      return rec;
+    };
+    const small = wide(2000);
+    const big = wide(8000);
+    expect(JSON.stringify(big).length).toBeGreaterThan(200 * 1024);
+    const time = (rec: Record<string, string>) => {
+      const t = performance.now();
+      expect(scanAccountData(rec).findings).toEqual([]);
+      return performance.now() - t;
+    };
+    time(small);
+    const tSmall = time(small);
+    const tBig = time(big);
+    // 4x the keys: linear is about 4x, quadratic about 16x.
+    expect(tBig).toBeLessThan(Math.max(tSmall, 5) * 10);
+    expect(tBig).toBeLessThan(1000);
   });
 
   test("window globals and astro props are read", async () => {

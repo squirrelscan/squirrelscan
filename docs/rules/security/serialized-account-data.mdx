@@ -41,11 +41,11 @@ The report tells these apart, because each needs a different response.
 
 ### The value is never printed
 
-A report is shared and stored. An item holds the JSON field path and the kind, and never a character of the value, an email or any other identifier from the record. Array indices fold to `[]`. A key that could be personal data, such as an email, a number, or a username used as the key of a map of records, is shown as `[*]`.
+A report is shared and stored. An item holds the JSON field path and the kind, and never a character of the value, an email or any other identifier from the record. Array indices fold to `[]`. A key that could be personal data, such as an email or a number, is shown as `[*]`. So is any key that holds a record with an identity field, even a single one, unless the key is a role or container name such as `user`, `account`, `profile` or `owner` that does not equal the record's own username or email.
 
 ### Limits
 
-The rule matches field names and value shapes, so a credential under an unusual key is missed, and a field named like a credential that holds something else can be flagged. A single record keyed by a username, outside a map of records, prints that key in the path. Only payloads in the page's markup are read, not data fetched after load. A finding shows what the page serves to anyone. It does not show whether the hash or session is still usable.
+The rule matches field names and value shapes, so a credential under an unusual key is missed, and a field named like a credential that holds something else can be flagged. Only payloads in the page's markup are read, not data fetched after load. A finding shows what the page serves to anyone. It does not show whether the hash or session is still usable.
 
 ## How to fix it
 
