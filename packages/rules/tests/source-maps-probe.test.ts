@@ -7,11 +7,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import type { CheckResult, RuleContext } from "../src/types";
 
+import { sourceMapsRule } from "../src/performance/source-maps";
 import {
-  SOURCE_MAP_PROBE_CAP,
-  sourceMapsRule,
-} from "../src/performance/source-maps";
-import { createProbeBudget, type ProbeLevel } from "../src/probe-budget";
+  createProbeBudget,
+  type ProbeBudget,
+  type ProbeLevel,
+} from "../src/probe-budget";
 
 const MAP_BODY = '{"version":3,"sources":["a.ts"],"mappings":""}';
 const hits: string[] = [];
@@ -56,7 +57,9 @@ afterAll(() => {
 async function run(
   maps: string[],
   level: ProbeLevel | null,
-  pageUrl = `${origin}/`
+  pageUrl = `${origin}/`,
+  // Pass one budget to several calls to model pages of the same audit.
+  budget?: ProbeBudget
 ): Promise<CheckResult[]> {
   const scripts = maps
     .map((m) => `<script>//# sourceMappingURL=${m}</script>`)
@@ -66,7 +69,9 @@ async function run(
     page: { url: pageUrl, html, statusCode: 200, loadTime: 0, headers: {} },
     parsed: parsePage(html, pageUrl),
     site: { baseUrl: origin, pages: [], robotsTxt: null, sitemaps: null },
-    probe: level ? createProbeBudget({ level, budgetMs: 10_000 }) : undefined,
+    probe:
+      budget ??
+      (level ? createProbeBudget({ level, budgetMs: 10_000 }) : undefined),
     options: {},
   } as unknown as RuleContext;
   return (await sourceMapsRule.run(ctx)).checks;
@@ -136,19 +141,23 @@ describe("perf/source-maps: reachability probe (#2333)", () => {
     expect(hits).toEqual([]);
   });
 
-  test("one request per distinct map within a run", async () => {
+  test("one request per distinct map across the pages of a run", async () => {
     hits.length = 0;
-    await run(["/live.js.map", "/live.js.map"], "active");
+    const budget = createProbeBudget({ level: "active", budgetMs: 10_000 });
+    const first = await run(["/live.js.map"], null, `${origin}/a`, budget);
+    const second = await run(["/live.js.map"], null, `${origin}/b`, budget);
+    // The second page reads the first page's answer instead of asking again.
     expect(hits).toEqual(["/live.js.map"]);
+    expect(ids(first)).toEqual([`${origin}/live.js.map`]);
+    expect(ids(second)).toEqual([`${origin}/live.js.map`]);
+    expect(second[0]?.details?.confirmed).toBe(1);
   });
 
-  test("the per-run cap bounds the requests", async () => {
+  test("the per-run cap bounds the requests at 50", async () => {
     hits.length = 0;
-    const many = Array.from(
-      { length: SOURCE_MAP_PROBE_CAP + 5 },
-      (_, i) => `/m${i}.js.map`
-    );
+    // A literal, not the exported constant, so loosening the cap fails here.
+    const many = Array.from({ length: 55 }, (_, i) => `/m${i}.js.map`);
     await run(many, "active");
-    expect(hits.length).toBe(SOURCE_MAP_PROBE_CAP);
+    expect(hits.length).toBe(50);
   });
 });
