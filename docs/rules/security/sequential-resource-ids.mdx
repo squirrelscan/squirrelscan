@@ -27,6 +27,8 @@ Endpoints are grouped by pattern. `/api/orders/1` and `/api/orders/2` are one fi
 - UUIDs, ULIDs, hashes, slugs, long numbers and other opaque ids.
 - Counters that are not resource ids: the number after `page`, `p`, `v`, `version`, `limit`, `offset`, `size`, `year`, `month`, `day`, `port`, `width`, `height`, `zoom`, `tile`, `rev`, `revision` or `build`, and version segments such as `v1`.
 - Plain navigation links such as `/blog/3` that are not under an API path.
+- Head links and script URLs, even on an API path (WordPress lists a public `wp-json/wp/v2/posts/<id>` link in every post).
+- A number right after an API word (`/api/42`), and cursor keys such as `maxId` or `since_id`.
 - Endpoints on another origin.
 
 ### Results

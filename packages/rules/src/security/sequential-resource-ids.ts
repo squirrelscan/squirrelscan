@@ -80,6 +80,30 @@ const ID_KEY =
 // Link-like discovery; a navigation link to `/blog/3` is a page, not an API.
 const LINK_VIA = new Set(["link-href", "script-src", "form-action"]);
 
+// Head links and script URLs are never a call, even on an API-looking path:
+// WordPress puts a public `wp-json/wp/v2/posts/<id>` alternate link in every post.
+const ALWAYS_SKIP_VIA = new Set(["link-href", "script-src"]);
+
+// Cursor and pagination keys page through results; they name no record.
+const CURSOR_KEYS = new Set([
+  "maxid",
+  "sinceid",
+  "minid",
+  "startid",
+  "afterid",
+  "beforeid",
+  "lastid",
+  "cursorid",
+  "max_id",
+  "since_id",
+  "min_id",
+  "start_id",
+  "after_id",
+  "before_id",
+  "last_id",
+  "cursor_id",
+]);
+
 export interface SequentialIdHit {
   url: string;
   /** Path with the id replaced by `{id}` so one pattern groups its endpoints. */
@@ -120,17 +144,22 @@ export function findSequentialId(
   const apiPath = looksLikeApiPath(segments);
   // A plain link is a page unless its path says API; script, render and
   // convention discoveries are calls.
+  if (ALWAYS_SKIP_VIA.has(c.discoveredVia)) return null;
   if (!apiPath && LINK_VIA.has(c.discoveredVia)) return null;
   if (!apiPath && c.source === "static-html") return null;
 
   for (let i = 1; i < segments.length; i++) {
-    const seg = segments[i]!;
-    if (seg.length > MAX_SEGMENT_LENGTH || !SMALL_INT.test(seg)) continue;
+    const raw = segments[i]!;
+    if (raw.length > MAX_SEGMENT_LENGTH) continue;
+    const isJson = raw.toLowerCase().endsWith(".json");
+    const seg = isJson ? raw.slice(0, -5) : raw;
+    if (!SMALL_INT.test(seg)) continue;
     const prev = segments[i - 1]!.toLowerCase();
+    if (API_WORDS.has(prev)) continue;
     if (COUNTER_WORDS.has(prev) || /^v\d{1,3}$/.test(prev)) continue;
     // The collection word must be a word, not another number or an id.
     if (!/^[a-z][a-z0-9_-]{1,63}$/.test(prev)) continue;
-    const pattern = `/${[...segments.slice(0, i), "{id}", ...segments.slice(i + 1)].join("/")}`;
+    const pattern = `/${[...segments.slice(0, i), isJson ? "{id}.json" : "{id}", ...segments.slice(i + 1)].join("/")}`;
     return {
       url: u.origin + u.pathname,
       pattern,
@@ -144,7 +173,8 @@ export function findSequentialId(
   let n = 0;
   for (const [key, value] of u.searchParams) {
     if (++n > MAX_QUERY_PARAMS) break;
-    if (key.length > 64 || !ID_KEY.test(key) || !SMALL_INT.test(value))
+    if (key.length > 64 || !ID_KEY.test(key) ||
+      CURSOR_KEYS.has(key.toLowerCase()) || !SMALL_INT.test(value))
       continue;
     return {
       url: `${u.origin}${u.pathname}?${key}=${value}`,

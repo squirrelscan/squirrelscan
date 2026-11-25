@@ -73,8 +73,29 @@ describe("findSequentialId", () => {
     "/api/orders?paid=1",
     "/api/orders?valid=1",
     "/api/orders?grid=3",
+    "/api/42",
+    "/api/orders?maxId=10",
+    "/api/orders?sinceId=10",
+    "/api/orders?since_id=10",
   ])("does not flag %s", (path) => {
     expect(findSequentialId(get(path), BASE)).toBeNull();
+  });
+
+  test("does not flag a WordPress wp-json alternate link in the head", () => {
+    expect(
+      findSequentialId(
+        get("/wp-json/wp/v2/posts/123", {
+          source: "static-html",
+          discoveredVia: "link-href",
+        }),
+        BASE
+      )
+    ).toBeNull();
+  });
+
+  test("flags an id before a .json ending", () => {
+    const hit = findSequentialId(get("/api/orders/42.json"), BASE);
+    expect(hit?.pattern).toBe("/api/orders/{id}.json");
   });
 
   test("does not flag a plain navigation link or a cross-origin URL", () => {
