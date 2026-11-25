@@ -22,6 +22,7 @@ import type { PageFingerprint } from "./integrity/fingerprint";
 import type { IntegritySignal, PageSignalContext } from "./integrity/signals";
 import type { PageAnchorSignal } from "./links/page-anchors";
 import type { LeakedSecret } from "./security/leaked-secrets";
+import type { NextDataInfo } from "./security/next-data-exposure";
 import type { InPageSectionSignal } from "./shared/inpage-section";
 import type { ParsedPage } from "./types";
 
@@ -58,6 +59,7 @@ import {
   startPageScan,
   type SiteFindingBudget,
 } from "./security/leaked-secrets";
+import { readNextDataFromDocument } from "./security/next-data-exposure";
 import { extractContentSentences } from "./shared/content-in-script";
 import { detached, detachedList, detachedSet } from "./shared/detach";
 import { buildInPageSectionSignal } from "./shared/inpage-section";
@@ -155,6 +157,12 @@ export interface CollectedPageSignal {
    */
   colorUsage?: ColorUsageSignal;
   /**
+   * security/next-data-exposure: the buildId and locale of the page's `__NEXT_DATA__` script when its
+   * props are server-rendered, else null. Absent on a record cached before the field existed, which
+   * the rule reads from the page's own document instead.
+   */
+  nextData?: NextDataInfo | null;
+  /**
    * Rules whose page-time extractor ran past its time budget on this page and was
    * abandoned (its field holds the empty value). The site pass records each as a
    * rule error for this page. Absent when nothing timed out.
@@ -230,6 +238,15 @@ export function detachColorUsage(c: ColorUsageSignal): ColorUsageSignal {
   };
 }
 
+/** The Next.js build info with every string copied out of the page. */
+export function detachNextData(n: NextDataInfo | null): NextDataInfo | null {
+  if (!n) return n;
+  return {
+    buildId: detached(n.buildId),
+    locale: n.locale === null ? null : detached(n.locale),
+  };
+}
+
 /** The hreflang signal with every string copied out of the page. */
 export function detachHreflang(h: HreflangPageSignal): HreflangPageSignal {
   return {
@@ -295,6 +312,7 @@ export function buildCollectedPageSignal(input: {
       edgeMarkers: [],
       hreflang: buildHreflangSignal(parsed, input.headers, url),
       contentFingerprint: null,
+      nextData: null,
       fontUsage: {
         families: [],
         referenced: [],
@@ -450,6 +468,11 @@ export function buildCollectedPageSignal(input: {
       "content/duplicate-content",
       null as ContentFingerprint | null,
       () => fingerprintForPage(doc, url, finalUrl)
+    ),
+    nextData: detachNextData(
+      timed("security/next-data-exposure", null, () =>
+        readNextDataFromDocument(doc)
+      )
     ),
     fontUsage: detachFontUsage(
       timed("content/font-consistency", extractFontUsage(null), () =>

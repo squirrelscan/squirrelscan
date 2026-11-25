@@ -14,7 +14,8 @@
 //    as server-rendered (`gssp` or `gsp`), since an auto-exported page has no
 //    data file. No path is guessed.
 //  - Same origin as the audited base URL, checked again here.
-//  - Not disallowed by robots.txt, unless the run is aggressive.
+//  - Not disallowed by robots.txt (the crawl's robots group, as
+//    security/graphql-probe reads it), unless the run is aggressive.
 //  - At most MAX_NEXT_DATA_PAGES pages per run, one GET each, no cookies, no
 //    redirects followed, through the shared probe budget and the JSON probe's
 //    capped reader.
@@ -26,7 +27,9 @@
 // Not checked is never clean (#1920): a throttle, bot challenge, 5xx, timeout,
 // an answer over the read cap, an exhausted budget, or a reply that is not a
 // JSON data file (a 404 after a redeploy changed the buildId, a redirect, an
-// HTML page) leaves the run not checked. A pass needs every file read as JSON.
+// HTML page), or a data file left out by the per-run cap or by robots.txt,
+// leaves the run not checked. A pass needs every data file of every crawled
+// server-rendered page read as JSON.
 
 import {
   type CheckItem,
@@ -90,11 +93,14 @@ export interface NextDataSelection {
 
 type SitePage = NonNullable<RuleContext["site"]>["pages"][number];
 
-/** buildId and locale of a page whose props are server-rendered, or null. */
-export function readServerRenderedNextData(
-  page: SitePage
+/**
+ * buildId and locale from a document's `__NEXT_DATA__` script, when the page's
+ * props are server-rendered, or null. Called page-time by the streaming engine's
+ * signal collector (the site pass sees no DOM) and by the legacy fallback below.
+ */
+export function readNextDataFromDocument(
+  doc: Document | null | undefined
 ): NextDataInfo | null {
-  const doc = page.parsed?.document;
   if (!doc) return null;
   let el: Element | null;
   try {
@@ -132,6 +138,13 @@ export function readServerRenderedNextData(
   return { buildId: id, locale };
 }
 
+/** buildId and locale of a page whose props are server-rendered, or null. */
+export function readServerRenderedNextData(
+  page: SitePage
+): NextDataInfo | null {
+  return readNextDataFromDocument(page.parsed?.document);
+}
+
 /**
  * The data file path, as Next.js builds it: `/` becomes `/index.json`,
  * `/blog/post/` becomes `/blog/post.json`. With a locale, the locale prefix of
@@ -162,7 +175,7 @@ function isNextInternalPath(pathname: string): boolean {
 
 /** The data files the rule may request, in crawl order. Pure: sends nothing. */
 export function selectNextDataCandidates(
-  ctx: Pick<RuleContext, "site" | "probe">
+  ctx: Pick<RuleContext, "site" | "probe" | "collectedSignals">
 ): NextDataSelection {
   const selection: NextDataSelection = {
     candidates: [],
@@ -179,7 +192,17 @@ export function selectNextDataCandidates(
   }
   const aggressive = ctx.probe?.level === "aggressive";
   const robotsTxt = ctx.site?.robotsTxt ?? null;
+  // The robots.txt group the crawl was matched as, as security/graphql-probe reads it.
+  const robotsAgent = ctx.site?.robotsUserAgent || "*";
   const seen = new Set<string>();
+  // The streaming engine detaches every DOM before the site pass, so the
+  // `__NEXT_DATA__` read is taken page-time into the collected signals. A record
+  // without the field (none should exist: the collector id was bumped with it)
+  // falls back to the page's own document.
+  const collected = new Map<string, NextDataInfo | null>();
+  for (const rec of ctx.collectedSignals?.pages ?? []) {
+    if (rec.nextData !== undefined) collected.set(rec.url, rec.nextData);
+  }
 
   for (const page of ctx.site?.pages ?? []) {
     if (page.redirectSource || page.statusCode < 200 || page.statusCode > 299)
@@ -192,14 +215,16 @@ export function selectNextDataCandidates(
     }
     if (u.origin !== siteOrigin || u.username || u.password) continue;
     if (isNextInternalPath(u.pathname)) continue;
-    const next = readServerRenderedNextData(page);
+    const next = collected.has(page.url)
+      ? (collected.get(page.url) ?? null)
+      : readServerRenderedNextData(page);
     if (next === null) continue;
     const { buildId } = next;
     selection.nextPages++;
     const url = `${u.origin}${nextDataPath(u.pathname, buildId, next.locale)}`;
     if (seen.has(url)) continue;
     seen.add(url);
-    if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, "*")) {
+    if (!aggressive && isRobotsTxtDisallowed(url, robotsTxt, robotsAgent)) {
       selection.skippedRobots++;
       continue;
     }
@@ -297,6 +322,20 @@ export const nextDataExposureRule: Rule = {
       skippedRobots: selection.skippedRobots,
       skippedCap: selection.skippedCap,
     };
+    const leftOut = selection.skippedRobots + selection.skippedCap;
+    if (selection.candidates.length === 0 && leftOut > 0) {
+      // Server-rendered pages were found but none of their data files may be
+      // requested: that is not checked, not "no Next.js page".
+      checks.push({
+        name: CHECK_CLEAN,
+        status: "skipped",
+        skipReason: PROBE_INCOMPLETE_SKIP_REASON,
+        message: `Not checked: robots.txt disallows the data file(s) of ${selection.skippedRobots} server-rendered Next.js page(s), so nothing was requested. Run with --probe aggressive to request them anyway`,
+        value: "not-checked",
+        details,
+      });
+      return { checks };
+    }
     if (selection.candidates.length === 0) {
       checks.push({
         name: CHECK_CLEAN,
@@ -424,7 +463,9 @@ export const nextDataExposureRule: Rule = {
       truncated -
       notJson -
       (pushback ? 1 : 0);
-    const unverified = total - verified;
+    // Data files left out by the per-run cap or by robots.txt were never read,
+    // so they count as not verified, never as clean.
+    const unverified = total - verified + leftOut;
     const runDetails = {
       ...details,
       probed,
@@ -462,18 +503,27 @@ export const nextDataExposureRule: Rule = {
         why.push(
           `${notJson} data file(s) did not answer with JSON pageProps (a 404, a redirect or an HTML page, for example after a redeploy changed the buildId)`
         );
+      if (selection.skippedCap > 0)
+        why.push(
+          `${selection.skippedCap} more data file(s) were not requested because the rule requests at most ${MAX_NEXT_DATA_PAGES} per run`
+        );
+      if (selection.skippedRobots > 0)
+        why.push(
+          `${selection.skippedRobots} data file(s) were not requested because robots.txt disallows them (run with --probe aggressive to request them)`
+        );
       const onlyBudget =
         budgetStopped &&
         !pushback &&
         errored === 0 &&
         serverErrors === 0 &&
         truncated === 0 &&
-        notJson === 0;
+        notJson === 0 &&
+        leftOut === 0;
       checks.push({
         name: CHECK_CLEAN,
         status: "skipped",
         skipReason: onlyBudget ? "probe-budget" : PROBE_INCOMPLETE_SKIP_REASON,
-        message: `Next.js data files check incomplete: ${why.join("; ")}. ${unverified} of ${total} data file(s) were not verified and may be leaking`,
+        message: `Next.js data files check incomplete: ${why.join("; ")}. ${unverified} of ${total + leftOut} data file(s) were not verified and may be leaking`,
         value: "not-checked",
         details: runDetails,
       });
