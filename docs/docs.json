@@ -679,6 +679,7 @@
                   "rules/security/exposed-actuator",
                   "rules/security/http-methods",
                   "rules/security/supabase-rls",
+                  "rules/security/firebase-open-rules",
                   "rules/security/third-party-cookies",
                   "rules/security/sri",
                   "rules/security/cookie-flags",

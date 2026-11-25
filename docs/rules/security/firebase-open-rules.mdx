@@ -1,0 +1,147 @@
+---
+title: "Firebase security rules open: databases readable without sign-in"
+description: "A Firebase Realtime Database or Firestore collection with open security rules answers anyone who can read your public Firebase config. squirrel makes one anonymous read per target and reads only key and collection names."
+---
+
+## What open Firebase rules are
+
+A Firebase web app ships its client config, including the database URL and project id, to every visitor. That is by design: security rules decide what a caller who is not signed in may read. A Realtime Database with `".read": true`, or a Firestore collection with `allow read: if true;`, answers a plain REST request from anyone who has seen your config, which is anyone who opened your site.
+
+This is common after "test mode" rules are left in place: the app works, and nobody tightens the rules.
+
+## What squirrel checks
+
+This is a probing rule, and a loud one: it sends requests to Firebase hosts, which are not the audited site. It runs only when [probing intensity](/configuration/security) is `aggressive`, only when the audit may request other hosts (not `--offline`, and external link checking on), and inside the shared probe budget. A cloud audit of a website whose ownership is not verified stays passive, so it never sends one.
+
+<Warning>
+`aggressive` is for sites you run: only use it on a website you own or are authorized to test. This rule asks your own Firebase backend for data with no credentials, the way any visitor could.
+</Warning>
+
+### Finding the targets
+
+Finding them sends no request. squirrel reads the scripts and inline scripts the crawl already fetched for:
+
+- A Realtime Database: a `databaseURL` in a Firebase config. The host is always `<name>.firebaseio.com` or `<name>.<region>.firebasedatabase.app`.
+- A Firestore project: a `projectId` in a script that also holds a Firebase web API key. The host is always `firestore.googleapis.com`.
+- Firestore collections: only the names the site's own code queries, such as `collection(db, "users")` or `.collection("users")`. No name is guessed, so a project whose scripts name no collection is not probed.
+
+At most 2 databases, 2 Firestore projects, 10 collections per project and 25 requests per audit. When there are more, the first by name (plain character order) are probed, so the same site probes the same targets on every run.
+
+### What is sent
+
+No API key, cookie, token or custom header is sent, so the answer is exactly what an anonymous visitor gets. Requests are `GET`, follow no redirect, and a host that resolves to a private, link-local or metadata address is refused before anything is sent.
+
+```text
+GET https://<name>.firebaseio.com/.json?shallow=true
+GET https://firestore.googleapis.com/v1/projects/<project>/databases/(default)/documents/<collection>?pageSize=1&mask.fieldPaths=__name__
+```
+
+`shallow=true` makes the Realtime Database return top-level key names only, never the values under them. The Firestore field mask removes every field, so a document comes back as its name alone, and squirrel only checks whether the list is empty. At most 16 KiB of an answer is read.
+
+### How the answer is judged
+
+| Answer | Verdict |
+|---|---|
+| Realtime Database: a JSON object of top-level keys. Firestore: a list with at least one document | Exposed |
+| `401` or a plain `403` (Realtime Database answers `Permission denied`) | Protected |
+| `null` or `{}` | Empty: nothing is readable now |
+| `404` that is not an HTML page | Does not exist |
+| `429`, a bot challenge, or a `403` carrying WAF markers | Not checked, and no further request is sent |
+| Any other answer, an HTML error page, a network error or a timeout | Not checked |
+
+### What is reported
+
+A finding names the database host or Firestore project, and the paths: top-level Realtime Database path names and Firestore collection names. Never a value, and never a document id. A path name is listed only when it is a short identifier (at most 24 characters, up to 10 names); anything else, such as a user id or an email used as a key, is counted and not named.
+
+### Results
+
+The rule emits checks named `firebase-open-rules`:
+
+- Fail, one check, when any database or collection answers without sign-in. Each exposed Realtime Database path or Firestore collection is an item. When the run did not get a definite answer from every target, the message says how many went unchecked and why.
+- Pass only when every planned target got a definite answer: protected, empty or missing.
+- Skipped, reason `probe-incomplete`, when any target got no definite answer or a cap left targets out. Never a pass.
+- Skipped, reason `not-applicable`, when the scripts hold no Firebase database or project.
+- Skipped, reason `probing-passive` or `probing-not-aggressive`, when probing is below `aggressive`. Nothing is sent.
+- Skipped, reason `external-requests-off`, on an `--offline` audit or one with external link checking off. Nothing is sent.
+- Skipped, reason `no-tables-in-code`, when the site has no database URL and its scripts name no Firestore collection. Nothing is sent.
+- Skipped, reason `probe-budget`, when the shared probe budget ran out before the first request.
+
+### Limits
+
+Only the Realtime Database root and the collections your code names are tried. A collection no script mentions, a subcollection, and rules that allow reads only on deeper paths are not found. A readable Firestore collection or Realtime Database path may be public on purpose: review each finding, and to waive one add an [`[[ignore]]`](/configuration/ignore) entry that names it.
+
+## How to fix it
+
+Realtime Database: replace `".read": true` with a condition, scoped per path.
+
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": { ".read": "auth != null && auth.uid === $uid" }
+    }
+  }
+}
+```
+
+Firestore:
+
+```text
+match /users/{uid} {
+  allow read: if request.auth != null && request.auth.uid == uid;
+}
+```
+
+Publish the rules, then treat anything they exposed as already read and rotate anything sensitive it held.
+
+| | |
+|---|---|
+| **Rule ID** | `security/firebase-open-rules` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/firebase-open-rules"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/firebase-open-rules"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `firebase-open-rules` | Problem |  |
+| `firebase-open-rules` | Clean | `firebase-open-rules` |
+| `firebase-open-rules` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/supabase-rls](/rules/security/supabase-rls): the same probe model for Supabase tables.
+- [security/leaked-secrets](/rules/security/leaked-secrets): finds keys in your pages and scripts.
