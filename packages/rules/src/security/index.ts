@@ -10,6 +10,7 @@ import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { cspViolationsRule } from "./csp-violations";
 import { exposedActuatorRule } from "./exposed-actuator";
 import { exposedBackupsRule } from "./exposed-backups";
+import { httpMethodsRule } from "./http-methods";
 import { exposedFilesRule } from "./exposed-files";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
@@ -72,6 +73,7 @@ export const rules: Rule[] = [
   openRedirectRule,
   clientSideAuthzRule,
   exposedActuatorRule,
+  httpMethodsRule,
   supabaseRlsRule,
   securityTxtRule,
   versionDisclosureRule,
@@ -93,6 +95,7 @@ export {
   graphqlGetMutationsRule,
   graphqlIntrospectionRule,
   hstsRule,
+  httpMethodsRule,
   httpToHttpsRule,
   httpsRule,
   jsonSensitiveFieldsRule,

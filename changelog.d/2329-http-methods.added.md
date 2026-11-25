@@ -1,0 +1,1 @@
+- New rule `security/http-methods` sends OPTIONS to the site root and up to two crawled pages when probing is active, and flags TRACE, TRACK, PUT, DELETE, PATCH and CONNECT in the Allow header. When TRACE is advertised, one TRACE request confirms whether the server reflects it. No state-changing method is ever sent. (#2329)
