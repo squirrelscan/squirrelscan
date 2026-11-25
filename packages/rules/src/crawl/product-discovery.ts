@@ -46,9 +46,7 @@ export interface ProductDiscovery {
 }
 
 /** True when the crawled pages show the site sells products. */
-export function hasCommerceEvidence(
-  pages: readonly SitePageView[]
-): boolean {
+export function hasCommerceEvidence(pages: readonly SitePageView[]): boolean {
   let productPages = 0;
   let cartLink = false;
   let productPathPage = false;
