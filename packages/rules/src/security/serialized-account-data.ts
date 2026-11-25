@@ -14,7 +14,10 @@
 //    PBKDF2, crypt) under any key, or a long value under a hash-named key.
 //  - plaintext password: a password-named key in a record that has an identity
 //    field (email, username, id).
-//  - API key or access token: a secret-named key holding a token-shaped value.
+//  - API key or access token: a secret-named key holding a token-shaped value
+//    in a record with an identity field. Browser keys that are public by
+//    design are not flagged: Google keys (`AIza...`) and keys in a client
+//    config record (Firebase or Algolia: `appId`, `authDomain`, `projectId`).
 //  - one-time code: an OTP-named key in a record with an identity field. A
 //    sibling expiry in the past marks it expired. An OTP secret (TOTP seed) is
 //    its own kind and is never "expired".
@@ -27,9 +30,10 @@
 // named example, sample, demo, mock or fixture.
 //
 // Values never reach the report. An item holds the JSON field path and a kind.
-// A path key that could be personal data (an email, a number, or any key
-// holding an identity record other than a role or container name such as
-// `user` or `account`) is folded to `[*]`; array indices fold to `[]`.
+// Only allowlisted path keys are printed: role and container names (`user`,
+// `account`, `props`) and the credential field names the rule looks for. Any
+// other key could be a username or an email keying a map, so it folds to
+// `[*]`; array indices fold to `[]`.
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
@@ -179,6 +183,18 @@ const EXPIRY_KEYS = new Set([
   "resetcodeexpiresat",
   "otpexpires",
 ]);
+/** Keys of a browser client config (Firebase, Algolia), whose API key is public by design. */
+const PUBLIC_CONFIG_KEYS = new Set([
+  "appid",
+  "applicationid",
+  "authdomain",
+  "projectid",
+  "messagingsenderid",
+  "storagebucket",
+  "measurementid",
+]);
+/** Google browser API keys (Maps, Firebase) are public and restricted by referrer. */
+const GOOGLE_BROWSER_KEY_RE = /^AIza/;
 /** Path segments that mark documentation or test data. */
 const EXAMPLE_SEGMENT =
   /^(?:examples?|samples?|demos?|mocks?|fixtures?|docs?)$/i;
@@ -229,7 +245,7 @@ function hasIdentity(obj: Record<string, unknown>): boolean {
   return false;
 }
 
-/** Keys that name a role or container, not a person, when they hold an identity record. */
+/** Role and container names, printed in a path when they do not equal the record's own identity. */
 const RECORD_ROLE_KEYS = new Set([
   "user",
   "users",
@@ -271,17 +287,28 @@ const RECORD_ROLE_KEYS = new Set([
   "payload",
   "contact",
   "person",
+  "dehydratedstate",
+  "queries",
+  "fallback",
+  "initialdata",
 ]);
 
-/**
- * A key whose child is an identity record can be the person's own name (a
- * username keying a map, even a map of one). Only role and container names
- * are printed, and never one that equals an identity value of the record.
- */
-function isPersonalRecordKey(key: string, child: unknown): boolean {
-  if (!isPlainObject(child) || !hasIdentity(child)) return false;
-  const k = norm(key);
-  if (!RECORD_ROLE_KEYS.has(k)) return true;
+/** Credential field names the rule classifies, safe to print as the last path segment. */
+const CREDENTIAL_KEYS: ReadonlySet<string> = new Set([
+  ...HASH_KEYS,
+  ...PASSWORD_KEYS,
+  ...API_KEY_KEYS,
+  ...OTP_KEYS,
+  ...OTP_SECRET_KEYS,
+  ...SESSION_KEYS,
+  "hash",
+  "salt",
+  "digest",
+]);
+
+/** True when `key` equals an identity value of the record it holds (a username named `admin`). */
+function namesOwnRecord(k: string, child: unknown): boolean {
+  if (!isPlainObject(child)) return false;
   for (const ck of Object.keys(child)) {
     if (!IDENTITY_KEYS.has(norm(ck))) continue;
     const v = child[ck];
@@ -290,13 +317,19 @@ function isPersonalRecordKey(key: string, child: unknown): boolean {
   return false;
 }
 
-/** A key that is safe to print: an identifier-shaped name with no digit run or id-like body. */
-function isSafeKey(key: string): boolean {
-  return (
-    /^[A-Za-z_][A-Za-z0-9_]{0,47}$/.test(key) &&
-    !/\d{4,}/.test(key) &&
-    !/^[a-f0-9]{16,}$/i.test(key)
-  );
+/**
+ * The printed segment for `key`. Any key outside the allowlist can be personal
+ * data (a username or email keying a map), so it folds to `[*]`.
+ */
+function pathSegment(
+  key: string,
+  child: unknown,
+  allow: ReadonlySet<string>
+): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,47}$/.test(key)) return "[*]";
+  const k = norm(key);
+  if (!allow.has(k) || namesOwnRecord(k, child)) return "[*]";
+  return `.${key}`;
 }
 
 function isPlaceholder(value: string): boolean {
@@ -332,11 +365,24 @@ export interface RecordFacts {
   identity: boolean;
   /** A sibling expiry as milliseconds, or null. */
   expiry: number | null;
+  /** The record is a browser client config (Firebase, Algolia) whose key is public. */
+  publicConfig: boolean;
 }
 
 /** Scan a record's keys once. Per-field rescans are quadratic in the key count. */
 export function recordFacts(record: Record<string, unknown>): RecordFacts {
-  return { identity: hasIdentity(record), expiry: siblingExpiry(record) };
+  let publicConfig = false;
+  for (const k of Object.keys(record)) {
+    if (PUBLIC_CONFIG_KEYS.has(norm(k))) {
+      publicConfig = true;
+      break;
+    }
+  }
+  return {
+    identity: hasIdentity(record),
+    expiry: siblingExpiry(record),
+    publicConfig,
+  };
 }
 
 /** The kind of value under `key` in a record with `facts`, or null. `now` is milliseconds. */
@@ -361,9 +407,12 @@ export function classifyField(
       return "plaintext-password";
     }
     if (API_KEY_KEYS.has(k)) {
-      return TOKEN_SHAPE_RE.test(value) && !PUBLIC_KEY_RE.test(value)
-        ? "api-key"
-        : null;
+      // A key outside an account record is site config, and a client config
+      // key is public by design: leaked-secrets judges those by provider.
+      if (!facts.identity || facts.publicConfig) return null;
+      if (PUBLIC_KEY_RE.test(value) || GOOGLE_BROWSER_KEY_RE.test(value))
+        return null;
+      return TOKEN_SHAPE_RE.test(value) ? "api-key" : null;
     }
     if (OTP_SECRET_KEYS.has(k)) {
       return /^[A-Za-z2-7=]{16,128}$/.test(value) ? "otp-secret" : null;
@@ -424,13 +473,11 @@ export function scanAccountData(
     const facts = recordFacts(value);
     for (const key of Object.keys(value)) {
       const child = value[key];
-      const safe = isSafeKey(key) && !isPersonalRecordKey(key, child);
-      const seg = safe ? `.${key}` : "[*]";
       const childExample = example || EXAMPLE_SEGMENT.test(key);
       if (typeof child === "object" && child !== null) {
         stack.push({
           value: child,
-          path: `${path}${seg}`,
+          path: `${path}${pathSegment(key, child, RECORD_ROLE_KEYS)}`,
           depth: depth + 1,
           example: childExample,
         });
@@ -439,7 +486,7 @@ export function scanAccountData(
       if (example) continue;
       const kind = classifyField(key, child, facts, now);
       if (!kind) continue;
-      const printed = `${path}${isSafeKey(key) ? `.${key}` : "[*]"}`;
+      const printed = `${path}${pathSegment(key, child, CREDENTIAL_KEYS)}`;
       const id = `${printed}\u0000${kind}`;
       const prior = found.get(id);
       if (prior) prior.count++;

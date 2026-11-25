@@ -25,7 +25,7 @@ The report tells these apart, because each needs a different response.
 |---|---|
 | Password hash | A value in a bcrypt, argon2, scrypt, PBKDF2 or crypt format under any key, or a value of 20 or more characters under a key such as `passwordHash` or `hashedPassword`. |
 | Plaintext password | A string under `password`, `passwd`, `pwd` and similar keys, in a record that also has an identity field (`email`, `username`, `id`). |
-| API key or access token | A token-shaped string under `apiKey`, `secret`, `clientSecret`, `accessToken`, `refreshToken` and similar keys. Values that start with `pk_`, `public` or `anon` are not flagged. |
+| API key or access token | A token-shaped string under `apiKey`, `secret`, `clientSecret`, `accessToken`, `refreshToken` and similar keys, in a record with an identity field. Values that start with `pk_`, `public`, `anon` or `AIza` (Google browser keys) are not flagged, and neither is a key in a record with `appId`, `applicationId`, `authDomain`, `projectId`, `messagingSenderId`, `storageBucket` or `measurementId` (a Firebase or Algolia client config, public by design). |
 | One-time code | A 4 to 10 digit or 6 to 8 character code under `otp`, `verificationCode`, `resetCode`, `mfaCode` and similar keys, in a record with an identity field. |
 | Expired one-time code | A one-time code whose sibling expiry field (`otpExpiresAt`, `expiresAt`, `validUntil`) is in the past when the audit runs. It is a warning. The expired code is not described as current access. |
 | One-time-code secret | A base32-shaped string under `totpSecret`, `otpSecret` and similar keys. |
@@ -37,11 +37,11 @@ The report tells these apart, because each needs a different response.
 - Placeholders such as `********`, `[REDACTED]`, `changeme` or `your_api_key_here`.
 - Documented example values: `password`, `hunter2`, `correcthorsebatterystaple`, and the bcrypt hash that library documentation uses.
 - Anything under a path segment named `example`, `examples`, `sample`, `demo`, `mock`, `fixture` or `docs`.
-- A `password` or one-time code key with no identity field in the same record.
+- A `password`, API key or one-time code key with no identity field in the same record. A site-wide key in page config is a matter for [security/leaked-secrets](/rules/security/leaked-secrets).
 
 ### The value is never printed
 
-A report is shared and stored. An item holds the JSON field path and the kind, and never a character of the value, an email or any other identifier from the record. Array indices fold to `[]`. A key that could be personal data, such as an email or a number, is shown as `[*]`. So is any key that holds a record with an identity field, even a single one, unless the key is a role or container name such as `user`, `account`, `profile` or `owner` that does not equal the record's own username or email.
+A report is shared and stored. An item holds the JSON field path and the kind, and never a character of the value, an email or any other identifier from the record. Array indices fold to `[]`. A path key is printed only when it is on an allowlist: role and container names such as `user`, `account`, `profile`, `owner` or `props`, and the credential field names in the table above. Every other key is shown as `[*]`, because a map can be keyed by a username or an email. A role name that equals the record's own username or email is shown as `[*]` too.
 
 ### Limits
 

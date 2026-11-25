@@ -126,6 +126,26 @@ describe("security/serialized-account-data", () => {
     expect(findings).toEqual([]);
   });
 
+  test("public browser keys and keys outside an account record are not flagged", () => {
+    // Invented values in the shape of public client keys.
+    const google = `AIza${"Sy0invented0invented0invented0inv".slice(0, 35)}`;
+    const { findings } = scanAccountData({
+      firebase: {
+        apiKey: google,
+        authDomain: "example.firebaseapp.com",
+        projectId: "example",
+        appId: "1:000000000000:web:0000000000000000",
+      },
+      algolia: {
+        appId: "EXAMPLEAPP",
+        apiKey: "0123456789abcdef0123456789abcdef",
+      },
+      maps: { id: 1, apiKey: google },
+      config: { apiKey: "sk_live_invented0123456789" },
+    });
+    expect(findings).toEqual([]);
+  });
+
   test("a plaintext password needs a record around it", () => {
     expect(
       scanAccountData({ password: "Tr0ub4dor-invented" }).findings
@@ -162,6 +182,19 @@ describe("security/serialized-account-data", () => {
       ].sort()
     );
     expect(JSON.stringify(findings)).not.toMatch(/alice|admin/);
+  });
+
+  test("only allowlisted keys are printed in a path", () => {
+    const { findings } = scanAccountData({
+      team: {
+        jdoe: { id: 7, passwordHash: BCRYPT },
+      },
+      user: { id: 8, jdoe_pw: BCRYPT },
+    });
+    expect(findings.map((f) => f.path).sort()).toEqual(
+      ["$.user[*]", "$[*][*].passwordHash"].sort()
+    );
+    expect(JSON.stringify(findings)).not.toMatch(/jdoe|team/);
   });
 
   test("a wide record is scanned in linear time", () => {
