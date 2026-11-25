@@ -9,7 +9,7 @@ A sitemap is a public, machine-readable list of URLs. When it names `/admin/`, `
 
 ## What squirrel checks
 
-It reads the sitemap entries the crawl already fetched. Reading them sends no request. An entry is sensitive-looking when its path has one of these whole words: `admin`, `administrator`, `staging`, `draft`, `drafts`, `preview`, `backup`, `backups`, `internal`, `intranet`, `private`, `sandbox`, `uat` or `debug`. Words are split on anything that is not a letter or digit, so `/admin-tools/` matches and `/administration/` does not.
+It reads the sitemap entries the crawl already fetched. Reading them sends no request. An entry is sensitive-looking when one of its path segments is exactly one of these words: `admin`, `administrator`, `staging`, `draft`, `drafts`, `preview`, `backup`, `backups`, `internal`, `intranet`, `private`, `sandbox`, `uat` or `debug`. Each segment is percent-decoded and lowercased, then compared whole, so `/admin/` and `/Staging/` match while `/admin-tools/`, `/administration/` and a slug such as `/blog/draft-post-staging` do not.
 
 The probes are a probing rule, so they run only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run the rule sends nothing and records a skipped check when sensitive-looking entries exist.
 

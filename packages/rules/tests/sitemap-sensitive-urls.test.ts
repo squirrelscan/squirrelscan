@@ -67,14 +67,29 @@ const ok =
     });
 
 describe("sensitiveWords", () => {
-  test("matches whole path words only", () => {
+  test("matches whole decoded path segments only", () => {
     expect(sensitiveWords("/admin/users")).toEqual(["admin"]);
-    expect(sensitiveWords("/blog/draft-post-staging")).toEqual([
-      "draft",
-      "staging",
-    ]);
+    expect(sensitiveWords("/Staging/admin/")).toEqual(["staging", "admin"]);
+    expect(sensitiveWords("/%61dmin/")).toEqual(["admin"]);
+    expect(sensitiveWords("/blog/draft-post-staging")).toEqual([]);
+    expect(sensitiveWords("/admin-tools/")).toEqual([]);
+    expect(sensitiveWords("/blog/admin.html")).toEqual([]);
+    expect(sensitiveWords("/a%2Fadmin/")).toEqual([]);
     expect(sensitiveWords("/administration")).toEqual([]);
     expect(sensitiveWords("/blog/hello")).toEqual([]);
+  });
+
+  test("a sitemap of content slugs that contain a word is clean", async () => {
+    const stub = stubFetch({});
+    restore = stub.restore;
+    const { checks } = await sitemapSensitiveUrlsRule.run(
+      ctxWith([
+        `${BASE}/blog/draft-post-staging`,
+        `${BASE}/blog/how-to-backup-your-mac`,
+      ])
+    );
+    expect(checks.map((c) => c.status)).toEqual(["pass"]);
+    expect(stub.sent).toHaveLength(0);
   });
 });
 

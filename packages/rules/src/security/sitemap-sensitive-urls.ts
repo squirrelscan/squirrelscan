@@ -12,7 +12,7 @@
 //
 // What may be probed, all enforced by `selectSensitiveEntries`:
 //  - Same origin as the audited base URL (scheme, host and port).
-//  - A path with a whole-word segment from SENSITIVE_WORDS.
+//  - A path with a whole segment from SENSITIVE_WORDS.
 //  - Not disallowed by robots.txt, unless the run is aggressive.
 //  - At most MAX_SENSITIVE_PROBES URLs, one GET each.
 //
@@ -49,7 +49,11 @@ const MAX_SITEMAPS_PER_URL = 3;
 /** Longest URL examined, so one hostile entry cannot bloat a finding. */
 const MAX_URL_CHARS = 2048;
 
-/** Whole words (path segments split on anything but letters and digits) that mark a URL as sensitive. */
+/**
+ * Whole path segments that mark a URL as sensitive. A segment is matched
+ * whole, so a slug that merely contains a word (`/blog/draft-post-staging`,
+ * `/admin-tools`) is an ordinary content page, not a sensitive one.
+ */
 export const SENSITIVE_WORDS: ReadonlySet<string> = new Set([
   "admin",
   "administrator",
@@ -67,17 +71,19 @@ export const SENSITIVE_WORDS: ReadonlySet<string> = new Set([
   "debug",
 ]);
 
-/** The sensitive words in a path, in order, deduped. */
+/** The path segments that are sensitive words, in order, deduped. */
 export function sensitiveWords(pathname: string): string[] {
-  let decoded = pathname;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    // Keep the raw path when it is not valid percent-encoding.
-  }
   const found: string[] = [];
-  for (const w of decoded.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (SENSITIVE_WORDS.has(w) && !found.includes(w)) found.push(w);
+  for (const raw of pathname.split("/")) {
+    if (raw === "") continue;
+    let segment = raw;
+    try {
+      segment = decodeURIComponent(raw);
+    } catch {
+      // Keep the raw segment when it is not valid percent-encoding.
+    }
+    const word = segment.toLowerCase();
+    if (SENSITIVE_WORDS.has(word) && !found.includes(word)) found.push(word);
   }
   return found;
 }
