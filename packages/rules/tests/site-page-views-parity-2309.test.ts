@@ -42,6 +42,8 @@ interface Spec {
   headers?: Record<string, string>;
   redirectSource?: boolean;
   finalPath?: string;
+  /** Attach the observed HTTP 301 chain from `path` to `finalPath`. */
+  chain?: boolean;
 }
 
 const article = (author: boolean, modified: boolean): string =>
@@ -142,7 +144,13 @@ const SPECS: Spec[] = [
       body: '<a href="/cart">Cart</a>',
     })
   ),
-  { path: "/old", redirectSource: true, status: 301, finalPath: "/en/" },
+  {
+    path: "/old",
+    redirectSource: true,
+    status: 301,
+    finalPath: "/en/",
+    chain: true,
+  },
   {
     path: "/dated",
     head: '<title>Dated</title><meta itemprop="dateModified" content="2020-01-01">',
@@ -160,6 +168,25 @@ function pages(): SiteData["pages"] {
       headers: s.headers ?? {},
       ...(s.finalPath ? { finalUrl: `${B}${s.finalPath}` } : {}),
       ...(s.redirectSource ? { redirectSource: true } : {}),
+      ...(s.chain && s.finalPath
+        ? {
+            redirectChain: {
+              sourceUrl: url,
+              finalUrl: `${B}${s.finalPath}`,
+              hops: [
+                { url, statusCode: 301, type: "http" as const },
+                {
+                  url: `${B}${s.finalPath}`,
+                  statusCode: 200,
+                  type: "http" as const,
+                },
+              ],
+              chainLength: 1,
+              isLoop: false,
+              endsInError: false,
+            },
+          }
+        : {}),
     };
   });
 }
@@ -266,6 +293,85 @@ describe("page views: legacy site.pages vs ctx.siteQuery.pageViews() (#2309)", (
     );
     const unfiltered = await privacyPolicyRule.run(withSource);
     expect(unfiltered.checks).toEqual(filtered.checks);
+  });
+});
+
+describe("buildSitePageView fixture values (#2309)", () => {
+  // Literal expectations: the parity tests above compare the helper with itself, so a field
+  // computed wrongly on both paths would still pass them.
+  const byPath = new Map(
+    pages().map((p) => [p.url.slice(B.length), buildSitePageView(p)])
+  );
+  const view = (path: string) => {
+    const v = byPath.get(path);
+    if (!v) throw new Error(`no view for ${path}`);
+    return v;
+  };
+
+  test("hasMailto and hasTel read mailto: and tel: entries of parsed.links", () => {
+    // Both link extractors drop mailto: and tel: hrefs, so a parsed /contact carries neither;
+    // eeat/contact-page read parsed.links the same way before #2309.
+    expect(view("/contact").hasMailto).toBe(false);
+    expect(view("/contact").hasTel).toBe(false);
+    const contact = pages().find((p) => p.url === `${B}/contact`);
+    if (!contact?.parsed) throw new Error("no /contact page");
+    const link = (url: string) => ({ url, text: "x", isInternal: false });
+    const withLinks = (urls: string[]) =>
+      buildSitePageView({
+        ...contact,
+        parsed: { ...contact.parsed, links: urls.map(link) },
+      } as SiteData["pages"][number]);
+    const both = withLinks(["mailto:hi@example.com", "tel:+15551234567"]);
+    expect(both.hasMailto).toBe(true);
+    expect(both.hasTel).toBe(true);
+    const mailOnly = withLinks(["mailto:hi@example.com"]);
+    expect(mailOnly.hasMailto).toBe(true);
+    expect(mailOnly.hasTel).toBe(false);
+    const telOnly = withLinks(["tel:+15551234567"]);
+    expect(telOnly.hasMailto).toBe(false);
+    expect(telOnly.hasTel).toBe(true);
+  });
+
+  test("/blog/post-1 counts citations and affiliate links, reads schema author and dates", () => {
+    const v = view("/blog/post-1");
+    // Two links to cdc.gov, duplicates counted.
+    expect(v.authoritativeLinks).toBe(2);
+    expect(v.affiliateLink).toBe(true);
+    expect(v.schemaAuthor).toBe(true);
+    expect(v.schemaDatePublished).toBe(true);
+    expect(v.schemaDateModified).toBe(true);
+    // The duplicate cdc.gov link collapses: cdc, the affiliate link and the privacy link.
+    expect(v.links).toHaveLength(3);
+    expect(new Set(v.links.map((l) => l.url)).size).toBe(3);
+  });
+
+  test("/blog/post-2 has no schema author or dateModified", () => {
+    const v = view("/blog/post-2");
+    expect(v.schemaAuthor).toBe(false);
+    expect(v.schemaDatePublished).toBe(true);
+    expect(v.schemaDateModified).toBe(false);
+    expect(v.authoritativeLinks).toBe(0);
+    expect(v.affiliateLink).toBe(false);
+  });
+
+  test("/old is a redirect source whose document is /en/", () => {
+    const v = view("/old");
+    expect(v.redirectSource).toBe(true);
+    expect(v.redirected).toBe(true);
+    expect(v.documentUrl).toBe(`${B}/en/`);
+    expect(view("/en/").redirected).toBe(false);
+    expect(view("/en/").documentUrl).toBe(`${B}/en/`);
+  });
+
+  test("a page without a parse has hasParsed false", () => {
+    expect(view("/").hasParsed).toBe(true);
+    const v = buildSitePageView({
+      url: `${B}/unparsed`,
+      statusCode: 200,
+      headers: {},
+    } as SiteData["pages"][number]);
+    expect(v.hasParsed).toBe(false);
+    expect(v.links).toEqual([]);
   });
 });
 
