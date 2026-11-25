@@ -1,0 +1,133 @@
+---
+title: "Exposed backup copies: page.php.bak, page.php~ and .page.php.swp"
+description: "An editor or deploy script that leaves page.php.bak next to page.php publishes its source code. On an aggressive run squirrel requests backup and temporary siblings of the files it crawled and confirms each hit by its content."
+---
+
+## What an exposed backup copy is
+
+Editors and deploy scripts leave copies next to the files they touch: `cart.php.bak` from a manual backup, `cart.php~` from Emacs or gedit, `.cart.php.swp` from a Vim session that is still open or crashed, `cart.php.zip` from someone who zipped the file before an edit. The server runs `cart.php`, but it does not know how to run `cart.php.bak`, so it serves the copy as a plain file. Anyone who guesses the name reads the source code, along with any database password or API key written in it. Scanners guess these names for every page they find.
+
+## What squirrel checks
+
+This is a loud probing rule. It requests paths that usually do not exist, which leaves a trail of 404s in your logs and can trip a WAF, so it runs only when [probing intensity](/configuration/security) is `aggressive` (`--probe aggressive` or `--pentest`). Below that it sends nothing and the report lists it as not checked and prints the note "Run the audit with --probe aggressive (or --pentest) to send these probes, on a site you own or may test." once. Run it on a site you own or have permission to test.
+
+### Which files it starts from
+
+The candidates come only from the pages the crawl fetched, never from a wordlist. A crawled URL is used when:
+
+- It is on the audited origin (scheme, host and port). A page on another origin is never used.
+- Its last path segment has an extension a server runs instead of serving: `php`, `php3`, `php4`, `php5`, `php7`, `phtml`, `inc`, `asp`, `aspx`, `ascx`, `ashx`, `asmx`, `jsp`, `jspx`, `cfm`, `cfml`, `cfc`, `pl`, `cgi`, `py`, `rb` or `shtml`. A copy of a static file such as `.html` shows nothing the original does not, so it is not probed.
+- Its path does not name a state-changing action such as `logout` or `delete`.
+
+The query string is dropped and each path is used once, in crawl order. At most 15 files are used per audit.
+
+### What is requested
+
+For each file, six sibling names in the same directory. For `/shop/cart.php`:
+
+| Shape | Requested path |
+|---|---|
+| `.bak` suffix | `/shop/cart.php.bak` |
+| `~` suffix | `/shop/cart.php~` |
+| Vim swap file | `/shop/.cart.php.swp` |
+| `.old` suffix | `/shop/cart.php.old` |
+| `.bak` in place of the extension | `/shop/cart.bak` |
+| `.zip` suffix | `/shop/cart.php.zip` |
+
+Every request is a `GET` with no cookies and no query string, built on the audited origin, and a redirect is never followed, wherever it points. At most 16 KB of each answer is read, counted after decompression, so an archive is never pulled in full. The whole run sends at most 120 requests, the checks against a catch-all answer included, and every request also counts against the shared [probe budget](/configuration/security#budget). robots.txt is ignored on purpose, as it is for every `aggressive` probe.
+
+### How a hit is confirmed
+
+A `200` alone is never a hit. A copy is reported only when the answer is a 2xx and its body is recognized by its content as one of:
+
+| Inferred content type | Signature |
+|---|---|
+| PHP source | a `<?php` tag |
+| ASP, ASP.NET or JSP source | a `<%@ Page` style directive or a `<script runat="server">` block; for an ASP or JSP file, also a `<% ... %>` code block |
+| ColdFusion source | a CFML tag such as `<cfquery` or `<cfset` |
+| Server-side include directives | an `<!--#include` style directive |
+| Perl, Python, Ruby, PHP or shell script source | a `#!` line naming the interpreter |
+| ZIP, gzip or tar archive | the format's magic number |
+| Vim swap file | the `b0VIM` header |
+| SQL dump | a MySQL, MariaDB, PostgreSQL or phpMyAdmin dump header, or SQL statements |
+
+A rendered HTML page carries none of these, so a homepage, an SPA shell or a themed 404 page served with `200` is not a hit. A site can still answer every unknown path with the same file. For a hit, once per directory, shape and content type, squirrel requests that shape for a random file name that cannot exist, such as `/shop/squirrelscan-baseline-<hex>.php.bak`, and drops the hit when that answer is a 2xx with the same bytes or the same inferred content type.
+
+### What it stops on
+
+An HTTP `429` or a bot challenge stops the run at once, with no retry. The probe budget running out or the 120-request cap stops it too. A path that answered with a `5xx`, a probe that failed with a network error or timeout, or a hit whose random-name check could not be completed, is not verified. Any of these makes the check incomplete: hits already confirmed are still reported, and the message names how many paths were not verified.
+
+### Results
+
+- Fail, one check per copy. Message: `<path> is publicly readable at <url>: a backup or temporary copy of <crawled path>, served as <content type>`. The item meta has the copy's path, the crawled file it copies, the sibling shape, the status, the size, the inferred content type and its kind (`source`, `archive`, `swap` or `data`).
+- Pass when no copy is readable: `No backup or temporary copy of N crawled server-side file(s) is publicly readable`, with `(the first N of M crawled server-side files)` when more files were crawled than the cap allows.
+- Pass when the crawl found no server-side file: `No crawled server-side file (.php, .asp, .jsp and the like) to derive backup copies from`.
+- Not checked, with reason `probe-level-too-low`, below `aggressive`.
+- Not checked, with reason `probe-incomplete`, when the run stopped early or left a path unverified.
+
+The finding never contains a line or a value from the copy, only its type. Nothing from the copy is logged.
+
+### Limits
+
+A site that hides its extensions (`/cart` served by `cart.php`) gives no file to start from. Other names (`cart.php.2024-01-05`, `cart-old.php`, `cart.php.orig`) are not requested. A copy readable only to signed-in users is not seen, because the probes carry no cookies.
+
+## How to fix it
+
+1. Delete each listed copy from the web root.
+2. Stop new ones from appearing: deploy from a build output or a clean checkout, not a directory you edit in place, and keep editor swap and backup files out of it.
+3. Block the shapes at the server as well, for example `location ~* (\.(bak|old|orig|swp|zip)|~)$ { deny all; }` in nginx or a matching `<FilesMatch>` with `Require all denied` in Apache.
+4. Treat what the copy exposed as leaked. Rotate every credential it held, and review the source for the flaws an attacker can now read.
+
+| | |
+|---|---|
+| **Rule ID** | `security/exposed-backups` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | error |
+| **Weight** | 8/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/exposed-backups"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/exposed-backups"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `exposed-backups` | Problem |  |
+| `exposed-backups-none` | Clean | `exposed-backups` |
+| `exposed-backups-not-checked` | Not checked |  |
+| `exposed-backups-incomplete` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/exposed-files](/rules/security/exposed-files): a fixed list of well-known sensitive paths such as `/.git/HEAD`, `/.env` and `/db.sql`.
+- [security/leaked-secrets](/rules/security/leaked-secrets): secrets that reached the pages and scripts the crawl fetched.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.

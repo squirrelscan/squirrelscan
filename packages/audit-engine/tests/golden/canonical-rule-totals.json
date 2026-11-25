@@ -314,6 +314,7 @@
   "security/csp-blocks-own-resources": 500,
   "security/csp-violations": 500,
   "security/exposed-actuator": 1,
+  "security/exposed-backups": 1,
   "security/exposed-files": 1,
   "security/form-captcha": 500,
   "security/form-https": 500,

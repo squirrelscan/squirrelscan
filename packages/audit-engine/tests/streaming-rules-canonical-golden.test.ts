@@ -196,6 +196,7 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
       "security/unauthenticated-api",
       "security/json-sensitive-fields",
       "security/exposed-files",
+      "security/exposed-backups",
       "security/auth-endpoint-disclosure",
       "security/open-redirect",
       "security/client-side-authz",
