@@ -64,9 +64,7 @@ export const SENSITIVE_WORDS: ReadonlySet<string> = new Set([
   "backup",
   "backups",
   "internal",
-  "intranet",
   "private",
-  "sandbox",
   "uat",
   "debug",
 ]);

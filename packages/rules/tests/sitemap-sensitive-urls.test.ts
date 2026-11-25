@@ -7,7 +7,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   MAX_SENSITIVE_PROBES,
-  buildProbeInit,
   selectSensitiveEntries,
   sensitiveWords,
   sitemapSensitiveUrlsRule,
@@ -77,6 +76,8 @@ describe("sensitiveWords", () => {
     expect(sensitiveWords("/a%2Fadmin/")).toEqual([]);
     expect(sensitiveWords("/administration")).toEqual([]);
     expect(sensitiveWords("/blog/hello")).toEqual([]);
+    expect(sensitiveWords("/docs/sandbox/concepts/firewall")).toEqual([]);
+    expect(sensitiveWords("/encyclopedia/definition/intranet")).toEqual([]);
   });
 
   test("a sitemap of content slugs that contain a word is clean", async () => {
@@ -177,7 +178,7 @@ describe("run", () => {
     for (const r of stub.sent) {
       expect(new URL(r.url).origin).toBe(BASE);
       expect(r.method).toBe("GET");
-      expect(r.credentials).toBe(buildProbeInit().credentials);
+      expect(r.credentials).toBe("omit");
       expect(r.redirect).toBe("manual");
       expect(r.headers.cookie).toBeUndefined();
       expect(r.headers.authorization).toBeUndefined();
