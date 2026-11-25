@@ -33,7 +33,10 @@ import {
   pluginNamespaces,
   type PluginRegistrySnapshot,
 } from "@squirrelscan/rules";
-import { isValidHeaderHost } from "@squirrelscan/utils/headers";
+import {
+  isValidHeaderHost,
+  mergeHeaderRecords,
+} from "@squirrelscan/utils/headers";
 import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { defineCommand } from "citty";
 import { existsSync } from "node:fs";
@@ -2362,6 +2365,10 @@ export const audit = defineCommand({
                 ) ?? config.crawler.follow_redirect === true,
               interactive: promptEligible() && !reportGoesToStdoutEarly,
               userAgent: config.crawler.user_agent || undefined,
+              customHeaders: mergeHeaderRecords(
+                config.crawler.headers,
+                customHeaders
+              ),
               // #1853: the redirect probe is inside the --max-duration budget.
               budgetDeadlineAt: createDurationBudget(
                 maxDurationSeconds ?? config.crawler.max_duration,

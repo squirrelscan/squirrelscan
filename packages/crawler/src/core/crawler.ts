@@ -50,6 +50,7 @@ import { findClientRedirects } from "@squirrelscan/utils/client-redirects";
 import { isCloudflareEmailProtectionUrl } from "@squirrelscan/utils/cloudflare-email";
 import {
   createHeaderScope,
+  customUserAgent,
   headerScopeBase,
   mergeHeaderRecords,
   type HeaderScope,
@@ -1798,7 +1799,10 @@ export function createCrawler(
           let cachedPage: PageRecord | null = null;
           // Request headers we vary the cache on (must match what the fetcher
           // actually sends; a stable, minimal set keeps Vary keying meaningful).
-          const requestContext = buildCacheRequestContext(config);
+          const requestContext = buildCacheRequestContext(
+            config,
+            customHeadersFor(entry.normalizedUrl)
+          );
           if (config.incremental) {
             // Lookup goes through the shared StorageCacheStore seam (#147): it
             // owns getCachedPage + Vary keying + freshness, so local and cloud
@@ -4563,9 +4567,14 @@ function looksLikeHtml(body: string): boolean {
  * `userAgent` is empty, so storing a value that won't match next time would
  * cause spurious misses). Accept-Encoding is intentionally omitted: it's set by
  * the runtime transport, not by us, so we can't key on it reliably.
+ *
+ * `sentHeaders` are the custom headers this page's request carries (none off
+ * the header scope, #959). A custom `User-Agent` among them replaces
+ * `config.userAgent` on the wire, so it is the agent the key records (#2316).
  */
 function buildCacheRequestContext(
-  config: CrawlerConfig
+  config: CrawlerConfig,
+  sentHeaders: Readonly<Record<string, string>> | undefined
 ): Record<string, string> {
   const ctx: Record<string, string> = {};
   // We send no Accept-Language of our own (#1355); one set in `[crawler] headers`
@@ -4574,8 +4583,9 @@ function buildCacheRequestContext(
     ([name]) => name.toLowerCase() === "accept-language"
   );
   if (configured) ctx["accept-language"] = configured[1];
-  if (config.userAgent) {
-    ctx["user-agent"] = config.userAgent;
+  const userAgent = customUserAgent(sentHeaders) || config.userAgent;
+  if (userAgent) {
+    ctx["user-agent"] = userAgent;
   }
   return ctx;
 }

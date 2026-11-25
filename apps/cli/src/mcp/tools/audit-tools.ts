@@ -15,6 +15,7 @@ import { renderLlm } from "@squirrelscan/report";
 import {
   isValidHeaderName,
   isValidHeaderValue,
+  mergeHeaderRecords,
 } from "@squirrelscan/utils/headers";
 import { ownHostsPinned } from "@squirrelscan/utils/public-egress";
 import { z } from "zod";
@@ -198,6 +199,8 @@ async function runWebsiteAudit(input: {
     url: input.url,
     follow: input.followRedirect ?? config.crawler.follow_redirect === true,
     interactive: false,
+    userAgent: config.crawler.user_agent || undefined,
+    customHeaders: mergeHeaderRecords(config.crawler.headers, input.headers),
     // #1853: the redirect probe is inside the budget.
     budgetDeadlineAt: createDurationBudget(
       input.maxDuration ?? config.crawler.max_duration,

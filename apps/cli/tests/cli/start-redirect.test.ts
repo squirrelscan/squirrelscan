@@ -8,8 +8,11 @@ import { describe, expect, test } from "bun:test";
 import {
   decideStartRedirect,
   resolveAuditStart,
+  type ResolveAuditStartInput,
   startRedirectPrompt,
 } from "@/cli/start-redirect";
+
+type ResolveFn = NonNullable<ResolveAuditStartInput["resolve"]>;
 
 // Built at runtime so no credential-shaped literal sits in the file (secret scan).
 const USERINFO = ["u", "pw"].join(":");
@@ -196,5 +199,39 @@ describe("resolveAuditStart", () => {
         originalUrl: `https://${USERINFO}@bit.ly/x?t=SECRET`,
       })
     ).not.toMatch(/SECRET|pw/);
+  });
+
+  test("the probe's agent is a custom User-Agent header over userAgent, and no other header is passed (#2316)", async () => {
+    const seen: Array<Parameters<ResolveFn>[1]> = [];
+    const recordingResolve: ResolveFn = async (_url, options) => {
+      seen.push(options);
+      return same;
+    };
+    for (const name of ["User-Agent", "user-agent", "USER-AGENT"]) {
+      await resolveAuditStart({
+        url: "http://example.com/",
+        follow: false,
+        interactive: false,
+        userAgent: "configured-agent",
+        customHeaders: { [name]: "custom-agent", "X-Secret": "s3cret" },
+        resolve: recordingResolve,
+      });
+    }
+    // Without a custom one, the configured agent is sent.
+    await resolveAuditStart({
+      url: "http://example.com/",
+      follow: false,
+      interactive: false,
+      userAgent: "configured-agent",
+      customHeaders: { "X-Secret": "s3cret" },
+      resolve: recordingResolve,
+    });
+    expect(seen.map((o) => o?.userAgent)).toEqual([
+      "custom-agent",
+      "custom-agent",
+      "custom-agent",
+      "configured-agent",
+    ]);
+    expect(JSON.stringify(seen)).not.toContain("s3cret");
   });
 });

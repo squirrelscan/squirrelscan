@@ -892,9 +892,10 @@ first colon, so values may contain colons). CLI headers **merge over** the TOML
 `[crawler] headers` map; a flag with the same name wins, whatever the casing of
 either. On a request that carries the custom headers, a custom header replaces
 squirrel's own header of the same name, so `-H "user-agent: ..."` is sent alone,
-never beside squirrel's agent. The requests that send no other custom header, the
-internal link check and the soft-404 confirmation, use that agent too, so the
-crawl and its probes agree. A few requests keep their own agent on purpose: the
+never beside squirrel's agent, even when `user_agent` is also set. The requests
+that send no other custom header, the internal link check, the soft-404
+confirmation and the probe that resolves the start URL's redirects before the
+crawl, use that agent too, so the crawl and its probes agree. A few requests keep their own agent on purpose: the
 reachability check that runs before the crawl, the cloaking probe's browser and
 Googlebot fetches, and the AI agent access probe (which fetches as GPTBot and
 Claude-User). Quoting is preserved verbatim, so
