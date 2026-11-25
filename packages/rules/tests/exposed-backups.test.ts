@@ -22,6 +22,7 @@ import {
   BACKUP_PROBES_PER_FILE,
   BACKUP_SIBLINGS,
   backupCandidates,
+  buildBackupProbe,
   classifyBackup,
   exposedBackupsRule,
   MAX_BACKUP_PROBES,
@@ -298,6 +299,26 @@ describe("security/exposed-backups probing", () => {
         .map((c) => c.details?.contentType)
         .sort()
     ).toEqual(["Vim swap file", "ZIP archive"]);
+  });
+
+  test("a crawled path starting with // is probed on the audited origin, and other files are still reported", async () => {
+    const site = serve({ "/cart.php.bak": text(PHP_SOURCE) });
+    const checks = await run(
+      ctx(site.origin, ["//other.example.com/x.php", "/cart.php"])
+    );
+    expect(
+      checks
+        .filter((c) => c.name === "exposed-backups")
+        .map((c) => c.details?.path)
+    ).toEqual(["/cart.php.bak"]);
+    // Sent to the audited server (Bun collapses the leading "//" on the wire).
+    expect(
+      site.seen.some((s) => s.endsWith("/other.example.com/x.php.bak"))
+    ).toBe(true);
+    expect(
+      buildBackupProbe("https://example.com", "//other.example.com/x.php.bak")
+        .url
+    ).toBe("https://example.com//other.example.com/x.php.bak");
   });
 
   test("only paths derived from crawled files are requested, and never another origin", async () => {

@@ -213,7 +213,9 @@ export function buildBackupProbe(
   origin: string,
   path: string
 ): { url: string; init: RequestInit } {
-  const url = new URL(path, `${origin}/`);
+  // Concatenate rather than resolve: a crawled pathname such as "//host/x.php"
+  // resolves as a network-path reference to another host.
+  const url = new URL(`${origin}${path}`);
   if (url.origin !== origin)
     throw new Error("exposed-backups: probe left the audited origin");
   url.search = "";
@@ -365,7 +367,14 @@ function createSender(ctx: RuleContext, origin: string): Sender {
       if (sender.sent >= MAX_BACKUP_PROBES) return { kind: "capped" };
       const probe = ctx.probe;
       if (!probe || !probe.allows("loud")) return { kind: "not-allowed" };
-      const { url, init } = buildBackupProbe(origin, path);
+      let url: string;
+      let init: RequestInit;
+      try {
+        ({ url, init } = buildBackupProbe(origin, path));
+      } catch {
+        // One unbuildable path must not abort the probes for every other file.
+        return { kind: "error" };
+      }
       const done = new AbortController();
       const signal = AbortSignal.any([
         probe.signal(),
