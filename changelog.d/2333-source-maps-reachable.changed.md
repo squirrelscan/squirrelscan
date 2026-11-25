@@ -1,0 +1,1 @@
+- `perf/source-maps` confirms each referenced same-origin `.map` with one bounded request when `--probe active` allows it, and no longer reports a map that answers 404 or is not a source map; without a probe budget it reports as before (#2333).

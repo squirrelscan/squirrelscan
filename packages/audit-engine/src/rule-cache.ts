@@ -286,6 +286,7 @@ export interface PageRuleCacheEntry {
  */
 export type RuleCacheDisabledReason =
   | "threat-intel-enabled"
+  | "active-probing"
   | "plugin-rules"
   | "unhashable-run-context";
 
