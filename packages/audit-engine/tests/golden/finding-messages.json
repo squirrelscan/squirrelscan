@@ -3944,6 +3944,12 @@
    "exposed-files-not-checked|skipped|Exposed sensitive files not checked: probing is passive, and this rule only probes at aggressive.|\"not-checked\"|"
   ]
  },
+ "security/firebase-open-rules": {
+  "digest": "90080952884386",
+  "lines": [
+   "firebase-open-rules|skipped|No Firebase Realtime Database URL or Firestore project was found in the site's scripts||"
+  ]
+ },
  "security/form-captcha": {
   "digest": "25043495342045",
   "lines": [
