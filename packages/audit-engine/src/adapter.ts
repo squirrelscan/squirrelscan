@@ -4193,6 +4193,13 @@ export function runStreamingRules(
     if (ruleCacheOpts) {
       if (effectiveScope?.intel) {
         ruleCacheDisabled = "threat-intel-enabled";
+      } else if (
+        effectiveScope?.probe &&
+        effectiveScope.probe.level !== "passive"
+      ) {
+        // A page rule (perf/source-maps) confirms what it reports with a live
+        // request, and a live answer is not part of any key.
+        ruleCacheDisabled = "active-probing";
       } else if (pluginRulePack.length > 0) {
         ruleCacheDisabled = "plugin-rules";
       } else {
