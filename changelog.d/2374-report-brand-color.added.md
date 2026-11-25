@@ -1,0 +1,1 @@
+- Markdown and text reports list a white-label brand colour as a plain `Brand colour` line, matching the HTML accent and the XML `brand-color` attribute (#2374)
