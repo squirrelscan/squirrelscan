@@ -39,6 +39,16 @@ export const jsFileSizeRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "js-file-size", outcome: "problem" },
+      { name: "js-file-size-warn", outcome: "problem" },
+      {
+        name: "js-file-size",
+        outcome: "clean",
+        clears: ["js-file-size", "js-file-size-warn"],
+      },
+    ],
     optionsSchema,
   },
 

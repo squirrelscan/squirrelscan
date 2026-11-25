@@ -346,6 +346,21 @@ export const jsLibrariesRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "js-libraries-vulnerable", outcome: "problem" },
+      { name: "js-libraries-detected", outcome: "problem" },
+      {
+        name: "js-libraries",
+        outcome: "clean",
+        clears: ["js-libraries-vulnerable", "js-libraries-detected"],
+      },
+      {
+        name: "js-libraries-detected",
+        outcome: "clean",
+        clears: ["js-libraries-vulnerable", "js-libraries-detected"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

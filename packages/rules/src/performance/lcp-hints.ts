@@ -29,6 +29,11 @@ export const lcpHintsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "lcp-preload", outcome: "problem" },
+      { name: "lcp-preload", outcome: "clean", clears: ["lcp-preload"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

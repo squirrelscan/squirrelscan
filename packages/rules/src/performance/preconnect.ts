@@ -17,6 +17,15 @@ export const preconnectRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "preconnect-missing", outcome: "problem" },
+      {
+        name: "preconnect-usage",
+        outcome: "clean",
+        clears: ["preconnect-missing"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

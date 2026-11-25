@@ -81,6 +81,15 @@ export const totalByteWeightRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "total-byte-weight", outcome: "problem" },
+      {
+        name: "total-byte-weight",
+        outcome: "clean",
+        clears: ["total-byte-weight"],
+      },
+    ],
     optionsSchema,
   },
 

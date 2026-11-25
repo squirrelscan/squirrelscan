@@ -25,6 +25,16 @@ export const lcpFetchpriorityRule: Rule = {
     // no-preload case, so this rule adds the fetchpriority nudge without
     // double-charging the same root cause (PR #710 review).
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "lcp-fetchpriority", outcome: "problem" },
+      {
+        name: "lcp-fetchpriority",
+        outcome: "clean",
+        clears: ["lcp-fetchpriority"],
+      },
+      { name: "lcp-fetchpriority", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

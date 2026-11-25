@@ -17,6 +17,21 @@ export const inpHintsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "inp-third-party", outcome: "problem" },
+      { name: "inp-blocking-scripts", outcome: "problem" },
+      {
+        name: "inp-third-party",
+        outcome: "clean",
+        clears: ["inp-third-party"],
+      },
+      {
+        name: "inp-blocking-scripts",
+        outcome: "clean",
+        clears: ["inp-blocking-scripts"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

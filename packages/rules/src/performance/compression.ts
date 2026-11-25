@@ -15,6 +15,11 @@ export const compressionRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "compression", outcome: "problem" },
+      { name: "compression", outcome: "clean", clears: ["compression"] },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
   },

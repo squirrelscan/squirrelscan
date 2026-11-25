@@ -38,6 +38,16 @@ export const cssFileSizeRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "css-file-size", outcome: "problem" },
+      { name: "css-file-size-warn", outcome: "problem" },
+      {
+        name: "css-file-size",
+        outcome: "clean",
+        clears: ["css-file-size", "css-file-size-warn"],
+      },
+    ],
     optionsSchema,
   },
 

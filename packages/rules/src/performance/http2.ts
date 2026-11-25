@@ -15,6 +15,22 @@ export const http2Rule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "http3-hint", outcome: "problem" },
+      { name: "http2-https-required", outcome: "problem" },
+      { name: "http2-unknown", outcome: "skipped" },
+      {
+        name: "http-version",
+        outcome: "clean",
+        clears: ["http3-hint", "http2-https-required"],
+      },
+      {
+        name: "http2-likely",
+        outcome: "clean",
+        clears: ["http3-hint", "http2-https-required"],
+      },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
   },

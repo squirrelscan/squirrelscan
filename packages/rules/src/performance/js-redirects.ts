@@ -16,6 +16,12 @@ export const jsRedirectsRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "js-redirects", outcome: "problem" },
+      { name: "js-redirects", outcome: "clean", clears: ["js-redirects"] },
+      { name: "js-redirects", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

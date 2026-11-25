@@ -83,6 +83,12 @@ export const fontDeliveryRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "font-delivery", outcome: "problem" },
+      { name: "font-delivery", outcome: "clean", clears: ["font-delivery"] },
+      { name: "font-delivery", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

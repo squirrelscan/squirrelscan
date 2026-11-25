@@ -1,0 +1,1 @@
+- The rule pages for the 31 performance rules list the check names each rule emits and which clean check clears which problem check (#2349).

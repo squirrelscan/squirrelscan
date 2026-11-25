@@ -15,6 +15,15 @@ export const browserRequiredRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "browser-required-audits", outcome: "problem" },
+      {
+        name: "browser-required-audits",
+        outcome: "clean",
+        clears: ["browser-required-audits"],
+      },
+    ],
   },
 
   run(_ctx: RuleContext): RuleResult {

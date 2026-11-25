@@ -21,6 +21,16 @@ export const criticalRequestChainsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "critical-request-chains", outcome: "problem" },
+      {
+        name: "critical-request-chains",
+        outcome: "clean",
+        clears: ["critical-request-chains"],
+      },
+      { name: "critical-request-chains", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

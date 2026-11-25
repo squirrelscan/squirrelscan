@@ -213,6 +213,16 @@ export const sourceMapsRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "source-maps-exposed", outcome: "problem" },
+      { name: "source-maps-inline", outcome: "problem" },
+      {
+        name: "source-maps",
+        outcome: "clean",
+        clears: ["source-maps-exposed", "source-maps-inline"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

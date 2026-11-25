@@ -35,6 +35,15 @@ export const carouselHiddenEagerRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "carousel-hidden-eager", outcome: "problem" },
+      {
+        name: "carousel-hidden-eager",
+        outcome: "clean",
+        clears: ["carousel-hidden-eager"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

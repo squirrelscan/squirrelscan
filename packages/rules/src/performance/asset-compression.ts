@@ -86,6 +86,16 @@ export const assetCompressionRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "asset-compression", outcome: "problem" },
+      {
+        name: "asset-compression",
+        outcome: "clean",
+        clears: ["asset-compression"],
+      },
+      { name: "asset-compression", outcome: "skipped" },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
     optionsSchema,
