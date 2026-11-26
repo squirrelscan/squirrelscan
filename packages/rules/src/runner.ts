@@ -6,6 +6,7 @@ import type {
   SiteQuery,
 } from "@squirrelscan/core-contracts";
 // Rule runner - executes rules with context
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 
 import {
@@ -121,6 +122,12 @@ export interface RunnerScope {
    * `security/tls-certificate` reports "not checked".
    */
   tlsProbe?: TlsProbeFn;
+  /**
+   * The egress policy for site-rule probes to the audited site's own hosts
+   * (#2315), threaded into `ctx.ownHostEgress`. Only the CLI sets one, and only
+   * when it pins those hosts. Undefined = the probes connect by name.
+   */
+  ownHostEgress?: EgressPolicy;
   /**
    * This run is a hosted (cloud) audit, threaded into `ctx.hosted` on site
    * rules. It only changes wording: a check that was not made says so without
@@ -476,6 +483,7 @@ export class RuleRunner {
   private readonly entityMap: EntityMap | undefined;
   private readonly probe: ProbeBudget | undefined;
   private readonly tlsProbe: TlsProbeFn | undefined;
+  private readonly ownHostEgress: EgressPolicy | undefined;
   private readonly hosted: boolean | undefined;
   // The audited url last classified by `isPrivateTarget`, and the verdict. One
   // audit has one base url, so this is a single classification per run; keyed on
@@ -490,6 +498,7 @@ export class RuleRunner {
     this.entityMap = options.entityMap;
     this.probe = options.probe;
     this.tlsProbe = options.tlsProbe;
+    this.ownHostEgress = options.ownHostEgress;
     this.hosted = options.hosted;
     this.ruleConcurrency = Math.max(
       1,
@@ -1116,6 +1125,7 @@ export class RuleRunner {
         const entityMap = this.entityMap;
         const probe = this.probe;
         const tlsProbe = this.tlsProbe;
+        const ownHostEgress = this.ownHostEgress;
         const hosted = this.hosted;
 
         // For site-scope rules, we need to provide page context: use the first
@@ -1166,6 +1176,7 @@ export class RuleRunner {
               entityMap,
               probe,
               tlsProbe,
+              ownHostEgress,
               hosted,
               ruleEnabled,
               options: getRuleOptions(rule, this.config),

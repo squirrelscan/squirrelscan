@@ -1,4 +1,11 @@
-import { proxiedByEnvironment } from "@squirrelscan/utils/public-egress";
+import {
+  memoizeResolveHost,
+  ownHostsPinned,
+  proxiedByEnvironment,
+  resolveHostAddresses,
+  type EgressPolicy,
+  type ResolveHost,
+} from "@squirrelscan/utils/public-egress";
 
 /**
  * Whether the crawl pins the site's own hosts (squirrelscan/repo#3430): the
@@ -24,4 +31,24 @@ export function pinOwnHosts(): boolean {
 export function hostPinningNotice(): string | null {
   if (!pinOwnHosts() || !proxiedByEnvironment()) return null;
   return "HTTP proxy set in the environment: the site's own hosts go out by name through it, without squirrel's address check";
+}
+
+/**
+ * Where the rule probes that request the site's own hosts connect (#2315):
+ * the `security/http-to-https` redirect probe and the GraphQL probes. With the
+ * own hosts pinned, a name is resolved once per audit, a link-local or cloud
+ * metadata answer is refused before anything is sent, and the request connects
+ * to the address that was checked. Private networks stay allowed, as for the
+ * crawl. Undefined where the crawl sends those hosts by name too (an
+ * environment proxy, `SQUIRREL_NO_HOST_PINNING`): the probes then go out by
+ * name, unchanged.
+ */
+export function ownHostProbeEgress(
+  resolve: ResolveHost = resolveHostAddresses
+): EgressPolicy | undefined {
+  if (!ownHostsPinned({ pinOwnHosts: pinOwnHosts() })) return undefined;
+  return {
+    allowPrivateNetwork: true,
+    resolve: memoizeResolveHost(resolve),
+  };
 }

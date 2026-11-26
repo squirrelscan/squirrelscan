@@ -100,10 +100,15 @@ async function probeEndpoint(
   ctx: RuleContext,
   candidate: GraphqlCandidate
 ): Promise<EndpointVerdict> {
-  const get = await sendGraphqlProbe(ctx.probe, candidate.url, {
-    op: "introspection",
-    method: "GET",
-  });
+  const get = await sendGraphqlProbe(
+    ctx.probe,
+    candidate.url,
+    {
+      op: "introspection",
+      method: "GET",
+    },
+    ctx.ownHostEgress
+  );
   if (!get.sent) return { kind: "not-sent" };
   if ("error" in get) return { kind: "errored" };
   const schema = schemaFrom(get);
@@ -114,10 +119,15 @@ async function probeEndpoint(
   // GraphQL answered without a schema. One POST, only when aggressive, and not
   // when the server already said introspection is off.
   if (ctx.probe?.level === "aggressive" && !saysIntrospectionDisabled(body)) {
-    const post = await sendGraphqlProbe(ctx.probe, candidate.url, {
-      op: "introspection",
-      method: "POST",
-    });
+    const post = await sendGraphqlProbe(
+      ctx.probe,
+      candidate.url,
+      {
+        op: "introspection",
+        method: "POST",
+      },
+      ctx.ownHostEgress
+    );
     const postSchema = schemaFrom(post);
     if (postSchema)
       return { kind: "exposed", method: "POST", schema: postSchema };

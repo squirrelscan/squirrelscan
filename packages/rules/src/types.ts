@@ -47,6 +47,7 @@ import type {
   Soft404Signal,
 } from "@squirrelscan/parser";
 import type { AuthorInfo, SchemaCollection } from "@squirrelscan/parser";
+import type { EgressPolicy } from "@squirrelscan/utils/public-egress";
 import type { TlsProbeFn } from "@squirrelscan/utils/tls-certificate";
 import type { Document } from "linkedom";
 
@@ -983,6 +984,14 @@ export interface RuleContext {
   // CLI). Shared packages never open a socket themselves; undefined (cloud, an
   // embedder, tests) means the rule reports "not checked". Site rules only.
   tlsProbe?: TlsProbeFn;
+
+  // Where a probe to the audited site's own hosts connects, when the runtime
+  // pins them (#2315, the CLI with own-host pinning on): the name is resolved,
+  // a link-local or metadata answer is refused, and the request connects to the
+  // address that was checked (send through `egressGuardedSend`). Undefined
+  // (pinning off, an environment proxy, cloud, tests) means send by name as
+  // before. Site rules only.
+  ownHostEgress?: EgressPolicy;
 
   // A hosted (cloud) audit. Wording only: a check that was not made says so
   // without advice about networks, proxies or --offline (#3922). Site rules only.

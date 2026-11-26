@@ -33,8 +33,18 @@
 //
 // Rules ask `ctx.probe.allows(...)` through `sendGraphqlProbe`, which also
 // records the request, so a passive run or an absent `ctx.probe` sends nothing.
+//
+// Where it connects. With `ctx.ownHostEgress` (the CLI with own-host pinning
+// on, #2315) the endpoint's name is resolved, a link-local or cloud metadata
+// answer is refused before anything is sent, and the request connects to the
+// address that was checked, with the original Host and TLS server name.
+// Without it the request goes by name, as before.
 
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import {
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { isRobotsTxtDisallowed } from "@squirrelscan/utils/robots-txt";
 
@@ -325,11 +335,14 @@ export function buildGraphqlProbe(
  * Send one probe, if the shared budget allows it. GET is a quiet probe (needs
  * `active`); the introspection POST is loud (needs `aggressive`). Returns
  * `{ sent: false }` without touching the network when it is not allowed.
+ * With `egress` (`ctx.ownHostEgress`) the request is vetted and pinned; a
+ * refused address comes back as an error, with nothing sent.
  */
 export async function sendGraphqlProbe(
   probe: ProbeBudget | undefined,
   endpointUrl: string,
-  request: GraphqlProbeRequest
+  request: GraphqlProbeRequest,
+  egress?: EgressPolicy
 ): Promise<GraphqlProbeOutcome> {
   const kind = request.method === "GET" ? "quiet" : "loud";
   if (!probe || !probe.allows(kind))
@@ -350,7 +363,10 @@ export async function sendGraphqlProbe(
   try {
     // Never `fetch` itself: Bun inflates a Content-Encoding body in full as it
     // arrives, before any capped read (#722, as #2717 was for the crawl).
-    const res = await fetchUndecoded(url, { ...init, signal });
+    const send = egress
+      ? egressGuardedSend(fetchUndecoded, egress)
+      : fetchUndecoded;
+    const res = await send(url, { ...init, signal });
     const { text, truncated } = await readCapped(
       res,
       GRAPHQL_RESPONSE_CAPS[request.op]
