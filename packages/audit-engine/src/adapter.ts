@@ -2838,9 +2838,8 @@ export function runRulesOnStorage(
 // six all-pages DOM scanners read `ctx.collectedSignals` captured page-time
 // (buildCollectedPageSignal) and every other site rule reads scalars, so no page
 // DOM is ever resident — the peak-RSS win (E-E2 (a) removed E-E's
-// materializeDomSitePages re-parse seam). The site pass runs WITHOUT a siteQuery
-// for now; wiring createSiteQuery (with the raw-getPages→v1 universe
-// reconciliation) is E-E2 (b) work.
+// materializeDomSitePages re-parse seam). The site pass receives a siteQuery from
+// createSiteQuery, whose universe is reconciled to v1's site.pages (E-E2 (b)).
 
 /** One parsed page in the streamed universe — same shape as runRulesOnStorage's `parsedPages` entries. */
 type StreamParsedPage = {
@@ -3626,9 +3625,9 @@ function buildStreamingSiteData(
  * resident here. This is the full peak-RSS win: it replaces E-E's
  * materializeDomSitePages re-parse seam (#1021 E-E2 (a)). `wafBlockedPages` is
  * threaded from Pass 1 (no re-fetch/re-parse); soft-404 verdicts were applied in
- * place on the Pass-1 parsed objects (same objects v1 mutates). Runs WITHOUT a
- * siteQuery for now — createSiteQuery wiring + the universe reconciliation land in
- * E-E2 (b). Appends the WAF + asset-fetch-degraded advisory checks verbatim from
+ * place on the Pass-1 parsed objects (same objects v1 mutates). Receives the
+ * siteQuery built in runStreamingRules, with its universe reconciled to v1 (E-E2 (b)).
+ * Appends the WAF + asset-fetch-degraded advisory checks verbatim from
  * runRulesOnStorage.
  */
 function runSitePass(
