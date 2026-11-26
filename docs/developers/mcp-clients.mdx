@@ -85,85 +85,6 @@ Then, inside a session, run `/mcp`, select **squirrelscan**, and choose **Authen
 `type` also accepts the alias `"streamable-http"`, handled identically. Avoid `--transport sse`, which is deprecated. Verify with `claude mcp list`: a server awaiting OAuth shows `! Needs authentication`.
 </Note>
 
-## Cursor
-
-Cursor auto-negotiates the transport, so a remote server entry only needs a `url`. Both the editor and the Cursor CLI (`agent`) read the same file.
-
-<Tabs>
-  <Tab title="OAuth (recommended)">
-    ```json
-    {
-      "mcpServers": {
-        "squirrelscan": {
-          "url": "https://mcp.squirrelscan.com/mcp"
-        }
-      }
-    }
-    ```
-
-    Save it, then open **Settings → Customize** (labelled **Tools & Integrations** in some builds), find **squirrelscan**, and click **Needs login** to run the browser flow. From the CLI, `agent mcp login squirrelscan` does the same.
-  </Tab>
-  <Tab title="API key">
-    ```json
-    {
-      "mcpServers": {
-        "squirrelscan": {
-          "url": "https://mcp.squirrelscan.com/mcp",
-          "headers": {
-            "Authorization": "Bearer ${env:SQUIRRELSCAN_API_KEY}"
-          }
-        }
-      }
-    }
-    ```
-
-    `${env:NAME}` interpolates a shell/system environment variable at connect time. Cursor does not read a `.env` file for remote servers, so export `SQUIRRELSCAN_API_KEY` in your shell profile or CI environment.
-  </Tab>
-</Tabs>
-
-**Scope.** `.cursor/mcp.json` in a repo scopes the server to that project; `~/.cursor/mcp.json` makes it available everywhere. The schema is identical, so the entry copies between them.
-
-<Note>
-Do not add a `"type"` field to a remote (`url`) entry, it is only used for stdio servers. On a Cursor Business or Enterprise plan, an admin MCP allowlist can block `https://mcp.squirrelscan.com/mcp` until it is added centrally.
-</Note>
-
-## Codex CLI
-
-The `codex mcp` commands write to `~/.codex/config.toml`.
-
-<Tabs>
-  <Tab title="OAuth (recommended)">
-    ```bash
-    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp
-    codex mcp login squirrelscan
-    ```
-
-    `codex mcp login` opens the browser, runs PKCE with a local loopback callback, and stores the token in Codex's own credential store (`~/.codex/auth.json` or the OS keyring, depending on `cli_auth_credentials_store`), not in `config.toml`. `codex mcp logout squirrelscan` clears it.
-  </Tab>
-  <Tab title="API key">
-    ```bash
-    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp \
-      --bearer-token-env-var SQUIRRELSCAN_API_KEY
-    ```
-
-    Codex reads `SQUIRRELSCAN_API_KEY` at connect time and sends it as `Authorization: Bearer <value>`. Export it in your shell or CI first.
-  </Tab>
-</Tabs>
-
-The equivalent `config.toml` block, whether in the global file or a project `.codex/config.toml`:
-
-```toml
-[mcp_servers.squirrelscan]
-url = "https://mcp.squirrelscan.com/mcp"
-# bearer_token_env_var = "SQUIRRELSCAN_API_KEY"   # omit if using OAuth
-```
-
-**Scope.** `codex mcp add`/`login` only touch the global `~/.codex/config.toml`. To scope squirrelscan to one project, hand-write the same `[mcp_servers.squirrelscan]` block into `<project>/.codex/config.toml`, which is honored only once the project is trusted.
-
-<Note>
-Do not set `experimental_environment` for this server, it applies to stdio-over-remote-executor and does not support streamable HTTP.
-</Note>
-
 ## VS Code Copilot
 
 <img src="/logo/agents/copilot.svg" alt="" width="28" height="28" />
@@ -219,6 +140,103 @@ Save either block via **Command Palette → MCP: Add Server** (choose **HTTP**),
 <Warning>
 Use a top-level `"headers"` object. The `"requestInit": { "headers": ... }` form is for the separate Visual Studio IDE, not VS Code, and silently no-ops here. On a GitHub Copilot Business or Enterprise plan, an org owner must enable MCP servers and allowlist `https://mcp.squirrelscan.com/mcp`. See [Enterprise: allowlisting](/developers/agents/copilot#enterprise-allowlisting).
 </Warning>
+
+## Codex CLI
+
+The `codex mcp` commands write to `~/.codex/config.toml`.
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```bash
+    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp
+    codex mcp login squirrelscan
+    ```
+
+    `codex mcp login` opens the browser, runs PKCE with a local loopback callback, and stores the token in Codex's own credential store (`~/.codex/auth.json` or the OS keyring, depending on `cli_auth_credentials_store`), not in `config.toml`. `codex mcp logout squirrelscan` clears it.
+  </Tab>
+  <Tab title="API key">
+    ```bash
+    codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp \
+      --bearer-token-env-var SQUIRRELSCAN_API_KEY
+    ```
+
+    Codex reads `SQUIRRELSCAN_API_KEY` at connect time and sends it as `Authorization: Bearer <value>`. Export it in your shell or CI first.
+  </Tab>
+</Tabs>
+
+The equivalent `config.toml` block, whether in the global file or a project `.codex/config.toml`:
+
+```toml
+[mcp_servers.squirrelscan]
+url = "https://mcp.squirrelscan.com/mcp"
+# bearer_token_env_var = "SQUIRRELSCAN_API_KEY"   # omit if using OAuth
+```
+
+**Scope.** `codex mcp add`/`login` only touch the global `~/.codex/config.toml`. To scope squirrelscan to one project, hand-write the same `[mcp_servers.squirrelscan]` block into `<project>/.codex/config.toml`, which is honored only once the project is trusted.
+
+<Note>
+Do not set `experimental_environment` for this server, it applies to stdio-over-remote-executor and does not support streamable HTTP.
+</Note>
+
+## Cursor
+
+Cursor auto-negotiates the transport, so a remote server entry only needs a `url`. Both the editor and the Cursor CLI (`agent`) read the same file.
+
+<Tabs>
+  <Tab title="OAuth (recommended)">
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "url": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+
+    Save it, then open **Settings → Customize** (labelled **Tools & Integrations** in some builds), find **squirrelscan**, and click **Needs login** to run the browser flow. From the CLI, `agent mcp login squirrelscan` does the same.
+  </Tab>
+  <Tab title="API key">
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "url": "https://mcp.squirrelscan.com/mcp",
+          "headers": {
+            "Authorization": "Bearer ${env:SQUIRRELSCAN_API_KEY}"
+          }
+        }
+      }
+    }
+    ```
+
+    `${env:NAME}` interpolates a shell/system environment variable at connect time. Cursor does not read a `.env` file for remote servers, so export `SQUIRRELSCAN_API_KEY` in your shell profile or CI environment.
+  </Tab>
+</Tabs>
+
+**Scope.** `.cursor/mcp.json` in a repo scopes the server to that project; `~/.cursor/mcp.json` makes it available everywhere. The schema is identical, so the entry copies between them.
+
+<Note>
+Do not add a `"type"` field to a remote (`url`) entry, it is only used for stdio servers. On a Cursor Business or Enterprise plan, an admin MCP allowlist can block `https://mcp.squirrelscan.com/mcp` until it is added centrally.
+</Note>
+
+## Google Antigravity
+
+<img src="/logo/agents/antigravity.svg" alt="" width="28" height="28" />
+
+Antigravity needs `serverUrl` (or `url`). `httpUrl` and SSE do not work. OAuth is automatic: it supports dynamic client registration and client ID metadata documents.
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "serverUrl": "https://mcp.squirrelscan.com/mcp"
+    }
+  }
+}
+```
+
+Save it to `~/.gemini/config/mcp_config.json` (every project) or `.agents/mcp_config.json` (one workspace). Log in with `/mcp` in the CLI, or **Authenticate** in the IDE. Full steps: [Antigravity guide](/developers/agents/antigravity).
 
 ## Windsurf (devin desktop)
 
@@ -319,27 +337,9 @@ Cascade caps total active MCP tools at 100 across all connected servers. If you 
 The OAuth flow needs a local browser and a reachable localhost redirect, so it will not work over headless SSH or in a browser-less container. Use the API-key header there. Verify any client with `gemini mcp list` or the in-REPL `/mcp` command.
 </Note>
 
-## Google Antigravity
-
-<img src="/logo/agents/antigravity.png" alt="" width="28" height="28" />
-
-Antigravity needs `serverUrl` (or `url`). `httpUrl` and SSE do not work. OAuth is automatic: it supports dynamic client registration and client ID metadata documents.
-
-```json
-{
-  "mcpServers": {
-    "squirrelscan": {
-      "serverUrl": "https://mcp.squirrelscan.com/mcp"
-    }
-  }
-}
-```
-
-Save it to `~/.gemini/config/mcp_config.json` (every project) or `.agents/mcp_config.json` (one workspace). Log in with `/mcp` in the CLI, or **Authenticate** in the IDE. Full steps: [Antigravity guide](/developers/agents/antigravity).
-
 ## Hermes Agent
 
-<img src="/logo/agents/hermes.png" alt="" width="28" height="28" />
+<img src="/logo/agents/hermes.svg" alt="" width="28" height="28" />
 
 Add the server to `~/.hermes/config.yaml`:
 

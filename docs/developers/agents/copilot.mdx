@@ -183,11 +183,14 @@ GitHub documents remote MCP servers for GitHub Copilot in JetBrains IDEs with a 
 
 ## Cloud agent on github.com
 
-The cloud agent that works on issues and pull requests has no OAuth for remote MCP servers. It reads its MCP config from repository settings and sends secrets as headers, so this is the API key route. An admin sets it up in the repository settings, never in a chat.
+{/* Source: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp (fetched 2026-11-26). Everything in this section is stated on that page. */}
+
+The cloud agent that works on issues and pull requests does not support OAuth for remote MCP servers, so this is the API key route. It reads its MCP configuration from repository settings, and only repository administrators can edit them. Set the key as a secret, never in a chat.
 
 1. Mint a key with `squirrel keys create --shell`.
-2. In the repository, open **Settings**, then **Environments**, and create a secret in the `copilot` environment named `COPILOT_MCP_SQUIRRELSCAN_API_KEY`. Only names starting with `COPILOT_MCP_` reach the agent.
-3. Open **Settings**, then **Copilot**, then **Cloud agent**, and add this to **MCP configuration**:
+2. In the repository, open **Settings**, then under **Code, planning, and automation** choose **Copilot**, then **MCP servers**.
+3. Add an Agents secret for the key. GitHub only passes Agents secrets and variables whose names start with `COPILOT_MCP_` to the MCP configuration, so name it `COPILOT_MCP_SQUIRRELSCAN_API_KEY`. Agents secrets can also be set at the organization level.
+4. Paste this into **MCP configuration** and choose **Save MCP configuration**. GitHub validates the syntax on save.
 
 ```json
 {
@@ -204,7 +207,9 @@ The cloud agent that works on issues and pull requests has no OAuth for remote M
 }
 ```
 
-<Warning>Never paste the key into an issue, a pull request comment, or a chat with the agent. Those are visible to others and are sent to a model. Set it only as a repository secret.</Warning>
+`tools` lists the server tools the agent may use. `["*"]` enables all of them, and GitHub advises listing specific read-only tools instead, because the agent uses them without asking for approval.
+
+<Warning>Never paste the key into an issue, a pull request comment, or a chat with the agent. Those are visible to others and are sent to a model. Set it only as an Agents secret.</Warning>
 
 The hosted server crawls from squirrelscan's cloud, so the cloud agent can audit only publicly reachable URLs.
 
@@ -231,12 +236,14 @@ Microsoft 365 Copilot does not take an MCP server from a settings page. A develo
 
 ## Enterprise: allowlisting
 
+{/* Sources: https://docs.github.com/en/copilot/concepts/mcp-management and https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-enterprise-allowlist (fetched 2026-11-26). */}
+
 On GitHub Copilot Business and Enterprise, an org or enterprise owner controls MCP. Both steps are needed before squirrelscan connects.
 
-1. **Turn MCP on.** Enable the **MCP servers in Copilot** policy. It is off by default.
-2. **Allow the server.** GitHub's registry-only policy, **Restrict MCP access to registry servers**, matches by server name, and squirrelscan is not in GitHub's registry. Set it to **Allow all**, and allowlist the URL in `managed-settings.json` instead.
+1. **Turn MCP on.** Enable the **MCP servers in Copilot** policy, in the **MCP** section of the Copilot policies.
+2. **Allow the server.** GitHub offers two mechanisms. GitHub recommends an allowlist in `managed-settings.json`, which can match a server by name, URL or `stdio` command. A custom registry (the **MCP Registry URL** setting with **Restrict MCP access to registry servers**) matches by name or ID only, is in public preview, and users can bypass it by editing configuration files. squirrelscan is not in GitHub's registry, so use the allowlist and set **Restrict MCP access to registry servers** to **Allow all** to avoid conflicts.
 
-Put `allowedMcpServers` in `copilot/managed-settings.json`, usually in the organization's `.github-private` repository:
+Most enterprises keep `managed-settings.json` in a `.github-private` repository. GitHub also documents installing it on users' machines through device management. A remote server such as squirrelscan is matched by URL:
 
 ```json
 {
@@ -246,7 +253,17 @@ Put `allowedMcpServers` in `copilot/managed-settings.json`, usually in the organ
 }
 ```
 
-Once an allowlist exists, every MCP server not on it is blocked, including servers people already use. Add their entries in the same change. A `deniedMcpServers` match wins over an allow entry, and a malformed file blocks everything except built-in servers.
+A local server is matched by its command instead, with `serverCommand` set to the command and its arguments as an array. `serverUrl` accepts `*` wildcards. See GitHub's [allowlist guide](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-enterprise-allowlist) for the full syntax.
+
+How GitHub evaluates a server:
+
+- Built-in default servers are always allowed.
+- A server that matches any `deniedMcpServers` entry is blocked, so a deny wins over an allow.
+- Once an allowlist exists, every server that does not match it is blocked, including servers people already use. Add their entries in the same change.
+- A server whose URL or command contains an unresolved variable (`$VAR` or `${VAR}`) is blocked.
+- A malformed file is treated as an empty allowlist, which blocks everything except built-in servers.
+
+The lists cover user and repository settings. GitHub states they do not apply to servers defined in repository custom agent profiles.
 
 Copilot Studio and Microsoft 365 Copilot follow Microsoft's controls instead: Power Platform DLP policies and custom-app upload permissions.
 
