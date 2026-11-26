@@ -1,0 +1,101 @@
+---
+title: "Sequential resource IDs: API endpoints that are easy to enumerate"
+description: "An API endpoint keyed by a small integer such as /api/orders/42 is easy to enumerate. squirrel flags the pattern as an IDOR advisory from the URLs your code references, with no requests sent."
+---
+
+## What sequential resource IDs are
+
+An endpoint such as `/api/orders/1`, `/api/orders/2` is keyed by an auto-increment integer. If the server does not check that the signed-in caller owns the record, anyone can read every order by counting up. That bug is an insecure direct object reference (IDOR), also called broken object-level authorization. Small sequential ids do not cause it, but they make it trivial to exploit.
+
+## What squirrel checks
+
+This is an advisory, not a confirmed vulnerability. An unauthenticated crawl cannot show whether one signed-in user can read another user's record, so the rule only reports the pattern.
+
+The rule is passive. It reads the endpoint discovery results: URLs the crawl already found in your pages and scripts (`fetch(...)`, `axios.*` and `XMLHttpRequest` call sites and API-looking string literals). It sends no request, at any [probing intensity](/configuration/security), and it never tries a second id or a second account. Because it reads no response bodies, it does not look at `id` fields inside JSON; it judges the URL alone.
+
+### What is flagged
+
+An endpoint on the audited website's own origin that looks like an API (a path word such as `api`, `rest`, `rpc` or `json`, a `v1`-style segment, a `.json` ending, or a call found in script rather than a plain link), and either of:
+
+- A path segment of 1 to 6 digits without a leading zero, right after a collection word: `/api/orders/42`.
+- On an API path, a query key that names an id (`id`, `uid`, `userId`, `order_id`) with such a value: `/api/orders?id=42`. The key match is case-sensitive, so a word that only ends in "id" (`paid`, `valid`, `grid`) is not an id key.
+
+Endpoints are grouped by pattern. `/api/orders/1` and `/api/orders/2` are one finding that lists the ids seen. At most 20 patterns are reported per audit.
+
+### What is not flagged
+
+- UUIDs, ULIDs, hashes, slugs, long numbers and other opaque ids.
+- Counters that are not resource ids: the number after `page`, `p`, `v`, `version`, `limit`, `offset`, `size`, `year`, `month`, `day`, `port`, `width`, `height`, `zoom`, `tile`, `rev`, `revision` or `build`, and version segments such as `v1`.
+- Plain navigation links such as `/blog/3` that are not under an API path.
+- Head links and script URLs, even on an API path (WordPress lists a public `wp-json/wp/v2/posts/<id>` link in every post).
+- A number right after `api`, `rest`, `rpc`, `json` or `ajax` (`/api/42`). A number after `services` is still a services record (`/api/services/42`).
+- Cursor keys, in any case and with or without `-` or `_`: `max`, `min`, `since`, `start`, `after`, `before`, `last`, `cursor`, `next`, `prev` and `until` followed by `id` (`maxId`, `since_id`, `next-id`).
+- Endpoints on another origin.
+
+### Results
+
+The rule emits checks named `sequential-resource-ids`:
+
+- Warn, one check per path pattern. Message: `<origin><path with {id}> takes a small integer id (<N> ids seen (...) or id <value> seen). Sequential ids are easy to guess, so this endpoint is IDOR-prone if the server does not check ownership. This is an advisory about a predictable pattern, not a confirmed vulnerability: an unauthenticated crawl cannot show whether one signed-in user can read another's record.` Items list up to 10 endpoints.
+- Pass when endpoint discovery found endpoints and none is keyed by a small integer: `No discovered API endpoint is keyed by a small sequential integer id`.
+- No check when endpoint discovery found no endpoints.
+
+## How to fix it
+
+1. Enforce ownership on the server, on every route that takes an id: look up the record, compare its owner to the caller, and answer `403` or `404` when they differ. This is the fix; the id format is not.
+2. Where ids reach clients, prefer opaque identifiers (UUIDv4, ULID or a random public id) over auto-increment keys. Treat it as defence in depth.
+3. Test with two accounts: sign in as user A and request user B's id.
+
+If the ids are public by design, such as a product catalog, disable the rule.
+
+| | |
+|---|---|
+| **Rule ID** | `security/sequential-resource-ids` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | info |
+| **Weight** | 3/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/sequential-resource-ids"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/sequential-resource-ids"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `sequential-resource-ids` | Problem |  |
+| `sequential-resource-ids` | Clean | `sequential-resource-ids` |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/client-side-authz](/rules/security/client-side-authz): admin APIs that answer without credentials.
+- [security/json-sensitive-fields](/rules/security/json-sensitive-fields): sensitive fields in JSON API responses.
+- [security/unauthenticated-api](/rules/security/unauthenticated-api): API endpoints that return data without authentication.

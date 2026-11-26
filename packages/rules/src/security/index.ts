@@ -28,6 +28,7 @@ import { permissionsPolicyRule } from "./permissions-policy";
 import { queryErrorFuzzRule } from "./query-error-fuzz";
 import { referrerPolicyRule } from "./referrer-policy";
 import { securityTxtRule } from "./security-txt";
+import { sequentialResourceIdsRule } from "./sequential-resource-ids";
 import { sriRule } from "./sri";
 import { supabaseRlsRule } from "./supabase-rls";
 import { thirdPartyCookiesRule } from "./third-party-cookies";
@@ -72,6 +73,7 @@ export const rules: Rule[] = [
   exposedActuatorRule,
   supabaseRlsRule,
   securityTxtRule,
+  sequentialResourceIdsRule,
   versionDisclosureRule,
   queryErrorFuzzRule,
 ];
@@ -103,6 +105,7 @@ export {
   queryErrorFuzzRule,
   referrerPolicyRule,
   securityTxtRule,
+  sequentialResourceIdsRule,
   sriRule,
   supabaseRlsRule,
   thirdPartyCookiesRule,
