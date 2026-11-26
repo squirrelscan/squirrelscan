@@ -13,6 +13,7 @@ import type { ParsedPage, Rule, RuleResult } from "../src/types";
 import { loadAllRules } from "../src/loader";
 import emptyBaseline from "./fixtures/rule-clean-run-empty.json";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
+import { parsedOptions } from "./helpers/rule-options";
 
 const URL = "https://shop.test/p";
 const HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A fine title of a decent length here</title><meta name="description" content="A perfectly reasonable description of the page that is long enough to be useful to readers and search engines alike."><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="canonical" href="${URL}"></head><body><main><h1>Hello</h1><p>Some text content here.</p><a href="/about">About</a></main></body></html>`;
@@ -26,7 +27,7 @@ function runClean(rule: Rule): RuleResult | null {
     const out = rule.run({
       page: { url: URL, html: HTML, statusCode: 200, loadTime: 0, headers: {} },
       parsed: parsePage(HTML, URL) as ParsedPage,
-      options: {},
+      options: parsedOptions(rule),
     });
     return out instanceof Promise ? null : out;
   } catch {

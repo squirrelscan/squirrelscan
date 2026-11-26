@@ -1,7 +1,7 @@
 import { parsePage } from "@squirrelscan/parser";
 // #1741: a site-scope rule that ran says so, like the page rules in rule-clean-run-checks.test.ts. Every
 // site-scope rule is run over a small clean site and must emit at least one check. The rules that still
-// return an empty list there, or that need more than this fixture (they throw or answer asynchronously),
+// return an empty list there, or that need more than this fixture,
 // are listed in `fixtures/rule-clean-run-site-empty.json`. It only shrinks: a rule that now emits a check
 // must be removed from it, and a new site rule that returns an empty list fails.
 import { describe, expect, test } from "bun:test";
@@ -11,6 +11,7 @@ import type { ParsedPage, Rule, RuleResult, SiteData } from "../src/types";
 import { loadAllRules } from "../src/loader";
 import emptyBaseline from "./fixtures/rule-clean-run-site-empty.json";
 import { expectDeclaredChecks } from "./helpers/declared-checks";
+import { parsedOptions } from "./helpers/rule-options";
 
 const ORIGIN = "https://shop.test";
 
@@ -37,8 +38,13 @@ const siteRules = [...loadAllRules().values()].filter(
   (r) => r.meta.scope === "site"
 );
 
-function runClean(rule: Rule): RuleResult | null {
+const RULE_TIMEOUT_MS = 3000;
+
+// Async site rules are awaited, each under its own timeout, so one that hangs on the network is unjudged
+// instead of stalling the suite.
+async function runClean(rule: Rule): Promise<RuleResult | null> {
   const data = site();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const out = rule.run({
       page: {
@@ -50,15 +56,24 @@ function runClean(rule: Rule): RuleResult | null {
       },
       parsed: data.pages[0]!.parsed,
       site: data,
-      options: {},
+      options: parsedOptions(rule),
     });
-    return out instanceof Promise ? null : out;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), RULE_TIMEOUT_MS);
+    });
+    return await Promise.race([Promise.resolve(out), timeout]);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-const results = new Map(siteRules.map((r) => [r.meta.id, runClean(r)]));
+const results = new Map(
+  await Promise.all(
+    siteRules.map(async (r) => [r.meta.id, await runClean(r)] as const)
+  )
+);
 
 describe("a site rule that ran emits a check (#1741)", () => {
   test("the site rules that return no checks on a clean site are exactly the baseline, which only shrinks", () => {
