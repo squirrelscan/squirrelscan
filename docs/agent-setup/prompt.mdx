@@ -159,13 +159,36 @@ let the audit through without weakening the site.
 ## 5. Connect over MCP
 
 MCP gives you the audit tools directly, so you can run audits and read issues
-without shelling out. Skip this if you installed the Claude Code plugin in step
-3. Check your MCP config first so the server is not added twice (in Claude
-Code, run `claude mcp list`). If a `squirrelscan` server is already there,
-leave it. Otherwise pick the line matching the agent you are:
+without shelling out. Check your MCP config first so the server is not added
+twice (in Claude Code, run `claude mcp list`). If a `squirrelscan` server is
+already there, leave it. Otherwise pick the line matching the agent you are. The
+MCP URL is `https://mcp.squirrelscan.com/mcp`. Sign in through the client's own
+OAuth flow, never with an API key in chat.
 
-- **Claude Code**: `claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`
+{/* Grok CLI: https://docs.x.ai/build/features/mcp-servers
+    Muse Code: https://dev.meta.ai/docs/muse-code/extending and
+    https://dev.meta.ai/docs/muse-code/configuration */}
+
+- **Claude Code**: if you installed the plugin in step 3, run `/reload-plugins`
+  (or restart Claude Code), then `/mcp` and choose Authenticate. Otherwise run
+  `claude mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`.
 - **Codex**: `codex mcp add squirrelscan --url https://mcp.squirrelscan.com/mcp`
+- **Antigravity**: add `{"mcpServers":{"squirrelscan":{"serverUrl":"https://mcp.squirrelscan.com/mcp"}}}`
+  to `~/.gemini/config/mcp_config.json`, then authenticate with `/mcp`.
+- **Gemini CLI**: `gemini mcp add --transport http --scope user squirrelscan https://mcp.squirrelscan.com/mcp`
+- **GitHub Copilot CLI**: `copilot mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`
+- **Hermes Agent**: add a `squirrelscan` entry under `mcp_servers` in
+  `~/.hermes/config.yaml` with `url: https://mcp.squirrelscan.com/mcp` and
+  `auth: oauth`, then run `hermes mcp login squirrelscan`. It opens a browser;
+  device flow is not supported yet.
+- **OpenClaw**: `openclaw mcp set squirrelscan '{"url":"https://mcp.squirrelscan.com/mcp","transport":"streamable-http","auth":"oauth"}'`,
+  then `openclaw mcp login squirrelscan`.
+- **Grok CLI**: `grok mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp`.
+  Browser OAuth runs on first use.
+- **Muse Code**: in `~/.config/muse/settings.json` (`"schema_version": 1` is
+  required), add a `squirrelscan` entry under `mcp_servers` with
+  `"transport": "streamable_http"` and `"url": "https://mcp.squirrelscan.com/mcp"`,
+  then run `muse mcp login squirrelscan`.
 - **Cursor**, **Windsurf**, **VS Code**, **opencode**, or any other MCP client:
   add an HTTP MCP server named `squirrelscan` pointing at
   `https://mcp.squirrelscan.com/mcp`, in whatever config file that client uses.
