@@ -42,10 +42,19 @@ const destination = Bun.serve({
     return new Response("not found", { status: 404 });
   },
 });
+/** The agent and custom header each request to the shortener carried (#2316). */
+const shortenerRequests: Array<{
+  agent: string | null;
+  secret: string | null;
+}> = [];
 const shortener = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
   fetch(req) {
+    shortenerRequests.push({
+      agent: req.headers.get("user-agent"),
+      secret: req.headers.get("x-audit-secret"),
+    });
     const { pathname } = new URL(req.url);
     // A Location that carries a token in its query.
     const query = pathname === "/t" ? "?token=SECRET#frag" : "";
@@ -62,6 +71,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   hits.length = 0;
+  shortenerRequests.length = 0;
   writeFileSync(configPath, "");
 });
 afterAll(() => {
@@ -174,4 +184,27 @@ describe("audit_website start URL redirects", () => {
     expect(report).toContain("<start-redirect");
     expect(report).not.toContain("SECRET");
   }, 90_000);
+
+  test("the redirect probe sends a custom User-Agent header over [crawler] user_agent, and no other custom header (#2316)", async () => {
+    writeFileSync(
+      configPath,
+      '[crawler]\nuser_agent = "configured-agent/2316"\n'
+    );
+    const text = await call({
+      url: shortUrl(),
+      offline: true,
+      level: "quick",
+      maxPages: 2,
+      headers: {
+        "USER-AGENT": "custom-agent/2316",
+        "x-audit-secret": "s3cret",
+      },
+    });
+    expect((JSON.parse(text) as { status: string }).status).toBe(
+      "confirmation_required"
+    );
+    expect(shortenerRequests).toEqual([
+      { agent: "custom-agent/2316", secret: null },
+    ]);
+  }, 60_000);
 });

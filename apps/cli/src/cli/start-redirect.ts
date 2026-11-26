@@ -22,6 +22,7 @@ import {
   renderRedirectedOutcome,
   type RedirectedOutcomeFormat,
 } from "@squirrelscan/report";
+import { customUserAgent } from "@squirrelscan/utils/headers";
 import { writeFileSync } from "node:fs";
 
 import { promptForInput } from "@/cli/prompt";
@@ -102,7 +103,15 @@ export interface ResolvedAuditStart {
 
 export interface ResolveAuditStartInput extends StartRedirectContext {
   url: string;
+  /** `[crawler] user_agent`, when set. */
   userAgent?: string;
+  /**
+   * The audit's custom request headers (`[crawler] headers` merged with `-H`).
+   * Only their `User-Agent` is sent: page requests send it in place of
+   * `userAgent`, so the probe does too, or a WAF that allows only that agent
+   * refuses the seed (#2316). No other custom header goes on the probe.
+   */
+  customHeaders?: Readonly<Record<string, string>>;
   /** False where an environment proxy carries requests (see `ownHostsPinned`). */
   pin?: boolean;
   /** Epoch ms the `--max-duration` budget ends (#1853): the probe is cut to what is left of it. */
@@ -121,8 +130,9 @@ export async function resolveAuditStart(
 ): Promise<ResolvedAuditStart> {
   // Under `bun test` only, the per-hop timeout follows the reachability knob (#1839).
   const testTimeoutMs = testOnlyMs(TEST_REACHABILITY_TIMEOUT_MS_ENV);
+  const userAgent = customUserAgent(input.customHeaders) || input.userAgent;
   const resolution = await (input.resolve ?? resolveStartRedirect)(input.url, {
-    ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+    ...(userAgent ? { userAgent } : {}),
     ...(testTimeoutMs !== undefined ? { timeoutMs: testTimeoutMs } : {}),
     ...(input.budgetDeadlineAt !== undefined
       ? { deadlineAt: input.budgetDeadlineAt }
