@@ -1,0 +1,1 @@
+- The MCP docs now describe both branches of the `run_audit` `confirmation_required` response: `sufficient: true` (show the estimate, call again with `confirm: true`) and `sufficient: false` (relay the cost, balance, reset date and `upgrade_url`, do not retry with `confirm: true`). (#2321)
