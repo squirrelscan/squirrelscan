@@ -21,6 +21,12 @@ export const authorBylineRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "author-byline", outcome: "problem" },
+      { name: "author-byline", outcome: "clean", clears: ["author-byline"] },
+      { name: "author-byline", outcome: "skipped" },
+    ],
     // Author bylines are an E-E-A-T signal for editorial / content sites. They're
     // noise on a SaaS marketing site or landing page (no articles to attribute).
     // Gate to content-publishing site types; offline / no-metadata runs as today.

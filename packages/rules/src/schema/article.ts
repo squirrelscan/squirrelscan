@@ -69,6 +69,23 @@ export const articleSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "article-schema", outcome: "problem" },
+      { name: "article-required", outcome: "problem" },
+      { name: "article-recommended", outcome: "problem" },
+      { name: "article-date-format", outcome: "problem" },
+      {
+        name: "article-required",
+        outcome: "clean",
+        clears: [
+          "article-schema",
+          "article-required",
+          "article-recommended",
+          "article-date-format",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -1,0 +1,1 @@
+- `schema/website-search` now reports a not-checked line on inner pages that have no WebSite schema instead of saying nothing, and `schema/product` raises an info `product-reviews` check when a Product has no review or aggregateRating (#2348).

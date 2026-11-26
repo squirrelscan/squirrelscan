@@ -17,6 +17,16 @@ export const editorialPolicyRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "editorial-policy", outcome: "problem" },
+      {
+        name: "editorial-policy",
+        outcome: "clean",
+        clears: ["editorial-policy"],
+      },
+      { name: "editorial-policy", outcome: "skipped" },
+    ],
     // Editorial / fact-checking policies are an authority signal for news and
     // content publishers; noise for SaaS / ecommerce / portfolios. Gate to
     // editorial site types. Offline / no-metadata runs as today.

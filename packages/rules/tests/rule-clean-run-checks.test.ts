@@ -1,7 +1,7 @@
 import { parsePage } from "@squirrelscan/parser";
 // #1741: a rule that ran says so. Every page-scope rule is run on a clean page and must emit at least one
-// check. Six rules still return an empty list when the page has nothing in their scope (no password form, no
-// svg role="img", no WebSite schema, no input field, no button); `fixtures/rule-clean-run-empty.json`
+// check. Five rules still return an empty list when the page has nothing in their scope (no password form, no
+// svg role="img", no input field, no button); `fixtures/rule-clean-run-empty.json`
 // lists them. It only shrinks: a rule that now emits a check must be removed from it, and a new rule that
 // returns an empty list fails. A declared rule (`meta.checks`) must emit only names it declares.
 //

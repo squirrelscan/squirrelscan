@@ -14,6 +14,16 @@ export const physicalAddressRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "physical-address", outcome: "problem" },
+      {
+        name: "physical-address",
+        outcome: "clean",
+        clears: ["physical-address"],
+      },
+      { name: "physical-address", outcome: "skipped" },
+    ],
     // A visible physical address is a trust signal for real-world local
     // businesses; an online-only SaaS / blog has no storefront to surface. Gate to
     // local businesses. Offline / no-metadata runs as today.

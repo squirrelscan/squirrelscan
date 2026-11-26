@@ -37,6 +37,18 @@ export const contactPageRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "contact-page", outcome: "problem" },
+      { name: "contact-methods", outcome: "problem" },
+      { name: "contact-page", outcome: "clean", clears: ["contact-page"] },
+      {
+        name: "contact-methods",
+        outcome: "clean",
+        clears: ["contact-methods"],
+      },
+      { name: "contact-page", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

@@ -82,6 +82,20 @@ enable = ["schema/entity-split-identity"]
 
 For one run without editing the config: `squirrel audit https://nutshop.squirrelscan.com --rule-include schema/entity-split-identity`.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `entity-split-identity` | Problem |  |
+| `entity-split-identity` | Clean | `entity-split-identity` |
+| `entity-split-identity` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [schema/entity-identity](/rules/schema/entity-identity): the same entity on many pages with no `@id` at all.

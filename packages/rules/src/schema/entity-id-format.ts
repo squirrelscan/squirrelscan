@@ -30,6 +30,16 @@ export const entityIdFormatRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-id-format", outcome: "problem" },
+      {
+        name: "entity-id-format",
+        outcome: "clean",
+        clears: ["entity-id-format"],
+      },
+      { name: "entity-id-format", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

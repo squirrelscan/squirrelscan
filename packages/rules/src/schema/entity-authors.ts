@@ -32,6 +32,12 @@ export const entityAuthorsRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-authors", outcome: "problem" },
+      { name: "entity-authors", outcome: "clean", clears: ["entity-authors"] },
+      { name: "entity-authors", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -21,6 +21,18 @@ export const jsonLdValidRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "json-ld", outcome: "problem" },
+      { name: "json-ld-valid", outcome: "problem" },
+      { name: "json-ld-types", outcome: "problem" },
+      {
+        name: "json-ld",
+        outcome: "clean",
+        clears: ["json-ld", "json-ld-valid", "json-ld-types"],
+      },
+      { name: "json-ld", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -65,6 +65,17 @@ export const ymylDetectionRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "ymyl-content", outcome: "problem" },
+      { name: "ymyl-requirements", outcome: "problem" },
+      {
+        name: "ymyl-detection",
+        outcome: "clean",
+        clears: ["ymyl-content", "ymyl-requirements"],
+      },
+      { name: "ymyl-detection", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

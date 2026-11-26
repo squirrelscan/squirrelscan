@@ -16,6 +16,16 @@ export const disclaimersRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "disclaimer-page", outcome: "problem" },
+      {
+        name: "disclaimer-page",
+        outcome: "clean",
+        clears: ["disclaimer-page"],
+      },
+      { name: "disclaimers", outcome: "skipped" },
+    ],
     // Medical / financial / legal disclaimers only matter for YMYL sites. Gate to
     // YMYL; everywhere else (and offline / no-metadata) the check would be noise.
     appliesWhen: { requiresYMYL: true },

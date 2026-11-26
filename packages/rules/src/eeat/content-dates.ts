@@ -21,6 +21,14 @@ export const contentDatesRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "date-published", outcome: "problem" },
+      { name: "date-modified", outcome: "problem" },
+      { name: "date-published", outcome: "clean", clears: ["date-published"] },
+      { name: "date-modified", outcome: "clean", clears: ["date-modified"] },
+      { name: "content-dates", outcome: "skipped" },
+    ],
     // Published / modified dates matter for time-sensitive editorial content;
     // they're noise on a SaaS marketing site, ecommerce store, or landing page.
     // Gate to content-publishing types. Offline / no-metadata runs as today.

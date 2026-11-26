@@ -36,6 +36,14 @@ export const privacyPolicyRule: Rule = {
     discoveryProbes: ["configured-pages"],
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "privacy-policy", outcome: "problem" },
+      { name: "privacy-linked", outcome: "problem" },
+      { name: "privacy-policy", outcome: "clean", clears: ["privacy-policy"] },
+      { name: "privacy-linked", outcome: "clean", clears: ["privacy-linked"] },
+      { name: "privacy-policy", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

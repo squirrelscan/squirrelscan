@@ -243,6 +243,12 @@ export const expectedTypeSchemaRule: Rule = {
     skipOnSoft404: true,
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "expected-type", outcome: "problem" },
+      { name: "expected-type", outcome: "clean", clears: ["expected-type"] },
+      { name: "expected-type", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

@@ -21,6 +21,22 @@ export const reviewSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "review-schema", outcome: "problem" },
+      { name: "aggregate-rating", outcome: "problem" },
+      { name: "individual-reviews", outcome: "problem" },
+      {
+        name: "aggregate-rating",
+        outcome: "clean",
+        clears: ["review-schema", "aggregate-rating"],
+      },
+      {
+        name: "individual-reviews",
+        outcome: "clean",
+        clears: ["review-schema", "individual-reviews"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

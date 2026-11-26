@@ -25,6 +25,30 @@ export const productSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "product-schema", outcome: "problem" },
+      { name: "product-required", outcome: "problem" },
+      { name: "product-offers", outcome: "problem" },
+      { name: "product-offer-details", outcome: "problem" },
+      { name: "product-reviews", outcome: "problem" },
+      { name: "product-field-evidence", outcome: "problem" },
+      {
+        name: "product-required",
+        outcome: "clean",
+        clears: [
+          "product-schema",
+          "product-required",
+          "product-offers",
+          "product-offer-details",
+        ],
+      },
+      {
+        name: "product-reviews",
+        outcome: "clean",
+        clears: ["product-reviews"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -140,6 +164,15 @@ export const productSchemaRule: Rule = {
         name: "product-reviews",
         status: "pass",
         message: "Product has review/rating data",
+      });
+    } else if (productSchema) {
+      // Only the JSON-LD node is read for reviews, so a microdata, RDFa or
+      // rendered-only Product is not proven to lack one.
+      checks.push({
+        name: "product-reviews",
+        status: "info",
+        message: "Product schema has no review or aggregateRating",
+        value: "Add review or aggregateRating for review rich results",
       });
     }
 

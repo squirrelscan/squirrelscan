@@ -28,6 +28,16 @@ export const entitySameAsMissingRule: Rule = {
     findingScope: "resource",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-sameas-missing", outcome: "problem" },
+      {
+        name: "entity-sameas-missing",
+        outcome: "clean",
+        clears: ["entity-sameas-missing"],
+      },
+      { name: "entity-sameas-missing", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

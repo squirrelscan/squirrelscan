@@ -38,6 +38,17 @@ export const breadcrumbSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "breadcrumb-schema", outcome: "problem" },
+      { name: "breadcrumb-items", outcome: "problem" },
+      { name: "breadcrumb-order", outcome: "problem" },
+      {
+        name: "breadcrumb-valid",
+        outcome: "clean",
+        clears: ["breadcrumb-schema", "breadcrumb-items", "breadcrumb-order"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

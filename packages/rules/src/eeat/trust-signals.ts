@@ -16,6 +16,12 @@ export const trustSignalsRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "trust-signals", outcome: "problem" },
+      { name: "trust-signals", outcome: "clean", clears: ["trust-signals"] },
+      { name: "trust-signals", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -31,6 +31,16 @@ export const entityIdentityRule: Rule = {
     findingScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-identity", outcome: "problem" },
+      {
+        name: "entity-identity",
+        outcome: "clean",
+        clears: ["entity-identity"],
+      },
+      { name: "entity-identity", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -91,6 +91,31 @@ export const localBusinessSchemaRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "local-business-schema", outcome: "problem" },
+      { name: "local-business-required", outcome: "problem" },
+      { name: "local-business-address", outcome: "problem" },
+      { name: "local-business-location", outcome: "problem" },
+      { name: "local-business-geo", outcome: "problem" },
+      { name: "local-business-recommended", outcome: "problem" },
+      {
+        name: "local-business-required",
+        outcome: "clean",
+        clears: [
+          "local-business-schema",
+          "local-business-required",
+          "local-business-address",
+          "local-business-geo",
+          "local-business-recommended",
+        ],
+      },
+      {
+        name: "local-business-location",
+        outcome: "clean",
+        clears: ["local-business-location"],
+      },
+    ],
     // LocalBusiness schema only applies to real-world local businesses. Skip with
     // a visible reason for global SaaS / blogs. Offline / no-metadata runs as today.
     appliesWhen: { requiresLocalBusiness: true },

@@ -33,6 +33,12 @@ export const citationsRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "citations", outcome: "problem" },
+      { name: "citations", outcome: "clean", clears: ["citations"] },
+      { name: "citations", outcome: "skipped" },
+    ],
     // Authoritative citations are an E-E-A-T signal for editorial / informational
     // content; a SaaS marketing site or ecommerce store has nothing to cite.
     // Gate to content-publishing types. Offline / no-metadata runs as today.

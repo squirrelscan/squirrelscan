@@ -41,6 +41,16 @@ export const entityDanglingRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "entity-dangling", outcome: "problem" },
+      {
+        name: "entity-dangling",
+        outcome: "clean",
+        clears: ["entity-dangling"],
+      },
+      { name: "entity-dangling", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
