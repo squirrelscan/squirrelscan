@@ -36,6 +36,7 @@ const SKIPPED: CheckResult[] = [
     name: "password-form-get",
     status: "skipped",
     skipReason: "not-applicable",
+    details: { foldKey: "not-applicable" },
     message: "No form with a password field in scope on this page",
   },
 ];

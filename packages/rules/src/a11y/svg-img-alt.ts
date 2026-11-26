@@ -1,3 +1,4 @@
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 // a11y/svg-img-alt - an inline <svg role="img"> needs an accessible name (#1699)
 
 import { wcag } from "@squirrelscan/core-contracts/wcag";
@@ -182,7 +183,8 @@ export const svgImgAltRule: Rule = {
       checks.push({
         name: CHECK,
         status: "skipped",
-        skipReason: "not-applicable",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
         message: 'No <svg role="img"> element in scope on this page',
       });
     }

@@ -1,3 +1,4 @@
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 // security/password-form-get - password forms must not submit by GET
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
@@ -276,7 +277,8 @@ export const passwordFormGetRule: Rule = {
       checks.push({
         name: "password-form-get",
         status: "skipped",
-        skipReason: "not-applicable",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
         message: "No form with a password field in scope on this page",
       });
     }

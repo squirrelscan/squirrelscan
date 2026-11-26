@@ -38,6 +38,7 @@ const SKIPPED: CheckResult[] = [
     name: "input-zoom",
     status: "skipped",
     skipReason: "not-applicable",
+    details: { foldKey: "not-applicable" },
     message: "No focusable text field in scope on this page",
   },
 ];
