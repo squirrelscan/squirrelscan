@@ -1,6 +1,6 @@
 ---
 title: "Auth endpoint leaks a password hash or the full user record"
-description: "A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET per endpoint and names each leaked field."
+description: "A /api/me or session endpoint that serializes the whole user row hands out password hashes and reset tokens. squirrel sends one credential-free GET each."
 ---
 
 ## What this rule finds

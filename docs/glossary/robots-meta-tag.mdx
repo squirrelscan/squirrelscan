@@ -30,7 +30,7 @@ Two rules compare the tag with robots.txt, deciding blocking the way Google does
 
 | Rule | What it flags | Severity |
 |---|---|---|
-| [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta) | A page declaring noindex or nofollow in its robots meta tag or X-Robots-Tag header. squirrel reads both on every crawled page and names the directive and where it was set. | warning |
+| [Robots meta and X-Robots-Tag: noindex and nofollow per page](/rules/core/robots-meta) | Find pages declaring noindex or nofollow in a robots meta tag or X-Robots-Tag header. squirrel names the directive and where it was set. | warning |
 | [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet) | A robots directive that stops search engines showing any description under the result. squirrel reads the robots meta on every page. | warning |
 | [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict) | A page disallowed in robots.txt is never fetched, so its noindex is never seen. squirrel lists the pages carrying both. | warning |
 | [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts) | Allow plus noindex is the correct way to deindex a page. squirrel only reports pages robots.txt blocks that carry no noindex, at info level. | warning |

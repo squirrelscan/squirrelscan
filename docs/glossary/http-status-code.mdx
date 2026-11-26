@@ -30,7 +30,7 @@ The status code is what a crawler believes, whatever the page says. An error pag
 | [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx) | A sitemap entry that returns 404 wastes a crawl and teaches search engines to trust the file less. squirrel reports the status of every checked entry. | warning |
 | [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404) | A not-found page that answers 200 gets crawled and can be indexed as thin content. squirrel detects the error shell and re-checks it before reporting. | warning |
 | [Broken images: empty and placeholder src attributes](/rules/images/broken-images) | An img with an empty or placeholder src renders as a broken icon. squirrel collects image sources across the crawl and flags the malformed ones. | error |
-| [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources) | A page whose script or stylesheet returns 404 or 500 looks fine to a crawler but renders unstyled or never runs its interactive parts. squirrel checks every script, stylesheet and font the crawl fetched. | error |
+| [Broken scripts, stylesheets and fonts that do not load](/rules/reliability/broken-resources) | A page whose script or stylesheet returns 404 or 500 renders unstyled or never runs, yet looks fine to a crawler. squirrel checks each fetched resource. | error |
 
 {/* glossary:rules:end */}
 

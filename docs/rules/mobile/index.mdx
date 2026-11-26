@@ -20,7 +20,7 @@ These carry the highest severity and weight in the category.
 
 - [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport): Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties.
 - [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom): Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale.
-- [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest): A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link.
+- [Web app manifest: home-screen icon and name checks](/rules/mobile/web-app-manifest): A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the linked manifest.
 - [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll): A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes.
 - [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials): A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries.
 
@@ -33,13 +33,13 @@ These carry the highest severity and weight in the category.
 | Rule | What it flags | Severity | Scope |
 |---|---|---|---|
 | [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size) | Body text below about 16px is hard to read on a phone without zooming. squirrel checks inline styles for sizes under 12px. | warning | Per-page |
-| [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads form field sizes from inline styles and style blocks and reports the small ones. | warning | Per-page |
+| [Form fields under 16px: why iOS Safari zooms on focus](/rules/mobile/input-zoom) | On an iPhone, focusing a text field under 16px zooms the page in. squirrel reads field sizes from inline styles and style blocks and reports small ones. | warning | Per-page |
 | [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll) | A page a phone can scroll sideways is a page that does not fit. squirrel looks for fixed widths, tables and fixed-width iframes. | warning | Per-page |
 | [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials) | A popup covering the content a visitor came for is a ranking problem as well as a usability one. squirrel detects popup markup and libraries. | warning | Per-page |
 | [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport) | Without a viewport meta tag a phone renders the page at desktop width and zooms out. squirrel checks the tag and its content properties. | error | Per-page |
 | [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets) | A control smaller than a fingertip is a control people miss. squirrel counts interactive elements and flags small inline dimensions. | warning | Per-page |
 | [user-scalable=no: the viewport setting that blocks zoom](/rules/mobile/viewport-zoom) | Disabling pinch zoom stops readers who need to magnify text. squirrel checks the viewport content for user-scalable and maximum-scale. | error | Per-page |
-| [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the manifest the pages link. | error | Site-wide |
+| [Web app manifest: home-screen icon and name checks](/rules/mobile/web-app-manifest) | A linked web app manifest that is missing, broken or inconsistent gives a blank home-screen icon and a generic name. squirrel checks the linked manifest. | error | Site-wide |
 
 {/* hub:rules:end */}
 

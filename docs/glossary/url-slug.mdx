@@ -30,7 +30,7 @@ Only [url/length](/rules/url/length) looks at the query string, as part of the f
 |---|---|---|
 | [Non-descriptive URL slug: numeric IDs and generic patterns](/rules/url/slug-keywords) | A slug like /p/48213 tells a reader and a crawler nothing. squirrel classifies the last path segment and flags the ID-shaped ones. | info |
 | [Mixed URL conventions: finding the minority form](/rules/url/slug-convention) | Half your paths ending in a slash and half not is how canonical bugs start. squirrel computes your site's own norm and reports what deviates. | warning |
-| [Stop words in a URL slug: when to drop them](/rules/url/stop-words) | the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups. | info |
+| [Stop words in a URL slug: when to drop them](/rules/url/stop-words) | Words like the, of and for add characters without adding meaning to a slug. squirrel counts them in each path and only reports the pile-ups. | info |
 | [Underscores in URLs: why hyphens separate words](/rules/url/hyphens) | Google reads blue-shoes as two words and blue_shoes as one. squirrel flags every crawled path containing an underscore. | warning |
 | [Special characters in a URL path: what breaks and why](/rules/url/special-chars) | Spaces, percent signs and non-ASCII characters in a path break when copied and pasted. squirrel decodes the path and reports what it finds. | warning |
 | [Uppercase in a URL: the duplicate content it creates](/rules/url/lowercase) | Most servers treat /Page and /page as two URLs serving the same content. squirrel flags every crawled path containing a capital letter. | warning |

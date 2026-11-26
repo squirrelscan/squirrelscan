@@ -28,10 +28,10 @@ squirrelscan builds a site-wide entity map from the typed JSON-LD nodes in the c
 |---|---|---|
 | [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity) | Your site declares the same organization on every page with nothing to say they are one thing. A search engine reading 60 pages sees 60 organizations. | error |
 | [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing) | This site has the pages a business has and no Organization entity for a search engine to hang any of it on. | info |
-| [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing) | sameAs is how a search engine learns the company on your site is the company on LinkedIn and Wikidata. Without it the entity stands alone. | info |
+| [Missing sameAs: an organization linked to nothing else](/rules/schema/entity-sameas-missing) | The sameAs property is how a search engine learns the company on your site is the one on LinkedIn and Wikidata. Without it the entity stands alone. | info |
 | [The same entity, two different logos](/rules/schema/entity-conflicts) | One organization declared on forty pages with two logos, two phone numbers or two names. A search engine picks one, and which one is not yours to choose. | warning |
 | [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift) | The same @id declared with different @type sets on different pages. A search engine merges them and then has to decide which types are authoritative. | warning |
-| [An @id that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
+| [Orphan @id: a schema entity that nothing points at](/rules/schema/entity-orphan) | Giving an entity an identifier is the expensive part. One that nothing references and that appears on a single page is doing no more than an inline block. | info |
 
 {/* glossary:rules:end */}
 
