@@ -669,6 +669,7 @@
                   "rules/security/json-sensitive-fields",
                   "rules/security/graphql-get-mutations",
                   "rules/security/unauthenticated-api",
+                  "rules/security/unpaginated-api",
                   "rules/security/exposed-files",
                   "rules/security/exposed-backups",
                   "rules/security/auth-endpoint-disclosure",

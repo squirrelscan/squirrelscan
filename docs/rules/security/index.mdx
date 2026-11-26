@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (35 rules).
+HTTPS, headers, and safe link practices (36 rules).
 
 ## Run only these rules
 
@@ -87,6 +87,7 @@ These carry the highest severity and weight in the category.
 | [Third-party cookies: which external domains a page loads](/rules/security/third-party-cookies) | Trackers and 1x1 pixels set cookies from domains you do not control. squirrel inventories the third-party scripts, iframes and pixels per page. | info | Per-page |
 | [TLS certificate: expiry, hostname, chain and key checks](/rules/security/tls-certificate) | A certificate that expires, does not cover the hostname, or is missing its intermediate breaks the page for some visitors. squirrel reads the certificate once per host and names each problem. | error | Per-site |
 | [Unauthenticated API endpoints: when your API hands out data with no login](/rules/security/unauthenticated-api) | An API route that answers an anonymous request with user records has no server-side authorization. squirrel sends one GET with no cookies or token and grades what comes back by its field names. | error | Site-wide |
+| [Unpaginated API endpoints: when one request returns a whole table](/rules/security/unpaginated-api) | A collection endpoint that answers every full record in one response, and ignores limit and page parameters, slows pages and hands out the whole table. squirrel reports the row count and response size, never a record value. | warning | Site-wide |
 | [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure) | A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel reads five headers and flags each version it finds. | warning | Site-wide |
 | [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type) | Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site. | info | Site-wide |
 | [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options) | With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together. | warning | Site-wide |

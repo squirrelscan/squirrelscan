@@ -34,6 +34,7 @@ import { thirdPartyCookiesRule } from "./third-party-cookies";
 import { tlsCertificateRule } from "./tls-certificate";
 import { tokenStorageRule } from "./token-storage";
 import { unauthenticatedApiRule } from "./unauthenticated-api";
+import { unpaginatedApiRule } from "./unpaginated-api";
 import { versionDisclosureRule } from "./version-disclosure";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
@@ -63,6 +64,7 @@ export const rules: Rule[] = [
   graphqlIntrospectionRule,
   graphqlGetMutationsRule,
   unauthenticatedApiRule,
+  unpaginatedApiRule,
   jsonSensitiveFieldsRule,
   exposedFilesRule,
   exposedBackupsRule,
@@ -109,6 +111,7 @@ export {
   tlsCertificateRule,
   tokenStorageRule,
   unauthenticatedApiRule,
+  unpaginatedApiRule,
   versionDisclosureRule,
   xContentTypeRule,
   xFrameOptionsRule,

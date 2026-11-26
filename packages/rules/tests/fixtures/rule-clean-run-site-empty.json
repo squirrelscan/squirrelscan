@@ -20,5 +20,6 @@
   "security/query-error-fuzz",
   "security/supabase-rls",
   "security/tls-certificate",
-  "security/unauthenticated-api"
+  "security/unauthenticated-api",
+  "security/unpaginated-api"
 ]

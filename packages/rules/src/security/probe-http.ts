@@ -232,7 +232,7 @@ export function peekAnonymousGet(
   return anonymousGets.get(probe)?.get(buildAnonymousGet(endpointUrl).url);
 }
 
-async function fetchAnonymousGet(
+export async function fetchAnonymousGet(
   url: string,
   init: RequestInit,
   deadline: AbortSignal
