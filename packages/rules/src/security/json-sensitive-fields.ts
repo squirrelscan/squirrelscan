@@ -829,7 +829,7 @@ export function isBulkPii(pii: JsonScanResult["pii"]): boolean {
  * Server-side keys the leaked-secrets matchers recognise in the response text.
  * Publishable keys and session values the crawl itself was issued are left out.
  */
-function leakedSecretKinds(
+export function leakedSecretKinds(
   body: string,
   url: string,
   alreadyFlagged?: Set<string>
@@ -931,7 +931,7 @@ export function scanJsonResponse(
 
 // ── reporting ──────────────────────────────────────────────────────
 
-function sensitiveItems(
+export function sensitiveItems(
   url: string,
   findings: SensitiveFinding[]
 ): CheckItem[] {
@@ -961,7 +961,7 @@ function sensitiveMessage(
   return `${url} returns ${kinds.slice(0, 4).join(", ")}${more}${SENSITIVE_MESSAGE_TAIL}${partial}`;
 }
 
-function piiSummary(pii: JsonScanResult["pii"]): string {
+export function piiSummary(pii: JsonScanResult["pii"]): string {
   const parts: string[] = [];
   if (pii.distinctEmails > 0)
     parts.push(`${pii.distinctEmails} distinct email address(es)`);

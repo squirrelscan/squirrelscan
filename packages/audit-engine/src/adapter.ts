@@ -4276,7 +4276,8 @@ export function runStreamingRules(
       // makes every older entry a miss, so each site's first audit after the upgrade runs fresh once.
       // v6: colorUsage joined the record (content/color-sprawl, repo#1377), same reason.
       // v5: fontUsage joined the record (content/font-consistency, repo#1376), same reason. v4: contentFingerprint joined the record too (content/duplicate-content, #1690), same reason.
-      id: "site-dom-signals-v6",
+      // v7: nextData joined the record (security/next-data-exposure, #2324), same reason.
+      id: "site-dom-signals-v7",
       collect(page, parsed, shared) {
         const signal = detachFromPage(
           // `shared.fingerprint` is the one the loop already built for

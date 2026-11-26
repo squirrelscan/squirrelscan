@@ -22,6 +22,7 @@ import { jsonSensitiveFieldsRule } from "./json-sensitive-fields";
 import { leakedSecretsRule } from "./leaked-secrets";
 import { mixedContentRule } from "./mixed-content";
 import { newTabRule } from "./new-tab";
+import { nextDataExposureRule } from "./next-data-exposure";
 import { openRedirectRule } from "./open-redirect";
 import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
@@ -64,6 +65,7 @@ export const rules: Rule[] = [
   graphqlGetMutationsRule,
   unauthenticatedApiRule,
   jsonSensitiveFieldsRule,
+  nextDataExposureRule,
   exposedFilesRule,
   exposedBackupsRule,
   authEndpointDisclosureRule,
@@ -97,6 +99,7 @@ export {
   leakedSecretsRule,
   mixedContentRule,
   newTabRule,
+  nextDataExposureRule,
   openRedirectRule,
   passwordFormGetRule,
   permissionsPolicyRule,
