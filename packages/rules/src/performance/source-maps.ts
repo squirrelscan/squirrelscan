@@ -8,9 +8,13 @@ import {
   querySelectorAllOutsideNoscript,
   resolveUrl,
 } from "@squirrelscan/utils";
+import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
+import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 
+import type { ProbeBudget } from "../probe-budget";
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
+import { readCappedBytes } from "../security/probe-http";
 import { sharedRegex } from "../shared-regex";
 import { siteResourceOccurrences } from "../shared/site-resource-occurrence";
 const NOTE =
@@ -200,6 +204,124 @@ function sharedBundleChecks(found: FoundMap[], siteUrl: string): CheckResult[] {
   return checks;
 }
 
+/** Per-request timeout, on top of the shared probe budget's deadline. */
+export const SOURCE_MAP_PROBE_TIMEOUT_MS = 10_000;
+/** Bytes of a map read: enough to see it is JSON, never the map itself. */
+export const SOURCE_MAP_READ_CAP = 1024;
+/** Distinct maps probed per run; the rest keep the unverified warning. */
+export const SOURCE_MAP_PROBE_CAP = 50;
+
+/**
+ * What one request says about a referenced map. `missing` is a definite
+ * absence (404, 410, or a 200 that is not a map, as a single-page app answers
+ * every path). `unknown` covers everything else (a refusal, a redirect, a
+ * network error, an exhausted budget): the reference stays reported as before.
+ */
+type MapReach = "exposed" | "missing" | "unknown";
+
+// Per run: one request per distinct map URL, however many pages name it.
+const probeCache = new WeakMap<
+  ProbeBudget,
+  { reach: Map<string, Promise<MapReach>>; sent: number }
+>();
+
+// The source map spec lets a map open with a `)]}'` line (an XSSI guard) that
+// a reader skips, so a guarded map is still a map.
+const XSSI_GUARD = ")]}'";
+
+function looksLikeMap(bytes: Uint8Array): boolean {
+  let head = new TextDecoder().decode(bytes).trimStart();
+  if (head.startsWith(XSSI_GUARD)) {
+    const eol = head.indexOf("\n");
+    head = eol === -1 ? "" : head.slice(eol + 1).trimStart();
+  }
+  return head.startsWith("{");
+}
+
+async function sendMapProbe(
+  probe: ProbeBudget,
+  url: string
+): Promise<MapReach> {
+  const done = new AbortController();
+  const signal = AbortSignal.any([
+    probe.signal(),
+    AbortSignal.timeout(SOURCE_MAP_PROBE_TIMEOUT_MS),
+    done.signal,
+  ]);
+  probe.record();
+  try {
+    const res = await fetchUndecoded(url, {
+      method: "GET",
+      credentials: "omit",
+      redirect: "manual",
+      headers: {
+        Accept: "application/json,*/*;q=0.8",
+        Range: `bytes=0-${SOURCE_MAP_READ_CAP - 1}`,
+        "User-Agent": SQUIRRELSCAN_USER_AGENT,
+      },
+      signal,
+    });
+    if (res.status === 404 || res.status === 410) return "missing";
+    if (res.status !== 200 && res.status !== 206) return "unknown";
+    const { bytes } = await readCappedBytes(res, SOURCE_MAP_READ_CAP);
+    return looksLikeMap(bytes) ? "exposed" : "missing";
+  } catch {
+    return "unknown";
+  } finally {
+    done.abort();
+  }
+}
+
+/**
+ * Probe each distinct same-origin http(s) map once per run. Off-origin maps
+ * are never requested: the probe policy covers the audited site only.
+ */
+async function probeMaps(
+  probe: ProbeBudget,
+  siteUrl: string,
+  urls: readonly string[]
+): Promise<Map<string, MapReach>> {
+  let state = probeCache.get(probe);
+  if (!state) {
+    state = { reach: new Map(), sent: 0 };
+    probeCache.set(probe, state);
+  }
+  let origin: string;
+  try {
+    origin = new URL(siteUrl).origin;
+  } catch {
+    return new Map();
+  }
+  const out = new Map<string, MapReach>();
+  await Promise.all(
+    urls.map(async (url) => {
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        return;
+      }
+      if (
+        (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+        parsed.origin !== origin
+      )
+        return;
+      let pending = state.reach.get(parsed.href);
+      if (!pending) {
+        // Asked per request, and before anything is cached: a refusal is not
+        // an answer, so it must not stand in for one on a later page.
+        if (state.sent >= SOURCE_MAP_PROBE_CAP || !probe.allows("quiet"))
+          return;
+        state.sent++;
+        pending = sendMapProbe(probe, parsed.href);
+        state.reach.set(parsed.href, pending);
+      }
+      out.set(url, await pending);
+    })
+  );
+  return out;
+}
+
 export const sourceMapsRule: Rule = {
   meta: {
     id: "perf/source-maps",
@@ -215,12 +337,11 @@ export const sourceMapsRule: Rule = {
     weight: 3,
   },
 
-  run(ctx: RuleContext): RuleResult {
+  run(ctx: RuleContext): RuleResult | Promise<RuleResult> {
     const doc = ctx.parsed.document;
     const html = ctx.page.html;
     if (!doc || !html) return { checks: [] };
 
-    const checks: CheckResult[] = [];
     const sourceMapsFound: FoundMap[] = [];
     const inlineSourceMaps: string[] = [];
     const baseUrl = ctx.page.url;
@@ -372,70 +493,105 @@ export const sourceMapsRule: Rule = {
             }
       );
     }
-    const uniqueSourceMaps = [...byUrl.values()];
-    const pageMaps = uniqueSourceMaps.filter((s) => !s.sharedPages);
+    const found = [...byUrl.values()];
 
-    // Report findings - note that we can't verify accessibility without fetching
-    // Future enhancement: verify via HEAD request
-    if (pageMaps.length > 0) {
-      checks.push({
-        name: "source-maps-exposed",
-        status: "warn",
-        message: `${pageMaps.length} potential source map(s) detected`,
-        items: pageMaps.slice(0, 10).map((s) => ({
-          id: s.url,
-          label: `from ${s.source}`,
-        })),
-        details: {
-          note: NOTE,
-          ...(pageMaps.length > 10 ? { additional: pageMaps.length - 10 } : {}),
-        },
-        // Additive evidence only: name, status, message, items and details above
-        // are exactly what this rule emitted before, so the status and the score
-        // cannot move. `items` stays the bounded 10-entry sample it has always
-        // been; this carries the WHOLE set this check lists, because the report
-        // stage groups on "which pages reference which maps" and a sampled set
-        // would make that membership a guess. Maps shared across pages belong
-        // to the shared-bundle checks below (repo#2341), not to this check, so
-        // they are not in this set.
-        siteResourceOccurrences: siteResourceOccurrences({
-          kind: "source-map",
-          pageUrl: ctx.page.url,
-          observedUrl: ctx.page.finalUrl,
-          resources: pageMaps.map((s) => ({ key: s.url, source: s.source })),
-        }),
-      });
-    }
-    // Named against the site's base URL, not this page's: pages of one group
-    // can sit on different origins (http and https) and must still emit one
-    // identical message.
-    checks.push(
-      ...sharedBundleChecks(uniqueSourceMaps, ctx.site?.baseUrl || baseUrl)
+    // No probe budget: every reference is reported, exactly as before.
+    const probe = ctx.probe;
+    if (!probe || !found.length)
+      return finish(ctx, found, inlineSourceMaps, null);
+    return probeMaps(
+      probe,
+      ctx.site?.baseUrl || baseUrl,
+      found.map((m) => m.url)
+    ).then((reach) =>
+      finish(ctx, found, inlineSourceMaps, reach.size > 0 ? reach : null)
     );
-
-    if (inlineSourceMaps.length > 0) {
-      checks.push({
-        name: "source-maps-inline",
-        status: "warn",
-        message: `${inlineSourceMaps.length} inline source map(s) found`,
-        items: inlineSourceMaps.slice(0, 3).map((id) => ({ id })),
-        details: {
-          note: "Inline source maps increase bundle size and expose code",
-          ...(inlineSourceMaps.length > 3
-            ? { additional: inlineSourceMaps.length - 3 }
-            : {}),
-        },
-      });
-    }
-
-    if (uniqueSourceMaps.length === 0 && inlineSourceMaps.length === 0) {
-      checks.push({
-        name: "source-maps",
-        status: "pass",
-        message: "No exposed source maps detected",
-      });
-    }
-
-    return { checks };
   },
 };
+
+function finish(
+  ctx: RuleContext,
+  found: FoundMap[],
+  inlineSourceMaps: string[],
+  reach: Map<string, MapReach> | null
+): RuleResult {
+  const checks: CheckResult[] = [];
+  const baseUrl = ctx.page.url;
+  // A reference that answered 404 (or a non-map 200) is not exposed.
+  const uniqueSourceMaps = found.filter((m) => reach?.get(m.url) !== "missing");
+  const unreachable = found.length - uniqueSourceMaps.length;
+  const confirmed = reach
+    ? uniqueSourceMaps.filter((m) => reach.get(m.url) === "exposed").length
+    : 0;
+  const pageMaps = uniqueSourceMaps.filter((s) => !s.sharedPages);
+
+  // Report findings - note that we can't verify accessibility without fetching
+  // Future enhancement: verify via HEAD request
+  if (pageMaps.length > 0) {
+    checks.push({
+      name: "source-maps-exposed",
+      status: "warn",
+      message: `${pageMaps.length} potential source map(s) detected`,
+      items: pageMaps.slice(0, 10).map((s) => ({
+        id: s.url,
+        label: `from ${s.source}`,
+      })),
+      details: {
+        note: NOTE,
+        ...(reach ? { confirmed, unreachable } : {}),
+        ...(pageMaps.length > 10 ? { additional: pageMaps.length - 10 } : {}),
+      },
+      // Additive evidence only: name, status, message, items and details above
+      // are exactly what this rule emitted before, so the status and the score
+      // cannot move. `items` stays the bounded 10-entry sample it has always
+      // been; this carries the WHOLE set this check lists, because the report
+      // stage groups on "which pages reference which maps" and a sampled set
+      // would make that membership a guess. Maps shared across pages belong
+      // to the shared-bundle checks below (repo#2341), not to this check, so
+      // they are not in this set.
+      siteResourceOccurrences: siteResourceOccurrences({
+        kind: "source-map",
+        pageUrl: ctx.page.url,
+        observedUrl: ctx.page.finalUrl,
+        resources: pageMaps.map((s) => ({ key: s.url, source: s.source })),
+      }),
+    });
+  }
+  // Named against the site's base URL, not this page's: pages of one group
+  // can sit on different origins (http and https) and must still emit one
+  // identical message.
+  checks.push(
+    ...sharedBundleChecks(uniqueSourceMaps, ctx.site?.baseUrl || baseUrl)
+  );
+
+  if (inlineSourceMaps.length > 0) {
+    checks.push({
+      name: "source-maps-inline",
+      status: "warn",
+      message: `${inlineSourceMaps.length} inline source map(s) found`,
+      items: inlineSourceMaps.slice(0, 3).map((id) => ({ id })),
+      details: {
+        note: "Inline source maps increase bundle size and expose code",
+        ...(inlineSourceMaps.length > 3
+          ? { additional: inlineSourceMaps.length - 3 }
+          : {}),
+      },
+    });
+  }
+
+  if (uniqueSourceMaps.length === 0 && inlineSourceMaps.length === 0) {
+    checks.push({
+      name: "source-maps",
+      status: "pass",
+      message:
+        unreachable > 0
+          ? `${unreachable} referenced source map(s) not reachable`
+          : "No exposed source maps detected",
+      // The engine reads this to tell a probed pass from a page with no map,
+      // because only the first depends on a live answer (rule-cache.ts).
+      ...(unreachable > 0 ? { details: { unreachable } } : {}),
+    });
+  }
+
+  return { checks };
+}

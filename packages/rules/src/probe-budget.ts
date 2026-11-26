@@ -21,7 +21,10 @@
 //
 // Probing rules belong in the site pass. The per-page rule-result cache
 // (audit-engine rule-cache.ts) replays a page rule's verdict when the page is
-// unchanged, and live probe responses are not part of its key.
+// unchanged, and live probe responses are not part of its key. The one page
+// rule that probes, perf/source-maps, is handled there by name: a probing run
+// keys apart from one that does not, and never replays a page whose stored
+// verdict depends on a live answer.
 //
 // Framework-free and clock-injectable for deterministic tests.
 

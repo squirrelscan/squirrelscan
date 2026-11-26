@@ -168,6 +168,7 @@ import {
 import {
   bindRuleCache,
   lateBoundRuleCache,
+  withoutReplayingProbedVerdicts,
   withoutStoringAfterIgnoreTimeout,
   computeRunContextHash,
   type RuleCacheDisabledReason,
@@ -4196,6 +4197,12 @@ export function runStreamingRules(
       } else if (pluginRulePack.length > 0) {
         ruleCacheDisabled = "plugin-rules";
       } else {
+        // perf/source-maps confirms a referenced map with a live request when
+        // the level allows one (#2333). Only the pages whose verdict depends on
+        // that answer skip replay; every other page keeps its cache hit.
+        const probing =
+          effectiveScope?.probe !== undefined &&
+          effectiveScope.probe.level !== "passive";
         const runContextHash = (
           cloud: Pick<RunnerScope, "siteMetadata" | "cloudResults"> | undefined
         ) =>
@@ -4215,15 +4222,18 @@ export function runStreamingRules(
             utcYear: new Date().getUTCFullYear(),
             utcMonth: new Date().getUTCMonth(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            probing,
           });
         // An `[[ignore]]` entry that ran over its work budget stops waiving from that
         // point, so a verdict computed after it is not the one the list gives with its
         // full budget: never stored, so a later run re-evaluates the page and says so.
-        const bind = (hash: string) =>
-          withoutStoringAfterIgnoreTimeout(
+        const bind = (hash: string) => {
+          const bound = withoutStoringAfterIgnoreTimeout(
             bindRuleCache(ruleCacheOpts.store, hash),
             () => runner.ignoreTimedOutEntries().length
           );
+          return probing ? withoutReplayingProbedVerdicts(bound) : bound;
+        };
         if (lateCloud) {
           // pub#2121: the run-context key hashes the whole cloud store, which is only
           // known once the prefetch settles. It is then hashed from the settled store,
