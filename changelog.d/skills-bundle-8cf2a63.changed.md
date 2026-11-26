@@ -1,0 +1,1 @@
+- The skills served by the MCP servers are updated to squirrelscan 2.5.1 and audit-website 3.4.1.
