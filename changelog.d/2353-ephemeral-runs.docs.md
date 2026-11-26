@@ -1,0 +1,1 @@
+- REST docs now say a one-off (`ephemeral`) run is hidden from `GET /v1/agent-runs` unless `includeOneOff=true`, and sends no email, notification, tracker issue or webhook. (#2353)
