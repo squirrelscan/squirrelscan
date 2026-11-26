@@ -152,7 +152,7 @@ A redirect done in the page (meta refresh or JavaScript) rather than with an HTT
 
 Also called: meta refresh.
 
-Checked by [meta http-equiv=refresh and the Refresh header: redirects and auto-refresh](/rules/a11y/meta-refresh), [Script URL redirects: a 3xx in front of every script load](/rules/perf/js-redirects).
+Checked by [Meta refresh and Refresh header: redirects and auto-refresh](/rules/a11y/meta-refresh), [Script URL redirects: a 3xx in front of every script load](/rules/perf/js-redirects).
 
 ### Client-side rendering \{#client-side-rendering\}
 
@@ -200,7 +200,7 @@ Checked by [Content gaps: topic clusters your site does not cover](/rules/gaps/c
 
 A response header listing where a page may load scripts, styles, frames and other resources from, limiting what injected code can do.
 
-Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources), [CSP violations: what the browser blocked while the page rendered](/rules/security/csp-violations).
+Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [CSP blocks your own scripts, frames and analytics endpoints](/rules/security/csp-blocks-own-resources), [CSP violations: what the browser blocked while rendering](/rules/security/csp-violations).
 
 [Read the full definition](/glossary/content-security-policy).
 
@@ -292,7 +292,7 @@ Checked by [Author bylines on content pages: what share carry one](/rules/eeat/a
 
 A thing a site describes in structured data, such as an organization, person or product, identified across pages so search engines and agents can tell it is one thing.
 
-Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [The same entity, two different logos](/rules/schema/entity-conflicts), [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift), [An @id that nothing points at](/rules/schema/entity-orphan).
+Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Missing sameAs: an organization linked to nothing else](/rules/schema/entity-sameas-missing), [The same entity, two different logos](/rules/schema/entity-conflicts), [An Organization on one page, a LocalBusiness on another](/rules/schema/entity-type-drift), [Orphan @id: a schema entity that nothing points at](/rules/schema/entity-orphan).
 
 [Read the full definition](/glossary/entity).
 
@@ -366,7 +366,7 @@ Checked by [HTML document size: when a page is too big to crawl fully](/rules/cr
 
 The GraphQL feature that returns the full schema on request; left on in production it maps the API for attackers.
 
-Checked by [GraphQL introspection in production: what an open schema exposes](/rules/security/graphql-introspection), [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations).
+Checked by [GraphQL introspection: why an open schema is risky](/rules/security/graphql-introspection), [GraphQL mutations over GET: why they open the door to CSRF](/rules/security/graphql-get-mutations).
 
 ## H
 
@@ -442,7 +442,7 @@ The three-digit code a server returns with every response; 2xx success, 3xx redi
 
 Also called: 4xx error, 5xx error.
 
-Checked by [Broken internal links: 404s inside your own site](/rules/links/broken-links), [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx), [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404), [Broken images: empty and placeholder src attributes](/rules/images/broken-images), [Broken scripts, stylesheets and fonts: files that do not load](/rules/reliability/broken-resources).
+Checked by [Broken internal links: 404s inside your own site](/rules/links/broken-links), [4XX pages in sitemap: dead URLs you are still submitting](/rules/crawl/sitemap-4xx), [Soft 404: error content served with an HTTP 200 status](/rules/crawl/soft-404), [Broken images: empty and placeholder src attributes](/rules/images/broken-images), [Broken scripts, stylesheets and fonts that do not load](/rules/reliability/broken-resources).
 
 [Read the full definition](/glossary/http-status-code).
 
@@ -460,7 +460,7 @@ Checked by [HTTPS: what it means when a page is not served over HTTPS](/rules/se
 
 The JSON-LD @id that gives a node a stable IRI, so other nodes and pages can reference the same entity instead of redeclaring it.
 
-Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity), [A publisher that points at nothing](/rules/schema/entity-dangling), [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format), [An @id that nothing points at](/rules/schema/entity-orphan).
+Checked by [One organization, or sixty? Entities declared without an @id](/rules/schema/entity-identity), [Two plugins, two @ids, one organization split in half](/rules/schema/entity-split-identity), [A publisher that points at nothing](/rules/schema/entity-dangling), [A bare #organization is one entity per page, not one entity](/rules/schema/entity-id-format), [Orphan @id: a schema entity that nothing points at](/rules/schema/entity-orphan).
 
 [Read the full definition](/glossary/entity-id).
 
@@ -612,7 +612,7 @@ A page that works on a phone without zooming or sideways scrolling: viewport set
 
 Also called: intrusive interstitials, web app manifest.
 
-Checked by [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport), [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size), [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll), [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets), [Form fields under 16px: why iOS Safari zooms in when one is focused](/rules/mobile/input-zoom), [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials), [Web app manifest: the file that sets the home-screen icon and name](/rules/mobile/web-app-manifest).
+Checked by [Missing viewport meta tag: what it does and what to set](/rules/mobile/viewport), [Font size under 12px: text too small to read on a phone](/rules/mobile/font-size), [Horizontal scroll on mobile: the usual causes](/rules/mobile/horizontal-scroll), [Tap target size: the 44 by 44 pixel guideline](/rules/mobile/tap-targets), [Form fields under 16px: why iOS Safari zooms on focus](/rules/mobile/input-zoom), [Intrusive interstitials: popups that cover mobile content](/rules/mobile/interstitials), [Web app manifest: home-screen icon and name checks](/rules/mobile/web-app-manifest).
 
 [Read the full definition](/glossary/mobile-friendly).
 
@@ -644,7 +644,7 @@ Checked by [noai and nosnippet: the AI opt-out tags squirrel reports](/rules/ax/
 
 A robots directive, in a meta tag or the X-Robots-Tag header, that asks search engines to keep a page out of their index.
 
-Checked by [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta), [Page is blocked from indexing: finding the directive](/rules/crawl/indexability), [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages), [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict).
+Checked by [Robots meta and X-Robots-Tag: noindex and nofollow per page](/rules/core/robots-meta), [Page is blocked from indexing: finding the directive](/rules/crawl/indexability), [All non-indexed pages: the full blocked list for review](/rules/crawl/all-noindex-pages), [Noindexed page in sitemap: why it is a contradiction](/rules/crawl/noindex-in-sitemap), [Rich result schema on a noindexed page: wasted markup](/rules/crawl/schema-noindex-conflict), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict).
 
 [Read the full definition](/glossary/noindex).
 
@@ -666,7 +666,7 @@ Organization structured data naming the business behind a site, its logo, contac
 
 Also called: sameAs.
 
-Checked by [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Your organization is not connected to anything that corroborates it](/rules/schema/entity-sameas-missing), [Social profile links: which platforms a page links to](/rules/social/social-profiles).
+Checked by [Organization schema: name, url, logo and sameAs checks](/rules/schema/organization), [A business with nothing to attach its reputation to](/rules/schema/entity-organization-missing), [Missing sameAs: an organization linked to nothing else](/rules/schema/entity-sameas-missing), [Social profile links: which platforms a page links to](/rules/social/social-profiles).
 
 [Read the full definition](/glossary/organization-schema).
 
@@ -792,7 +792,7 @@ A `<meta name="robots">` tag carrying page-level directives such as noindex, nof
 
 Also called: nosnippet, max-snippet.
 
-Checked by [noindex in a robots meta tag or X-Robots-Tag header: what squirrel reports per page](/rules/core/robots-meta), [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict), [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts).
+Checked by [Robots meta and X-Robots-Tag: noindex and nofollow per page](/rules/core/robots-meta), [nosnippet and max-snippet:0: pages with no search snippet](/rules/core/nosnippet), [Redundant noindex: a blocked page nobody reads it on](/rules/crawl/robots-meta-conflict), [robots.txt blocked pages without noindex](/rules/crawl/indexability-conflicts).
 
 [Read the full definition](/glossary/robots-meta-tag).
 
@@ -818,7 +818,7 @@ HTTP response headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Refer
 
 Also called: Referrer-Policy, Permissions-Policy, X-Powered-By.
 
-Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts), [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type), [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options), [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy), [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy), [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure).
+Checked by [Content-Security-Policy: what to set and how to check it](/rules/security/csp), [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts), [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type), [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options), [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy), [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy), [Version-revealing headers: Server and X-Powered-By](/rules/security/version-disclosure).
 
 [Read the full definition](/glossary/security-headers).
 
@@ -826,7 +826,7 @@ Checked by [Content-Security-Policy: what to set and how to check it](/rules/sec
 
 A file at /.well-known/security.txt (RFC 9116) that tells researchers how to report a vulnerability.
 
-Checked by [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt).
+Checked by [security.txt: publish a vulnerability disclosure contact](/rules/security/security-txt).
 
 ### Sitemap lastmod \{#lastmod\}
 
@@ -958,7 +958,7 @@ Fixed paths under /.well-known/ (RFC 8615) where sites publish machine-readable 
 
 Also called: .well-known, MCP server card.
 
-Checked by [MCP and A2A manifests under .well-known: what squirrel finds](/rules/ax/well-known-agent), [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery), [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt).
+Checked by [MCP and A2A manifests under .well-known: what squirrel finds](/rules/ax/well-known-agent), [api-catalog and OpenAPI: how an agent finds your API](/rules/ax/api-discovery), [security.txt: publish a vulnerability disclosure contact](/rules/security/security-txt).
 
 ## X
 

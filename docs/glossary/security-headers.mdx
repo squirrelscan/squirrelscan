@@ -30,9 +30,9 @@ Most of these rules read the response headers of the first crawled page, so the 
 | [HSTS: what Strict-Transport-Security needs to be valid](/rules/security/hsts) | A missing or short Strict-Transport-Security header leaves the first request downgradeable. squirrel reads the header and checks max-age. | warning |
 | [X-Content-Type-Options: nosniff and why it matters](/rules/security/x-content-type) | Without nosniff a browser may execute an uploaded file as script because the bytes look like one. squirrel reads the header once per site. | info |
 | [X-Frame-Options: how to stop your pages being framed](/rules/security/x-frame-options) | With no X-Frame-Options and no frame-ancestors, any site can iframe your pages and overlay them. squirrel checks both headers together. | warning |
-| [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info |
+| [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | The unsafe-url value sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info |
 | [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy) | Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site. | info |
-| [Version-revealing headers: why Server and X-Powered-By should not name a version](/rules/security/version-disclosure) | A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel reads five headers and flags each version it finds. | warning |
+| [Version-revealing headers: Server and X-Powered-By](/rules/security/version-disclosure) | A Server or X-Powered-By header with a version number tells a scanner which known vulnerabilities to try. squirrel reads five headers and flags versions. | warning |
 
 {/* glossary:rules:end */}
 

@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "tangly dev",
     "build": "tangly build",
-    "check": "tangly check --strict && bun scripts/check-links.ts && bun scripts/glossary.ts --check && bun scripts/rule-checks.ts --check && bun scripts/cloud-rules.ts --check && bun scripts/rule-wcag.ts --check && bun scripts/check-currency.ts && bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts ./scripts/rule-wcag.test.ts ./scripts/cloud-rules.test.ts ./scripts/check-currency.test.ts ./scripts/agent-pill.test.ts",
+    "check": "tangly check --strict && bun scripts/check-links.ts && bun scripts/glossary.ts --check && bun scripts/rule-checks.ts --check && bun scripts/cloud-rules.ts --check && bun scripts/rule-wcag.ts --check && bun scripts/check-currency.ts && bun scripts/check-frontmatter.ts && bun test ./scripts/glossary.test.ts ./scripts/check-links.test.ts ./scripts/rule-wcag.test.ts ./scripts/cloud-rules.test.ts ./scripts/check-currency.test.ts ./scripts/check-frontmatter.test.ts ./scripts/agent-pill.test.ts",
     "preview": "tangly preview",
     "deploy": "tangly build && wrangler deploy"
   },

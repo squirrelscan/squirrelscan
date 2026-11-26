@@ -29,7 +29,7 @@ The declared `width` and `height` attributes stand in for the displayed size. CS
 | Rule | What it flags | Severity |
 |---|---|---|
 | [srcset: serving the right image size for the screen](/rules/images/srcset) | Without srcset every visitor downloads the same file, sized for the largest screen. squirrel counts responsive images against fixed-size ones. | info |
-| [Thumbnails without srcset: small images serving large files](/rules/images/responsive-size) | A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel reads each image's real pixel size and flags small images that serve far more pixels than they display. | warning |
+| [Thumbnails without srcset: small images serving large files](/rules/images/responsive-size) | A 60 by 60 avatar that loads a 2000 pixel photo wastes almost all of it. squirrel reads each image's real size and flags small ones serving huge files. | warning |
 | [\<picture\> without an \<img\>: the fallback that is required](/rules/images/picture-element) | A picture element with no img child renders nothing at all. squirrel checks every picture on the page for its required fallback. | error |
 
 {/* glossary:rules:end */}
