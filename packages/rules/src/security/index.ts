@@ -11,6 +11,7 @@ import { cspViolationsRule } from "./csp-violations";
 import { exposedActuatorRule } from "./exposed-actuator";
 import { exposedBackupsRule } from "./exposed-backups";
 import { exposedFilesRule } from "./exposed-files";
+import { firebaseOpenRulesRule } from "./firebase-open-rules";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
 import { graphqlGetMutationsRule } from "./graphql-get-mutations";
@@ -75,6 +76,7 @@ export const rules: Rule[] = [
   exposedActuatorRule,
   httpMethodsRule,
   supabaseRlsRule,
+  firebaseOpenRulesRule,
   securityTxtRule,
   versionDisclosureRule,
   queryErrorFuzzRule,
@@ -90,6 +92,7 @@ export {
   exposedFilesRule,
   exposedActuatorRule,
   exposedBackupsRule,
+  firebaseOpenRulesRule,
   formCaptchaRule,
   formHttpsRule,
   graphqlGetMutationsRule,

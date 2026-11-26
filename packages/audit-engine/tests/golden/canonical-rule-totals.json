@@ -316,6 +316,7 @@
   "security/exposed-actuator": 1,
   "security/exposed-backups": 1,
   "security/exposed-files": 1,
+  "security/firebase-open-rules": 1,
   "security/form-captcha": 500,
   "security/form-https": 500,
   "security/graphql-get-mutations": 1,
