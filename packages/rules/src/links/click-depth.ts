@@ -100,6 +100,12 @@ export const clickDepthRule: Rule = {
     // Advisory: a deep page is a structure hint, not a defect, so it costs a
     // site the smallest share of the links score.
     weight: 1,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "click-depth", outcome: "problem" },
+      { name: "click-depth", outcome: "clean", clears: ["click-depth"] },
+      { name: "click-depth", outcome: "skipped" },
+    ],
     optionsSchema: z.object({
       maxDepth: z
         .number()

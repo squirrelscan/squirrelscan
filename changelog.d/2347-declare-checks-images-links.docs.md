@@ -1,0 +1,1 @@
+- The rule pages for 33 more rules (images and links) list the check names each rule emits and which clean check clears which problem check (#2347).

@@ -24,6 +24,13 @@ export const deadLinksRule: Rule = {
     findingScope: "page",
     severity: "info",
     weight: 1,
+    // Check names by outcome class (#1741, #2347).
+    // This rule reports every verdict at info, so the problem and the clean outcome share one name.
+    checks: [
+      { name: "dead-links", outcome: "problem" },
+      { name: "dead-links", outcome: "clean", clears: ["dead-links"] },
+      { name: "dead-links", outcome: "skipped" },
+    ],
     cloud: { service: "dead-links", unit: "link", creditFeature: "dead_links" },
   },
 

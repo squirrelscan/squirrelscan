@@ -15,6 +15,17 @@ export const figureFigcaptionRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "figure-figcaption", outcome: "problem" },
+      { name: "figure-usage", outcome: "problem" },
+      {
+        name: "figure-figcaption",
+        outcome: "clean",
+        clears: ["figure-figcaption"],
+      },
+      { name: "figure-figcaption", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

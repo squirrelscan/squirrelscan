@@ -63,6 +63,26 @@ export const offscreenLazyRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "offscreen-lazy", outcome: "problem" },
+      { name: "offscreen-images-not-lazy", outcome: "problem" },
+      { name: "eager-below-fold", outcome: "problem" },
+      {
+        name: "offscreen-lazy",
+        outcome: "clean",
+        clears: [
+          "offscreen-lazy",
+          "offscreen-images-not-lazy",
+          "eager-below-fold",
+        ],
+      },
+      {
+        name: "lazy-loading-used",
+        outcome: "clean",
+        clears: ["offscreen-lazy", "offscreen-images-not-lazy"],
+      },
+    ],
     optionsSchema,
   },
 

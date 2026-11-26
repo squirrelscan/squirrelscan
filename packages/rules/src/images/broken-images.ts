@@ -14,6 +14,12 @@ export const brokenImagesRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "broken-images", outcome: "problem" },
+      { name: "broken-images", outcome: "clean", clears: ["broken-images"] },
+      { name: "broken-images", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

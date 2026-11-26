@@ -19,6 +19,12 @@ export const deadEndPages: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "dead-end", outcome: "problem" },
+      { name: "dead-end", outcome: "clean", clears: ["dead-end"] },
+      { name: "dead-end", outcome: "skipped" },
+    ],
     optionsSchema: z.object({
       excludePatterns: z
         .array(z.string())

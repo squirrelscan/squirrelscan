@@ -316,6 +316,17 @@ export const hotlinkedRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "hotlinked-images", outcome: "problem" },
+      { name: "hotlinked-share-image", outcome: "problem" },
+      {
+        name: "hotlinked-images",
+        outcome: "clean",
+        clears: ["hotlinked-images", "hotlinked-share-image"],
+      },
+      { name: "hotlinked-images", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

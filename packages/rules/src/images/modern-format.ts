@@ -17,6 +17,12 @@ export const modernFormatRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "modern-format", outcome: "problem" },
+      { name: "modern-format", outcome: "clean", clears: ["modern-format"] },
+      { name: "modern-format", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

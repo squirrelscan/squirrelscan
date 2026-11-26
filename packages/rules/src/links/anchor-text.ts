@@ -82,6 +82,16 @@ export const anchorTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "empty-anchor", outcome: "problem" },
+      { name: "generic-anchor", outcome: "problem" },
+      {
+        name: "anchor-text",
+        outcome: "clean",
+        clears: ["empty-anchor", "generic-anchor"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

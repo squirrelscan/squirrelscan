@@ -81,6 +81,16 @@ export const imageFileSizeRule: Rule = {
     findingScope: "resource",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "image-file-size", outcome: "problem" },
+      { name: "image-file-size-warn", outcome: "problem" },
+      {
+        name: "image-file-size",
+        outcome: "clean",
+        clears: ["image-file-size", "image-file-size-warn"],
+      },
+    ],
     optionsSchema,
   },
 

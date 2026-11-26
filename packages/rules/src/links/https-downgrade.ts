@@ -25,6 +25,15 @@ export const httpsDowngradeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "https-downgrade", outcome: "problem" },
+      {
+        name: "https-downgrade",
+        outcome: "clean",
+        clears: ["https-downgrade"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

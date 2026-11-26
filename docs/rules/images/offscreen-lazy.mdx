@@ -81,6 +81,22 @@ enable = ["images/offscreen-lazy"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `offscreen-lazy` | Problem |  |
+| `offscreen-images-not-lazy` | Problem |  |
+| `eager-below-fold` | Problem |  |
+| `offscreen-lazy` | Clean | `offscreen-lazy`, `offscreen-images-not-lazy`, `eager-below-fold` |
+| `lazy-loading-used` | Clean | `offscreen-lazy`, `offscreen-images-not-lazy` |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [images/lazy-loading](/rules/images/lazy-loading): the page-wide count of lazy elements, including iframes.

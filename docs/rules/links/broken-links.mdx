@@ -150,6 +150,28 @@ enable = ["links/broken-links"]
 
 `enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `broken-links` | Problem |  |
+| `broken-links-sitewide` | Problem |  |
+| `refused-links` | Problem |  |
+| `rate-limited-links` | Problem |  |
+| `broken-links` | Clean | `broken-links`, `broken-links-sitewide`, `refused-links`, `rate-limited-links` |
+| `broken-links` | Not checked |  |
+
+Retired check names:
+
+- `broken-links` is replaced by `broken-links-sitewide`.
+- `broken-links-sitewide` is replaced by `broken-links`.
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [links/broken-external-links](/rules/links/broken-external-links): the same check for links leaving your site.

@@ -19,6 +19,11 @@ export const altTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "alt-text-missing", outcome: "problem" },
+      { name: "alt-text", outcome: "clean", clears: ["alt-text-missing"] },
+    ],
     // 1.1.1 Non-text Content: an image with no alt attribute has no text alternative (repo#3094).
     wcag: [wcag("1.1.1")],
   },

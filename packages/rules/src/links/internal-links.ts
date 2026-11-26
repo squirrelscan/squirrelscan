@@ -25,6 +25,21 @@ export const internalLinksRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2347).
+    checks: [
+      { name: "internal-links-too-few", outcome: "problem" },
+      { name: "internal-links-too-many", outcome: "problem" },
+      {
+        name: "internal-links-too-few",
+        outcome: "clean",
+        clears: ["internal-links-too-few"],
+      },
+      {
+        name: "internal-links-too-many",
+        outcome: "clean",
+        clears: ["internal-links-too-many"],
+      },
+    ],
     optionsSchema,
     // The old name carried both directions (pub#1765).
     supersededChecks: {
