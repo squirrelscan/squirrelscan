@@ -17,6 +17,34 @@ How it works:
   `bun run changelog` prints them as the next release's section, and the release bump PR
   assembles them into a new `## vX.Y.Z` section and deletes them.
 
+## v0.0.191-beta.2 (2026-11-25)
+
+### Added
+
+- `security/leaked-secrets` reads the places a repository scanner cannot see: HTML comments (location `html-comment`), framework server-side data payloads such as Next.js `__NEXT_DATA__`, Nuxt `__NUXT__`, Remix `__remixContext` and SvelteKit `__sveltekit_*` (location `framework-payload`, with the framework and its loader named in the finding), the original sources inside same-origin source maps (`source-map`), and same-origin config endpoints a bundle fetches by literal URL (`config-endpoint`). Source maps and config endpoints cost at most 10 extra requests per audit, one per URL, on the audit's fetch budget, and a cross-origin URL is never requested (#362)
+
+### Changed
+
+- Scores: the issue-density penalty now pools the findings that component evidence marks as one shared element (such as a header logo link repeated on every page) and caps the pool, per score, at the weight of one failing element, however many pages or shared findings it holds, so shared components can no longer sink the overall score. Scores move for audits with repeated chrome findings, and the report's adjustment line says how much of the density penalty came from shared components (#2256)
+- `squirrel auth login` and `squirrel setup` (when signed in) now end with a plain-text pointer to the dashboard at https://app.squirrelscan.com to finish onboarding (#4976)
+
+### Fixed
+
+- `a11y/identical-links-same-purpose` no longer reports links whose visible text is missing from their aria-label, which `a11y/label-content-name-mismatch` already flags, so one defect gives one finding (#2226)
+- A link written without a scheme (`example.org/a`) is now shown masked in reports as `example.org/a` instead of a bare `…` (#2281)
+- `squirrel self update` no longer says a binary "was not built by the release workflow" when an attestation check fails, and every attestation or signature failure now names the recovery step (re-run the install one-liner) and links the docs (#2284)
+- `security/cookie-flags`: there is one `cookie-httponly` check again. A session-like cookie without `HttpOnly` on a page that loads third-party scripts is `cookie-httponly` at fail, any other cookie without `HttpOnly` is `cookie-httponly` at warn, so a cookie that moves from warn to fail is one finding getting worse and keeps its first-seen date. 0.0.191-beta.1 shipped a separate `cookie-httponly-third-party-scripts` check name, so a beta user's local store will see that check disappear and `cookie-httponly` return at fail on the next audit (#2298)
+- A merged `cookie-httponly` finding no longer states fewer cookies than the items it lists when pages each list different cookies; the count reads as a range up to the merged items. (#2300)
+- Partial re-audits now score the same as full audits for findings that repeat as shared components on carried pages, including findings with several items (#2301, #2304).
+
+### Security
+
+- `security/leaked-secrets` now masks a secret that sits in the URL a finding names, such as a key in a script's query string or a token in a path segment, so the report no longer prints it in plain text. Labels, affected pages, occurrences and the lists of unread scripts all show it as a short prefix and suffix around an ellipsis, in every report format (#2270)
+
+### Docs
+
+- The rule pages for 42 more rules (crawl and security) list the check names each rule emits and which clean check clears which problem check (#2218).
+
 ## v0.0.191-beta.1 (2026-11-23)
 
 ### Added

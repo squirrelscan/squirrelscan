@@ -1,1 +1,0 @@
-- `a11y/identical-links-same-purpose` no longer reports links whose visible text is missing from their aria-label, which `a11y/label-content-name-mismatch` already flags, so one defect gives one finding (#2226)
