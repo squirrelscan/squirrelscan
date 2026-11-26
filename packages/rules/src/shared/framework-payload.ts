@@ -239,3 +239,64 @@ export function visibleTextLength(doc: Doc): number {
   }
   return total;
 }
+
+/** A framework payload's text, for a rule that parses what the page serialised. */
+export interface FrameworkPayloadSource {
+  label: string;
+  text: string;
+  /** True for a script that assigns a global (`window.__NUXT__ = {...}`) rather than holding bare JSON. */
+  assignment: boolean;
+}
+
+/** Longest payload text handed to a parser. */
+const MAX_SOURCE_CHARS = 2_000_000;
+
+/**
+ * The JSON-bearing framework payloads of a page: `__NEXT_DATA__`, `__NUXT_DATA__`,
+ * Qwik state, `window.__X__ = {...}` globals and Astro island props. Next app
+ * router flight chunks are not JSON and are left out. Bounded like
+ * `findFrameworkPayloads`; a payload past MAX_SOURCE_CHARS is skipped, not cut.
+ */
+export function frameworkPayloadSources(doc: Doc): FrameworkPayloadSource[] {
+  const out: FrameworkPayloadSource[] = [];
+  let read = 0;
+  for (const script of querySelectorAllOutsideNoscript(
+    doc,
+    "script:not([src])"
+  )) {
+    if (++read > MAX_SCRIPTS) break;
+    const text = script.textContent ?? "";
+    if (text.length === 0 || text.length > MAX_SOURCE_CHARS) continue;
+    const id = script.getAttribute("id") ?? "";
+    const type = (script.getAttribute("type") ?? "").toLowerCase();
+    if (id === "__NEXT_DATA__" || id === "__NUXT_DATA__") {
+      out.push({ label: id, text, assignment: false });
+      continue;
+    }
+    if (type === "qwik/json" || type === "qwik/state") {
+      out.push({ label: "qwik/json", text, assignment: false });
+      continue;
+    }
+    if (
+      type !== "" &&
+      type !== "text/javascript" &&
+      type !== "module" &&
+      type !== "application/javascript"
+    ) {
+      continue;
+    }
+    const head = text.slice(0, PREFIX_CHARS);
+    const state = STATE_GLOBALS.find(
+      (s) => s.kind !== "sveltekit" && head.includes(s.needle)
+    );
+    if (state) out.push({ label: state.label, text, assignment: true });
+  }
+  let islands = 0;
+  for (const island of doc.querySelectorAll("astro-island")) {
+    if (++islands > MAX_ISLANDS) break;
+    const props = island.getAttribute("props") ?? "";
+    if (props.length > 0 && props.length <= MAX_SOURCE_CHARS)
+      out.push({ label: "astro-island props", text: props, assignment: false });
+  }
+  return out;
+}

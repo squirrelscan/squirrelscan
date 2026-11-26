@@ -4040,6 +4040,12 @@
    "security-txt|skipped|security.txt not checked: the discovery probe was not sent|\"not-checked\"|"
   ]
  },
+ "security/serialized-account-data": {
+  "digest": "40027771618545",
+  "lines": [
+   "serialized-account-data|pass|No serialised account records found in framework data||"
+  ]
+ },
  "security/sri": {
   "digest": "215556054092134",
   "lines": [
