@@ -4,6 +4,10 @@
 
 import { withRequestDeadline } from "@squirrelscan/crawler/deadline";
 import { setRequestAsync } from "@squirrelscan/rules";
+import {
+  egressGuardedSend,
+  type EgressPolicy,
+} from "@squirrelscan/utils/public-egress";
 import { fetchUndecoded } from "@squirrelscan/utils/response-body";
 import { Effect, Schedule, Duration, Data } from "effect";
 
@@ -526,10 +530,19 @@ export async function requestProbeAsync(
  * Give the rules package its HTTP client (it throws "not injected" otherwise,
  * which `security/http-to-https` used to swallow, so the rule never fired).
  * `ownSiteHost` (--offline) refuses any request to another host, so a redirect
- * off the audited site is not followed.
+ * off the audited site is not followed. `egress` (#2315, `ownHostProbeEgress`)
+ * vets every request and connects to the checked address: a host that resolves
+ * to a link-local or metadata address is never requested. It wraps the send
+ * after the --offline check, which therefore still reads the name.
  */
-export function installRuleRequestTool(opts?: { ownSiteHost?: string }): void {
+export function installRuleRequestTool(opts?: {
+  ownSiteHost?: string;
+  egress?: EgressPolicy;
+}): void {
   const only = opts?.ownSiteHost?.toLowerCase();
+  const send = opts?.egress
+    ? egressGuardedSend(requestProbeAsync, opts.egress)
+    : requestProbeAsync;
   setRequestAsync((url, options) => {
     if (only) {
       let host = "";
@@ -544,6 +557,6 @@ export function installRuleRequestTool(opts?: { ownSiteHost?: string }): void {
         );
       }
     }
-    return requestProbeAsync(url, options);
+    return send(url, options ?? {});
   });
 }

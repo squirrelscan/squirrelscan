@@ -102,10 +102,15 @@ export const graphqlGetMutationsRule: Rule = {
     const executed: Array<{ candidate: GraphqlCandidate; typename: string }> =
       [];
     for (const candidate of selection.candidates) {
-      const outcome = await sendGraphqlProbe(ctx.probe, candidate.url, {
-        op: "noop-mutation",
-        method: "GET",
-      });
+      const outcome = await sendGraphqlProbe(
+        ctx.probe,
+        candidate.url,
+        {
+          op: "noop-mutation",
+          method: "GET",
+        },
+        ctx.ownHostEgress
+      );
       if (!outcome.sent) {
         budgetStopped = true;
         break;

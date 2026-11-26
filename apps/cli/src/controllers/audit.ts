@@ -186,7 +186,11 @@ import {
   ErrorCodes,
 } from "@/controllers/types";
 import { createHybridDocumentFetcher } from "@/crawl/hybrid-fetcher";
-import { hostPinningNotice, pinOwnHosts } from "@/crawl/pin-own-hosts";
+import {
+  hostPinningNotice,
+  ownHostProbeEgress,
+  pinOwnHosts,
+} from "@/crawl/pin-own-hosts";
 import { resolveSeedRedirect } from "@/crawler/frontier";
 import {
   createStorage,
@@ -1228,8 +1232,13 @@ export async function runAudit(
     });
     // Rules that probe the site themselves (security/http-to-https, #1269) call
     // this client; without it they throw and report nothing.
+    // #2315: with the own hosts pinned, the rule probes to them (the
+    // http-to-https redirect probe here, the GraphQL probes through ctx) are
+    // vetted and connect to the checked address, like the crawl's requests.
+    const ruleProbeEgress = ownHostProbeEgress();
     installRuleRequestTool({
       ownSiteHost: options.offline ? new URL(url).hostname : undefined,
+      ...(ruleProbeEgress ? { egress: ruleProbeEgress } : {}),
     });
 
     // Check reachability
@@ -2499,6 +2508,7 @@ export async function runAudit(
             proxyResolvesNames:
               mergedConfig.crawler.tls_proxy_resolves_names === true,
           }),
+          ...(ruleProbeEgress ? { ownHostEgress: ruleProbeEgress } : {}),
         },
         {
           batchSize: streamBatchSize,

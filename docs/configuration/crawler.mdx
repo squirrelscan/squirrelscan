@@ -1040,10 +1040,14 @@ requested: the page is recorded as failed with "Not requested", and an asset as
 refused. Private networks,
 `localhost` and mDNS `.local` names keep working; a `.local` name that answers
 only a scoped link-local IPv6 address cannot be connected to by address and is
-refused. Some rule probes still go out by name without that check: the `HEAD`
-request `security/http-to-https` sends to the site's `http://` address, and the
-GraphQL and Spring Boot Actuator probes an active or aggressive probing
-intensity sends.
+refused. The rule probes `security/http-to-https`,
+`security/graphql-introspection` and `security/graphql-get-mutations` send are
+checked and connected the same way. The other probes an active or aggressive
+probing intensity sends still go out by name without that check: those of
+`crawl/custom-404`, `security/exposed-files`, `security/exposed-actuator`,
+`security/open-redirect`, `security/client-side-authz`,
+`security/unauthenticated-api`, `security/auth-endpoint-disclosure` and
+`security/json-sensitive-fields`.
 
 Two cases send the site's own hostnames by name instead, without that check:
 an HTTP proxy set in the environment (`HTTP_PROXY` or `HTTPS_PROXY`), which
