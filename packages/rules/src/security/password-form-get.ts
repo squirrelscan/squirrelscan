@@ -1,7 +1,8 @@
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 // security/password-form-get - password forms must not submit by GET
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
+
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 

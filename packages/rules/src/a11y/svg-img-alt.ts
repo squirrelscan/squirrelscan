@@ -1,6 +1,6 @@
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 // a11y/svg-img-alt - an inline <svg role="img"> needs an accessible name (#1699)
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 

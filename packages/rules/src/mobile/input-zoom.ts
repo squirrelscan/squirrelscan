@@ -1,4 +1,3 @@
-import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 // mobile/input-zoom - form fields under 16px make iOS Safari zoom in on focus (#708)
 //
 // On an iPhone, focusing a text field whose font size is under 16px zooms the
@@ -15,6 +14,7 @@ import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/r
 
 import type { Element } from "linkedom";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -759,7 +759,7 @@ export const inputZoomRule: Rule = {
             name: "input-zoom",
             status: "skipped",
             skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
-        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+            details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
             message: "No focusable text field in scope on this page",
           },
         ],

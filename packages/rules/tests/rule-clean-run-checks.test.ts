@@ -1,8 +1,7 @@
 import { parsePage } from "@squirrelscan/parser";
 // #1741: a rule that ran says so. Every page-scope rule is run on a clean page and must emit at least one
-// check. Three rules still return an empty list when the page has nothing in their scope (no WebSite schema,
-// no button or interactive svg, no threat intel); `fixtures/rule-clean-run-empty.json`
-// maps each to a one-line reason. It only shrinks: a rule that now emits a check must be removed from it, and a new rule that
+// check. A rule that still returns an empty list (integrity/kit-signature, when threat intel is off) is
+// mapped to a one-line reason in `fixtures/rule-clean-run-empty.json`. It only shrinks: a rule that now emits a check must be removed from it, and a new rule that
 // returns an empty list fails. A declared rule (`meta.checks`) must emit only names it declares.
 //
 // Site-scope rules need a crawl context, not a single page, and are not run here. Tracked as a follow-up.

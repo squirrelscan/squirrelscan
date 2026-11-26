@@ -1,5 +1,6 @@
 // schema/website-search - WebSite with SearchAction schema
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import {
   flattenJsonLdNodes,
   indexJsonLdIds,
@@ -66,6 +67,16 @@ export const websiteSearchSchemaRule: Rule = {
           status: "info",
           message: "No WebSite schema on homepage",
           value: "Consider adding for sitelinks searchbox",
+        });
+      } else {
+        // #2350: off the home page a missing WebSite schema is expected. Say the rule ran with a neutral
+        // not-applicable row instead of nothing.
+        checks.push({
+          name: "website-schema",
+          status: "skipped",
+          skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+          details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+          message: "No WebSite schema in scope on this page",
         });
       }
       return { checks };
