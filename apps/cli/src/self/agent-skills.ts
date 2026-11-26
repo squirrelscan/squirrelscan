@@ -62,13 +62,16 @@ import {
   type ManifestSkill,
   type SkillsManifest,
   downloadSkillFile,
-  fetchSkillsManifest,
+  fetchSkillsIndex,
   sha256Hex,
 } from "./skills-manifest";
 
 export { SKILLS_REPOSITORY, SkillsFetchError } from "./skills-manifest";
 
-/** The skills squirrelscan publishes today; the manifest is the authority. */
+/**
+ * The default install, hard-coded so it works without the catalog. Every other
+ * skill in the skills repo's catalog is installed by name or with `--all`.
+ */
 export const SKILL_NAMES = ["squirrelscan", "audit-website"] as const;
 
 /** Agents whose skill folders the CLI knows. `all` means every one of them. */
@@ -565,6 +568,12 @@ export interface SyncOptions extends FetchDeps {
    */
   mode: "install" | "update" | "auto";
   skills?: string[];
+  /**
+   * install: every skill in the catalog, not just the defaults.
+   * update: also install catalog skills that are not installed yet, at the
+   * locations already in use.
+   */
+  all?: boolean;
   agents?: readonly AgentName[];
   scope?: SkillsScope;
   force?: boolean;
@@ -861,7 +870,16 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
       sweepLeftovers(roots);
     }
 
+    if (options.all && options.skills?.length) {
+      throw new SkillsUsageError("--all takes no skill names");
+    }
+    if (options.all && options.mode === "auto") {
+      throw new SkillsUsageError(
+        "an unattended update never installs new skills"
+      );
+    }
     let names: string[] | undefined;
+    let installedNow: string[] = [];
     if (options.mode !== "install") {
       // An update never reaches for the network when nothing of ours is installed.
       const installed = installedSkillNames(e, options.mode);
@@ -873,15 +891,55 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
           `not installed: ${unknown.join(", ")} (run squirrel skills install ${unknown.join(" ")})`
         );
       }
+      installedNow = installed;
       names = options.skills?.length ? options.skills : installed;
-      if (!names.length) return result;
+      if (!names.length && !options.all) return result;
     }
 
-    const manifest = options.manifest ?? (await fetchSkillsManifest(fetchDeps));
+    const manifest = options.manifest ?? (await fetchSkillsIndex(fetchDeps));
     result.ref = manifest.ref;
     const published = new Map(manifest.skills.map((s) => [s.name, s]));
+    // `update --all`: catalog skills not installed yet go where the installed ones are.
+    const fresh = new Set<string>();
+    let freshCandidates: (name: string) => Candidate[] = (_name) => [];
+    if (options.mode === "update" && options.all) {
+      for (const name of published.keys()) {
+        if (!installedNow.includes(name)) fresh.add(name);
+      }
+      names = [...installedNow, ...fresh];
+      const places = new Map<string, Candidate>();
+      for (const name of installedNow) {
+        for (const c of candidates(name, options, e, state)) {
+          places.set(dirname(c.dir), c);
+        }
+      }
+      if (!places.size) {
+        for (const agent of AGENT_NAMES) {
+          places.set(agentRoot(agent, "global", e), {
+            dir: "",
+            agent,
+            scope: "global",
+          });
+        }
+      }
+      freshCandidates = (name) =>
+        [...places.entries()].map(([root, c]) => ({
+          dir: join(root, name),
+          agent: c.agent,
+          scope: c.scope,
+        }));
+    }
     if (options.mode === "install") {
-      names = options.skills?.length ? options.skills : [...published.keys()];
+      names = options.skills?.length
+        ? options.skills
+        : options.all
+          ? [...published.keys()]
+          : SKILL_NAMES.filter((n) => published.has(n));
+      if (!names.length) {
+        throw new SkillsUsageError(
+          `no such skill: ${SKILL_NAMES.join(", ")} (available: ${[...published.keys()].join(", ")})`
+        );
+      }
       const missing = names.filter((n) => !published.has(n));
       if (missing.length) {
         throw new SkillsUsageError(
@@ -896,7 +954,10 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
       const skill = published.get(name);
       if (!skill) continue; // installed but no longer published: leave it be
       const records = (state.skills[name] ??= {});
-      for (const c of candidates(name, options, e, state)) {
+      const isFresh = fresh.has(name);
+      for (const c of isFresh
+        ? freshCandidates(name)
+        : candidates(name, options, e, state)) {
         const kind = inspectTarget(c.dir, e);
         const base = {
           skill: name,
@@ -921,7 +982,7 @@ export async function syncSkills(options: SyncOptions): Promise<SyncResult> {
           );
           continue;
         }
-        if (kind.kind === "absent" && options.mode !== "install") {
+        if (kind.kind === "absent" && options.mode !== "install" && !isFresh) {
           if (!options.dryRun) delete records[c.dir]; // removed since: never put back
           continue;
         }
@@ -1343,6 +1404,9 @@ export interface TargetStatus {
   root: string;
   /** squirrel: we manage it. npx skills: that tool still does. other: not ours. */
   managedBy: "squirrel" | "npx skills" | "unmanaged" | "other";
+  /** Which agent's folder and which scope, when known. */
+  agent?: AgentName;
+  scope?: SkillsScope;
   version?: string;
   editedFiles: string[];
   linkTo?: string;
@@ -1360,6 +1424,23 @@ export interface SkillStatus {
   name: string;
   latest?: string;
   targets: TargetStatus[];
+}
+
+/** The agent and scope a skills folder belongs to, when it is one we know. */
+function locateRoot(
+  root: string,
+  e: SkillsEnv
+): { agent?: AgentName; scope?: SkillsScope } {
+  for (const scope of ["global", "project"] as const) {
+    for (const agent of AGENT_NAMES) {
+      try {
+        if (agentRoot(agent, scope, e) === root) return { agent, scope };
+      } catch {
+        // no repo here: project folders can't be told apart
+      }
+    }
+  }
+  return {};
 }
 
 function lockNames(scope: SkillsScope, e: SkillsEnv): string[] {
@@ -1412,6 +1493,7 @@ export function skillsStatus(
             targets.push({
               dir,
               root,
+              ...locateRoot(root, e),
               managedBy: "other",
               linkTo,
               ...(linked ? { linked, ...(version ? { version } : {}) } : {}),
@@ -1444,6 +1526,7 @@ export function skillsStatus(
         targets.push({
           dir,
           root,
+          ...locateRoot(root, e),
           managedBy: npx.includes(name) ? "npx skills" : "unmanaged",
           version: versionOnDisk(probe),
           linkTo: kind.kind === "npx-link" ? kind.to : undefined,
@@ -1476,6 +1559,8 @@ export function skillsStatus(
       targets.push({
         dir,
         root,
+        agent: record.agent,
+        scope: record.scope,
         managedBy: "squirrel",
         version: record.version,
         editedFiles,

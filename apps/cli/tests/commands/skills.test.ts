@@ -155,6 +155,7 @@ describe("squirrel skills", () => {
 
   test("has install, update, status and uninstall, and nothing runs npx", () => {
     expect(Object.keys(skills.subCommands ?? {})).toEqual([
+      "list",
       "install",
       "update",
       "status",

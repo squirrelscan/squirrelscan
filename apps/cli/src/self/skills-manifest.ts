@@ -21,6 +21,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_SKILL_BYTES = 10 * 1024 * 1024;
 const MAX_FILES_PER_SKILL = 500;
 const MAX_MANIFEST_BYTES = 1024 * 1024;
+const MAX_DESCRIPTION_CHARS = 500;
 // The ref advertisement lists every branch and pull-request ref, so it grows.
 const MAX_REFS_BYTES = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -38,12 +39,18 @@ export interface ManifestSkill {
   name: string;
   version: string;
   files: ManifestFile[];
+  /** One line, from catalog.json only. */
+  description?: string;
+  /** From catalog.json only: part of the default install. */
+  default?: boolean;
 }
 
 export interface SkillsManifest {
   /** The commit everything was read at, or "main" when it couldn't be pinned. */
   ref: string;
   skills: ManifestSkill[];
+  /** True when read from catalog.json (every skill), false for manifest.json (the core two). */
+  catalog?: boolean;
 }
 
 export interface FetchDeps {
@@ -93,6 +100,7 @@ export function parseLoopbackSource(value: string): string | null {
 interface SkillsSource {
   refsUrl: string | null;
   manifestUrl: (ref: string) => string;
+  catalogUrl: (ref: string) => string;
   fileUrl: (ref: string, path: string) => string;
   /** True for the loopback override: refuse redirects. */
   local: boolean;
@@ -117,6 +125,7 @@ function skillsSource(deps: FetchDeps): SkillsSource {
       return {
         refsUrl: null,
         manifestUrl: () => `${base}/manifest.json`,
+        catalogUrl: () => `${base}/catalog.json`,
         fileUrl: (_ref, path) => `${base}/${path}`,
         local: true,
       };
@@ -134,6 +143,7 @@ function githubSource(): SkillsSource {
   return {
     refsUrl: REFS_URL,
     manifestUrl: (ref) => `${RAW_BASE}/${ref}/manifest.json`,
+    catalogUrl: (ref) => `${RAW_BASE}/${ref}/catalog.json`,
     fileUrl: (ref, path) => `${RAW_BASE}/${ref}/${path}`,
     local: false,
   };
@@ -167,7 +177,11 @@ export function isSafeRelativePath(path: string): boolean {
 }
 
 /** Validate a parsed manifest.json, or throw saying what is wrong with it. */
-export function parseManifest(raw: unknown, ref: string): SkillsManifest {
+export function parseManifest(
+  raw: unknown,
+  ref: string,
+  catalog = false
+): SkillsManifest {
   const fail = (why: string): never => {
     throw new SkillsFetchError(`skills manifest is invalid: ${why}`);
   };
@@ -234,13 +248,30 @@ export function parseManifest(raw: unknown, ref: string): SkillsManifest {
         }
       }
     }
+    const extra: Pick<ManifestSkill, "description" | "default"> = {};
+    if (catalog) {
+      const description = entry.description;
+      if (
+        typeof description !== "string" ||
+        !description ||
+        description.length > MAX_DESCRIPTION_CHARS
+      ) {
+        fail(`${name}: bad description`);
+      }
+      extra.description = description as string;
+      if (entry.default !== undefined && typeof entry.default !== "boolean") {
+        fail(`${name}: bad default flag`);
+      }
+      extra.default = entry.default === true;
+    }
     skills.push({
       name: name as string,
       version: version as string,
       files: parsed,
+      ...extra,
     });
   }
-  return { ref, skills };
+  return { ref, skills, ...(catalog ? { catalog: true } : {}) };
 }
 
 /** The body, refused past `max` bytes instead of read whole into memory. */
@@ -337,6 +368,48 @@ export async function fetchSkillsManifest(
     throw new SkillsFetchError("the skills manifest is not JSON");
   }
   return parseManifest(raw, ref);
+}
+
+/**
+ * catalog.json: every skill in the skills repo (same shape as manifest.json
+ * plus a one-line `description` and a `default` flag per skill), read at the
+ * same pinned commit. A skill added there needs no CLI release.
+ */
+export async function fetchSkillsCatalog(
+  deps: FetchDeps = {}
+): Promise<SkillsManifest> {
+  const source = skillsSource(deps);
+  const ref = await resolveSkillsRef(deps);
+  const response = await request(source.catalogUrl(ref), deps, source.local);
+  if (!response.ok) {
+    throw new SkillsFetchError(
+      `could not fetch the skills catalog (HTTP ${response.status})`
+    );
+  }
+  const body = await readCapped(response, MAX_MANIFEST_BYTES);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    throw new SkillsFetchError("the skills catalog is not JSON");
+  }
+  return parseManifest(raw, ref, true);
+}
+
+/**
+ * The catalog when it can be read, else manifest.json (the core two), so the
+ * default install works while the catalog is missing, invalid or unreachable.
+ * A cancelled request is never retried.
+ */
+export async function fetchSkillsIndex(
+  deps: FetchDeps = {}
+): Promise<SkillsManifest> {
+  try {
+    return await fetchSkillsCatalog(deps);
+  } catch (error) {
+    if (deps.signal?.aborted) throw error;
+    return fetchSkillsManifest(deps);
+  }
 }
 
 export function sha256Hex(bytes: Uint8Array): string {
