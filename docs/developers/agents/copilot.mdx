@@ -9,7 +9,7 @@ icon: "github"
     Verified: `copilot mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp` writes
     ~/.copilot/mcp-config.json exactly as shown below. Not verified: OAuth. Any prompt fails with
     "Access denied by policy settings" without a GitHub Copilot login, and no login was completed, so
-    the CLI never contacted the MCP server. VS Code, Visual Studio, JetBrains, the cloud agent,
+    the CLI never contacted the MCP server. VS Code, Visual Studio, JetBrains, Xcode, Eclipse, the cloud agent,
     Copilot Studio and Microsoft 365 Copilot were not installed; those sections come from vendor docs. */}
 
 GitHub Copilot agent mode can already run terminal commands on your behalf, so it can run `squirrel` with no configuration at all. Connecting the hosted MCP server replaces that parsed terminal output with native tools for cloud audits, the issue tracker, and the rule catalog.
@@ -19,7 +19,7 @@ GitHub Copilot agent mode can already run terminal commands on your behalf, so i
 | VS Code | Yes | [Add the MCP server](#2-add-the-mcp-server) |
 | Visual Studio 17.14+ | Yes | [Visual Studio](#visual-studio) |
 | GitHub Copilot CLI | Not documented | [GitHub Copilot CLI](#github-copilot-cli) |
-| JetBrains IDEs | No | [JetBrains](#jetbrains) |
+| JetBrains IDEs, Xcode, Eclipse | No | [JetBrains, Xcode and Eclipse](#jetbrains-xcode-and-eclipse) |
 | Cloud agent on github.com | No, API key in a repository secret | [Cloud agent](#cloud-agent-on-githubcom) |
 | Copilot Studio | Yes, dynamic discovery | [Copilot Studio](#copilot-studio) |
 | Microsoft 365 Copilot | Developer-built agent only | [Microsoft 365 Copilot](#microsoft-365-copilot) |
@@ -177,9 +177,11 @@ That writes this entry to `~/.copilot/mcp-config.json`:
 
 GitHub documents the command and the config file, but does not document OAuth for remote servers. We have not confirmed a browser login from GitHub Copilot CLI, so treat OAuth there as untested. If the login does not start, use VS Code, or add an API key header with `--header`.
 
-## JetBrains
+## JetBrains, Xcode and Eclipse
 
-GitHub documents remote MCP servers for GitHub Copilot in JetBrains IDEs with a personal access token header only. OAuth is not supported there yet. Use the [GitHub Copilot CLI](#github-copilot-cli) or VS Code for squirrelscan, and run local audits through the `squirrel` CLI in the IDE terminal.
+{/* Source: https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp (fetched 2026-11-26): JetBrains, Xcode (GitHub Copilot for Xcode extension) and Eclipse (2024-09 or later) support remote MCP servers; every remote example uses a personal access token header and none documents OAuth. */}
+
+GitHub documents remote MCP servers for GitHub Copilot in JetBrains IDEs, Xcode (through the GitHub Copilot for Xcode extension) and Eclipse 2024-09 or later, but only with a personal access token header. It does not document OAuth for any of them. Use the [GitHub Copilot CLI](#github-copilot-cli) or VS Code for squirrelscan, and run local audits through the `squirrel` CLI in the IDE terminal.
 
 ## Cloud agent on github.com
 
