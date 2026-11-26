@@ -165,7 +165,9 @@ export const productSchemaRule: Rule = {
         status: "pass",
         message: "Product has review/rating data",
       });
-    } else {
+    } else if (productSchema) {
+      // Only the JSON-LD node is read for reviews, so a microdata, RDFa or
+      // rendered-only Product is not proven to lack one.
       checks.push({
         name: "product-reviews",
         status: "info",

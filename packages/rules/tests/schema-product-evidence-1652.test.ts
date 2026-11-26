@@ -402,3 +402,47 @@ describe("schema/product Microdata itemtype host is anchored", () => {
     ).toBeUndefined();
   });
 });
+
+// #2348: product-reviews reads only the JSON-LD node, so it must not claim a
+// microdata or RDFa Product lacks the review data it carries.
+describe("schema/product product-reviews outside JSON-LD (#2348)", () => {
+  test("microdata Product with aggregateRating gets no missing-review info", async () => {
+    const body = `<div itemscope itemtype="https://schema.org/Product">
+      <span itemprop="name">Dripper</span><img itemprop="image" src="/a.jpg" alt="">
+      <div itemprop="aggregateRating" itemscope itemtype="https://schema.org/AggregateRating">
+        <meta itemprop="ratingValue" content="4.5"><meta itemprop="reviewCount" content="12"></div></div>`;
+    const r = await run(page("", body));
+    expect(r.byName("product-required")).toBe("pass");
+    expect(r.byName("product-reviews")).toBeUndefined();
+  });
+
+  test("RDFa Product with review gets no missing-review info", async () => {
+    const body = `<div vocab="https://schema.org/" typeof="Product">
+      <span property="name">Dripper</span><img property="image" src="/a.jpg" alt="">
+      <div property="review" typeof="Review"><span property="reviewBody">Great</span></div></div>`;
+    const r = await run(page("", body));
+    expect(r.byName("product-required")).toBe("pass");
+    expect(r.byName("product-reviews")).toBeUndefined();
+  });
+
+  test("JSON-LD Product without review still gets the info", async () => {
+    const r = await run(page(ld(full())));
+    expect(r.byName("product-reviews")).toBe("info");
+  });
+
+  test("JSON-LD Product with aggregateRating passes", async () => {
+    const r = await run(
+      page(
+        ld({
+          ...full(),
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: 4.5,
+            reviewCount: 3,
+          },
+        })
+      )
+    );
+    expect(r.byName("product-reviews")).toBe("pass");
+  });
+});
