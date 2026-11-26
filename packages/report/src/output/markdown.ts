@@ -1,7 +1,9 @@
 // Markdown report output
 
-import type { ReportBranding } from "@squirrelscan/core-contracts";
-
+import {
+  validateBrandColor,
+  type ReportBranding,
+} from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
 import { wcagLabel } from "@squirrelscan/core-contracts/wcag";
@@ -395,6 +397,10 @@ export function renderMarkdown(
   lines.push(`**Date:** ${formatReportDate(report.timestamp)}  `);
   lines.push(`**Pages:** ${report.totalPages}  `);
   if (version) lines.push(`**Version:** ${version}`);
+  const brand = validateBrandColor(
+    whiteLabel ? options?.branding?.brandColor : undefined
+  );
+  if (brand.ok) lines.push(`**Brand colour:** ${brand.color}`);
   lines.push("");
 
   // Editor's summary — report-only (Pro exec-email narrative), surfaced first.

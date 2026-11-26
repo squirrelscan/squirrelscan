@@ -316,13 +316,39 @@ describe("brand colour (#3130)", () => {
     expect(xml).not.toContain("brand-color");
   });
 
-  test("markdown and text ignore brandColor", () => {
-    const b = { ...WL, brandColor: "#1d4ed8" };
-    expect(renderMarkdown(baseReport(), { branding: b })).toBe(
+  test("markdown and text carry a valid brandColor as plain metadata, else unchanged", () => {
+    const b = { ...WL, brandColor: "#1D4ED8" };
+    const md = renderMarkdown(baseReport(), { branding: b });
+    expect(md).toContain("**Brand colour:** #1d4ed8");
+    expect(md.replace("**Brand colour:** #1d4ed8\n", "")).toBe(
       renderMarkdown(baseReport(), { branding: WL })
     );
-    expect(renderText(baseReport(), { branding: b })).toBe(
+    const txt = renderText(baseReport(), { branding: b });
+    expect(txt).toContain("Brand colour: #1d4ed8");
+    expect(txt.replace("Brand colour: #1d4ed8\n", "")).toBe(
       renderText(baseReport(), { branding: WL })
     );
+    const bad = { ...WL, brandColor: "#ffff00" };
+    expect(renderMarkdown(baseReport(), { branding: bad })).toBe(
+      renderMarkdown(baseReport(), { branding: WL })
+    );
+    expect(renderText(baseReport(), { branding: bad })).toBe(
+      renderText(baseReport(), { branding: WL })
+    );
+  });
+
+  test("html: dark, light-ish and mid-tone colours get an AA foreground", () => {
+    for (const [brandColor, text] of [
+      ["#1d4ed8", "#ffffff"], // dark
+      ["#0f766e", "#ffffff"], // dark teal
+      ["#1e90ff", "#000000"], // mid-tone
+    ] as const) {
+      const html = renderHtml(baseReport(), {
+        ...opts,
+        branding: { ...WL, brandColor },
+      });
+      expect(html).toContain(`border-top:4px solid ${brandColor}`);
+      expect(html).toContain(`color:${text}`);
+    }
   });
 });

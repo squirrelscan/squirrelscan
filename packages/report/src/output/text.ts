@@ -1,7 +1,9 @@
 // Plain text report output
 
-import type { ReportBranding } from "@squirrelscan/core-contracts";
-
+import {
+  validateBrandColor,
+  type ReportBranding,
+} from "@squirrelscan/core-contracts";
 import { isAuditFailed } from "@squirrelscan/core-contracts";
 import { stripControlChars } from "@squirrelscan/core-contracts/control-chars";
 import { AUDIT_FAILURE_NEXT_STEP } from "@squirrelscan/core-contracts/failure-reason";
@@ -351,6 +353,10 @@ export function renderText(
   write("=".repeat(60));
   write(`Auditing: ${report.baseUrl}`);
   write(`Crawled ${report.totalPages} pages`);
+  const brand = validateBrandColor(
+    whiteLabel ? options?.branding?.brandColor : undefined
+  );
+  if (brand.ok) write(`Brand colour: ${brand.color}`);
   write("");
 
   // Editor's summary — report-only (Pro exec-email narrative; not part of the score).
