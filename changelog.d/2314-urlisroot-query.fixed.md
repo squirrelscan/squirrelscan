@@ -1,0 +1,1 @@
+- Page classification now treats `/?p=123` and `/?s=shoes` as content pages, not the home page, in the classifier features as well as the rules fallback (#2314)

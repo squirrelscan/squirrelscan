@@ -31,6 +31,7 @@ import {
   tokenBucket,
   tokenize,
 } from "../src/featurize";
+import { isRootPath } from "../src/root-path";
 
 const PAGE = `<!doctype html><html lang="en"><head><title>Test</title></head>
 <body class="page single">
@@ -379,6 +380,27 @@ describe("the feature vectors", () => {
       expect(parent.nodeId).toBeLessThan(node.nodeId);
     }
     expect(checked).toBeGreaterThan(5);
+  });
+
+  test("urlIsRoot agrees with isRootPath for query-string roots", () => {
+    const get = (page: number[], name: string): number =>
+      page[PAGE_FEATURE_NAMES.indexOf(name)]!;
+    const urls = [
+      "https://example.com/",
+      "https://example.com/?p=123",
+      "https://example.com/?s=shoes",
+      "https://example.com/?utm_source=x",
+      "https://example.com/index.html",
+      "https://example.com/blog/",
+    ];
+    for (const url of urls) {
+      const feature = get(featurizePage(PAGE, url).page.features, "urlIsRoot");
+      expect(feature).toBe(isRootPath(url) ? 1 : 0);
+    }
+    // Pin the intent so both sides cannot drift together.
+    expect(isRootPath("https://example.com/?p=123")).toBe(false);
+    expect(isRootPath("https://example.com/?s=shoes")).toBe(false);
+    expect(isRootPath("https://example.com/?utm_source=x")).toBe(true);
   });
 
   test("the page vector reads the URL shape", () => {
