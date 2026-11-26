@@ -183,11 +183,18 @@ GitHub documents remote MCP servers for GitHub Copilot in JetBrains IDEs with a 
 
 ## Cloud agent on github.com
 
-{/* Source: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp (fetched 2026-11-26). Everything in this section is stated on that page. */}
+{/* Source: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp (re-checked 2026-11-26): repository administrators only; Settings > Code, planning, and automation > Copilot > MCP servers; syntax validated on save; only Agents secrets and variables prefixed COPILOT_MCP_ reach the config; $VAR substitution in headers; Agents secrets at organization or repository level; no OAuth for remote servers; tools run without approval and GitHub recommends allowlisting read-only tools; the config is shared with Copilot code review, which only uses tools annotated readOnlyHint: true. Scopes: API_KEY_SCOPES in packages/core-contracts/src/api-keys.ts; the hosted read tools require audits:read, run_audit requires audits:write. */}
 
 The cloud agent that works on issues and pull requests does not support OAuth for remote MCP servers, so this is the API key route. It reads its MCP configuration from repository settings, and only repository administrators can edit them. Set the key as a secret, never in a chat.
 
-1. Mint a key with `squirrel keys create --shell`.
+The agent calls MCP tools on its own, without asking first. So give it a read-only key and a read-only tool list: it can read your audits, reports and issues, and it cannot start audits that spend credits or change anything.
+
+1. Mint a read-only key. It is shown once, so copy it straight into the secret in step 3.
+
+   ```bash
+   squirrel keys create --name copilot-cloud-agent --scopes audits:read
+   ```
+
 2. In the repository, open **Settings**, then under **Code, planning, and automation** choose **Copilot**, then **MCP servers**.
 3. Add an Agents secret for the key. GitHub only passes Agents secrets and variables whose names start with `COPILOT_MCP_` to the MCP configuration, so name it `COPILOT_MCP_SQUIRRELSCAN_API_KEY`. Agents secrets can also be set at the organization level.
 4. Paste this into **MCP configuration** and choose **Save MCP configuration**. GitHub validates the syntax on save.
@@ -198,7 +205,18 @@ The cloud agent that works on issues and pull requests does not support OAuth fo
     "squirrelscan": {
       "type": "http",
       "url": "https://mcp.squirrelscan.com/mcp",
-      "tools": ["*"],
+      "tools": [
+        "whoami",
+        "list_websites",
+        "list_audits",
+        "get_audit_status",
+        "get_report",
+        "compare_audits",
+        "list_issues",
+        "get_issue",
+        "list_findings",
+        "get_rule"
+      ],
       "headers": {
         "Authorization": "Bearer $COPILOT_MCP_SQUIRRELSCAN_API_KEY"
       }
@@ -207,7 +225,11 @@ The cloud agent that works on issues and pull requests does not support OAuth fo
 }
 ```
 
-`tools` lists the server tools the agent may use. `["*"]` enables all of them, and GitHub advises listing specific read-only tools instead, because the agent uses them without asking for approval.
+`tools` lists the server tools the agent may use. GitHub recommends allowlisting specific read-only tools rather than `["*"]`, because the agent uses them without asking for approval. The list above only reads.
+
+To let the agent start audits too, add `"run_audit"` to `tools` and mint the key with `--scopes audits:read,audits:write`. Do that on purpose only: every audit spends credits, and the agent will start them without asking.
+
+GitHub shares this configuration with Copilot code review, which only calls tools marked read-only (`readOnlyHint`) by the server. squirrelscan's tools do not carry that marker yet, so code review does not call them.
 
 <Warning>Never paste the key into an issue, a pull request comment, or a chat with the agent. Those are visible to others and are sent to a model. Set it only as an Agents secret.</Warning>
 
