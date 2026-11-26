@@ -4076,6 +4076,12 @@
    "unauthenticated-api-unchecked|skipped|Probing is passive, so no API endpoint was probed. Run with --probe active to check for API endpoints that answer without authentication.||"
   ]
  },
+ "security/unpaginated-api": {
+  "digest": "21302860716081",
+  "lines": [
+   "unpaginated-api-unchecked|skipped|Probing is passive, so no API endpoint was probed. Run with --probe active to check for unpaginated API endpoints.||"
+  ]
+ },
  "security/version-disclosure": {
   "digest": "73157584638604",
   "lines": [
