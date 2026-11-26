@@ -1,0 +1,81 @@
+---
+title: "squirrelscan for Grok"
+sidebarTitle: "Grok"
+description: "Set up squirrelscan in the grok CLI with grok mcp add and browser OAuth, and what to check for custom connectors on grok.com."
+icon: "bot"
+---
+
+{/* Source: https://docs.x.ai/build/features/mcp-servers (checked 2026-11-26). The page shows
+    `grok mcp add --transport http <name> <url>` and says servers that require OAuth trigger a
+    browser flow on first use. Not verified: the grok.com custom connector flow (grok.com/connectors,
+    "Bring Your Own MCP") and which plans include it. Nothing here has been run end to end. */}
+
+The `grok` CLI adds remote MCP servers with `grok mcp add`, so squirrelscan's tools are available in a session.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+Local audits run entirely on your machine. Signed out, they need no account and cost nothing; signed-in audits spend credits. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+```bash
+grok mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
+```
+
+## 3. Sign in with OAuth
+
+Servers that require OAuth start a browser sign-in the first time you use them, so there is nothing to paste into the config. Use a machine with a browser.
+
+<Note>The sign-in step has not been verified by a human yet.</Note>
+
+### grok.com custom connectors
+
+On grok.com, custom connectors are reportedly offered on paid plans only, so check your plan. The steps below are generic and unverified: add a custom connector with the URL `https://mcp.squirrelscan.com/mcp`, then sign in.
+
+## 4. Install the skills
+
+```bash
+squirrel skills install
+```
+
+That installs `audit-website` (the fix loop) and `squirrelscan` (operating the CLI). See [`squirrel skills`](/cli/skills).
+
+## 5. Run an audit
+
+Ask for the audit, then hand it the fixes:
+
+```text
+Audit https://nutshop.squirrelscan.com with squirrelscan and list the top issues by severity.
+```
+
+```text
+Fix every core/title-missing and images/alt-missing issue, then re-audit to confirm the score went up.
+```
+
+<Note>The hosted MCP server crawls from squirrelscan's cloud, so it needs a publicly reachable URL. Use the CLI or [`squirrel mcp`](/cli/mcp) for `localhost` and private staging websites.</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#grok">
+    Config for every other client.
+  </Card>
+</CardGroup>

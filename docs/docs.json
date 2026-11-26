@@ -137,7 +137,9 @@
                   "developers/agents/windsurf",
                   "developers/agents/opencode",
                   "developers/agents/hermes",
-                  "developers/agents/openclaw"
+                  "developers/agents/openclaw",
+                  "developers/agents/grok",
+                  "developers/agents/muse"
                 ]
               },
               "developers/mcp",
