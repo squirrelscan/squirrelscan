@@ -49,7 +49,7 @@ This release is signed with the squirrelscan release key, key id 3d10cf377566562
 ### Security
 
 - `security/leaked-secrets` now masks a secret that sits in the URL a finding names, such as a key in a script's query string or a token in a path segment, so the report no longer prints it in plain text. Labels, affected pages, occurrences and the lists of unread scripts all show it as a short prefix and suffix around an ellipsis, in every report format (#2270)
-- `security/cookie-flags` and `security/token-storage` now rate a finding one step higher, from warning to failure, when the page loads scripts from another domain, and name up to five of those script hosts, since any script on the page can read a cookie without `HttpOnly` or a token in web storage. `security/cookie-flags` raises only session-like cookies, in a new `cookie-httponly-third-party-scripts` check. Pages with no third-party script report as before (#2089)
+- `security/cookie-flags` and `security/token-storage` now rate a finding one step higher, from warning to failure, when the page loads scripts from another domain, and name up to five of those script hosts, since any script on the page can read a cookie without `HttpOnly` or a token in web storage. `security/cookie-flags` raises only session-like cookies, as `cookie-httponly` at fail. Pages with no third-party script report as before (#2089)
 
 ### Docs
 
