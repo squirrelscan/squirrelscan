@@ -3932,6 +3932,12 @@
    "exposed-actuator-not-checked|skipped|Probing is passive, so no Spring Boot Actuator path was probed. Run with --probe active to check for exposed actuator endpoints.||"
   ]
  },
+ "security/exposed-backups": {
+  "digest": "278969559234584",
+  "lines": [
+   "exposed-backups-not-checked|skipped|Backup copies of crawled files not checked: probing is passive, and this rule only probes at aggressive.|\"not-checked\"|"
+  ]
+ },
  "security/exposed-files": {
   "digest": "242287976103433",
   "lines": [

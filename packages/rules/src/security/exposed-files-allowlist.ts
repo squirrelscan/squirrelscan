@@ -450,7 +450,7 @@ function matchOle(a: ProbeAnswer): SignatureMatch | null {
     : null;
 }
 
-function matchSqlDump(a: ProbeAnswer): SignatureMatch | null {
+export function matchSqlDump(a: ProbeAnswer): SignatureMatch | null {
   const text = nonHtmlText(a);
   if (!text) return null;
   const head = text.slice(0, 4096);
