@@ -53,6 +53,7 @@ import { metaRefreshRule } from "./meta-refresh";
 import { objectAltRule } from "./object-alt";
 import { pasteInputsRule } from "./paste-inputs";
 import { reducedMotionRule } from "./reduced-motion";
+import { renderedLayoutRule } from "./rendered-layout";
 import { selectNameRule } from "./select-name";
 import { skipLinkRule } from "./skip-link";
 import { svgImgAltRule } from "./svg-img-alt";
@@ -122,6 +123,7 @@ export const rules: Rule[] = [
 
   // Tables
   tdHeadersAttrRule,
+  renderedLayoutRule,
   thHasDataCellsRule,
 
   // IDs and navigation
@@ -216,6 +218,7 @@ export {
   tabindexRule,
   tableHeadersRule,
   tdHeadersAttrRule,
+  renderedLayoutRule,
   thHasDataCellsRule,
   touchTargetsRule,
   validLangRule,
