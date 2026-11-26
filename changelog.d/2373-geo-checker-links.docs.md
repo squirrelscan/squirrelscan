@@ -1,0 +1,1 @@
+- Linked the GEO checker guide from the answer blocks, commerce readiness and WebMCP rule pages. (#2373)
