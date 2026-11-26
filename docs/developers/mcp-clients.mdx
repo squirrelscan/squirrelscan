@@ -1,7 +1,7 @@
 ---
 title: "Connect Claude Code, Cursor, or Codex to website audit MCP"
 sidebarTitle: "MCP client setup"
-description: "Copy-paste config that connects Claude Code, Cursor, Codex CLI, GitHub Copilot, Windsurf, Gemini CLI, Antigravity, Hermes Agent, OpenClaw, Grok, or Muse Code to squirrelscan's hosted website audit MCP server."
+description: "Connect Claude Code, Cursor, Codex CLI, GitHub Copilot, Windsurf, Gemini CLI, Antigravity, Hermes Agent, OpenClaw, Grok, or Muse Code to squirrelscan's hosted website audit MCP server, with copy-paste config where the client documents one."
 icon: "toy-brick"
 ---
 
@@ -366,8 +366,6 @@ Then run `openclaw mcp login squirrelscan` and `openclaw mcp doctor squirrelscan
 
 ## Grok
 
-<img src="/logo/agents/grok.png" alt="" width="28" height="28" />
-
 ```bash
 grok mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
 ```
@@ -375,8 +373,6 @@ grok mcp add --transport http squirrelscan https://mcp.squirrelscan.com/mcp
 OAuth runs in the browser on first use. Full steps: [Grok guide](/developers/agents/grok).
 
 ## Muse Code
-
-<img src="/logo/agents/meta-muse.png" alt="" width="28" height="28" />
 
 In `~/.config/muse/settings.json` (which needs `"schema_version": 1`), add a `squirrelscan` entry under `mcp_servers` with `"transport": "streamable_http"` and `"url": "https://mcp.squirrelscan.com/mcp"`. Then sign in:
 
