@@ -11,15 +11,22 @@ The protocol requires four: `og:title`, `og:type`, `og:image` and `og:url`. `og:
 
 ## What squirrel checks
 
-The rule runs on every crawled page against the parsed Open Graph values. It emits one to four checks, one per missing tag plus a summary:
+The rule runs on every crawled page against the parsed Open Graph values. It emits one check per missing tag, up to two `og:type` checks, and a summary:
 
 - `og-title`: warns with the message `Missing og:title` and a null value.
 - `og-description`: warns with the message `Missing og:description` and a null value.
 - `og-image`: warns with the message `Missing og:image - social shares will lack imagery` and a null value.
 - `og-type`: reports at info status with the message `Missing og:type (defaults to website)` and a null value. The message reflects what most clients assume rather than a default the protocol defines; the protocol requires the property.
-- `og-tags`: passes with the message `Essential Open Graph tags present` and a value showing the first 30 characters of the title, emitted only when title, description and image are all present.
+- `og-type-mismatch`: compares a declared `og:type` of `article` or `website` with what the page is. It fires only when `og:type` is present.
+  - `article` on a page that reads as a pricing, contact, legal or listing page, or the homepage, warns with `og:type is article but the page reads as a <page kind> (from <source>)`. It warns only when the evidence is schema (`ContactPage`, `CollectionPage`, `ItemList`, `SearchResultsPage`, `Blog`) or a URL pattern. A label that only the [page classifier](/rules/schema/expected-type) supplies reports at info status.
+  - `website` on a page that reads as a blog post (an Article-family schema type, a blog-style URL path, or a confident classifier label) reports at info status, never a warning.
+  - A page that declares an Article-family schema type (`Article`, `BlogPosting`, `NewsArticle` and so on) is an article, so `og:type` of `article` passes whatever the URL looks like.
+  - The classifier label counts only when the classifier model produced it with confidence at or above the 0.9 floor that `schema/expected-type` uses. A label from the classifier's rules fallback is never used, because that fallback is derived from the page's own `og:type` and schema.
+  - Soft-404 pages are not judged.
+- `og-type-unknown`: reports at info status, with the declared value as the check value, when `og:type` is not one of the types the Open Graph protocol defines (`website`, `article`, `book`, `profile`, `product`, `place`, `business.business`, `music.*`, `video.*`).
+- `og-tags`: passes with the message `Essential Open Graph tags present` and a value showing the first 30 characters of the title, emitted only when title, description and image are present and no `og:type` finding stands.
 
-`og:type` is informational and does not stop the summary passing, because most clients treat a missing type as `website` and render the preview anyway. Each missing tag is its own check, so a page missing all three essentials produces three warnings rather than one. The rule checks presence and never validates a value, so an `og:image` pointing at a URL that returns 404 passes.
+`og:type` is informational and does not stop the summary passing, because most clients treat a missing type as `website` and render the preview anyway. Each missing tag is its own check, so a page missing all three essentials produces three warnings rather than one. Apart from `og:type`, the rule checks presence and never validates a value, so an `og:image` pointing at a URL that returns 404 passes.
 
 ## How to fix it
 
@@ -80,7 +87,9 @@ Each check name this rule can emit, by what it means to a tool comparing two aud
 | `og-description` | Problem |  |
 | `og-image` | Problem |  |
 | `og-type` | Problem |  |
-| `og-tags` | Clean | `og-title`, `og-description`, `og-image`, `og-type` |
+| `og-type-mismatch` | Problem |  |
+| `og-type-unknown` | Problem |  |
+| `og-tags` | Clean | `og-title`, `og-description`, `og-image`, `og-type`, `og-type-mismatch`, `og-type-unknown` |
 
 {/* rule-checks:end */}
 

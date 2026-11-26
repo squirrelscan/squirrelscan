@@ -31,18 +31,21 @@ import {
   microdataAndRdfaTypes,
 } from "./markup-types";
 
+/** The classifier confidence floor; core/og-tags reuses it so both rules trust the same labels. */
+export const DEFAULT_MIN_CONFIDENCE = 0.9;
+
 export const optionsSchema = z.object({
   min_confidence: z
     .number()
     .min(0)
     .max(1)
-    .default(0.9)
+    .default(DEFAULT_MIN_CONFIDENCE)
     .describe(
       "Minimum classifier confidence (0 to 1) before a page type is trusted"
     ),
 });
 
-type PageTypeFamily = {
+export type PageTypeFamily = {
   /** The page reads as `a <noun>` / `an <noun>`; the pass message capitalises it. */
   readonly noun: string;
   /** The schema.org types, in plain words, that the fail message asks for. */
@@ -61,7 +64,7 @@ const ARTICLE_TYPES = new Set([
   "discussionforumposting",
 ]);
 // Not `endsWith("posting")`: that would take JobPosting for an article.
-const isArticleType = (name: string): boolean =>
+export const isArticleType = (name: string): boolean =>
   name.endsWith("article") || ARTICLE_TYPES.has(name);
 
 const PRODUCT_TYPES = new Set([
@@ -87,7 +90,7 @@ const LISTING_TYPES = new Set([
 ]);
 // The subset that says "this page is an index", used for the veto. OfferCatalog is
 // a valid listing answer for product_listing but does not prove a post is an index.
-const VETO_TYPES = new Set([
+export const VETO_TYPES = new Set([
   "collectionpage",
   "itemlist",
   "searchresultspage",
@@ -118,7 +121,7 @@ const isOrganizationType = (name: string): boolean =>
   name.endsWith("business") ||
   name.endsWith("organization");
 
-const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
+export const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
   article: {
     noun: "article",
     wanted: "Article",
@@ -173,7 +176,7 @@ const FAMILIES: Readonly<Record<string, PageTypeFamily>> = {
   },
 };
 
-interface DeclaredTypes {
+export interface DeclaredTypes {
   /** Every type the page declares, nested JSON-LD, microdata and RDFa included: lowercase key to spelling. */
   readonly all: Map<string, string>;
   /** Only the JSON-LD top-level and `@graph` node types: what the listing veto reads. */
@@ -182,7 +185,7 @@ interface DeclaredTypes {
   readonly complete: boolean;
 }
 
-function declaredTypes(ctx: RuleContext): DeclaredTypes {
+export function declaredTypes(ctx: RuleContext): DeclaredTypes {
   const all = new Map<string, string>();
   const topLevel = new Map<string, string>();
   const put = (into: Map<string, string>, raw: string): void => {
