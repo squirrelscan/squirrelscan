@@ -183,7 +183,7 @@ GitHub documents remote MCP servers for GitHub Copilot in JetBrains IDEs with a 
 
 ## Cloud agent on github.com
 
-{/* Source: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp (re-checked 2026-11-26): repository administrators only; Settings > Code, planning, and automation > Copilot > MCP servers; syntax validated on save; only Agents secrets and variables prefixed COPILOT_MCP_ reach the config; $VAR substitution in headers; Agents secrets at organization or repository level; no OAuth for remote servers; tools run without approval and GitHub recommends allowlisting read-only tools; the config is shared with Copilot code review, which only uses tools annotated readOnlyHint: true. Scopes: API_KEY_SCOPES in packages/core-contracts/src/api-keys.ts; the hosted read tools require audits:read, run_audit requires audits:write. */}
+{/* Source: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/extend-cloud-agent-with-mcp (re-checked 2026-11-26): repository administrators only; Settings > Code, planning, and automation > Copilot > MCP servers; syntax validated on save; only Agents secrets and variables prefixed COPILOT_MCP_ reach the config; $VAR substitution in headers; Agents secrets at organization or repository level; no OAuth for remote servers; tools run without approval and GitHub recommends allowlisting read-only tools; the config is shared with Copilot code review, which only uses tools annotated readOnlyHint: true (all ten listed tools use READ_ONLY_TOOL_ANNOTATIONS on the hosted server). Scopes: API_KEY_SCOPES in packages/core-contracts/src/api-keys.ts; the hosted read tools require audits:read, run_audit requires audits:write. */}
 
 The cloud agent that works on issues and pull requests does not support OAuth for remote MCP servers, so this is the API key route. It reads its MCP configuration from repository settings, and only repository administrators can edit them. Set the key as a secret, never in a chat.
 
@@ -229,7 +229,7 @@ The agent calls MCP tools on its own, without asking first. So give it a read-on
 
 To let the agent start audits too, add `"run_audit"` to `tools` and mint the key with `--scopes audits:read,audits:write`. Do that on purpose only: every audit spends credits, and the agent will start them without asking.
 
-GitHub shares this configuration with Copilot code review, which only calls tools marked read-only (`readOnlyHint`) by the server. squirrelscan's tools do not carry that marker yet, so code review does not call them.
+GitHub shares this configuration with Copilot code review, which only calls tools the server marks read-only (`readOnlyHint`). Every tool in the list above carries that marker, so code review can use them as well. `run_audit` does not, so code review never starts an audit.
 
 <Warning>Never paste the key into an issue, a pull request comment, or a chat with the agent. Those are visible to others and are sent to a model. Set it only as an Agents secret.</Warning>
 
