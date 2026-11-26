@@ -134,7 +134,10 @@
                   "developers/agents/copilot",
                   "developers/agents/gemini-cli",
                   "developers/agents/windsurf",
-                  "developers/agents/opencode"
+                  "developers/agents/opencode",
+                  "developers/agents/antigravity",
+                  "developers/agents/hermes",
+                  "developers/agents/openclaw"
                 ]
               },
               "developers/mcp",

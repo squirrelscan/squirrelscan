@@ -1,7 +1,7 @@
 ---
 title: "Connect Claude Code, Cursor, or Codex to website audit MCP"
 sidebarTitle: "MCP client setup"
-description: "Copy-paste config that connects Claude Code, Cursor, Codex CLI, VS Code, Windsurf, or Gemini CLI to squirrelscan's hosted website audit MCP server."
+description: "Copy-paste config that connects Claude Code, Cursor, Codex CLI, GitHub Copilot, Windsurf, Gemini CLI, Antigravity, Hermes Agent, or OpenClaw to squirrelscan's hosted website audit MCP server."
 icon: "toy-brick"
 ---
 
@@ -166,6 +166,10 @@ Do not set `experimental_environment` for this server, it applies to stdio-over-
 
 ## VS Code Copilot
 
+<img src="/logo/agents/copilot.svg" alt="" width="28" height="28" />
+
+For Visual Studio, GitHub Copilot CLI, the cloud agent, Copilot Studio, and enterprise allowlisting, see the [GitHub Copilot guide](/developers/agents/copilot).
+
 VS Code's built-in MCP client (v1.101+) auto-runs the OAuth handshake for a remote server, so a minimal entry needs only the URL.
 
 <Tabs>
@@ -213,7 +217,7 @@ VS Code's built-in MCP client (v1.101+) auto-runs the OAuth handshake for a remo
 Save either block via **Command Palette → MCP: Add Server** (choose **HTTP**), or write it to `.vscode/mcp.json` (workspace, safe to commit) or the user `mcp.json` (**Command Palette → MCP: Open User Configuration**, applies everywhere).
 
 <Warning>
-Use a top-level `"headers"` object. The `"requestInit": { "headers": ... }` form is for the separate Visual Studio IDE, not VS Code, and silently no-ops here. On a GitHub Copilot Business or Enterprise plan, an org owner must enable MCP servers and set MCP access to allow all servers, since squirrelscan is not in GitHub's public registry.
+Use a top-level `"headers"` object. The `"requestInit": { "headers": ... }` form is for the separate Visual Studio IDE, not VS Code, and silently no-ops here. On a GitHub Copilot Business or Enterprise plan, an org owner must enable MCP servers and allowlist `https://mcp.squirrelscan.com/mcp`. See [Enterprise: allowlisting](/developers/agents/copilot#enterprise-allowlisting).
 </Warning>
 
 ## Windsurf (devin desktop)
@@ -314,6 +318,51 @@ Cascade caps total active MCP tools at 100 across all connected servers. If you 
 <Note>
 The OAuth flow needs a local browser and a reachable localhost redirect, so it will not work over headless SSH or in a browser-less container. Use the API-key header there. Verify any client with `gemini mcp list` or the in-REPL `/mcp` command.
 </Note>
+
+## Google Antigravity
+
+<img src="/logo/agents/antigravity.png" alt="" width="28" height="28" />
+
+Antigravity needs `serverUrl` (or `url`). `httpUrl` and SSE do not work. OAuth is automatic: it supports dynamic client registration and client ID metadata documents.
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "serverUrl": "https://mcp.squirrelscan.com/mcp"
+    }
+  }
+}
+```
+
+Save it to `~/.gemini/config/mcp_config.json` (every project) or `.agents/mcp_config.json` (one workspace). Log in with `/mcp` in the CLI, or **Authenticate** in the IDE. Full steps: [Antigravity guide](/developers/agents/antigravity).
+
+## Hermes Agent
+
+<img src="/logo/agents/hermes.png" alt="" width="28" height="28" />
+
+Add the server to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  squirrelscan:
+    url: "https://mcp.squirrelscan.com/mcp"
+    auth: oauth
+```
+
+Then log in with `hermes mcp login squirrelscan` and check it with `hermes mcp test squirrelscan`. Do not use `--flow device`: squirrelscan does not offer the device code flow. Full steps: [Hermes Agent guide](/developers/agents/hermes).
+
+## OpenClaw
+
+<img src="/logo/agents/openclaw.svg" alt="" width="28" height="28" />
+
+Always set `transport`, because OpenClaw defaults to SSE:
+
+```bash
+openclaw mcp set squirrelscan '{"url":"https://mcp.squirrelscan.com/mcp","transport":"streamable-http","auth":"oauth"}'
+```
+
+Then run `openclaw mcp login squirrelscan` and `openclaw mcp doctor squirrelscan --probe`. Full steps: [OpenClaw guide](/developers/agents/openclaw).
 
 ## Related
 
