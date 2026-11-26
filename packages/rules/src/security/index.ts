@@ -13,6 +13,7 @@ import { exposedBackupsRule } from "./exposed-backups";
 import { exposedFilesRule } from "./exposed-files";
 import { formCaptchaRule } from "./form-captcha";
 import { formHttpsRule } from "./form-https";
+import { getStateChangeRule } from "./get-state-change";
 import { graphqlGetMutationsRule } from "./graphql-get-mutations";
 import { graphqlIntrospectionRule } from "./graphql-introspection";
 import { hstsRule } from "./hsts";
@@ -55,6 +56,7 @@ export const rules: Rule[] = [
   formCaptchaRule,
   newTabRule,
   passwordFormGetRule,
+  getStateChangeRule,
   leakedSecretsRule,
   tokenStorageRule,
   thirdPartyCookiesRule,
@@ -97,6 +99,7 @@ export {
   leakedSecretsRule,
   mixedContentRule,
   newTabRule,
+  getStateChangeRule,
   openRedirectRule,
   passwordFormGetRule,
   permissionsPolicyRule,

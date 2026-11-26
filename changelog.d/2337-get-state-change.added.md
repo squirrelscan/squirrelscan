@@ -1,0 +1,1 @@
+- `security/get-state-change` flags forms that submit by GET but look state-changing (a delete, pay or logout action path or button text) and email or login fields sent by GET. Search and filter forms are skipped, and password forms stay with `security/password-form-get` (#2337)
