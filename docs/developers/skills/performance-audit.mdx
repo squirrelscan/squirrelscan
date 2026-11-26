@@ -1,0 +1,129 @@
+---
+title: "Performance audit skill for Claude Code, Codex and Cursor"
+sidebarTitle: "performance-audit"
+description: "The performance-audit agent skill finds what slows page loading, such as images, scripts, compression, caching and layout shift, and fixes it by template."
+icon: "brain"
+---
+
+`performance-audit` is an Agent Skills `SKILL.md` from squirrelscan: a page speed and Core Web Vitals audit skill for coding agents. It runs squirrelscan's performance audit rules through the squirrel CLI or the hosted squirrelscan MCP server. It then fixes slow-loading causes by template in Claude Code, Codex, Cursor and other agents. It reads markup, headers and fetched resources, so it finds causes, not real-user measurements.
+
+New to skills? Start with the [skills overview](/developers/skills/overview).
+
+## What it does
+
+- Checks the largest image, render-blocking resources, script and image weight, compression, caching, server response, fonts and layout shift.
+- Fixes biggest effect first: loading the main content, bytes, delivery, then stability and responsiveness.
+- Does not lazy-load the main (largest) image, a common regression the audit flags.
+- Gets each rule's exact fix from its docs page, not from memory.
+- Audits the live website, because only there do compression, caching, HTTP version and server response reflect production.
+- Compares before and after with `--refresh` and `squirrel report --diff`, and reports the rules that cleared.
+- States the Core Web Vitals thresholds from web.dev: Largest Contentful Paint 2.5 s, Interaction to Next Paint 200 ms and Cumulative Layout Shift 0.1, at the 75th percentile.
+- Says these audits do not replace field data from the Chrome UX Report or PageSpeed Insights.
+- Points to where the fix usually lives in Next.js, WordPress, Shopify, Webflow, Cloudflare, Vercel and Netlify.
+
+## Questions it answers
+
+- Why is my website slow?
+- Audit page performance
+- Fix layout shift
+- Which images are too large or in the wrong format?
+- What is blocking rendering on my pages?
+- Is my website compressed and cached correctly?
+- Why is my largest contentful paint slow?
+- Which scripts add the most weight to my pages?
+
+## Install
+
+<Note>`squirrel skills install` installs only `squirrelscan` and `audit-website`. This skill comes from `npx skills add` or the Claude Code plugin.</Note>
+
+<Tabs>
+  <Tab title="npx skills">
+    Works with any Agent Skills tool (Claude Code, Codex, Cursor, Gemini CLI, Amp and others):
+
+    ```bash
+    npx skills add squirrelscan/skills --skill performance-audit
+    ```
+  </Tab>
+  <Tab title="Claude Code plugin">
+    The plugin installs all the skills and the hosted squirrelscan MCP server:
+
+    <div class="sq-install">
+
+    ```text
+    /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
+    /plugin install squirrelscan@squirrelscan
+    ```
+
+    </div>
+  </Tab>
+  <Tab title="Codex">
+    `npx skills add` puts the skill in `.agents/skills/`. To add the MCP server too, configure it in `~/.codex/config.toml`. See [squirrelscan for Codex](/developers/agents/codex).
+  </Tab>
+  <Tab title="Cursor">
+    Run `npx skills add`, then use the Cursor plugin from the skills repository or the one-click MCP link. See [squirrelscan for Cursor](/developers/agents/cursor).
+  </Tab>
+  <Tab title="Other tools">
+    Gemini CLI, GitHub Copilot, Amp and other Agent Skills tools: run `npx skills add`, then add the MCP server. See [coding agents](/developers/agents).
+  </Tab>
+</Tabs>
+
+## Requirements
+
+The squirrel CLI installed and in your `PATH`, or the hosted squirrelscan MCP server connected (`https://mcp.squirrelscan.com/mcp`). Check the CLI with `squirrel --version`. Setup steps are in [install](/install) and [MCP clients](/developers/mcp-clients).
+
+Install the CLI on macOS or Linux:
+
+```bash
+curl -fsSL https://install.squirrelscan.com | bash
+```
+
+## Example prompts
+
+Paste one of these into your coding agent:
+
+<div class="sq-prompts">
+
+```text
+Why is my website slow? Audit https://example.com and fix what you can in this repo
+```
+
+```text
+Fix layout shift on my product pages
+```
+
+```text
+Re-audit after the deploy and show the before and after performance score
+```
+
+</div>
+
+The agent runs the performance and image rules at surface level, fixes the template-level causes in order, then re-audits and reports which rules cleared.
+
+## How it works
+
+1. Check the CLI and login status and tell you the cost.
+2. Run `squirrel audit` with `--rule-include perf,images` at `--level surface` against the live website.
+3. Read the `perf` category score and fix in order: main content loading, bytes, delivery, stability, hygiene.
+4. Re-audit with `--refresh` after the deploy and diff against the baseline.
+5. Stop when error-severity `perf` issues are cleared on a `--level full` re-audit and you know lab-style checks do not replace field data.
+
+## Related skills
+
+- [`broken-link-checker`](/developers/skills/broken-link-checker): broken assets and links.
+- [`audit-website`](/developers/skills/audit-website): anything else, and the fix loop.
+- [`website-ci-gate`](/developers/skills/website-ci-gate): fail CI on a performance score threshold.
+
+## Related rules and guides
+
+- [Performance rules](/rules/perf)
+- [Image rules](/rules/images)
+- [Performance score group](/rules/performance)
+
+## Source on GitHub
+
+- [`skills/performance-audit`](https://github.com/squirrelscan/skills/tree/main/skills/performance-audit): the skill folder
+- [README.md](https://github.com/squirrelscan/skills/blob/main/skills/performance-audit/README.md)
+- [SKILL.md](https://github.com/squirrelscan/skills/blob/main/skills/performance-audit/SKILL.md)

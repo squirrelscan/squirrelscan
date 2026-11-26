@@ -164,6 +164,9 @@ Install the plugin (bundles skills + the MCP server):
 
 ```
 /plugin marketplace add squirrelscan/skills
+```
+
+```
 /plugin install squirrelscan@squirrelscan
 ```
 

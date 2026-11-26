@@ -32,20 +32,37 @@ Local audits run entirely on your machine. Signed out, they need no account and 
   <Tab title="Plugin (recommended)">
     The plugin bundles both skills plus the hosted MCP server:
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
 
     That's it, skills and MCP tools are both available. Authenticate the MCP server for cloud features (below).
 
     Added the older `squirrelscan/squirrelscan` marketplace before? It now points the plugin at squirrelscan/skills, so it keeps working: run `/plugin marketplace update squirrelscan` then `/plugin update squirrelscan@squirrelscan`. To switch marketplaces instead, remove the old one first (Claude Code won't add a second marketplace named `squirrelscan`, and removing it uninstalls the plugin):
 
+    <div class="sq-install">
+
     ```text
     /plugin marketplace remove squirrelscan
+    ```
+
+    ```text
     /plugin marketplace add squirrelscan/skills
+    ```
+
+    ```text
     /plugin install squirrelscan@squirrelscan
     ```
+
+    </div>
   </Tab>
   <Tab title="MCP only">
     Add just the hosted server (dynamic client registration, no client id needed):
@@ -131,5 +148,8 @@ accessibility, SEO meta tags, and performance.
   </Card>
   <Card title="Rules reference" icon="list-checks" href="/rules">
     Every audit rule and how it's fixed.
+  </Card>
+  <Card title="Agent skills" icon="brain" href="/developers/skills/overview">
+    The squirrelscan skills: what each one does and how to install it.
   </Card>
 </CardGroup>

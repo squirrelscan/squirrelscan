@@ -156,20 +156,37 @@ Removes only the files squirrel wrote and you haven't changed. Files you edited,
 
 Claude Code users can install everything (all skills plus the hosted MCP server) as a plugin instead:
 
+<div class="sq-install">
+
 ```text
 /plugin marketplace add squirrelscan/skills
+```
+
+```text
 /plugin install squirrelscan@squirrelscan
 ```
+
+</div>
 
 Every commit to the skills repository is a new plugin version. Claude Code doesn't auto-update third-party marketplaces unless you turn it on in `/plugin`, so pick up new versions with `/plugin marketplace update squirrelscan` and `/plugin update squirrelscan@squirrelscan`.
 
 Added the older `squirrelscan/squirrelscan` marketplace before? It now points the plugin at squirrelscan/skills, so it keeps working: run those same two update commands to move over. To switch marketplaces instead, remove the old one first. Claude Code won't add a second marketplace named `squirrelscan`, and removing it uninstalls the plugin, so reinstall:
 
+<div class="sq-install">
+
 ```text
 /plugin marketplace remove squirrelscan
+```
+
+```text
 /plugin marketplace add squirrelscan/skills
+```
+
+```text
 /plugin install squirrelscan@squirrelscan
 ```
+
+</div>
 
 ---
 
@@ -211,4 +228,5 @@ The server serves `manifest.json` and `skills/<skill>/<file>` under that URL. Th
 
 - [Agent Skills Standard](https://agentskills.io/home) - Learn more about Agent Skills
 - [squirrelscan/skills](https://github.com/squirrelscan/skills) - The skills source; open skill issues and pull requests there
+- [Agent skills overview](/developers/skills/overview) - What each skill does and every install path
 - [Using with Agents](/developers/agents) - Full guide to using squirrelscan with coding agents

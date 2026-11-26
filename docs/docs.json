@@ -143,6 +143,25 @@
             ]
           },
           {
+            "group": "Skills",
+            "pages": [
+              "developers/skills/overview",
+              "developers/skills/squirrelscan",
+              "developers/skills/audit-website",
+              "developers/skills/security-audit",
+              "developers/skills/supabase-security-audit",
+              "developers/skills/security-headers",
+              "developers/skills/accessibility-audit",
+              "developers/skills/seo-audit",
+              "developers/skills/broken-link-checker",
+              "developers/skills/performance-audit",
+              "developers/skills/structured-data-audit",
+              "developers/skills/agent-experience-audit",
+              "developers/skills/website-ci-gate",
+              "developers/skills/launch-checklist"
+            ]
+          },
+          {
             "group": "CI/CD",
             "pages": [
               "guides/ci"
