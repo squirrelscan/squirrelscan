@@ -1,0 +1,104 @@
+---
+title: "Dangerous HTTP methods: TRACE, PUT and DELETE left enabled"
+description: "TRACE enables cross-site tracing, and PUT, DELETE, PATCH and CONNECT widen the attack surface. squirrel sends OPTIONS to a few paths, reads the Allow header, and confirms TRACE with one safe request."
+---
+
+## Why dangerous methods matter
+
+A web server that answers methods the website never uses gives an attacker more to try:
+
+- `TRACE` and `TRACK` ask the server to echo the request back, headers included. Combined with a script injection bug, that echo can expose cookies and credentials a script is not allowed to read (cross-site tracing).
+- `PUT`, `DELETE` and `PATCH` change or remove content. On a misconfigured server, `PUT` can upload a file and `DELETE` can remove one.
+- `CONNECT` turns a server into a proxy tunnel when it is not meant to be one.
+
+The `Allow` header of an `OPTIONS` answer lists what a path accepts, and asking changes nothing.
+
+## What squirrel checks
+
+This is a probing rule. It runs only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run it sends nothing and records one skipped check.
+
+### What is sent
+
+- `OPTIONS`, to at most three paths of the audited origin: the site root, then up to two crawled pages from different top-level sections. A path that names a state-changing action (`logout`, `delete`, `reset` and similar) or that `robots.txt` disallows is never chosen. A page on another host is never probed.
+- One `TRACE`, only when an `OPTIONS` answer advertised `TRACE`. It carries a random marker header and no cookies.
+- Never `PUT`, `DELETE`, `PATCH`, `CONNECT` or any other method. Those are read from the `Allow` header and never tried.
+
+Requests carry no cookies and do not follow redirects. Each has a 10 second timeout and at most a few kilobytes of the answer are read.
+
+### How TRACE is confirmed
+
+The `TRACE` answer counts as reflection when it is a 2xx and either echoes the marker in a response header or is typed `message/http`. Reflection is read from the response headers only: the body is not read as evidence, because the HTTP client squirrel uses returns an empty body for `TRACE`. A `TRACE` that is advertised but refused is reported as a lower-severity advertised method.
+
+### Results
+
+- `http-methods-trace` (fail) when the server reflected the `TRACE` request. The details carry `severity: "error"`.
+- `http-methods-dangerous` (warn) lists each path whose `Allow` header names `TRACK`, `PUT`, `DELETE`, `PATCH` or `CONNECT`, or `TRACE` that was not reflected. Each item has the `methods` found.
+- `http-methods` (pass) when every `OPTIONS` request got a definite answer and none advertised a dangerous method. A non-redirect answer with no `Allow` header counts as advertising nothing.
+- `http-methods-not-checked` (skipped) when a request failed, was redirected (3xx, which is not followed), was throttled (HTTP 429), met a bot or WAF challenge or got a 5xx, so nothing can be said about that path. The reason is `probing-passive`, `probe-budget`, `probe-errors` when every request failed, or `probe-incomplete` otherwise.
+
+### Limits
+
+The `Allow` header is what the server says it accepts. A server can accept a method it does not advertise, and a REST API route can legitimately advertise `PUT`, `DELETE` or `PATCH`. squirrel asks the root and a few pages, not every route, so it does not see methods enabled on other paths.
+
+## How to fix it
+
+Turn off the methods the website does not use, at the web server or reverse proxy:
+
+```apache httpd.conf
+TraceEnable off
+```
+
+nginx refuses `TRACE` by default. On IIS, deny the `TRACE` and `TRACK` verbs in request filtering. Allow `PUT`, `DELETE` and `PATCH` only on the API routes that need them, behind authentication, and reject `CONNECT` on origin servers.
+
+| | |
+|---|---|
+| **Rule ID** | `security/http-methods` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/http-methods"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/http-methods"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `http-methods-trace` | Problem |  |
+| `http-methods-dangerous` | Problem |  |
+| `http-methods` | Clean | `http-methods-trace`, `http-methods-dangerous` |
+| `http-methods-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/exposed-actuator](/rules/security/exposed-actuator): another read-only probe for endpoints that answer anyone.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.
