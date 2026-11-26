@@ -330,6 +330,7 @@
   "security/open-redirect": 1,
   "security/password-form-get": 0,
   "security/permissions-policy": 1,
+  "security/query-error-fuzz": 1,
   "security/referrer-policy": 1,
   "security/security-txt": 1,
   "security/sri": 500,

@@ -25,7 +25,7 @@ Cloud audits also run the [third-party rules](/cloud/third-party): who else load
 
 ## Security rules
 
-HTTPS, headers, and safe link practices (34 rules).
+HTTPS, headers, and safe link practices (35 rules).
 
 ## Run only these rules
 
@@ -77,6 +77,7 @@ These carry the highest severity and weight in the category.
 | [Password form submitted by GET: the password in the URL warning](/rules/security/password-form-get) | A form with a password field and method=get, or no method, puts the password in the URL. squirrel checks method and formmethod on every password form. | error | Per-page |
 | [Permissions-Policy: what the header does and how to set it](/rules/security/permissions-policy) | Without a Permissions-Policy, embedded frames inherit access to camera, microphone and geolocation. squirrel reads the header once per site. | info | Site-wide |
 | [Public forms without CAPTCHA: what counts as public](/rules/security/form-captcha) | A contact or newsletter form with no bot protection collects spam within days. squirrel classifies forms and flags the unprotected public ones. | warning | Per-page |
+| [Query error pages: malformed values that leak a stack trace](/rules/security/query-error-fuzz) | A quote, a NUL byte or a huge number in a query value that makes a page print a PHP, database or framework error. squirrel sends a fixed list of harmless tokens with GET only, one value at a time, on aggressive probing. | warning | Site-wide |
 | [Referrer-Policy: which value to send and what leaks](/rules/security/referrer-policy) | unsafe-url sends the full URL, query string included, to every site you link to. squirrel reads the header and flags the leaky values. | info | Site-wide |
 | [rel=noopener: external target=_blank links and tabnabbing](/rules/security/new-tab) | An external link with target=_blank and an explicit rel=opener gives the opened page a handle on yours. squirrel lists every one, per page. | warning | Per-page |
 | [security.txt: how to publish a vulnerability disclosure contact](/rules/security/security-txt) | Without a security.txt a researcher who finds a bug has no published route to report it. squirrel checks /.well-known/security.txt against RFC 9116 and flags catch-all HTML pages. | warning | Site-wide |

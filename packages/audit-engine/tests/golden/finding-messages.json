@@ -4022,6 +4022,12 @@
    "permissions-policy|info|No Permissions-Policy header|\"Consider restricting browser features\"|"
   ]
  },
+ "security/query-error-fuzz": {
+  "digest": "171599704247835",
+  "lines": [
+   "query-error-fuzz-not-checked|skipped|Query parameter error pages not checked: probing is passive, and this rule only probes at aggressive.|\"not-checked\"|"
+  ]
+ },
  "security/referrer-policy": {
   "digest": "48761140698451",
   "lines": [
