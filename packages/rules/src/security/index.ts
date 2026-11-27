@@ -29,6 +29,7 @@ import { passwordFormGetRule } from "./password-form-get";
 import { permissionsPolicyRule } from "./permissions-policy";
 import { queryErrorFuzzRule } from "./query-error-fuzz";
 import { referrerPolicyRule } from "./referrer-policy";
+import { infoDisclosureRule } from "./info-disclosure";
 import { securityTxtRule } from "./security-txt";
 import { sitemapSensitiveUrlsRule } from "./sitemap-sensitive-urls";
 import { sriRule } from "./sri";
@@ -80,6 +81,7 @@ export const rules: Rule[] = [
   httpMethodsRule,
   supabaseRlsRule,
   firebaseOpenRulesRule,
+  infoDisclosureRule,
   securityTxtRule,
   versionDisclosureRule,
   queryErrorFuzzRule,
@@ -114,6 +116,7 @@ export {
   permissionsPolicyRule,
   queryErrorFuzzRule,
   referrerPolicyRule,
+  infoDisclosureRule,
   securityTxtRule,
   sriRule,
   sitemapSensitiveUrlsRule,

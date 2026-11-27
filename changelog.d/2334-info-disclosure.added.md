@@ -1,0 +1,1 @@
+- **security/info-disclosure**: a new rule that flags stack traces, server filesystem paths, framework debug pages and database errors shown in crawled page and error-page bodies, quoting a bounded snippet. (#2334)

@@ -691,6 +691,7 @@
                   "rules/security/sri",
                   "rules/security/cookie-flags",
                   "rules/security/security-txt",
+                  "rules/security/info-disclosure",
                   "rules/security/version-disclosure"
                 ]
               },

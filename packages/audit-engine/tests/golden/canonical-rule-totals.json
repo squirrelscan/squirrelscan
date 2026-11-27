@@ -325,6 +325,7 @@
   "security/http-methods": 1,
   "security/http-to-https": 1,
   "security/https": 500,
+  "security/info-disclosure": 500,
   "security/json-sensitive-fields": 1,
   "security/leaked-secrets": 1,
   "security/mixed-content": 500,

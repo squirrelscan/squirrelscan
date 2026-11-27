@@ -1,0 +1,72 @@
+---
+title: "Information disclosure: stack traces, paths, debug pages and database errors"
+description: "A stack trace, filesystem path, framework debug page or database error in a response hands an attacker your internals. squirrel reads each crawled page and error page for them."
+---
+
+## What information disclosure is
+
+A page that crashes can print what the server knows: a stack trace with file names and line numbers, the absolute path of the web root, a framework debug page with environment details, or the text of a failed SQL query. None of that is for visitors. It tells an attacker which framework and database you run, where your files live and how your queries are built, and a debug page can show configuration and credentials as well.
+
+Version numbers in response headers are a separate check: [security/version-disclosure](/rules/security/version-disclosure) reads `Server` and `X-Powered-By`. This rule does not read headers, so one disclosure is never reported twice.
+
+## What squirrel checks
+
+The rule runs on every crawled page, error pages included. It reads the visible text of the document, skipping `<script>`, `<style>`, `<template>` and `<noscript>`, and looks at the first 200,000 characters for these signatures:
+
+- Stack traces: Python tracebacks, Java and Kotlin frames and exceptions, Node.js frames with a file path and position, PHP traces and `... in <path>.php on line N` errors, .NET frames with a source path, and Ruby backtraces.
+- Framework debug pages: Laravel (Whoops and `Illuminate\` classes), Symfony, Django (`DEBUG = True`), Rails (Action Controller exception pages), ASP.NET (`Server Error in '...' Application`) and the Werkzeug debugger.
+- Database errors: `SQLSTATE[...]`, `ORA-NNNNN`, `PG::` errors and common PostgreSQL messages, MySQL and mysqli messages, SQL Server messages and SQLite errors.
+- Absolute filesystem paths such as `/var/www/...`, `/home/<user>/public_html/...`, `/Users/...` and `C:\inetpub\...`. A bare path is only reported on an error response (status 400 or higher), because tutorials and documentation quote paths on healthy pages.
+
+The first match is reported as `info-disclosure`, a warning, with the kind, the matched signature and a snippet of at most 160 characters. The snippet is collapsed to one line.
+
+- Pass with `No stack trace, filesystem path, debug page or database error in the page` when nothing matches. A styled 404 page with no internal details passes.
+
+The rule reads what the page shows. A page that documents an error, such as a tutorial quoting a Python traceback, can match.
+
+## How to fix it
+
+Turn debug output off in production and serve a generic error page:
+
+- Laravel: `APP_DEBUG=false`. Symfony: `APP_ENV=prod`. Django: `DEBUG = False`. Rails: `config.consider_all_requests_local = false`.
+- ASP.NET: `<customErrors mode="RemoteOnly" />` or `On`.
+- PHP: `display_errors = Off` and `log_errors = On`.
+
+Log the details on the server instead. If the output showed a credential, rotate it.
+
+| | |
+|---|---|
+| **Rule ID** | `security/info-disclosure` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Per-page |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/info-disclosure"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `info-disclosure` | Problem |  |
+| `info-disclosure` | Clean | `info-disclosure` |
+
+{/* rule-checks:end */}
