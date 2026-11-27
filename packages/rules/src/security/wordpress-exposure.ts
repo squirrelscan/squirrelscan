@@ -27,7 +27,8 @@
 // What is reported. An endpoint counts only when its answer has the shape that
 // endpoint has, never on status alone. Findings name the endpoint, the kind of
 // evidence and (for users) a count. A username, and any body, never leaves
-// this file. The version from readme.html is the one value reported.
+// this file. The version from readme.html, when an old readme names one, is
+// the one value reported.
 
 import { PROBE_INCOMPLETE_SKIP_REASON } from "@squirrelscan/core-contracts";
 import { SQUIRRELSCAN_USER_AGENT } from "@squirrelscan/utils/constants";
@@ -129,7 +130,7 @@ const RISK: Record<Family, string> = {
   users:
     "Usernames give an attacker half of every login: they can be fed to wp-login.php or xmlrpc.php in a brute-force or credential-stuffing run.",
   version:
-    "The exact version tells a scanner which known vulnerabilities to try.",
+    "readme.html confirms WordPress and dates the install, and a version tells a scanner which known vulnerabilities to try.",
   xmlrpc:
     "xmlrpc.php is a brute-force target (system.multicall tries many passwords in one request) and a pingback amplification vector (pingback.ping makes your server request a URL the attacker picks).",
 };
@@ -264,15 +265,29 @@ export function readAuthorRedirect(r: Reply, origin: string): boolean {
   }
 }
 
+// WordPress has shipped readme.html with this title since 2.x. Releases since
+// 3.x dropped the "Version N" line, so the title alone identifies the file, and
+// a served readme.html is the disclosure even when it names no version: it
+// still confirms WordPress and dates the install to a release line.
+const README_TITLE_RE =
+  /<title>\s{0,16}WordPress\s{0,8}(?:&#8250;|&rsaquo;|\u203A)\s{0,8}ReadMe\s{0,16}<\/title>/i;
 const README_VERSION_RE =
   /<br\s{0,8}\/?>\s{0,64}Version\s{1,8}(\d{1,3}(?:\.\d{1,3}){1,3})/i;
 
-/** `/readme.html`: WordPress's own readme, naming the installed version. */
-export function readReadmeVersion(r: Reply): string | null {
+/**
+ * `/readme.html`: WordPress's own readme. Null when the reply is not that file;
+ * otherwise the version it names, or null `version` for the current readme,
+ * which names none.
+ */
+export function readReadme(r: Reply): { version: string | null } | null {
   if (r.status < 200 || r.status >= 300) return null;
   const body = text(r);
-  if (!/wordpress/i.test(body.slice(0, 4096))) return null;
-  return README_VERSION_RE.exec(body)?.[1] ?? null;
+  const head = body.slice(0, 4096);
+  const version = README_VERSION_RE.exec(body)?.[1] ?? null;
+  if (README_TITLE_RE.test(head)) return { version };
+  // An old readme whose title differs still has the version line.
+  if (version && /wordpress/i.test(head)) return { version };
+  return null;
 }
 
 /** `/xmlrpc.php`: the answer a GET to an enabled endpoint gets. */
@@ -290,7 +305,7 @@ export const wordpressExposureRule: Rule = {
     description:
       "On a site detected as WordPress, probes with read-only GET requests for usernames exposed by the wp-json users endpoint or the ?author= redirect, the version disclosed by readme.html, and an enabled xmlrpc.php. readme.html and xmlrpc.php need probing active or aggressive; the username probes are loud and need aggressive.",
     solution:
-      "Restrict /wp-json/wp/v2/users to signed-in users (a `rest_authentication_errors` filter), block `?author=N` redirects, delete readme.html (and license.txt), and disable xmlrpc.php unless you need it (`add_filter('xmlrpc_enabled', '__return_false')` or a server rule). Use unique login names that differ from author slugs, and rate limit wp-login.php.",
+      "Deny /xmlrpc.php at the web server unless you need it (nginx `location = /xmlrpc.php { deny all; }`, or a `<Files xmlrpc.php>` deny in .htaccess): the `xmlrpc_enabled` filter turns off only authenticated methods and leaves pingback.ping answering. Restrict /wp-json/wp/v2/users to signed-in users (a `rest_authentication_errors` filter), block `?author=N` redirects, and delete readme.html (and license.txt). Use login names that differ from author slugs, and rate limit wp-login.php.",
     category: "security",
     scope: "site",
     findingScope: "page",
@@ -407,12 +422,12 @@ export async function runWordpressExposure(
       if (readAuthorRedirect(r, origin))
         found.push({ probe: spec, evidence: "author-redirect-to-username" });
     } else if (spec.id === "readme") {
-      const v = readReadmeVersion(r);
-      if (v)
+      const readme = readReadme(r);
+      if (readme)
         found.push({
           probe: spec,
-          evidence: "readme-version",
-          detail: `version ${v}`,
+          evidence: readme.version ? "readme-version" : "readme-served",
+          ...(readme.version ? { detail: `version ${readme.version}` } : {}),
         });
     } else if (isXmlrpcEnabled(r)) {
       found.push({ probe: spec, evidence: "xmlrpc-post-only-banner" });

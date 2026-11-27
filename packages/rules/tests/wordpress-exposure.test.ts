@@ -8,7 +8,6 @@ import {
   isWordpressSite,
   MAX_WORDPRESS_REQUESTS,
   runWordpressExposure,
-  WORDPRESS_PROBES,
   wordpressExposureRule,
 } from "../src/security/wordpress-exposure";
 import {
@@ -40,7 +39,29 @@ const wpSurface = () =>
 
 const USERNAME = "secret-admin-login";
 const USERS = [{ id: 1, name: "A", slug: USERNAME, link: `${BASE}/author/x/` }];
-const README = `<html><head><title>WordPress &#8250; ReadMe</title></head><body><h1>WordPress</h1><br /> Version 5.8.1</body></html>`;
+// The head of readme.html as WordPress ships it today (6.x): it names no version.
+const README = `<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta name="viewport" content="width=device-width" />
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta name="robots" content="noindex,nofollow" />
+	<title>WordPress &#8250; ReadMe</title>
+	<link rel="stylesheet" href="wp-admin/css/install.css?ver=20100228" />
+</head>
+<body>
+<h1 id="logo">
+	<a href="https://wordpress.org/"><img alt="WordPress" src="wp-admin/images/wordpress-logo.png" /></a>
+</h1>
+<p style="text-align: center">Semantic Personal Publishing Platform</p>
+<h2>System Requirements</h2>
+<ul>
+	<li><a href="https://www.php.net/">PHP</a> version <strong>7.4</strong> or greater.</li>
+</ul>
+</body>
+</html>`;
+// readme.html from a release old enough to carry the version line.
+const OLD_README = `<html><head><title>WordPress &rsaquo; ReadMe</title></head><body><h1 id="logo"><img alt="WordPress" src="wp-admin/images/wordpress-logo.png" /><br /> Version 3.0.1</h1></body></html>`;
 
 const open: Record<string, Route> = {
   [`${BASE}/readme.html`]: () => html(README, 200),
@@ -102,8 +123,14 @@ describe("security/wordpress-exposure", () => {
     const { checks } = await runWordpressExposure(
       ruleCtx({ level: "aggressive", surface: wpSurface() })
     );
-    expect(stub.sent).toHaveLength(WORDPRESS_PROBES.length);
-    expect(stub.sent.length).toBeLessThanOrEqual(MAX_WORDPRESS_REQUESTS);
+    expect(stub.sent.map((r) => r.url).sort()).toEqual([
+      "https://example.com/?author=1",
+      "https://example.com/readme.html",
+      "https://example.com/wp-json/wp/v2/users",
+      "https://example.com/xmlrpc.php",
+    ]);
+    expect(stub.sent).toHaveLength(4);
+    expect(MAX_WORDPRESS_REQUESTS).toBe(4);
     for (const r of stub.sent) {
       expect(r.method).toBe("GET");
       expect(r.credentials).toBe("omit");
@@ -117,7 +144,6 @@ describe("security/wordpress-exposure", () => {
     ]);
     const all = JSON.stringify(checks);
     expect(all).not.toContain(USERNAME);
-    expect(all).toContain("5.8.1");
     const users = checks.find((c) => c.name === "wordpress-user-enumeration")!;
     expect(users.items).toHaveLength(2);
     expect(users.status).toBe("warn");
@@ -125,6 +151,53 @@ describe("security/wordpress-exposure", () => {
     expect(
       checks.find((c) => c.name === "wordpress-xmlrpc-enabled")?.message
     ).toContain("pingback");
+  });
+
+  test("the current readme.html, which names no version, is the version-disclosure finding", async () => {
+    const stub = stubFetch(open);
+    restore = stub.restore;
+    const { checks } = await runWordpressExposure(
+      ruleCtx({ level: "active", surface: wpSurface() })
+    );
+    const v = checks.find((c) => c.name.startsWith("wordpress-version"));
+    expect(v?.name).toBe("wordpress-version-disclosure");
+    expect(v?.status).toBe("warn");
+    expect(v?.items?.[0]?.meta).toEqual({ evidence: "readme-served" });
+    expect(v?.message).not.toContain("version 7.4");
+  });
+
+  test("an old readme.html reports the version it names", async () => {
+    const stub = stubFetch({
+      ...open,
+      [`${BASE}/readme.html`]: () => html(OLD_README, 200),
+    });
+    restore = stub.restore;
+    const { checks } = await runWordpressExposure(
+      ruleCtx({ level: "active", surface: wpSurface() })
+    );
+    const v = checks.find((c) => c.name === "wordpress-version-disclosure");
+    expect(v?.items?.[0]?.meta).toEqual({
+      evidence: "readme-version",
+      detail: "version 3.0.1",
+    });
+  });
+
+  test("a 2xx readme.html that is not WordPress's readme is not a finding", async () => {
+    const stub = stubFetch({
+      ...open,
+      [`${BASE}/readme.html`]: () =>
+        html(
+          "<html><head><title>ReadMe</title></head><body>Our WordPress theme, version 2</body></html>",
+          200
+        ),
+    });
+    restore = stub.restore;
+    const { checks } = await runWordpressExposure(
+      ruleCtx({ level: "active", surface: wpSurface() })
+    );
+    expect(
+      checks.find((c) => c.name.startsWith("wordpress-version"))?.name
+    ).toBe("wordpress-version-disclosure-closed");
   });
 
   test("a hardened site passes every family when each answer is definite", async () => {

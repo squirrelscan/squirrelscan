@@ -9,7 +9,7 @@ A stock WordPress install answers a few requests that help an attacker more than
 
 - `/wp-json/wp/v2/users` lists the site's authors, with their `slug`, which is usually the login name.
 - `/?author=1` redirects to `/author/<username>/`, so counting up the number finds every author.
-- `/readme.html` names the installed WordPress version, so a scanner knows which known vulnerabilities to try.
+- `/readme.html` is WordPress's own readme. It confirms the site runs WordPress and dates the install, and readme files from old releases name the exact version, so a scanner knows which known vulnerabilities to try.
 - `/xmlrpc.php` is a legacy remote API. It is a brute-force target, because `system.multicall` tries many passwords in one request, and a pingback amplification vector, because `pingback.ping` makes your server request a URL the attacker picks.
 
 Usernames are half of every login. Once an attacker has them, they can feed them to `wp-login.php` or `xmlrpc.php` in a brute-force or credential-stuffing run.
@@ -38,20 +38,20 @@ Requests carry no cookies and do not follow redirects. Reads are capped (64 KB f
 A status code alone never counts, so a site that answers every path with a 200 page is not a finding.
 
 - Users: a JSON array whose every entry has a numeric `id` and a string `slug`, or a redirect on the same origin to a path of the form `/author/<name>/`.
-- Version: a 2xx page that mentions WordPress and has a `Version` line with a dotted number.
+- Version: a 2xx `readme.html` whose title is WordPress's readme title (`WordPress › ReadMe`), or a 2xx page that mentions WordPress and has a `Version` line with a dotted number. Current WordPress releases ship a readme that names no version, and serving it is still the finding: the clean check passes only when `readme.html` is not WordPress's readme.
 - xmlrpc: the "XML-RPC server accepts POST requests only" answer, on any status other than 404 or a 5xx.
 
 ### Results
 
-A finding names the endpoint and the kind of evidence. For users it adds the number of users listed. For the version it adds the version number. A username is never stored or reported, and no response body leaves the rule.
+A finding names the endpoint and the kind of evidence. For users it adds the number of users listed. For the version it adds the version number when the readme names one (evidence `readme-version`); a readme without one is reported with evidence `readme-served`. A username is never stored or reported, and no response body leaves the rule.
 
 Each of the three families has a problem check, a clean check and a not-checked check, so a pass clears only what the run requested and got a definite answer for. An `active` run never asks for usernames, so it never clears a user enumeration finding from an earlier `aggressive` run.
 
 ## How to fix it
 
+- Deny `/xmlrpc.php` at the web server unless you need it. In nginx, `location = /xmlrpc.php { deny all; }`; in Apache, a `<Files xmlrpc.php>` block with `Require all denied`. The `add_filter( 'xmlrpc_enabled', '__return_false' );` filter is not enough on its own: it turns off only the methods that need a login, so `pingback.ping` still answers and the endpoint still reports as enabled.
 - Block anonymous access to `/wp-json/wp/v2/users` (a `rest_authentication_errors` filter or a security plugin), and block `?author=N` redirects at the server or with a plugin.
-- Delete `readme.html` and `license.txt` from the web root, and keep WordPress updated.
-- Disable XML-RPC unless you need it: `add_filter( 'xmlrpc_enabled', '__return_false' );` or deny `xmlrpc.php` at the server.
+- Delete `readme.html` and `license.txt` from the web root (an update puts them back, so delete them after each update, or deny them at the server), and keep WordPress updated.
 - Use login names that differ from author slugs, and rate limit `wp-login.php`.
 
 | | |
