@@ -1,0 +1,97 @@
+---
+title: "Sensitive URLs in your sitemap: admin, staging and backup paths that answer"
+description: "A sitemap is public, so an /admin/ or /staging/ entry points visitors at it. squirrel probes each sensitive-looking entry and reports only the ones that answer."
+---
+
+## What this rule finds
+
+A sitemap is a public, machine-readable list of URLs. When it names `/admin/`, `/staging/`, `/drafts/` or `/backup/`, anyone who reads it knows where to look. A path that only looks sensitive is not a problem if it is not reachable, so this rule reports an entry only when it answers a request without credentials.
+
+## What squirrel checks
+
+It reads the sitemap entries the crawl already fetched. Reading them sends no request. An entry is sensitive-looking when one of its path segments is exactly one of these words: `admin`, `administrator`, `staging`, `draft`, `drafts`, `preview`, `backup`, `backups`, `internal`, `private`, `uat` or `debug`. Each segment is percent-decoded and lowercased, then compared whole, so `/admin/` and `/Staging/` match while `/admin-tools/`, `/administration/` and a slug such as `/blog/draft-post-staging` do not.
+
+The probes are a probing rule, so they run only when [probing intensity](/configuration/security) is `active` or `aggressive`. On a `passive` run the rule sends nothing and records a skipped check when sensitive-looking entries exist.
+
+### Which URLs are probed
+
+- Only entries on the same origin as the audited URL (scheme, host and port). An entry on another host is never requested.
+- Below `aggressive`, an entry that `robots.txt` disallows is skipped.
+- At most 10 entries per run.
+
+### What is sent
+
+One `GET` per entry, with no cookies, no `Authorization` header and no redirect followed. At most 8 KB of each answer is read. One more `GET` goes to a random path on the origin, to learn whether the site answers `200` for every path. Every request is counted against the shared probe budget, and a request is not sent once the budget is spent.
+
+### What is reported
+
+An entry is reported when it answers with a 2xx status that is not the site's answer for a random path. Not reported: a `404`, a redirect (a login redirect is the page protecting itself), a `401` or `403`, and a catch-all `200` page such as a single-page app shell. Findings list each reachable URL, its status, the sensitive words found and the sitemaps that name it. No response body is stored.
+
+- `sitemap-sensitive-urls` (fail) lists the reachable URLs.
+- `sitemap-sensitive-urls-clean` (pass) when no entry looks sensitive, or every probed entry did not answer, and nothing was left unchecked.
+- `sitemap-sensitive-urls-not-checked` (skipped) when there is no sitemap (`no-sitemap`), probing is passive (`probing-passive`), `robots.txt` disallows every entry (`robots-disallowed`), the budget ran out (`probe-budget`), every probe failed (`probe-errors`), or part of the work was not done (`probe-incomplete`: the sitemaps were read only in part, the 10 entry cap, a `429`, a challenge, a 5xx or a failed request).
+
+## How to fix it
+
+Take the URLs out of the sitemap, then make the pages unreachable to the public: require a login, restrict them by IP, or remove them from the production server. `robots.txt` and `noindex` hide a page from search engines only. They do not protect it.
+
+| | |
+|---|---|
+| **Rule ID** | `security/sitemap-sensitive-urls` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/sitemap-sensitive-urls"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/sitemap-sensitive-urls"]
+```
+
+## Run only these rules
+
+```bash
+squirrel audit https://nutshop.squirrelscan.com --rule-include security
+```
+
+`security` runs this category only. Add the other categories in the group with `--rule-include security,integrity,legal,blocking`.
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `sitemap-sensitive-urls` | Problem |  |
+| `sitemap-sensitive-urls-clean` | Clean | `sitemap-sensitive-urls` |
+| `sitemap-sensitive-urls-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [crawl/sitemap-domain](/rules/crawl/sitemap-domain): sitemap URLs on another domain.
+- [security/exposed-files](/rules/security/exposed-files): sensitive files such as `.git` and `.env`.
+- [security/client-side-authz](/rules/security/client-side-authz): admin APIs that answer without credentials.
