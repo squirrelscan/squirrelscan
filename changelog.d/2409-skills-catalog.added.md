@@ -1,0 +1,1 @@
+- `squirrel skills list` shows every skill in the squirrelscan/skills catalog, `squirrel skills install <name>` and `--all` install them, and `squirrel skills update` and `squirrel skills status` now cover the task skills too. `squirrel skills install` with no names still installs only `squirrelscan` and `audit-website`. (#2409)

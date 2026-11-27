@@ -5,6 +5,7 @@ import {
   AGENT_NAMES,
   type AgentName,
   SKILLS_REPOSITORY,
+  SKILL_NAMES,
   type SkillsEnv,
   type SkillsScope,
   type SyncResult,
@@ -24,7 +25,7 @@ import {
   uninstallSkills,
 } from "@/self/agent-skills";
 import { loadSettings } from "@/self/settings";
-import { SkillsFetchError, fetchSkillsManifest } from "@/self/skills-manifest";
+import { SkillsFetchError, fetchSkillsIndex } from "@/self/skills-manifest";
 import { safeExit } from "@/self/updater";
 
 import { type Theme, createTheme, padVisible, visibleLength } from "../theme";
@@ -219,8 +220,8 @@ export async function runSkillsSync(
 ): Promise<void> {
   const allowed =
     mode === "install"
-      ? ["--agent", "--project", "--dry-run"]
-      : ["--check", "--force", "--dry-run", "--json"];
+      ? ["--agent", "--project", "--dry-run", "--all"]
+      : ["--check", "--force", "--dry-run", "--json", "--all"];
   // `--check` exits 1 for "update available", so anything that stops the
   // check itself exits 2: a script must never read an error as an update.
   const errorCode =
@@ -238,7 +239,8 @@ export async function runSkillsSync(
   const e = deps.e ?? defaultSkillsEnv();
   const json = args.flags.has("--json");
   const check = args.flags.has("--check");
-  if (mode === "update" && !installedSkillNames(e).length) {
+  const all = args.flags.has("--all");
+  if (mode === "update" && !all && !installedSkillNames(e).length) {
     if (json)
       console.log(
         JSON.stringify({ targets: [], updateAvailable: false }, null, 2)
@@ -263,6 +265,7 @@ export async function runSkillsSync(
       e,
       fetch: deps.fetch,
       skills: args.skills,
+      all,
       agents: args.agents,
       scope: args.flags.has("--project") ? "project" : "global",
       force: args.flags.has("--force"),
@@ -330,7 +333,7 @@ export async function printSkillsStatus(
   const e = deps.e ?? defaultSkillsEnv();
   let manifest;
   try {
-    manifest = await fetchSkillsManifest({ fetch: deps.fetch });
+    manifest = await fetchSkillsIndex({ fetch: deps.fetch });
   } catch {
     manifest = undefined; // offline: still show what is installed
   }
@@ -363,7 +366,12 @@ export async function printSkillsStatus(
   console.log(
     `${t.heading("squirrelscan skills")}  ${t.dim(`(${SOURCE} @ ${manifest ? manifest.ref.slice(0, 7) : "offline"})`)}\n`
   );
-  const rows = status.map((s) => {
+  const shown = status.filter(
+    (s) =>
+      s.targets.length > 0 ||
+      (SKILL_NAMES as readonly string[]).includes(s.name)
+  );
+  const rows = shown.map((s) => {
     const ours = s.targets.filter(
       (x) => x.managedBy !== "other" && !x.released
     );
@@ -474,6 +482,107 @@ export async function printSkillsStatus(
   );
 }
 
+// ── list ────────────────────────────────────────────────────────────────────
+
+export async function printSkillsList(
+  raw: string[],
+  deps: SkillsCommandDeps = {}
+): Promise<void> {
+  let args: ParsedArgs;
+  try {
+    args = parseSkillsArgs(raw, ["--json"]);
+  } catch (error) {
+    return fail(deps, whyFailed(error, "list"));
+  }
+  if (args.skills.length) {
+    return fail(deps, "squirrel skills list takes no skill names");
+  }
+  const e = deps.e ?? defaultSkillsEnv();
+  let catalog;
+  try {
+    catalog = await fetchSkillsIndex({ fetch: deps.fetch });
+  } catch {
+    catalog = undefined; // offline: list what is installed
+  }
+  // Only a real catalog describes every skill; manifest.json holds the core two.
+  const known = catalog?.catalog ? catalog : undefined;
+  const defaults = new Set<string>(SKILL_NAMES);
+  const status = skillsStatus(catalog, e).filter(
+    (s) => known?.skills.some((k) => k.name === s.name) || s.targets.length > 0
+  );
+  const entries = status.map((s) => {
+    const meta = known?.skills.find((k) => k.name === s.name);
+    return {
+      name: s.name,
+      version: s.latest ?? null,
+      description: meta?.description ?? null,
+      default: defaults.has(s.name),
+      installed: s.targets
+        .filter((x) => x.managedBy !== "other" || x.linked)
+        .map((x) => ({
+          dir: x.dir,
+          agent: x.agent ?? null,
+          scope: x.scope ?? null,
+          version: x.version ?? null,
+        })),
+    };
+  });
+  if (args.flags.has("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          source: SOURCE,
+          ref: catalog?.ref ?? null,
+          catalog: Boolean(known),
+          skills: entries,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  const p = paint(deps);
+  const { t } = p;
+  console.log(
+    `${t.heading("squirrelscan skills")}  ${t.dim(`(${SOURCE} @ ${known ? known.ref.slice(0, 7) : "catalog unavailable"})`)}\n`
+  );
+  if (!entries.length) {
+    console.log(
+      `No skills installed, and the catalog is unavailable. Try again when ${SOURCE} is reachable.`
+    );
+    return;
+  }
+  const where = (x: (typeof entries)[number]["installed"][number]) => {
+    const place = [x.scope, x.agent].filter(Boolean).join(" ");
+    return place || tildify(dirname(x.dir), e);
+  };
+  const width = Math.max(5, ...entries.map((x) => visibleLength(x.name))) + 3;
+  for (const x of entries) {
+    const flags = [
+      x.default ? "default" : "",
+      x.installed.length
+        ? `installed ${[...new Set(x.installed.map((i) => `${i.version ?? "?"} (${where(i)})`))].join(", ")}`
+        : "not installed",
+    ].filter(Boolean);
+    console.log(
+      `${padVisible(t.bold(x.name), width)}${x.version ?? "-"}  ${t.dim(flags.join("; "))}`
+    );
+    if (x.description) console.log(`  ${x.description}`);
+  }
+  console.log("");
+  if (!known) {
+    console.log(
+      `The catalog is unavailable, so only installed skills are listed.`
+    );
+  } else {
+    console.log(
+      `Install one with ${p.cmd("squirrel skills install <name>")}, or all with ${p.cmd("squirrel skills install --all")}.`
+    );
+  }
+}
+
 // ── uninstall ───────────────────────────────────────────────────────────────
 
 export async function runSkillsUninstall(
@@ -542,7 +651,12 @@ export const skillsInstall = defineCommand({
     skill: {
       type: "positional",
       required: false,
-      description: "Skills to install, by name (default: all of them)",
+      description:
+        "Skills to install, by name (default: squirrelscan and audit-website)",
+    },
+    all: {
+      type: "boolean",
+      description: "Install every skill in the catalog",
     },
     agent: {
       type: "string",
@@ -572,6 +686,10 @@ export const skillsUpdate = defineCommand({
       type: "positional",
       required: false,
       description: "Skills to update, by name (default: every installed one)",
+    },
+    all: {
+      type: "boolean",
+      description: "Also install catalog skills that are not installed yet",
     },
     check: {
       type: "boolean",
@@ -614,6 +732,19 @@ export const skillsStatusCommand = defineCommand({
   },
 });
 
+export const skillsList = defineCommand({
+  meta: {
+    name: "list",
+    description: "List every skill in the catalog and where it is installed",
+  },
+  args: {
+    json: { type: "boolean", description: "Output JSON" },
+  },
+  async run({ rawArgs }) {
+    await printSkillsList(rawArgs);
+  },
+});
+
 export const skillsUninstall = defineCommand({
   meta: {
     name: "uninstall",
@@ -645,6 +776,7 @@ export const skills = defineCommand({
     description: "Manage agent skills (Claude Code, Cursor, Codex, and more)",
   },
   subCommands: {
+    list: skillsList,
     install: skillsInstall,
     update: skillsUpdate,
     status: skillsStatusCommand,

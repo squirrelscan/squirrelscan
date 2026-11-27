@@ -274,7 +274,7 @@ _squirrel_completions() {
     skills)
       case "\${prev}" in
         skills)
-          COMPREPLY=( $(compgen -W "install update status uninstall" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "list install update status uninstall" -- "\${cur}") )
           return 0
           ;;
         --agent)
@@ -284,12 +284,12 @@ _squirrel_completions() {
       esac
       case "\${COMP_WORDS[2]}" in
         install)
-          COMPREPLY=( $(compgen -W "squirrelscan audit-website --agent --project --dry-run" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "squirrelscan audit-website --all --agent --project --dry-run" -- "\${cur}") )
           ;;
         update)
-          COMPREPLY=( $(compgen -W "squirrelscan audit-website --check --force --dry-run --json" -- "\${cur}") )
+          COMPREPLY=( $(compgen -W "squirrelscan audit-website --all --check --force --dry-run --json" -- "\${cur}") )
           ;;
-        status)
+        list|status)
           COMPREPLY=( $(compgen -W "--json" -- "\${cur}") )
           ;;
         uninstall)
@@ -600,6 +600,7 @@ _squirrel() {
   )
 
   skills_commands=(
+    'list:List every skill in the catalog and where it is installed'
     'install:Install squirrelscan skills for coding agents'
     'update:Update the installed squirrelscan skills'
     'status:Show installed skill versions and locations'
@@ -675,6 +676,7 @@ _squirrel() {
                 '*--agent[Agent to install for]:agent:(claude agents all)' \\
                 '--project[Install into this repo]' \\
                 '--dry-run[Show what would change]' \\
+                '--all[Install every skill in the catalog]' \\
                 '*:skill:(squirrelscan audit-website)'
               ;;
             update)
@@ -682,10 +684,11 @@ _squirrel() {
                 '--check[Only report; exit 1 when an update is available]' \\
                 '--force[Also replace locally edited files]' \\
                 '--dry-run[Show what would change]' \\
+                '--all[Also install catalog skills not installed yet]' \\
                 '--json[Output JSON]' \\
                 '*:skill:(squirrelscan audit-website)'
               ;;
-            status)
+            list|status)
               _arguments '--json[Output JSON]'
               ;;
             uninstall)
@@ -1067,16 +1070,18 @@ complete -c squirrel -n "__fish_seen_subcommand_from self; and not __fish_seen_s
 complete -c squirrel -n "__fish_seen_subcommand_from completion" -a "bash zsh fish" -d "Shell type"
 
 # Skills subcommands
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a install -d "Install squirrelscan skills for coding agents"
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a update -d "Update the installed squirrelscan skills"
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a status -d "Show installed skill versions and locations"
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from install update status uninstall" -a uninstall -d "Remove the skills squirrelscan installed"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from list install update status uninstall" -a list -d "List every skill in the catalog and where it is installed"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from list install update status uninstall" -a install -d "Install squirrelscan skills for coding agents"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from list install update status uninstall" -a update -d "Update the installed squirrelscan skills"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from list install update status uninstall" -a status -d "Show installed skill versions and locations"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from list install update status uninstall" -a uninstall -d "Remove the skills squirrelscan installed"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install uninstall" -l agent -d "Agent: claude, agents or all" -xa "claude agents all"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install uninstall" -l project -d "This repo's .claude/skills and .agents/skills"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install update" -l all -d "Install catalog skills: every one (install) or those not installed yet (update)"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from install update" -l dry-run -d "Show what would change, write nothing"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update" -l check -d "Only report; exit 1 when an update is available"
 complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update" -l force -d "Also replace locally edited files (backed up first)"
-complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from update status" -l json -d "Output JSON"
+complete -c squirrel -n "__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from list update status" -l json -d "Output JSON"
 
 # Setup options
 complete -c squirrel -n "__fish_seen_subcommand_from setup" -s y -l yes -d "Accept every default without asking"

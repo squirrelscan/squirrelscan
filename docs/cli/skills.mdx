@@ -25,7 +25,7 @@ For the full list of supported agents, see [agentskills.io](https://agentskills.
 
 ## The squirrelscan skills
 
-squirrelscan ships these skills from the [squirrelscan/skills repository](https://github.com/squirrelscan/skills), the one source for every install path below:
+squirrelscan ships these skills from the [squirrelscan/skills repository](https://github.com/squirrelscan/skills), the one source for every install path below. The repository holds more skills than these two (task skills for security, accessibility, SEO and more). `squirrel skills list` shows all of them, and a skill added there needs no CLI update. The two below are the default set:
 
 | Skill | What it does |
 |-------|--------------|
@@ -38,13 +38,14 @@ squirrelscan ships these skills from the [squirrelscan/skills repository](https:
 
 ```bash
 squirrel skills                         # same as squirrel skills status
+squirrel skills list [--json]
 squirrel skills status [--json]
-squirrel skills install [skill...] [--agent <name>...] [--project] [--dry-run]
-squirrel skills update  [skill...] [--check] [--force] [--dry-run] [--json]
+squirrel skills install [skill...] [--all] [--agent <name>...] [--project] [--dry-run]
+squirrel skills update  [skill...] [--all] [--check] [--force] [--dry-run] [--json]
 squirrel skills uninstall [skill...] [--agent <name>...] [--project]
 ```
 
-`skill...` defaults to both skills (`squirrelscan` and `audit-website`).
+`skill...` on `install` defaults to the two default skills (`squirrelscan` and `audit-website`), which are built into the CLI and install even when the catalog can't be read. Name any other skill from `squirrel skills list` to install it, or pass `--all` to install every skill in the catalog. On `update`, `skill...` defaults to every installed skill.
 
 `--agent` picks where the skills go, and can be repeated:
 
@@ -56,7 +57,27 @@ squirrel skills uninstall [skill...] [--agent <name>...] [--project]
 
 The default is both. `--project` uses the current repo's `.claude/skills` and `.agents/skills` instead of the ones in your home directory. The repo is the nearest folder up from where you run it that holds a `.git`, or the current folder when there is none.
 
-squirrel downloads the skills itself: no Node, no `npx`, no other tool. It reads the published `manifest.json` in [squirrelscan/skills](https://github.com/squirrelscan/skills), downloads the files it needs, checks each one against its sha256, and only then writes. The skills are real copies, so this works the same on macOS, Linux and Windows. A download that fails or doesn't match its hash writes nothing, so the previous install stays exactly as it was.
+squirrel downloads the skills itself: no Node, no `npx`, no other tool. It reads the published `catalog.json` in [squirrelscan/skills](https://github.com/squirrelscan/skills) (the name, version, description, default flag and files of every skill, with each file's sha256 and size), falling back to `manifest.json`, which lists only the default skills, when the catalog can't be read. It downloads the files it needs, checks each one against its sha256, and only then writes. The skills are real copies, so this works the same on macOS, Linux and Windows. A download that fails or doesn't match its hash writes nothing, so the previous install stays exactly as it was.
+
+---
+
+## list
+
+Show every skill in the catalog: its latest version, a one-line description, whether it is a default skill, and where it is installed (global or project, `claude` or `agents`).
+
+```bash
+$ squirrel skills list
+squirrelscan skills  (github.com/squirrelscan/skills @ e23765f)
+
+squirrelscan   1.4.1  default; installed 1.4.1 (global claude, global agents)
+  Operate the squirrelscan CLI
+seo-audit      1.0    not installed
+  Audit a website for SEO issues
+
+Install one with `squirrel skills install <name>`, or all with `squirrel skills install --all`.
+```
+
+Offline, it lists the installed skills and says the catalog is unavailable. `--json` gives the same as JSON.
 
 ---
 
@@ -76,7 +97,7 @@ squirrelscan skills  (github.com/squirrelscan/skills @ e23765f)
 Auto-update is on: skills update with the CLI.
 ```
 
-It also lists files you have edited, skills that `npx skills` still manages, folders that belong to something else, and any install an update can't write to (a link or a folder where a file should be). Offline, it shows what is installed and says the latest version is unknown. `--json` gives the same as JSON.
+It shows the default skills and every other skill you have installed, with the installed and latest version of each. It also lists files you have edited, skills that `npx skills` still manages, folders that belong to something else, and any install an update can't write to (a link or a folder where a file should be). Offline, it shows what is installed and says the latest version is unknown. `--json` gives the same as JSON.
 
 ---
 
@@ -93,6 +114,13 @@ Restart your agent to load them.
 Skills you installed earlier with `npx skills add` are taken over: squirrel updates them in place, replaces the symlinks `npx skills` made with copies, and removes them from its lock file (after copying the lock to `.skill-lock.json.bak`), so the two tools stop updating the same folders. A file that differs from the published version with no record of who wrote it is backed up first.
 
 squirrel leaves alone a skill folder that links somewhere else (such as your own checkout) and a folder holding another author's skill of the same name.
+
+```bash
+squirrel skills install seo-audit security-headers   # by name
+squirrel skills install --all                        # every skill in the catalog
+```
+
+An unknown name stops the command with the list of valid names and writes nothing. `--agent`, `--project` and `--dry-run` work the same with `--all`.
 
 `--dry-run` shows what would change without writing anything. [`squirrel setup`](/cli/setup) runs the same install as part of the first run.
 
@@ -118,7 +146,7 @@ $ squirrel skills update
 ✓ squirrelscan 1.4.1 is current
 ```
 
-`update` changes only what is already installed, and downloads only the files that changed. It never installs a skill or a location you don't have. It updates the skills in your home directory and, run inside a repo, that repo's `--project` copies; other repos' copies are updated from inside those repos.
+`update` changes only what is already installed (task skills included), and downloads only the files that changed. It never installs a skill or a location you don't have, unless you pass `--all`: that also installs the catalog skills you don't have yet, at the locations you already use. It updates the skills in your home directory and, run inside a repo, that repo's `--project` copies; other repos' copies are updated from inside those repos.
 
 squirrel records the hash of every file it writes (in `~/.squirrel/skills.json`; `~/.squirrel` is `%LOCALAPPDATA%\squirrel` on Windows), so it knows when you have edited one, and it never overwrites an edit silently. An edited file is kept and reported; `--force` replaces it too, after backing your copy up to `~/.squirrel/skills/backups/<timestamp>/`, one folder per location (`global-claude`, `project-agents` and so on). Files of your own in a skill folder always stay.
 
@@ -126,12 +154,13 @@ squirrel records the hash of every file it writes (in `~/.squirrel/skills.json`;
 |--------|--------------|
 | `--check` | Only report. Exits 1 when an update is available and 0 when everything is current, for scripts and agents. Exits 2 when the check itself fails or an install can't be updated |
 | `--force` | Also replace locally edited files, after backing them up |
+| `--all` | Also install catalog skills that are not installed yet |
 | `--dry-run` | Show what would change without writing anything |
 | `--json` | Output JSON |
 
 ### Automatic updates
 
-You rarely need to run it. From v0.0.99, when squirrel [auto-updates itself](/cli/self#automatic-updates), the first run on the new version updates the installed skills in the background: no prompts, a 60 second limit, once per new version, edits kept, and no network at all when no skills are installed. It leaves project installs (`--project`) to you. It follows `auto_update`; turn off just the skills with:
+You rarely need to run it. From v0.0.99, when squirrel [auto-updates itself](/cli/self#automatic-updates), the first run on the new version updates the installed skills in the background: no prompts, a 60 second limit, once per new version, edits kept, and no network at all when no skills are installed. It only updates what is installed and never installs a new skill. It leaves project installs (`--project`) to you. It follows `auto_update`; turn off just the skills with:
 
 ```bash
 squirrel self settings set skills_auto_update false
@@ -220,7 +249,7 @@ The `squirrelscan` skill teaches your agent the CLI itself: installation, authen
 SQUIRREL_SKILLS_TEST_SOURCE=http://127.0.0.1:8123 squirrel skills install
 ```
 
-The server serves `manifest.json` and `skills/<skill>/<file>` under that URL. The value is read from the process environment only, never from `squirrel.toml`, a URL or a manifest. The variable has to be in the real environment (your shell, or your CI's secrets): `squirrel` does not read a `.env` file or a `bunfig.toml` from the directory you run it in. Whenever the override is honoured, `squirrel` prints a note on stderr naming the source. It is honoured only for a literal loopback address (`127.x.x.x` or `[::1]`, no credentials, no host name to resolve). Any other value is ignored with a warning and the skills come from `squirrelscan/skills` on GitHub as usual. Redirects from the local server are refused, and every file is still checked against its sha256 in the manifest, which from the same local server is an integrity check, not proof of who wrote the files. Requests go through `HTTP_PROXY` if one is set, so add `127.0.0.1` to `NO_PROXY` when a proxy is configured.
+The server serves `manifest.json`, `catalog.json` and `skills/<skill>/<file>` under that URL. The value is read from the process environment only, never from `squirrel.toml`, a URL or a manifest. The variable has to be in the real environment (your shell, or your CI's secrets): `squirrel` does not read a `.env` file or a `bunfig.toml` from the directory you run it in. Whenever the override is honoured, `squirrel` prints a note on stderr naming the source. It is honoured only for a literal loopback address (`127.x.x.x` or `[::1]`, no credentials, no host name to resolve). Any other value is ignored with a warning and the skills come from `squirrelscan/skills` on GitHub as usual. Redirects from the local server are refused, and every file is still checked against its sha256 in the manifest, which from the same local server is an integrity check, not proof of who wrote the files. Requests go through `HTTP_PROXY` if one is set, so add `127.0.0.1` to `NO_PROXY` when a proxy is configured.
 
 ---
 

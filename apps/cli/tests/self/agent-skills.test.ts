@@ -156,7 +156,10 @@ function put(path: string, content: string) {
 }
 const fileDownloads = (requests: string[]) =>
   requests.filter(
-    (u) => u.includes("/skills/") && !u.endsWith("manifest.json")
+    (u) =>
+      u.includes("/skills/") &&
+      !u.endsWith("manifest.json") &&
+      !u.endsWith("catalog.json")
   );
 const install = (files: Files = V1) =>
   syncSkills({ mode: "install", e, fetch: fakeRemote(files).fetch });
