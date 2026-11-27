@@ -5,7 +5,7 @@ import type { CheckItem } from "@squirrelscan/core-contracts";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { scanContent } from "./leaked-secrets";
-import { decodeForLocation } from "./secrets/decode";
+import { decodeForLocation, findBase64Runs } from "./secrets/decode";
 
 const COMMENT_NODE = 8;
 const ELEMENT_NODE = 1;
@@ -132,15 +132,46 @@ export function redactSecrets(data: string): {
   if (secrets.length === 0) return { text: decoded, found: false };
   // Offsets into a text the scanner decoded further cannot be trusted: quote nothing of it.
   if (!stable) return { text: REDACTED, found: true };
-  let text = decoded;
-  let floor = decoded.length;
-  // From the end, so earlier offsets stay valid; overlapping matches are skipped.
-  for (const s of [...secrets].sort((a, b) => b.offset - a.offset)) {
-    const end = s.offset + s.length;
-    if (end > floor || s.offset < 0) continue;
-    text = text.slice(0, s.offset) + REDACTED + text.slice(end);
-    floor = s.offset;
+  // A finding read inside a decoded base64 blob carries the blob's start as its offset and the decoded key's length, so
+  // cutting `length` characters from there leaves most of the blob, which still decodes to the key: cut the whole run.
+  const runs = secrets.some((s) => s.location.endsWith("(base64)"))
+    ? findBase64Runs(decoded)
+    : [];
+  const spans: [number, number][] = [];
+  for (const s of secrets) {
+    if (s.offset < 0) return { text: REDACTED, found: true };
+    if (s.location.endsWith("(base64)")) {
+      const run = runs.find((r) => r.start <= s.offset && s.offset < r.end);
+      if (!run) return { text: REDACTED, found: true };
+      spans.push([run.start, run.end]);
+    } else
+      spans.push([s.offset, Math.min(decoded.length, s.offset + s.length)]);
   }
+  // From the end, so earlier offsets stay valid; overlapping spans merge into one cut.
+  spans.sort((a, b) => b[0] - a[0]);
+  let text = decoded;
+  let cutStart = -1;
+  let cutEnd = -1;
+  const cut = () => {
+    if (cutStart >= 0)
+      text = text.slice(0, cutStart) + REDACTED + text.slice(cutEnd);
+  };
+  for (const [start, end] of spans) {
+    if (cutStart >= 0 && end > cutStart) {
+      cutStart = Math.min(cutStart, start);
+      cutEnd = Math.max(cutEnd, end);
+      continue;
+    }
+    cut();
+    cutStart = start;
+    cutEnd = end;
+  }
+  cut();
+  // What is quoted must hold no secret the scanner can still find, at any decode depth.
+  const left = scanContent(text, "html-comment").filter(
+    (s) => s.confidence !== "info" && !s.publicByDesign
+  );
+  if (left.length > 0) return { text: REDACTED, found: true };
   return { text, found: true };
 }
 

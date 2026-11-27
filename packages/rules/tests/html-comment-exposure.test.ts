@@ -10,6 +10,7 @@ import {
   SNIPPET_MAX_LENGTH,
   htmlCommentExposureRule,
 } from "../src/security/html-comment-exposure";
+import { scanContent } from "../src/security/leaked-secrets";
 
 const URL_ = "https://www.example.com/page";
 
@@ -95,6 +96,49 @@ describe("signals", () => {
     expect(item.snippet).toContain(REDACTED);
     expectNoKeyFragment(item.snippet!);
     expectNoKeyFragment(JSON.stringify(r));
+  });
+
+  // A key read inside a decoded base64 blob is reported at the blob's start with the KEY's length: cutting that many
+  // characters left the rest of the blob, which still decoded to the key.
+  const serious = (text: string) =>
+    scanContent(text, "html-comment").filter(
+      (s) => s.confidence !== "info" && !s.publicByDesign
+    );
+  function expectNothingDecodes(out: string): void {
+    expect(serious(out)).toEqual([]);
+    for (const run of out.match(/[A-Za-z0-9+/_-]{8,}={0,2}/g) ?? []) {
+      const decoded = Buffer.from(run, "base64").toString("latin1");
+      expectNoKeyFragment(decoded);
+      expect(serious(decoded)).toEqual([]);
+    }
+  }
+  const pad = "x".repeat(30);
+  test.each([
+    ["at the start", { k: KEY, pad }],
+    ["in the middle", { pad, k: KEY, pad2: pad }],
+    ["at the end", { pad, k: KEY }],
+  ])("a secret inside a base64 blob is redacted whole: %s", async (_n, obj) => {
+    const blob = Buffer.from(JSON.stringify(obj)).toString("base64");
+    const c = `config ${blob} end`;
+    // The blob is found by the scanner's base64 pass, the case being guarded.
+    expect(serious(c).some((s) => s.location.endsWith("(base64)"))).toBe(true);
+    const r = await run(`<!-- ${c} -->`);
+    expect(r?.status).toBe("warn");
+    const item = r!.items![0]!;
+    expect((item.meta as { signals: string[] }).signals).toContain("secret");
+    expect(item.snippet).toContain(REDACTED);
+    expect(item.snippet).not.toContain(blob.slice(0, 8));
+    expectNothingDecodes(item.snippet!);
+    expectNothingDecodes(JSON.stringify(r));
+  });
+
+  test("two base64 blobs holding keys are both redacted", async () => {
+    const a = Buffer.from(JSON.stringify({ pad, k: KEY })).toString("base64");
+    const b = Buffer.from(JSON.stringify({ k: KEY, pad })).toString("base64");
+    const r = await run(`<!-- one ${a} two ${b} -->`);
+    const item = r!.items![0]!;
+    expect(item.snippet).toBe(`one ${REDACTED} two ${REDACTED}`);
+    expectNothingDecodes(JSON.stringify(r));
   });
 });
 
