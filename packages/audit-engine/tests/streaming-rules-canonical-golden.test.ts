@@ -95,6 +95,9 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
     // 58 -> 59 (#2334): security/info-disclosure passes on all 500 pages (the synthetic site shows no stack
     // trace, path, debug page or database error), which lifts the weighted overall past one more rounding
     // boundary, the same shape as security/token-storage above. Without the rule the number is 58.
+    // 58 -> 59 (#2332): security/html-comment-exposure passes on each of the 500 pages (the fixture holds no
+    // sensitive comment, pinned by its tally below), which lifts the weighted overall past one more rounding
+    // boundary. Without the rule the number is 58.
     expect(v1.healthScore.overall).toBe(59);
     // Per-rule finding totals live in golden/canonical-rule-totals.json, one
     // sorted line per rule, so two new-rule PRs touch different lines and
@@ -229,6 +232,17 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
     );
     expect(cspBlocks).toEqual({
       ruleId: "security/csp-blocks-own-resources",
+      pass: 500,
+      warn: 0,
+      fail: 0,
+      info: 0,
+      skipped: 0,
+      total: 500,
+    });
+    expect(
+      v1.perRuleTally.find((t) => t.ruleId === "security/html-comment-exposure")
+    ).toEqual({
+      ruleId: "security/html-comment-exposure",
       pass: 500,
       warn: 0,
       fail: 0,
