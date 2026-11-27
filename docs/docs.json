@@ -683,6 +683,7 @@
                   "rules/security/client-side-authz",
                   "rules/security/exposed-actuator",
                   "rules/security/http-methods",
+                  "rules/security/wordpress-exposure",
                   "rules/security/supabase-rls",
                   "rules/security/firebase-open-rules",
                   "rules/security/sitemap-sensitive-urls",

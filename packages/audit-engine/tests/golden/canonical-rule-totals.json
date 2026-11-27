@@ -344,6 +344,7 @@
   "security/unauthenticated-api": 1,
   "security/unpaginated-api": 1,
   "security/version-disclosure": 1,
+  "security/wordpress-exposure": 0,
   "security/x-content-type": 1,
   "security/x-frame-options": 1,
   "social/asset-divergence": 1,

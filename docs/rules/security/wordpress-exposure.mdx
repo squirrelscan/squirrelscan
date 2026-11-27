@@ -1,0 +1,114 @@
+---
+title: "WordPress exposure: user enumeration, version disclosure and xmlrpc.php"
+description: "An open wp-json users endpoint, an ?author= redirect, readme.html or xmlrpc.php hands attackers usernames, your version and a brute-force target. squirrel checks them on WordPress sites."
+---
+
+## What WordPress exposes by default
+
+A stock WordPress install answers a few requests that help an attacker more than they help a visitor:
+
+- `/wp-json/wp/v2/users` lists the site's authors, with their `slug`, which is usually the login name.
+- `/?author=1` redirects to `/author/<username>/`, so counting up the number finds every author.
+- `/readme.html` is WordPress's own readme. It confirms the site runs WordPress and dates the install, and readme files from old releases name the exact version, so a scanner knows which known vulnerabilities to try.
+- `/xmlrpc.php` is a legacy remote API. It is a brute-force target, because `system.multicall` tries many passwords in one request, and a pingback amplification vector, because `pingback.ping` makes your server request a URL the attacker picks.
+
+Usernames are half of every login. Once an attacker has them, they can feed them to `wp-login.php` or `xmlrpc.php` in a brute-force or credential-stuffing run.
+
+## What squirrel checks
+
+This is a probing rule. It runs only on a website detected as WordPress (the endpoint discovery pass found the WordPress stack), and reports nothing on any other site. It sends requests beyond the crawl, so it follows the [probing intensity](/configuration/security): on a `passive` run it sends nothing and records a skipped check for each of the three findings.
+
+### What is sent
+
+Only `GET` requests, one per path, to the audited origin. A run sends at most four requests.
+
+| Path | Level | Finding |
+|---|---|---|
+| `/readme.html` | `active` | version disclosure |
+| `/xmlrpc.php` | `active` | xmlrpc enabled |
+| `/wp-json/wp/v2/users` | `aggressive` | user enumeration |
+| `/?author=1` | `aggressive` | user enumeration |
+
+Username enumeration is a loud probe: it is what a scanner does to build a password list, so it runs only with `--probe aggressive`, on a site you own or may test. `xmlrpc.php` is never sent a `POST`: a `GET` to an enabled endpoint answers "XML-RPC server accepts POST requests only", which is enough.
+
+Requests carry no cookies and do not follow redirects. Reads are capped (64 KB for `readme.html`, 256 KB for the users list). Requests go one at a time, each with a 10 second timeout, inside the shared probe budget, and the whole rule stops after 30 seconds. A `429` answer or a bot or WAF challenge stops the rule. Below `aggressive`, a path that `robots.txt` disallows is not requested.
+
+### How each exposure is confirmed
+
+A status code alone never counts, so a site that answers every path with a 200 page is not a finding.
+
+- Users: a JSON array whose every entry has a numeric `id` and a string `slug`, or a redirect on the same origin to a path of the form `/author/<name>/`.
+- Version: a 2xx `readme.html` whose title is WordPress's readme title (`WordPress › ReadMe`), or a 2xx page that mentions WordPress and has a `Version` line with a dotted number. Current WordPress releases ship a readme that names no version, and serving it is still the finding: the clean check passes only when `readme.html` is not WordPress's readme.
+- xmlrpc: the "XML-RPC server accepts POST requests only" answer, on any status other than 404 or a 5xx.
+
+### Results
+
+A finding names the endpoint and the kind of evidence. For users it adds the number of users listed. For the version it adds the version number when the readme names one (evidence `readme-version`); a readme without one is reported with evidence `readme-served`. A username is never stored or reported, and no response body leaves the rule.
+
+Each of the three families has a problem check, a clean check and a not-checked check, so a pass clears only what the run requested and got a definite answer for. An `active` run never asks for usernames, so it never clears a user enumeration finding from an earlier `aggressive` run.
+
+## How to fix it
+
+- Deny `/xmlrpc.php` at the web server unless you need it. In nginx, `location = /xmlrpc.php { deny all; }`; in Apache, a `<Files xmlrpc.php>` block with `Require all denied`. The `add_filter( 'xmlrpc_enabled', '__return_false' );` filter is not enough on its own: it turns off only the methods that need a login, so `pingback.ping` still answers and the endpoint still reports as enabled.
+- Block anonymous access to `/wp-json/wp/v2/users` (a `rest_authentication_errors` filter or a security plugin), and block `?author=N` redirects at the server or with a plugin.
+- Delete `readme.html` and `license.txt` from the web root (an update puts them back, so delete them after each update, or deny them at the server), and keep WordPress updated.
+- Use login names that differ from author slugs, and rate limit `wp-login.php`.
+
+| | |
+|---|---|
+| **Rule ID** | `security/wordpress-exposure` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/wordpress-exposure"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/wordpress-exposure"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `wordpress-version-disclosure` | Problem |  |
+| `wordpress-version-disclosure-closed` | Clean | `wordpress-version-disclosure` |
+| `wordpress-version-disclosure-not-checked` | Not checked |  |
+| `wordpress-xmlrpc-enabled` | Problem |  |
+| `wordpress-xmlrpc-closed` | Clean | `wordpress-xmlrpc-enabled` |
+| `wordpress-xmlrpc-not-checked` | Not checked |  |
+| `wordpress-user-enumeration` | Problem |  |
+| `wordpress-user-enumeration-closed` | Clean | `wordpress-user-enumeration` |
+| `wordpress-user-enumeration-not-checked` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/exposed-actuator](/rules/security/exposed-actuator): the same kind of probe for Spring Boot.
+- [security/exposed-files](/rules/security/exposed-files): readable .git, .env and backup files.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that name a server version.
