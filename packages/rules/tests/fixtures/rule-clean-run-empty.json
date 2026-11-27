@@ -1,8 +1,3 @@
-[
-  "a11y/aria-labels",
-  "a11y/svg-img-alt",
-  "integrity/kit-signature",
-  "mobile/input-zoom",
-  "schema/website-search",
-  "security/password-form-get"
-]
+{
+  "integrity/kit-signature": "returns no checks when ctx.intel is unset (the opt-in threat intel feature is off); there is nothing to judge, so it cannot emit a clean check"
+}

@@ -1,5 +1,6 @@
 // a11y/aria-labels - Interactive elements need accessible names
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { hasAttrCI } from "@squirrelscan/utils";
 
@@ -121,6 +122,18 @@ export const ariaLabelsRule: Rule = {
         name: "aria-svg",
         status: "warn",
         message: `${unlabeledSvgs} interactive SVG(s) without accessible names`,
+      });
+    }
+
+    // #2350: every button yields a row above, so an empty list means the page has no button and no unnamed
+    // interactive svg. Say the rule ran with a neutral not-applicable row instead of nothing.
+    if (checks.length === 0) {
+      checks.push({
+        name: "aria-buttons",
+        status: "skipped",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+        message: "No button in scope on this page",
       });
     }
 

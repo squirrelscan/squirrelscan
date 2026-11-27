@@ -87,6 +87,11 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
     // overall past one more rounding boundary; without either one (or both) the number is 57.
     // ax/commerce-readiness adds an info row on each of the 500 pages (the harness has no site type, and no
     // page carries Product markup) and does not move it.
+    // #2350: a11y/svg-img-alt, mobile/input-zoom and security/password-form-get emit a declared skipped
+    // (not-applicable) row on each of the 500 pages that have nothing in their scope, and a11y/aria-labels
+    // does the same (no button). schema/website-search emits one on each of the 499 pages other than the
+    // home page, which keeps its info row (1 to 500). Skipped rows do not score, so the number stays 58 and
+    // only those five per-rule totals move.
     expect(v1.healthScore.overall).toBe(58);
     // Per-rule finding totals live in golden/canonical-rule-totals.json, one
     // sorted line per rule, so two new-rule PRs touch different lines and

@@ -14,6 +14,7 @@
 
 import type { Element } from "linkedom";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { CLASS_SPLIT } from "@squirrelscan/parser/dom";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
@@ -724,6 +725,7 @@ export const inputZoomRule: Rule = {
     checks: [
       { name: "input-zoom", outcome: "problem" },
       { name: "input-zoom", outcome: "clean", clears: ["input-zoom"] },
+      { name: "input-zoom", outcome: "skipped" },
     ],
   },
 
@@ -750,7 +752,19 @@ export const inputZoomRule: Rule = {
       else fields.push(el);
     }
     // A page with no text field has nothing to zoom into.
-    if (fields.length + overCap === 0) return { checks: [] };
+    if (fields.length + overCap === 0) {
+      return {
+        checks: [
+          {
+            name: "input-zoom",
+            status: "skipped",
+            skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+            details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+            message: "No focusable text field in scope on this page",
+          },
+        ],
+      };
+    }
 
     const blocks: StyleBlock[] = [];
     // Past the block cap, or a block nested past the depth cap: not read.

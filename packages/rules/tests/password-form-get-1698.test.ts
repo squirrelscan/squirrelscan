@@ -31,6 +31,16 @@ const failOf = (checks: CheckResult[]) =>
 const isPass = (checks: CheckResult[]) =>
   checks.length === 1 && checks[0]?.status === "pass";
 
+const SKIPPED: CheckResult[] = [
+  {
+    name: "password-form-get",
+    status: "skipped",
+    skipReason: "not-applicable",
+    details: { foldKey: "not-applicable" },
+    message: "No form with a password field in scope on this page",
+  },
+];
+
 describe("methodOf table", () => {
   const table: [string | null, "get" | "post" | "dialog"][] = [
     [null, "get"],
@@ -116,7 +126,7 @@ describe("failures", () => {
   test("a disabled password field is not submitted", () => {
     expect(
       run('<form action="/l"><input type="password" disabled></form>')
-    ).toEqual([]);
+    ).toEqual(SKIPPED);
   });
 });
 
@@ -185,11 +195,11 @@ describe("passes and out of scope", () => {
 
   test("a GET form with no password field is not assessed", () => {
     const checks = run('<form action="/search"><input name="q"></form>');
-    expect(checks).toEqual([]);
+    expect(checks).toEqual(SKIPPED);
   });
 
   test("a page with no form is not assessed", () => {
-    expect(run("<main><p>hi</p></main>")).toEqual([]);
+    expect(run("<main><p>hi</p></main>")).toEqual(SKIPPED);
   });
 
   test("a mixed page flags only the password GET form", () => {

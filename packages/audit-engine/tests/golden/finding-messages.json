@@ -47,6 +47,12 @@
    "aria-input-field-name|pass|All input fields have accessible names||"
   ]
  },
+ "a11y/aria-labels": {
+  "digest": "87548935416827",
+  "lines": [
+   "aria-buttons|skipped|No button in scope on this page||"
+  ]
+ },
  "a11y/aria-meter-name": {
   "digest": "210338339661178",
   "lines": [
@@ -313,6 +319,12 @@
   "digest": "72187721254057",
   "lines": [
    "skip-link|pass|Bypass mechanism available via landmarks||"
+  ]
+ },
+ "a11y/svg-img-alt": {
+  "digest": "4999108006288",
+  "lines": [
+   "svg-img-alt|skipped|No <svg role=\"img\"> element in scope on this page||"
   ]
  },
  "a11y/tabindex": {
@@ -3491,6 +3503,12 @@
    "horizontal-scroll|pass|No obvious horizontal scroll issues detected||"
   ]
  },
+ "mobile/input-zoom": {
+  "digest": "225243441640501",
+  "lines": [
+   "input-zoom|skipped|No focusable text field in scope on this page||"
+  ]
+ },
  "mobile/interstitials": {
   "digest": "232013109484871",
   "lines": [
@@ -3885,9 +3903,10 @@
   ]
  },
  "schema/website-search": {
-  "digest": "238085668331082",
+  "digest": "123502984698907",
   "lines": [
-   "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|"
+   "website-schema|info|No WebSite schema on homepage|\"Consider adding for sitelinks searchbox\"|",
+   "website-schema|skipped|No WebSite schema in scope on this page||"
   ]
  },
  "security/auth-endpoint-disclosure": {
@@ -4026,6 +4045,12 @@
   "digest": "163295195601176",
   "lines": [
    "open-redirect|skipped|Probing is passive, so no redirect parameter was probed. Run with --probe active to check for open redirects.||"
+  ]
+ },
+ "security/password-form-get": {
+  "digest": "102529960812293",
+  "lines": [
+   "password-form-get|skipped|No form with a password field in scope on this page||"
   ]
  },
  "security/permissions-policy": {

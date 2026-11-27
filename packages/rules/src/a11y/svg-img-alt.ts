@@ -1,5 +1,6 @@
 // a11y/svg-img-alt - an inline <svg role="img"> needs an accessible name (#1699)
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
 import { wcag } from "@squirrelscan/core-contracts/wcag";
 import { getAttrCI, hasAttrCI } from "@squirrelscan/utils";
 
@@ -96,6 +97,16 @@ export const svgImgAltRule: Rule = {
     severity: "error",
     weight: 6,
     itemSelectors: true,
+    checks: [
+      { name: "svg-img-alt", outcome: "problem" },
+      { name: "svg-img-alt-unconfirmed", outcome: "problem" },
+      {
+        name: "svg-img-alt",
+        outcome: "clean",
+        clears: ["svg-img-alt", "svg-img-alt-unconfirmed"],
+      },
+      { name: "svg-img-alt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -166,6 +177,15 @@ export const svgImgAltRule: Rule = {
         status: "pass",
         message: 'All <svg role="img"> elements have accessible names',
         details: { svgChecked: assessed },
+      });
+    }
+    if (checks.length === 0) {
+      checks.push({
+        name: CHECK,
+        status: "skipped",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+        message: 'No <svg role="img"> element in scope on this page',
       });
     }
     return { checks };

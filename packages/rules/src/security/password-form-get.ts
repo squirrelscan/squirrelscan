@@ -2,6 +2,8 @@
 
 import type { CheckItem } from "@squirrelscan/core-contracts";
 
+import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { formSelector } from "../shared/form-fields";
@@ -162,6 +164,7 @@ export const passwordFormGetRule: Rule = {
           "password-form-get-no-method",
         ],
       },
+      { name: "password-form-get", outcome: "skipped" },
     ],
   },
 
@@ -269,6 +272,15 @@ export const passwordFormGetRule: Rule = {
         status: "pass",
         message: "Every form with a password field submits by POST",
         details: { formsChecked: forms.length, passwordForms: assessed },
+      });
+    }
+    if (checks.length === 0) {
+      checks.push({
+        name: "password-form-get",
+        status: "skipped",
+        skipReason: CHECK_NOT_APPLICABLE_SKIP_REASON,
+        details: { foldKey: CHECK_NOT_APPLICABLE_SKIP_REASON },
+        message: "No form with a password field in scope on this page",
       });
     }
     return { checks };

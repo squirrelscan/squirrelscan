@@ -24,7 +24,9 @@ function run(body: string, head = ""): CheckResult[] {
 const fail = (checks: CheckResult[]) => checks.find((c) => c.status === "fail");
 const passes = (checks: CheckResult[]) =>
   checks.length === 1 && checks[0]?.status === "pass";
-const nothing = (checks: CheckResult[]) => checks.length === 0;
+// Nothing in scope: one declared skipped check, never a finding.
+const nothing = (checks: CheckResult[]) =>
+  checks.length === 1 && checks[0]?.status === "skipped";
 
 describe("a name is required", () => {
   test("no title, no aria-label, no aria-labelledby fails, and the finding locates the element", () => {
@@ -178,7 +180,7 @@ describe("counting", () => {
     expect(f?.details).toEqual({ additional: 3 });
   });
 
-  test("a page with no svg emits nothing", () => {
+  test("a page with no svg emits one skipped check", () => {
     expect(nothing(run("<p>text</p>"))).toBe(true);
   });
 });

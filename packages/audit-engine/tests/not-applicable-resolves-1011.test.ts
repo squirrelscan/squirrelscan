@@ -15,7 +15,9 @@ import type {
   SitePageRecord,
 } from "@squirrelscan/core-contracts";
 
+import { REPORT_LIMITS } from "@squirrelscan/core-contracts/limits";
 import { CHECK_NOT_APPLICABLE_SKIP_REASON } from "@squirrelscan/core-contracts/resolution";
+import { capChecksForPublish } from "@squirrelscan/rules/fold";
 import { buildResolutionSignal } from "@squirrelscan/rules/resolution";
 import { normalizePageUrl } from "@squirrelscan/utils/url";
 import { describe, expect, test } from "bun:test";
@@ -272,6 +274,46 @@ describe("the signal reads a not-applicable page as evaluated and clean (#1011)"
       [A, B]
     )!;
     expect(signal.notEvaluated?.[`${RULE}|${CHECK}`]).toHaveLength(1);
+  });
+});
+
+describe("over-cap not-applicable checks fold and still resolve (#2350)", () => {
+  const total = REPORT_LIMITS.maxChecksPerRule + 20;
+  const urls = Array.from({ length: total }, (_, i) =>
+    i === 0 ? A : `https://www.acme-shop.com/p${i}`
+  );
+  const folded = capChecksForPublish(
+    urls.map(na),
+    REPORT_LIMITS.maxChecksPerRule
+  );
+
+  test("the fold collapses them into one aggregate carrying the fold key", () => {
+    expect(folded.length).toBeLessThan(total);
+    expect(
+      folded.every(
+        (c) =>
+          c.skipReason === CHECK_NOT_APPLICABLE_SKIP_REASON &&
+          c.details?.foldKey === CHECK_NOT_APPLICABLE_SKIP_REASON
+      )
+    ).toBe(true);
+  });
+
+  test("the signal reads the aggregate as not applicable: no page is not evaluated", () => {
+    const signal = buildResolutionSignal({ [RULE]: { checks: folded } }, urls)!;
+    expect(signal.notEvaluated).toBeUndefined();
+    expect(signal.failing[`${RULE}|${CHECK}`]).toEqual([]);
+  });
+
+  test("a prior finding on a folded page resolves", async () => {
+    const row = await priorAfterRerun(
+      [
+        { name: "other", status: "pass", message: "ok", pageUrl: A },
+        ...folded,
+        pass(B),
+      ],
+      healthy
+    );
+    expect(row.state).toBe("resolved");
   });
 });
 
