@@ -115,7 +115,10 @@ export function buildListingProbe(
   origin: string,
   folderPath: string
 ): { url: string; init: RequestInit } {
-  const url = new URL(folderPath, `${origin}/`);
+  // Set the path rather than resolving it: a folder such as `//wp-content/`
+  // would otherwise resolve as a network-path reference to another host.
+  const url = new URL(origin);
+  url.pathname = folderPath;
   if (url.origin !== origin)
     throw new Error("directory-listing: probe left the audited origin");
   url.search = "";
@@ -152,15 +155,17 @@ async function sendProbe(
 ): Promise<Outcome> {
   const probe = ctx.probe;
   if (!probe || !probe.allows("loud")) return { kind: "not-allowed" };
-  const { url, init } = buildListingProbe(origin, folderPath);
   const done = new AbortController();
   const signal = AbortSignal.any([
     probe.signal(),
     AbortSignal.timeout(LISTING_PROBE_TIMEOUT_MS),
     done.signal,
   ]);
-  probe.record();
   try {
+    // A path that cannot be probed is one failed probe, not a rule error that
+    // would drop the listings already found.
+    const { url, init } = buildListingProbe(origin, folderPath);
+    probe.record();
     const res = await fetchUndecoded(url, { ...init, signal });
     const { bytes } = await readCappedBytes(res, LISTING_READ_CAP);
     return {

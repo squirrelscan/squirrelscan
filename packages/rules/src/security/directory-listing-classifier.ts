@@ -37,9 +37,11 @@ export interface DirectoryListing {
 
 const APACHE_TITLE_RE = /<title>\s{0,8}Index of \/[^<]{0,300}<\/title>/i;
 const INDEX_OF_H1_RE = /<h1>\s{0,8}Index of \/[^<]{0,300}<\/h1>/i;
+// Tomcat 8.5 and later print the path in brackets, `Directory Listing For [/x/]`,
+// and put an "Up To" parent link inside the <h1>, so the h1 has no </h1> anchor.
 const TOMCAT_TITLE_RE =
-  /<title>\s{0,8}Directory Listing For \/[^<]{0,300}<\/title>/i;
-const TOMCAT_H1_RE = /<h1>\s{0,8}Directory Listing For \/[^<]{0,300}<\/h1>/i;
+  /<title>\s{0,8}Directory Listing For \[?\/[^<]{0,300}<\/title>/i;
+const TOMCAT_H1_RE = /<h1>\s{0,8}Directory Listing For \[?\//i;
 const IIS_TITLE_RE = /<title>([^<]{1,300}? - \/[^<]{0,300})<\/title>/i;
 const IIS_H1_RE = /<h1>([^<]{1,300}? - \/[^<]{0,300})<\/h1>/i;
 const TIME_RE = /\b\d{1,2}:\d{2}\b/;

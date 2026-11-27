@@ -26,7 +26,7 @@ A `200` alone is never a hit. The body must be a generated index page of one of 
 | Apache | An `Index of /path` title and heading, plus its sort links, a "Parent Directory" row or its `Apache` signature line |
 | nginx | An `Index of /path` title and heading, and the `../` parent row right after `<hr><pre>` |
 | IIS | A `host - /path/` title that matches the heading, with the `<pre>` block and rule IIS prints |
-| Tomcat | A `Directory Listing For /path` title and heading |
+| Tomcat | A `Directory Listing For [/path/]` title and heading (Tomcat 8.5 and later; older releases print the path without brackets) |
 
 A file row is a link, other than the parent or a sort link, with the entry's time of day beside it. An SPA shell, a themed 404 served with `200` and an article that quotes "Index of /" have no such rows, so they are not reported. A listing is also ignored when the baseline folder (which cannot exist) answered with a listing, or with the same bytes: a server that lists every path says nothing about your folders, and the check is then reported as incomplete.
 

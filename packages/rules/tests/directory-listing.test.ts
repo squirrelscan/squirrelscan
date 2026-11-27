@@ -31,7 +31,42 @@ import { clearRequestAsync, setRequestAsync } from "../src/tools";
 const APACHE = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"><html><head><title>Index of /assets</title></head><body><h1>Index of /assets</h1><table><tr><th><a href="?C=N;O=D">Name</a></th><th><a href="?C=M;O=A">Last modified</a></th></tr><tr><td><a href="/">Parent Directory</a></td><td>&nbsp;</td></tr><tr><td><a href="app.css">app.css</a></td><td align="right">2024-05-01 10:22  </td><td align="right">12K</td></tr><tr><td><a href="app.js">app.js</a></td><td align="right">2024-05-01 10:23  </td><td align="right">80K</td></tr><tr><td><a href="backup.zip">backup.zip</a></td><td align="right">2024-05-02 08:00  </td><td align="right">4M</td></tr></table><address>Apache/2.4.57 (Ubuntu) Server at example.com Port 80</address></body></html>`;
 const NGINX = `<html><head><title>Index of /assets/</title></head><body><h1>Index of /assets/</h1><hr><pre><a href="../">../</a>\n<a href="app.css">app.css</a>                 01-May-2024 10:22   12345\n<a href="img/">img/</a>                    01-May-2024 10:23       -\n</pre><hr></body></html>`;
 const IIS = `<html><head><title>example.com - /assets/</title></head><body><H1>example.com - /assets/</H1><hr>\n<pre><A HREF="/">[To Parent Directory]</A><br><br>Wednesday, May 01, 2024 10:22 AM 12345 <A HREF="/assets/app.css">app.css</A><br>Wednesday, May 01, 2024 10:23 AM 999 <A HREF="/assets/app.js">app.js</A><br></pre><hr></body></html>`;
-const TOMCAT = `<html><head><title>Directory Listing For /assets/</title></head><body><h1>Directory Listing For /assets/</h1><HR size="1" noshade="noshade"><table width="100%" cellspacing="0" cellpadding="5" align="center"><tr><td align="left"><font size="+1"><strong>Filename</strong></font></td></tr><tr><td align="left"><tt><a href="/assets/app.css"><tt>app.css</tt></a></tt></td><td align="right"><tt>12 KiB</tt></td><td align="right"><tt>Wed, 01 May 2024 10:22:00 GMT</tt></td></tr><tr><td align="left"><tt><a href="/assets/app.js"><tt>app.js</tt></a></tt></td><td align="right"><tt>3 KiB</tt></td><td align="right"><tt>Wed, 01 May 2024 10:23:00 GMT</tt></td></tr></table><HR size="1" noshade="noshade"><h3>Apache Tomcat/9.0</h3></body></html>`;
+// What Tomcat 9.0.x and 10.1.x DefaultServlet (listings=true) emit for a
+// subfolder: bracketed path, an "Up To" parent link inside the <h1>, absolute
+// entry hrefs and HTTP dates. Line breaks are the servlet's own \r\n.
+const TOMCAT = [
+  `<!doctype html><html lang="en">`,
+  `<head>`,
+  `<title>Directory Listing For [/assets/]</title>`,
+  `<style>h1 {font-family:Tahoma,Arial,sans-serif;color:white;background-color:#525D76;font-size:22px;} h2 {font-family:Tahoma,Arial,sans-serif;color:white;background-color:#525D76;font-size:16px;} h3 {font-family:Tahoma,Arial,sans-serif;color:white;background-color:#525D76;font-size:14px;} body {font-family:Tahoma,Arial,sans-serif;color:black;background-color:white;} b {font-family:Tahoma,Arial,sans-serif;color:white;background-color:#525D76;} p {font-family:Tahoma,Arial,sans-serif;background:white;color:black;font-size:12px;} a {color:black;} a.name {color:black;} .line {height:1px;background-color:#525D76;border:none;}</style> </head>`,
+  `<body><h1>Directory Listing For [/assets/] - <a href="/"><b>Up To [/]</b></a></h1><hr class="line"><table width="100%" cellspacing="0" cellpadding="5" align="center">`,
+  `<tr>`,
+  `<td align="left"><font size="+1"><strong>Filename</strong></font></td>`,
+  `<td align="center"><font size="+1"><strong>Size</strong></font></td>`,
+  `<td align="right"><font size="+1"><strong>Last Modified</strong></font></td>`,
+  `</tr><tr>`,
+  `<td align="left">&nbsp;&nbsp;`,
+  `<a href="/assets/app.css"><tt>app.css</tt></a></td>`,
+  `<td align="right"><tt>12.1 kb</tt></td>`,
+  `<td align="right"><tt>Wed, 01 May 2024 10:22:00 GMT</tt></td>`,
+  `</tr>`,
+  `<tr bgcolor="#eeeeee">`,
+  `<td align="left">&nbsp;&nbsp;`,
+  `<a href="/assets/app.js"><tt>app.js</tt></a></td>`,
+  `<td align="right"><tt>3.4 kb</tt></td>`,
+  `<td align="right"><tt>Wed, 01 May 2024 10:23:00 GMT</tt></td>`,
+  `</tr>`,
+  `<tr>`,
+  `<td align="left">&nbsp;&nbsp;`,
+  `<a href="/assets/img/"><tt>img/</tt></a></td>`,
+  `<td align="right"><tt>&nbsp;</tt></td>`,
+  `<td align="right"><tt>Wed, 01 May 2024 10:24:00 GMT</tt></td>`,
+  `</tr>`,
+  `</table>`,
+  `<hr class="line"><h3>Apache Tomcat/9.0.85</h3></body>`,
+  `</html>`,
+  ``,
+].join("\r\n");
 const SPA = `<!doctype html><html><head><title>My App</title></head><body><div id="root"></div><script src="/static/js/main.js"></script></body></html>`;
 const THEMED_404 = `<!doctype html><html><head><title>Page not found</title></head><body><h1>We could not find that page</h1><a href="/">Home</a><a href="/blog">Blog</a></body></html>`;
 
@@ -154,6 +189,14 @@ describe("classifyDirectoryListing", () => {
     );
   });
 
+  test("reads every Tomcat entry and skips the Up To link in the heading", () => {
+    expect(classifyDirectoryListing(TOMCAT)).toEqual({
+      server: "tomcat",
+      files: ["app.css", "app.js", "img/"],
+      rows: 3,
+    });
+  });
+
   test("a catch-all or themed 404 is not a listing", () => {
     expect(classifyDirectoryListing(SPA)).toBeNull();
     expect(classifyDirectoryListing(THEMED_404)).toBeNull();
@@ -210,8 +253,13 @@ describe("selectListingFolders", () => {
     expect(selectListingFolders(origin, urls).length).toBe(MAX_LISTING_FOLDERS);
     expect(selectListingFolders(origin, urls, 3).length).toBe(3);
   });
-  test("buildListingProbe refuses a path that names another host", () => {
-    expect(() => buildListingProbe(origin, "//evil.example.net/x/")).toThrow();
+  test("buildListingProbe keeps a path that looks like another host on the origin", () => {
+    expect(buildListingProbe(origin, "//evil.example.net/x/").url).toBe(
+      "https://example.com//evil.example.net/x/"
+    );
+    expect(buildListingProbe(origin, "//wp-content/").url).toBe(
+      "https://example.com//wp-content/"
+    );
   });
 });
 
@@ -228,6 +276,18 @@ describe("security/directory-listing", () => {
       "backup.zip",
     ]);
     expect(checks.some((c) => c.name === "directory-listing-none")).toBe(false);
+  });
+
+  test("an asset under a double-slash path does not lose the listings found", async () => {
+    const f = serve({ "/assets/": html(APACHE) });
+    const checks = await run(
+      ctx(f.origin, { css: [`${f.origin}//wp-content/x.css`] })
+    );
+    expect(checks.find((c) => c.name === "directory-listing")?.status).toBe(
+      "warn"
+    );
+    // Bun's server collapses the doubled slash in the path it reports.
+    expect(f.seen.some((s) => s.endsWith("/wp-content/"))).toBe(true);
   });
 
   test("a themed 404 is clean", async () => {
