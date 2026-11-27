@@ -71,6 +71,31 @@ describe("signals", () => {
     expect(item.snippet).toContain(REDACTED);
     expect(JSON.stringify(r)).not.toContain(key);
   });
+
+  // The scanner reports offsets into DECODED text: entities before the key shift them, and cutting the raw comment
+  // with them left the key in the snippet.
+  const KEY = `${"AKIA"}${"JQ7XK2MZ4PL9RT5N"}`;
+  function expectNoKeyFragment(out: string): void {
+    for (let i = 0; i + 4 <= KEY.length; i++)
+      expect(out).not.toContain(KEY.slice(i, i + 4));
+  }
+  test.each([
+    ["8x &lt; before the key", `${"&lt;".repeat(8)} aws ${KEY}`],
+    ["&amp; before the key", `a &amp; b aws ${KEY}`],
+    [
+      "double-encoded entities before the key",
+      `${"&amp;lt;".repeat(8)} aws ${KEY}`,
+    ],
+    ["an entity-encoded key", `aws &#65;&#75;&#73;&#65;${KEY.slice(4)}`],
+  ])("a secret after entities is still redacted: %s", async (_name, c) => {
+    const r = await run(`<!-- ${c} -->`);
+    expect(r?.status).toBe("warn");
+    const item = r!.items![0]!;
+    expect((item.meta as { signals: string[] }).signals).toContain("secret");
+    expect(item.snippet).toContain(REDACTED);
+    expectNoKeyFragment(item.snippet!);
+    expectNoKeyFragment(JSON.stringify(r));
+  });
 });
 
 describe("output", () => {

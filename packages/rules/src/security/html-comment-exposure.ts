@@ -5,6 +5,7 @@ import type { CheckItem } from "@squirrelscan/core-contracts";
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
 import { scanContent } from "./leaked-secrets";
+import { decodeForLocation } from "./secrets/decode";
 
 const COMMENT_NODE = 8;
 const ELEMENT_NODE = 1;
@@ -101,17 +102,38 @@ export function findSignals(text: string, pageHost: string): Hit[] {
   return hits;
 }
 
-/** Replace every secret the leaked-secrets matchers find with {@link REDACTED}. Returns the text and whether any matched. */
+/** Decode passes before giving up on aligning offsets: each pass peels one layer of entity, percent or escape encoding. */
+const MAX_DECODE_PASSES = 4;
+
+/**
+ * Replace every secret the leaked-secrets matchers find with {@link REDACTED}. Returns the DECODED text and whether any
+ * matched. The scanner reports offsets into the text it decoded, so the cut is made in decoded text: cutting the raw
+ * comment with those offsets misses the key whenever an entity (`&lt;`, `&amp;`) sits before it. The text is decoded
+ * until the scanner's own decode leaves it unchanged, so a double-encoded comment cannot shift the offsets either.
+ */
 export function redactSecrets(data: string): {
   text: string;
   found: boolean;
 } {
-  const secrets = scanContent(data, "html-comment").filter(
+  let decoded = data;
+  let stable = false;
+  for (let pass = 0; pass < MAX_DECODE_PASSES; pass++) {
+    const next = decodeForLocation(decoded, "html-comment");
+    if (next === decoded) {
+      stable = true;
+      break;
+    }
+    decoded = next;
+  }
+  if (!stable) stable = decodeForLocation(decoded, "html-comment") === decoded;
+  const secrets = scanContent(decoded, "html-comment").filter(
     (s) => s.confidence !== "info" && !s.publicByDesign
   );
-  if (secrets.length === 0) return { text: data, found: false };
-  let text = data;
-  let floor = data.length;
+  if (secrets.length === 0) return { text: decoded, found: false };
+  // Offsets into a text the scanner decoded further cannot be trusted: quote nothing of it.
+  if (!stable) return { text: REDACTED, found: true };
+  let text = decoded;
+  let floor = decoded.length;
   // From the end, so earlier offsets stay valid; overlapping matches are skipped.
   for (const s of [...secrets].sort((a, b) => b.offset - a.offset)) {
     const end = s.offset + s.length;
