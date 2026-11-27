@@ -1,0 +1,1 @@
+- Agent setup pages in the docs now use "Website audits in <Agent>" titles, descriptions that name the install path, and an answer-first opening with a link to the matching squirrelscan.com guide (#2400)
