@@ -1,7 +1,7 @@
 ---
-title: "squirrelscan for Google Antigravity"
+title: "Website audits in Google Antigravity"
 sidebarTitle: "Antigravity"
-description: "Set up squirrelscan in Google Antigravity (CLI and IDE): mcp_config.json with serverUrl, automatic OAuth, the skills, and running audits."
+description: "Run a website audit in Google Antigravity: add the squirrelscan MCP server to mcp_config.json with serverUrl, sign in with OAuth, then ask it to audit."
 icon: "rocket"
 ---
 
@@ -13,6 +13,8 @@ icon: "rocket"
     The vendor MCP page (antigravity.google/docs/mcp) names ~/.gemini/config/mcp_config.json; the CLI
     wrote exactly that path. The ~/.gemini/antigravity/ path is where the IDE and App keep MCP tool
     schemas and OAuth tokens, not the config file. The Antigravity IDE and App were not installed. */}
+
+To run a website audit in Google Antigravity, add the squirrelscan MCP server to `mcp_config.json` and ask it to audit your site.
 
 Antigravity is Google's agentic coding product, with a CLI (`agy`), an IDE and an app. All three read the same `mcp_config.json`, so squirrelscan's audit, report and issue tools show up next to the built-in tools.
 

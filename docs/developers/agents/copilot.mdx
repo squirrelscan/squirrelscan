@@ -1,7 +1,7 @@
 ---
-title: "squirrelscan for GitHub Copilot"
+title: "Website audits in GitHub Copilot"
 sidebarTitle: "GitHub Copilot"
-description: "Set up squirrelscan in GitHub Copilot: VS Code, Visual Studio, GitHub Copilot CLI, the cloud agent, Copilot Studio, and enterprise allowlisting."
+description: "Run a website audit in GitHub Copilot: add the squirrelscan MCP server in VS Code, Visual Studio, Copilot CLI, or the cloud agent, then ask it to audit."
 icon: "github"
 ---
 
@@ -11,6 +11,8 @@ icon: "github"
     "Access denied by policy settings" without a GitHub Copilot login, and no login was completed, so
     the CLI never contacted the MCP server. VS Code, Visual Studio, JetBrains, Xcode, Eclipse, the cloud agent,
     Copilot Studio and Microsoft 365 Copilot were not installed; those sections come from vendor docs. */}
+
+To run a website audit in GitHub Copilot, add the squirrelscan MCP server and ask Copilot to audit your site. For a step-by-step walkthrough, see the [Copilot guide](https://squirrelscan.com/for/copilot).
 
 GitHub Copilot agent mode can already run terminal commands on your behalf, so it can run `squirrel` with no configuration at all. Connecting the hosted MCP server replaces that parsed terminal output with native tools for cloud audits, the issue tracker, and the rule catalog.
 
