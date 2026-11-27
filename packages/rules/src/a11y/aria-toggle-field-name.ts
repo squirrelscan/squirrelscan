@@ -55,6 +55,19 @@ export const ariaToggleFieldNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-toggle-field-name", outcome: "problem" },
+      { name: "aria-toggle-field-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-toggle-field-name",
+        outcome: "clean",
+        clears: [
+          "aria-toggle-field-name",
+          "aria-toggle-field-name-unconfirmed",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

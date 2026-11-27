@@ -47,6 +47,16 @@ export const ariaMeterNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-meter-name", outcome: "problem" },
+      { name: "aria-meter-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-meter-name",
+        outcome: "clean",
+        clears: ["aria-meter-name", "aria-meter-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

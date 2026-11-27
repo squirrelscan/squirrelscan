@@ -38,6 +38,15 @@ export const ariaDeprecatedRoleRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-deprecated-role", outcome: "problem" },
+      {
+        name: "aria-deprecated-role",
+        outcome: "clean",
+        clears: ["aria-deprecated-role"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

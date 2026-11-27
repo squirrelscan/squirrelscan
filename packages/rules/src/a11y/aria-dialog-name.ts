@@ -101,6 +101,23 @@ export const ariaDialogNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-dialog-name", outcome: "problem" },
+      { name: "aria-dialog-name-unconfirmed", outcome: "problem" },
+      { name: "dialog-name", outcome: "problem" },
+      { name: "dialog-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-dialog-name",
+        outcome: "clean",
+        clears: ["aria-dialog-name", "aria-dialog-name-unconfirmed"],
+      },
+      {
+        name: "dialog-name",
+        outcome: "clean",
+        clears: ["dialog-name", "dialog-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

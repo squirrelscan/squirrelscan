@@ -27,6 +27,15 @@ export const duplicateIdActiveRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "duplicate-id-active", outcome: "problem" },
+      {
+        name: "duplicate-id-active",
+        outcome: "clean",
+        clears: ["duplicate-id-active"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

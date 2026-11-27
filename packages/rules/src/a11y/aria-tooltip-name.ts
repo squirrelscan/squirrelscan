@@ -39,6 +39,16 @@ export const ariaTooltipNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-tooltip-name", outcome: "problem" },
+      { name: "aria-tooltip-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-tooltip-name",
+        outcome: "clean",
+        clears: ["aria-tooltip-name", "aria-tooltip-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

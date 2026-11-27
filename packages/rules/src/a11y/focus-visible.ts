@@ -18,6 +18,17 @@ export const focusVisibleRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "focus-outline-global", outcome: "problem" },
+      { name: "focus-outline", outcome: "problem" },
+      { name: "focus-modern", outcome: "clean", clears: ["focus-outline"] },
+      {
+        name: "focus-visible",
+        outcome: "clean",
+        clears: ["focus-outline-global", "focus-outline"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

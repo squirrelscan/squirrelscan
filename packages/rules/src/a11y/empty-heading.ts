@@ -24,6 +24,16 @@ export const emptyHeadingRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "empty-heading", outcome: "problem" },
+      { name: "empty-heading-unconfirmed", outcome: "problem" },
+      {
+        name: "empty-heading",
+        outcome: "clean",
+        clears: ["empty-heading", "empty-heading-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

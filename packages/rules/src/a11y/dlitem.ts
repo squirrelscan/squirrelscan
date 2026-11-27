@@ -18,6 +18,11 @@ export const dlitemRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "dlitem", outcome: "problem" },
+      { name: "dlitem", outcome: "clean", clears: ["dlitem"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -150,6 +150,21 @@ export const ariaHiddenFocusRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-hidden-focus", outcome: "problem" },
+      { name: "aria-hidden-focus-honeypot", outcome: "problem" },
+      { name: "aria-hidden-focus-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-hidden-focus",
+        outcome: "clean",
+        clears: [
+          "aria-hidden-focus",
+          "aria-hidden-focus-honeypot",
+          "aria-hidden-focus-unconfirmed",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

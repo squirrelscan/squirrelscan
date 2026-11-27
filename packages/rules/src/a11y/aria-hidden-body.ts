@@ -18,6 +18,15 @@ export const ariaHiddenBodyRule: Rule = {
     verdictScope: "template",
     severity: "error",
     weight: 10,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-hidden-body", outcome: "problem" },
+      {
+        name: "aria-hidden-body",
+        outcome: "clean",
+        clears: ["aria-hidden-body"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

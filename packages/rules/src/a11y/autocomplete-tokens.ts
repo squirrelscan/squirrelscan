@@ -68,6 +68,16 @@ export const autocompleteTokensRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "autocomplete-tokens", outcome: "problem" },
+      {
+        name: "autocomplete-tokens",
+        outcome: "clean",
+        clears: ["autocomplete-tokens"],
+      },
+      { name: "autocomplete-tokens", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

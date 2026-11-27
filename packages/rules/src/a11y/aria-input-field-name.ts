@@ -69,6 +69,16 @@ export const ariaInputFieldNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-input-field-name", outcome: "problem" },
+      { name: "aria-input-field-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-input-field-name",
+        outcome: "clean",
+        clears: ["aria-input-field-name", "aria-input-field-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -20,6 +20,15 @@ export const ariaValidAttrRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-valid-attr", outcome: "problem" },
+      {
+        name: "aria-valid-attr",
+        outcome: "clean",
+        clears: ["aria-valid-attr"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

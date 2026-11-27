@@ -114,6 +114,21 @@ The WCAG success criteria this rule's findings map to. These automated checks co
 
 {/* rule-wcag:end */}
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `aria-hidden-focus` | Problem |  |
+| `aria-hidden-focus-honeypot` | Problem |  |
+| `aria-hidden-focus-unconfirmed` | Problem |  |
+| `aria-hidden-focus` | Clean | `aria-hidden-focus`, `aria-hidden-focus-honeypot`, `aria-hidden-focus-unconfirmed` |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [a11y/aria-hidden-body](/rules/a11y/aria-hidden-body): the same attribute applied to the whole document.

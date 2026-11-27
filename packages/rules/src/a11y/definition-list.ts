@@ -19,6 +19,15 @@ export const definitionListRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "definition-list", outcome: "problem" },
+      {
+        name: "definition-list",
+        outcome: "clean",
+        clears: ["definition-list"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
