@@ -92,7 +92,10 @@ describe("runStreamingRules — canonical 518-page v1↔v2 merge gate", () => {
     // does the same (no button). schema/website-search emits one on each of the 499 pages other than the
     // home page, which keeps its info row (1 to 500). Skipped rows do not score, so the number stays 58 and
     // only those five per-rule totals move.
-    expect(v1.healthScore.overall).toBe(58);
+    // 58 -> 59 (#2334): security/info-disclosure passes on all 500 pages (the synthetic site shows no stack
+    // trace, path, debug page or database error), which lifts the weighted overall past one more rounding
+    // boundary, the same shape as security/token-storage above. Without the rule the number is 58.
+    expect(v1.healthScore.overall).toBe(59);
     // Per-rule finding totals live in golden/canonical-rule-totals.json, one
     // sorted line per rule, so two new-rule PRs touch different lines and
     // rebase cleanly (#2055). There is no grand total or rule count to edit:

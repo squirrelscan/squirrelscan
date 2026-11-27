@@ -4017,6 +4017,12 @@
    "https|fail|Page not served over HTTPS|\"http:\"|\"https:\""
   ]
  },
+ "security/info-disclosure": {
+  "digest": "41620760712297",
+  "lines": [
+   "info-disclosure|pass|No stack trace, filesystem path, debug page or database error in the page||"
+  ]
+ },
  "security/json-sensitive-fields": {
   "digest": "190526034971805",
   "lines": [

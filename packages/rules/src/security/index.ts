@@ -20,6 +20,7 @@ import { hstsRule } from "./hsts";
 import { httpMethodsRule } from "./http-methods";
 import { httpToHttpsRule } from "./http-to-https";
 import { httpsRule } from "./https";
+import { infoDisclosureRule } from "./info-disclosure";
 import { jsonSensitiveFieldsRule } from "./json-sensitive-fields";
 import { leakedSecretsRule } from "./leaked-secrets";
 import { mixedContentRule } from "./mixed-content";
@@ -80,6 +81,7 @@ export const rules: Rule[] = [
   httpMethodsRule,
   supabaseRlsRule,
   firebaseOpenRulesRule,
+  infoDisclosureRule,
   securityTxtRule,
   versionDisclosureRule,
   queryErrorFuzzRule,
@@ -114,6 +116,7 @@ export {
   permissionsPolicyRule,
   queryErrorFuzzRule,
   referrerPolicyRule,
+  infoDisclosureRule,
   securityTxtRule,
   sriRule,
   sitemapSensitiveUrlsRule,
