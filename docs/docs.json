@@ -677,6 +677,7 @@
                   "rules/security/unpaginated-api",
                   "rules/security/exposed-files",
                   "rules/security/exposed-backups",
+                  "rules/security/directory-listing",
                   "rules/security/auth-endpoint-disclosure",
                   "rules/security/open-redirect",
                   "rules/security/query-error-fuzz",

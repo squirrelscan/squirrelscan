@@ -3945,6 +3945,12 @@
    "csp-violations|skipped|CSP violations were not checked: the page was fetched as plain HTML, not rendered in a browser||"
   ]
  },
+ "security/directory-listing": {
+  "digest": "210186121472131",
+  "lines": [
+   "directory-listing-not-checked|skipped|Directory listings not checked: probing is passive, and this rule only probes at aggressive.|\"not-checked\"|"
+  ]
+ },
  "security/exposed-actuator": {
   "digest": "111694927425978",
   "lines": [

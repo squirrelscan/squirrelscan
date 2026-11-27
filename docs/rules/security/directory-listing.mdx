@@ -1,0 +1,106 @@
+---
+title: "Open directory listing: folders that show every file to anyone"
+description: "A web server with autoindex on lists every file in a folder. On an aggressive run squirrel requests the parent folders of the assets it crawled and flags each one that shows an Apache, nginx, IIS or Tomcat file index."
+---
+
+## What an open directory listing is
+
+When a web server has directory indexes turned on and a folder has no index page, a request for the folder returns a generated page that lists every file in it. A folder of stylesheets and scripts then also shows the source maps, backups, exports and half-finished uploads that sit beside them. Scanners look for these pages because the file names alone point at what to download next.
+
+## What squirrel checks
+
+This is a loud probing rule. It requests folders the browser never asks for, which leaves 404s and listings in your logs, so it runs only when [probing intensity](/configuration/security) is `aggressive` (`--probe aggressive` or `--pentest`). Below that it sends nothing and the report lists it as not checked. Run it on a site you own or have permission to test.
+
+### Which folders are requested
+
+The immediate parent folder of every same-origin stylesheet, script, image and font the crawl referenced. Folders are deduplicated, ordered shallowest first and capped at 20. The site root is never requested, and neither is an asset on another host or port. Every URL is built from the audited origin, has no query string, and a redirect is never followed, wherever it points.
+
+The requests are one `GET` to a random folder that cannot exist (the baseline), then one `GET` per folder. Each is admitted by the shared [probe budget](/configuration/security#budget), has its own timeout, and reads at most 64 KB of the answer after decompression. A run with no same-origin asset in a folder sends nothing and reports not checked.
+
+### How a listing is recognised
+
+A `200` alone is never a hit. The body must be a generated index page of one of four servers, and must show at least two file rows:
+
+| Server | Marker the page must carry |
+|---|---|
+| Apache | An `Index of /path` title and heading, plus its sort links, a "Parent Directory" row or its `Apache` signature line |
+| nginx | An `Index of /path` title and heading, and the `../` parent row right after `<hr><pre>` |
+| IIS | A `host - /path/` title that matches the heading, with the `<pre>` block and rule IIS prints |
+| Tomcat | A `Directory Listing For [/path/]` title and heading (Tomcat 8.5 and later; older releases print the path without brackets) |
+
+A file row is a link, other than the parent or a sort link, with the entry's time of day beside it. An SPA shell, a themed 404 served with `200` and an article that quotes "Index of /" have no such rows, so they are not reported. A listing is also ignored when the baseline folder (which cannot exist) answered with a listing, or with the same bytes: a server that lists every path says nothing about your folders, and the check is then reported as incomplete.
+
+### What it stops on
+
+An HTTP `429` or a bot challenge stops the run at once, with no retry. The probe budget running out, a folder that answered with a `5xx`, and a probe that failed with a network error or timeout also make the check incomplete: hits already confirmed are still reported, and the message names how many folders were not verified.
+
+### Results
+
+- Warn, one check for the audit, when at least one folder lists its files. The message is `N folder(s) list their files to anyone: <folder URLs>`. Each folder is an item whose meta has the path, the server, the number of file rows seen and a sample of at most 10 file names.
+- Pass when no probed folder lists its files: `None of the N asset folder(s) probed lists its files`.
+- Not checked, with reason `probe-level-too-low`, below `aggressive`.
+- Not checked, with reason `no-asset-folders`, when the crawl found no same-origin asset in a folder.
+- Not checked, with reason `probe-incomplete`, when the run stopped early or the baseline folder answered with a listing.
+
+### Limits
+
+Only the immediate parent of each asset is requested, so a listing two levels up, or in a folder no crawled page references, is not found. A listing that shows to signed-in users only is not seen, because the probes carry no cookies. Servers other than the four above, and custom index pages, are not recognised.
+
+## How to fix it
+
+1. Turn directory indexes off. nginx: remove `autoindex on;` or set `autoindex off;` for the location. Apache: `Options -Indexes` in the virtual host or `.htaccess`. IIS: turn off Directory Browsing in the site's settings. Tomcat: set the `listings` init parameter of the DefaultServlet to `false` in `web.xml`.
+2. Read what the listing showed. If a backup, source map, dump or private file was in the folder, remove it and treat its contents as leaked.
+3. Serve assets from a build output that contains only what the site needs.
+
+| | |
+|---|---|
+| **Rule ID** | `security/directory-listing` |
+| **Category** | [Security](/rules/security) |
+| **Scope** | Site-wide |
+| **Severity** | warning |
+| **Weight** | 5/10 |
+
+## Enable / disable
+
+### Disable this rule
+
+```toml squirrel.toml
+[rules]
+disable = ["security/directory-listing"]
+```
+
+### Disable all Security rules
+
+```toml squirrel.toml
+[rules]
+disable = ["security/*"]
+```
+
+### Enable only this rule
+
+```toml squirrel.toml
+[rules]
+enable = ["security/directory-listing"]
+```
+
+`enable` replaces the default `["*"]`, so this is the only rule selected. Leave `disable` out: a rule that matches any `disable` pattern is skipped even when `enable` names it. Only an `enabled` setting under a rule's own `[rule_options]` table overrides both lists.
+
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `directory-listing` | Problem |  |
+| `directory-listing-none` | Clean | `directory-listing` |
+| `directory-listing-not-checked` | Not checked |  |
+| `directory-listing-incomplete` | Not checked |  |
+
+{/* rule-checks:end */}
+
+## Related rules
+
+- [security/exposed-files](/rules/security/exposed-files): a curated list of sensitive files that should never be served.
+- [security/version-disclosure](/rules/security/version-disclosure): response headers that tell a scanner which server version to target.

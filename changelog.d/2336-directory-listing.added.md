@@ -1,0 +1,1 @@
+- New `security/directory-listing` rule: on an aggressive probe run, requests the parent folders of the assets the crawl found and flags folders where an Apache, nginx, IIS or Tomcat file index is open. Probes stay on the audited origin and need several file rows, so a themed 404 or an SPA catch-all is never reported. (#2336)

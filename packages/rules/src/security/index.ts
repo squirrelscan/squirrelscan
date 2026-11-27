@@ -8,6 +8,7 @@ import { cookieFlagsRule } from "./cookie-flags";
 import { cspRule } from "./csp";
 import { cspBlocksOwnResourcesRule } from "./csp-blocks-own-resources";
 import { cspViolationsRule } from "./csp-violations";
+import { directoryListingRule } from "./directory-listing";
 import { exposedActuatorRule } from "./exposed-actuator";
 import { exposedBackupsRule } from "./exposed-backups";
 import { exposedFilesRule } from "./exposed-files";
@@ -74,6 +75,7 @@ export const rules: Rule[] = [
   jsonSensitiveFieldsRule,
   exposedFilesRule,
   exposedBackupsRule,
+  directoryListingRule,
   authEndpointDisclosureRule,
   openRedirectRule,
   clientSideAuthzRule,
@@ -95,6 +97,7 @@ export {
   cspBlocksOwnResourcesRule,
   cspRule,
   cspViolationsRule,
+  directoryListingRule,
   exposedFilesRule,
   exposedActuatorRule,
   exposedBackupsRule,
