@@ -66,6 +66,16 @@ export const ariaCommandNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-command-name", outcome: "problem" },
+      { name: "aria-command-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-command-name",
+        outcome: "clean",
+        clears: ["aria-command-name", "aria-command-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

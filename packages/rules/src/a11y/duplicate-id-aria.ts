@@ -18,6 +18,21 @@ export const duplicateIdAriaRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "duplicate-id-aria", outcome: "problem" },
+      { name: "aria-missing-name-id", outcome: "problem" },
+      { name: "aria-missing-id-ref", outcome: "problem" },
+      {
+        name: "duplicate-id-aria",
+        outcome: "clean",
+        clears: [
+          "duplicate-id-aria",
+          "aria-missing-name-id",
+          "aria-missing-id-ref",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -26,6 +26,18 @@ export const ariaLabelsRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-buttons", outcome: "problem" },
+      { name: "aria-buttons-unconfirmed", outcome: "problem" },
+      { name: "aria-svg", outcome: "problem" },
+      { name: "aria-buttons", outcome: "skipped" },
+      {
+        name: "aria-buttons",
+        outcome: "clean",
+        clears: ["aria-buttons", "aria-buttons-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -215,6 +215,15 @@ export const ariaRequiredParentRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-required-parent", outcome: "problem" },
+      {
+        name: "aria-required-parent",
+        outcome: "clean",
+        clears: ["aria-required-parent"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

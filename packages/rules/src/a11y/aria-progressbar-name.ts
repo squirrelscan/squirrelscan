@@ -47,6 +47,16 @@ export const ariaProgressbarNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-progressbar-name", outcome: "problem" },
+      { name: "aria-progressbar-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-progressbar-name",
+        outcome: "clean",
+        clears: ["aria-progressbar-name", "aria-progressbar-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -18,6 +18,17 @@ export const focusVisibleRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "focus-outline-global", outcome: "problem" },
+      { name: "focus-outline", outcome: "problem" },
+      { name: "focus-modern", outcome: "clean", clears: ["focus-outline"] },
+      {
+        name: "focus-visible",
+        outcome: "clean",
+        clears: ["focus-outline-global", "focus-outline"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
@@ -54,7 +65,12 @@ export const focusVisibleRule: Rule = {
       });
     }
 
-    if (hasFocusVisible || hasFocusWithin) {
+    // focus-modern clears focus-outline, so it never sits beside one:
+    // :focus-within alone does not restyle the ring outline:none removed.
+    if (
+      hasFocusVisible ||
+      (hasFocusWithin && !checks.some((c) => c.name === "focus-outline"))
+    ) {
       checks.push({
         name: "focus-modern",
         status: "pass",

@@ -1,0 +1,1 @@
+- The rule pages for 31 more accessibility rules (accesskeys to form-labels) list the check names each rule emits and which clean check clears which problem check (#2344).

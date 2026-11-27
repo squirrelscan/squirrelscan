@@ -22,6 +22,15 @@ export const formFieldMultipleLabelsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "form-field-multiple-labels", outcome: "problem" },
+      {
+        name: "form-field-multiple-labels",
+        outcome: "clean",
+        clears: ["form-field-multiple-labels"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

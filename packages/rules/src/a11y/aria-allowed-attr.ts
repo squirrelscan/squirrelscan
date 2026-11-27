@@ -37,6 +37,15 @@ export const ariaAllowedAttrRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-allowed-attr", outcome: "problem" },
+      {
+        name: "aria-allowed-attr",
+        outcome: "clean",
+        clears: ["aria-allowed-attr"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

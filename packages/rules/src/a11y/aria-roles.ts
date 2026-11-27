@@ -20,6 +20,11 @@ export const ariaRolesRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-roles", outcome: "problem" },
+      { name: "aria-roles", outcome: "clean", clears: ["aria-roles"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -43,6 +43,16 @@ export const ariaTreeitemNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-treeitem-name", outcome: "problem" },
+      { name: "aria-treeitem-name-unconfirmed", outcome: "problem" },
+      {
+        name: "aria-treeitem-name",
+        outcome: "clean",
+        clears: ["aria-treeitem-name", "aria-treeitem-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -1,0 +1,1 @@
+- `a11y/focus-visible` no longer passes `focus-modern` on a page that removes the focus outline and uses `:focus-within` without `:focus-visible`, so the page reports only the `focus-outline` warning (#2344).

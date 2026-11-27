@@ -88,6 +88,11 @@ export const ariaTextRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-text", outcome: "problem" },
+      { name: "aria-text", outcome: "clean", clears: ["aria-text"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

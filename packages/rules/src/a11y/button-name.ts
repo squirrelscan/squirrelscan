@@ -71,6 +71,16 @@ export const buttonNameRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "button-name", outcome: "problem" },
+      { name: "button-name-unconfirmed", outcome: "problem" },
+      {
+        name: "button-name",
+        outcome: "clean",
+        clears: ["button-name", "button-name-unconfirmed"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

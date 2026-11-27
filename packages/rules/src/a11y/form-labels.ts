@@ -22,6 +22,16 @@ export const formLabelsRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "form-labels", outcome: "problem" },
+      { name: "form-labels-unconfirmed", outcome: "problem" },
+      {
+        name: "form-labels",
+        outcome: "clean",
+        clears: ["form-labels", "form-labels-unconfirmed"],
+      },
+    ],
     messageCountsItems: true,
     itemSelectors: true,
   },

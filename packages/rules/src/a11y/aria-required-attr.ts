@@ -21,6 +21,15 @@ export const ariaRequiredAttrRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "aria-required-attr", outcome: "problem" },
+      {
+        name: "aria-required-attr",
+        outcome: "clean",
+        clears: ["aria-required-attr"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

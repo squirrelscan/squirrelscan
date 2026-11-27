@@ -21,6 +21,11 @@ export const accesskeysRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "accesskeys-unique", outcome: "problem" },
+      { name: "accesskeys", outcome: "clean", clears: ["accesskeys-unique"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
