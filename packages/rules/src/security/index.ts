@@ -39,6 +39,7 @@ import { tokenStorageRule } from "./token-storage";
 import { unauthenticatedApiRule } from "./unauthenticated-api";
 import { unpaginatedApiRule } from "./unpaginated-api";
 import { versionDisclosureRule } from "./version-disclosure";
+import { wordpressExposureRule } from "./wordpress-exposure";
 import { xContentTypeRule } from "./x-content-type";
 import { xFrameOptionsRule } from "./x-frame-options";
 
@@ -82,6 +83,7 @@ export const rules: Rule[] = [
   securityTxtRule,
   versionDisclosureRule,
   queryErrorFuzzRule,
+  wordpressExposureRule,
 ];
 
 export {
@@ -122,6 +124,7 @@ export {
   unauthenticatedApiRule,
   unpaginatedApiRule,
   versionDisclosureRule,
+  wordpressExposureRule,
   xContentTypeRule,
   xFrameOptionsRule,
 };
