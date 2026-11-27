@@ -28,6 +28,21 @@ interface Signature {
   re: RegExp;
 }
 
+// A trace or error shape that must sit right after a bare framework or driver
+// identifier. Documentation prose names `ActiveRecord::RecordNotFound` or
+// `mysqli::query` all the time; only a crash prints one beside a frame, a file
+// and line, or a trace header.
+const TRACE_SHAPE = String.raw`\.(?:php|rb|py|java|kt|cs|js|ts)(?::\d{1,6}|\(\d{1,6}\)| on line \d{1,6}|", line \d{1,6})|:line \d{1,6}|#0 |Stack [Tt]race:|\bat [\w$]{1,60}(?:\.[\w$<>]{1,60}){1,20}\(|Rails\.root:|Application Trace`;
+
+/**
+ * `ident` counts only when a {@link TRACE_SHAPE} follows within a short bounded
+ * window. Keep `ident` free of a variable-length tail (use a lookahead): a tail
+ * and the window backtrack against each other on a repeated identifier.
+ */
+function withTrace(ident: string): RegExp {
+  return new RegExp(String.raw`(?:${ident})[\s\S]{0,240}?(?:${TRACE_SHAPE})`);
+}
+
 // Every quantifier is bounded: the text is chosen by the website under audit.
 const SIGNATURES: readonly Signature[] = [
   // Stack traces
@@ -75,12 +90,24 @@ const SIGNATURES: readonly Signature[] = [
   {
     kind: "debug-page",
     label: "Laravel debug page",
-    re: /Whoops! There was an error|Illuminate\\(?:Database|Foundation|Routing|Http)\\[\w\\]{1,100}/,
+    re: /Whoops! There was an error/,
+  },
+  {
+    kind: "debug-page",
+    label: "Laravel debug page",
+    re: withTrace(
+      String.raw`Illuminate\\(?:Database|Foundation|Routing|Http)\\(?=\w)`
+    ),
   },
   {
     kind: "debug-page",
     label: "Symfony debug page",
-    re: /Symfony\\Component\\[\w\\]{1,100}|<title>[^<]{0,200}\(\d{3} [A-Za-z ]{1,40}\)<\/title>[\s\S]{0,400}?Symfony Profiler/,
+    re: /<title>[^<]{0,200}\(\d{3} [A-Za-z ]{1,40}\)<\/title>[\s\S]{0,400}?Symfony Profiler/,
+  },
+  {
+    kind: "debug-page",
+    label: "Symfony debug page",
+    re: withTrace(String.raw`Symfony\\Component\\(?=\w)`),
   },
   {
     kind: "debug-page",
@@ -90,12 +117,24 @@ const SIGNATURES: readonly Signature[] = [
   {
     kind: "debug-page",
     label: "Rails debug page",
-    re: /Action Controller: Exception caught|<h1>\s{0,20}[\w:]{1,80}\s{1,20}in [\w:]{1,80}Controller#\w{1,60}\s{0,20}<\/h1>|ActionController::RoutingError|ActiveRecord::\w{1,60}/,
+    re: /Action Controller: Exception caught|<h1>\s{0,20}[\w:]{1,80}\s{1,20}in [\w:]{1,80}Controller#\w{1,60}\s{0,20}<\/h1>/,
+  },
+  {
+    kind: "debug-page",
+    label: "Rails debug page",
+    re: withTrace(
+      String.raw`ActionController::RoutingError|ActiveRecord::(?=\w)`
+    ),
   },
   {
     kind: "debug-page",
     label: "ASP.NET error page",
-    re: /Server Error in '[^']{1,80}' Application|Stack Trace:\s{0,10}<\/b>|System\.Web\.[\w.]{1,80}Exception/,
+    re: /Server Error in '[^']{1,80}' Application|Stack Trace:\s{0,10}<\/b>/,
+  },
+  {
+    kind: "debug-page",
+    label: "ASP.NET error page",
+    re: withTrace(String.raw`System\.Web\.(?=[\w.]{1,80}Exception)`),
   },
   {
     kind: "debug-page",
@@ -111,17 +150,35 @@ const SIGNATURES: readonly Signature[] = [
   {
     kind: "database-error",
     label: "Oracle error",
-    re: /\bORA-\d{5}\b/,
+    // A driver or exception prefix, or the ORA-06512 frame that follows a raised error.
+    re: /(?:Exception|Error|Warning|\(\)):\s{1,5}ORA-\d{5}\b|\bORA-\d{5}:[^\n]{0,200}\s{1,10}ORA-06512: at /,
+  },
+  {
+    kind: "database-error",
+    label: "Oracle error",
+    re: withTrace(String.raw`\bORA-\d{5}:`),
   },
   {
     kind: "database-error",
     label: "PostgreSQL error",
-    re: /\bPG::[A-Z]\w{2,60}|ERROR:\s{1,5}(?:syntax error at or near|relation "[^"\n]{1,80}" does not exist|column "[^"\n]{1,80}" does not exist)/,
+    re: /\bPG::[A-Z]\w{2,60}: {1,3}(?:ERROR|FATAL):|ERROR:\s{1,5}(?:syntax error at or near|relation "[^"\n]{1,80}" does not exist|column "[^"\n]{1,80}" does not exist)/,
+  },
+  {
+    kind: "database-error",
+    label: "PostgreSQL error",
+    re: withTrace(String.raw`\bPG::(?=[A-Z]\w{2})`),
   },
   {
     kind: "database-error",
     label: "MySQL error",
-    re: /You have an error in your SQL syntax|\bmysqli?(?:_sql_exception|_query\(\)|::\w{1,40})|\bmysqli_\w{1,40}\(\)|Warning: mysql_\w{1,40}\(\)|MySQLSyntaxErrorException|com\.mysql\.jdbc\./,
+    re: /You have an error in your SQL syntax|\b(?:Warning|Fatal error): mysqli?_\w{1,40}\(\): |Uncaught mysqli_sql_exception\b/,
+  },
+  {
+    kind: "database-error",
+    label: "MySQL error",
+    re: withTrace(
+      String.raw`\bmysqli?(?:_sql_exception|::(?=\w)|_(?=\w{1,40}\(\)))|MySQLSyntaxErrorException|com\.mysql\.jdbc\.`
+    ),
   },
   {
     kind: "database-error",
@@ -148,6 +205,16 @@ function toSnippet(text: string, index: number, length: number): string {
   return flat.length > MAX_SNIPPET
     ? `${flat.slice(0, MAX_SNIPPET - 3)}...`
     : flat;
+}
+
+/**
+ * Whether bare filesystem paths count for a response with this status. A path on
+ * a 2xx page is usually documentation; on an error response it is a leak. The
+ * crawler stores no body for a 4xx or 5xx response yet (#2393), so today the rule
+ * only sees 2xx pages and this returns false for every page it reads.
+ */
+export function scansPathsFor(statusCode: number): boolean {
+  return statusCode >= 400;
 }
 
 /**

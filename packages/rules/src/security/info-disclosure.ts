@@ -4,16 +4,49 @@ import { collectTextExcluding } from "@squirrelscan/parser/extractors";
 
 import type { CheckResult, Rule, RuleContext, RuleResult } from "../types";
 
-import { classifyDisclosure } from "../shared/info-disclosure";
+import { classifyDisclosure, scansPathsFor } from "../shared/info-disclosure";
 
 const NON_TEXT_TAGS = new Set(["script", "style", "template", "noscript"]);
+
+// Phrasing elements whose text runs on in the same line. Every other element
+// (a cell, row, paragraph, list item, div) ends a line, so a trace laid out one
+// frame per cell keeps its line breaks instead of gluing `Exception` to `at`.
+const INLINE_TAGS = new Set([
+  "a",
+  "abbr",
+  "b",
+  "bdi",
+  "bdo",
+  "cite",
+  "code",
+  "data",
+  "dfn",
+  "em",
+  "i",
+  "kbd",
+  "mark",
+  "q",
+  "s",
+  "samp",
+  "small",
+  "span",
+  "strong",
+  "sub",
+  "sup",
+  "time",
+  "u",
+  "var",
+]);
+
+const isBoundary = (el: Element): boolean =>
+  !INLINE_TAGS.has(el.tagName.toLowerCase());
 
 export const infoDisclosureRule: Rule = {
   meta: {
     id: "security/info-disclosure",
     name: "Information disclosure",
     description:
-      "Checks page and error-page bodies for stack traces, absolute filesystem paths, framework debug pages and database errors",
+      "Checks 2xx page bodies for stack traces, absolute filesystem paths, framework debug pages and database errors (error responses are not stored yet)",
     solution:
       'Turn debug output off in production (Laravel APP_DEBUG=false, Django DEBUG = False, Symfony APP_ENV=prod, Rails consider_all_requests_local = false, ASP.NET customErrors mode="RemoteOnly" or "On", PHP display_errors = Off) and serve a generic error page. Log the details server-side instead. Rotate any credential the output showed.',
     category: "security",
@@ -43,7 +76,8 @@ export const infoDisclosureRule: Rule = {
         text = collectTextExcluding(
           root,
           (el) => NON_TEXT_TAGS.has(el.tagName.toLowerCase()),
-          "\n"
+          "\n",
+          isBoundary
         );
       }
     } catch {
@@ -51,8 +85,7 @@ export const infoDisclosureRule: Rule = {
     }
 
     const found = classifyDisclosure(text, {
-      // A bare path on a 200 page is usually documentation; on an error response it is a leak.
-      paths: ctx.page.statusCode >= 400,
+      paths: scansPathsFor(ctx.page.statusCode),
     });
     const checks: CheckResult[] = [];
     if (!found) {

@@ -1,6 +1,6 @@
 ---
 title: "Information disclosure: stack traces, paths, debug pages and database errors"
-description: "A stack trace, filesystem path, framework debug page or database error in a response hands an attacker your internals. squirrel reads each crawled page and error page for them."
+description: "A stack trace, filesystem path, framework debug page or database error in a page hands an attacker your internals. squirrel reads each crawled 2xx page for them."
 ---
 
 ## What information disclosure is
@@ -11,16 +11,20 @@ Version numbers in response headers are a separate check: [security/version-disc
 
 ## What squirrel checks
 
-The rule runs on every crawled page, error pages included. It reads the visible text of the document, skipping `<script>`, `<style>`, `<template>` and `<noscript>`, and looks at the first 200,000 characters for these signatures:
+The rule runs on every crawled page that returned a 2xx status. The crawler does not store the body of a 4xx or 5xx response yet, so error pages are not read; reading them is tracked in [#2393](https://github.com/squirrelscan/squirrelscan/issues/2393). The rule reads the visible text of the document, skipping `<script>`, `<style>`, `<template>` and `<noscript>`, and looks at the first 200,000 characters for these signatures:
 
 - Stack traces: Python tracebacks, Java and Kotlin frames and exceptions, Node.js frames with a file path and position, PHP traces and `... in <path>.php on line N` errors, .NET frames with a source path, and Ruby backtraces.
-- Framework debug pages: Laravel (Whoops and `Illuminate\` classes), Symfony, Django (`DEBUG = True`), Rails (Action Controller exception pages), ASP.NET (`Server Error in '...' Application`) and the Werkzeug debugger.
-- Database errors: `SQLSTATE[...]`, `ORA-NNNNN`, `PG::` errors and common PostgreSQL messages, MySQL and mysqli messages, SQL Server messages and SQLite errors.
-- Absolute filesystem paths such as `/var/www/...`, `/home/<user>/public_html/...`, `/Users/...` and `C:\inetpub\...`. A bare path is only reported on an error response (status 400 or higher), because tutorials and documentation quote paths on healthy pages.
+- Framework debug pages: Laravel (Whoops and `Illuminate\` classes), Symfony, Django (`DEBUG = True`), Rails (Action Controller exception pages and `ActiveRecord::` errors), ASP.NET (`Server Error in '...' Application`) and the Werkzeug debugger.
+- Database errors: `SQLSTATE[...]`, Oracle `ORA-NNNNN` errors, `PG::` errors and common PostgreSQL messages, MySQL and mysqli messages, SQL Server messages and SQLite errors.
+
+A framework or driver name on its own is not reported, because documentation names them in prose. `Illuminate\`, `Symfony\Component\`, `ActiveRecord::`, `ActionController::RoutingError`, `System.Web.` exceptions, `mysqli::`, `mysqli_...()`, `PG::` and `ORA-NNNNN:` count only when a trace or error shape follows within about 240 characters: a `file.php:N` or similar file and line, `:line N`, a `#0 ` frame, `Stack trace:`, an `at package.Class(` frame, `Rails.root:` or `Application Trace`. Some error shapes count on their own: `PG::<Name>: ERROR:`, `Warning: mysqli_<name>(): `, `Uncaught mysqli_sql_exception`, an exception or `Warning:` prefix before `ORA-NNNNN`, and an `ORA-06512: at` line after one.
+- Absolute filesystem paths such as `/var/www/...`, `/home/<user>/public_html/...`, `/Users/...` and `C:\inetpub\...`. A bare path is only reported on an error response (status 400 or higher), because tutorials and documentation quote paths on healthy pages. Since error pages are not read yet, bare paths are not reported today.
 
 The first match is reported as `info-disclosure`, a warning, with the kind, the matched signature and a snippet of at most 160 characters. The snippet is collapsed to one line.
 
 - Pass with `No stack trace, filesystem path, debug page or database error in the page` when nothing matches. A styled 404 page with no internal details passes.
+
+Text in separate block elements, such as table cells, paragraphs and list items, is read as separate lines, so a trace laid out one frame per cell is still found.
 
 The rule reads what the page shows. A page that documents an error, such as a tutorial quoting a Python traceback, can match.
 

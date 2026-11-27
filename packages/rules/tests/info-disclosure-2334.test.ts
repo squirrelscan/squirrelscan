@@ -6,7 +6,11 @@ import { describe, expect, test } from "bun:test";
 import type { CheckResult, RuleContext } from "../src/types";
 
 import { infoDisclosureRule } from "../src/security/info-disclosure";
-import { MAX_SNIPPET, classifyDisclosure } from "../src/shared/info-disclosure";
+import {
+  MAX_SNIPPET,
+  classifyDisclosure,
+  scansPathsFor,
+} from "../src/shared/info-disclosure";
 
 function run(
   body: string,
@@ -64,7 +68,17 @@ describe("classifier", () => {
     [
       "debug-page",
       "Symfony debug page",
-      "Symfony\\Component\\HttpKernel\\Exception\\NotFoundHttpException",
+      "Symfony\\Component\\HttpKernel\\Exception\\NotFoundHttpException\n  at vendor/symfony/http-kernel/HttpKernel.php:152",
+    ],
+    [
+      "debug-page",
+      "Laravel debug page",
+      "Illuminate\\Database\\Eloquent\\ModelNotFoundException\nNo query results\n  at vendor/laravel/framework/src/Builder.php:470",
+    ],
+    [
+      "debug-page",
+      "Rails debug page",
+      "ActiveRecord::RecordNotFound\nRails.root: /app\nApplication Trace",
     ],
     [
       "database-error",
@@ -74,13 +88,27 @@ describe("classifier", () => {
     [
       "database-error",
       "Oracle error",
-      "ORA-00942: table or view does not exist",
+      "java.sql.SQLSyntaxErrorException: ORA-00942: table or view does not exist",
     ],
-    ["database-error", "PostgreSQL error", "PG::UndefinedTable: ERROR"],
+    [
+      "database-error",
+      "Oracle error",
+      "ORA-01403: no data found\nORA-06512: at line 5",
+    ],
+    [
+      "database-error",
+      "PostgreSQL error",
+      'PG::UndefinedTable: ERROR:  relation "users" does not exist',
+    ],
     [
       "database-error",
       "MySQL error",
       "Warning: mysqli_connect(): (HY000/1045)",
+    ],
+    [
+      "database-error",
+      "MySQL error",
+      "mysqli_sql_exception: Table 'shop.users' doesn't exist in app/db.php:12",
     ],
     [
       "filesystem-path",
@@ -107,7 +135,7 @@ describe("classifier", () => {
   }
 
   test("snippet is bounded", () => {
-    const found = classifyDisclosure(`ORA-00942 ${"x".repeat(5000)}`);
+    const found = classifyDisclosure(`SQLSTATE[42S02] ${"x".repeat(5000)}`);
     expect(found?.snippet.length).toBeLessThanOrEqual(MAX_SNIPPET);
   });
 
@@ -116,6 +144,49 @@ describe("classifier", () => {
       classifyDisclosure("Traceback (most recent call last):".repeat(5000))
     ).toBeNull();
     expect(classifyDisclosure("at ".repeat(60000))).toBeNull();
+    expect(classifyDisclosure("ActiveRecord::X ".repeat(12000))).toBeNull();
+    expect(classifyDisclosure("ORA-00001: ".repeat(18000))).toBeNull();
+  });
+
+  // Documentation names framework and driver identifiers in prose; only a trace
+  // or error shape next to one is a leak.
+  const prose: [string, string][] = [
+    [
+      "Rails guide",
+      "Rails raises ActiveRecord::RecordNotFound when find gets a missing id, and ActionController::RoutingError for an unknown route. Rescue ActiveRecord::RecordInvalid to show validation errors.",
+    ],
+    [
+      "Symfony docs",
+      "Throw Symfony\\Component\\HttpKernel\\Exception\\NotFoundHttpException from a controller to return a 404. The Symfony\\Component\\HttpFoundation\\Request class wraps the request.",
+    ],
+    [
+      "Laravel docs",
+      "If no model is found, an Illuminate\\Database\\Eloquent\\ModelNotFoundException is thrown. Type-hint Illuminate\\Http\\Request on your route closure.",
+    ],
+    [
+      "php.net mysqli page",
+      "mysqli::query -- mysqli_query - Performs a query on the database. Object-oriented style: public mysqli::query(string $query, int $result_mode = MYSQLI_STORE_RESULT): mysqli_result|bool. Procedural style: mysqli_query(mysqli $mysql, string $query). Errors throw mysqli_sql_exception when MYSQLI_REPORT_STRICT is set. See also mysqli_real_query() and mysqli_multi_query().",
+    ],
+    [
+      "PostgreSQL gem docs",
+      "The pg gem raises PG::UndefinedTable for a missing table and PG::UniqueViolation for a duplicate key.",
+    ],
+    [
+      "Oracle error reference",
+      "ORA-00942: table or view does not exist\nCause: The table or view entered does not exist.\nAction: Check the spelling.",
+    ],
+  ];
+  for (const [name, text] of prose) {
+    test(`${name} prose passes`, () => {
+      expect(classifyDisclosure(text, { paths: false })).toBeNull();
+    });
+  }
+
+  test("paths are scanned on error statuses only", () => {
+    expect(scansPathsFor(200)).toBe(false);
+    expect(scansPathsFor(399)).toBe(false);
+    expect(scansPathsFor(400)).toBe(true);
+    expect(scansPathsFor(500)).toBe(true);
   });
 
   test("paths: false skips bare paths but keeps database errors", () => {
@@ -154,6 +225,21 @@ describe("rule", () => {
     const body = "<p>Could not read /var/www/site/config.php</p>";
     expect(run(body, 404)[0]?.status).toBe("fail");
     expect(run(body, 200)[0]?.status).toBe("pass");
+  });
+
+  test("a trace laid out one line per table cell is found", () => {
+    const checks = run(
+      "<table><tr><td>java.lang.IllegalStateException: boom</td></tr><tr><td>at com.example.Foo.bar(Unknown Source)</td></tr></table>"
+    );
+    expect(checks[0]?.status).toBe("fail");
+    expect(checks[0]?.details?.label).toBe("Java exception");
+  });
+
+  test("docs prose naming framework classes passes", () => {
+    const checks = run(
+      "<p>Rails raises <code>ActiveRecord::RecordNotFound</code> here.</p><p>See <code>mysqli::query</code> and <code>mysqli_query()</code>.</p>"
+    );
+    expect(checks[0]?.status).toBe("pass");
   });
 
   test("a database error on a 200 page fails", () => {
