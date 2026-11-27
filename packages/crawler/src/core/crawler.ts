@@ -31,6 +31,7 @@ import {
 } from "@squirrelscan/core-contracts/limits";
 import {
   MAX_UNDECODABLE_FETCHES,
+  RATE_LIMITED_FRONTIER_REASON_PREFIX,
   WELL_KNOWN_PATHS,
   isPermanentStorageError,
 } from "@squirrelscan/core-contracts/storage";
@@ -1649,7 +1650,7 @@ export function createCrawler(
       crawlId: string,
       entry: FrontierRecord,
       host: string,
-      message = `Rate limited by ${host}`
+      message = `${RATE_LIMITED_FRONTIER_REASON_PREFIX} by ${host}`
     ): Effect.Effect<void, StorageError, never> =>
       Effect.gen(function* () {
         yield* storage.updateFrontierStatus(

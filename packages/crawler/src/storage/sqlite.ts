@@ -7,6 +7,7 @@ import type { Database } from "bun:sqlite";
 
 import {
   FRONTIER_STATUS_TRANSITIONS,
+  RATE_LIMITED_FRONTIER_REASON_PREFIX,
   isCacheHitReason,
   parseUnverifiedReason,
 } from "@squirrelscan/core-contracts";
@@ -3191,6 +3192,41 @@ export class SQLiteStorage implements CrawlStorage {
           )
           .get(crawlId) as { count: number };
         return row.count;
+      },
+      catch: (e) => StorageError.read(e),
+    });
+  }
+
+  getRateLimitedFrontierUrls(
+    crawlId: string,
+    limit: number
+  ): Effect.Effect<
+    Array<{ url: string; status: number }>,
+    StorageError,
+    never
+  > {
+    return Effect.try({
+      try: () => {
+        // substr, not LIKE: LIKE is case-insensitive and treats `_` and `%` in
+        // the prefix as wildcards.
+        const rows = this.getDb()
+          .query(
+            "SELECT f.normalized_url AS url, f.reason AS reason FROM frontier f WHERE f.crawl_id = ? AND f.status = 'failed' AND substr(f.reason, 1, ?) = ? AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.crawl_id = f.crawl_id AND p.normalized_url = f.normalized_url) ORDER BY f.enqueued_at, f.normalized_url LIMIT ?"
+          )
+          .all(
+            crawlId,
+            RATE_LIMITED_FRONTIER_REASON_PREFIX.length,
+            RATE_LIMITED_FRONTIER_REASON_PREFIX,
+            Math.max(0, Math.floor(limit))
+          ) as Array<{ url: string; reason: string }>;
+        return rows.map((row) => {
+          // The fetcher writes "Rate limited (430)"; the crawler's own backoff
+          // writes "Rate limited by <host>", which names no status.
+          const named = /^ \((\d{3})\)/.exec(
+            row.reason.slice(RATE_LIMITED_FRONTIER_REASON_PREFIX.length)
+          );
+          return { url: row.url, status: named ? Number(named[1]) : 429 };
+        });
       },
       catch: (e) => StorageError.read(e),
     });

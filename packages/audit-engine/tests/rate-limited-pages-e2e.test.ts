@@ -16,6 +16,8 @@ import type { Config } from "@squirrelscan/config";
 import type { PageRecord } from "@squirrelscan/core-contracts";
 
 import { SQLiteStorage } from "@squirrelscan/crawler";
+import { CrawlError } from "@squirrelscan/crawler/fetcher";
+import { parsePage } from "@squirrelscan/parser";
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 
@@ -36,12 +38,13 @@ const PAGE_RULES = [
 ];
 const LINK_RULE = "links/broken-links";
 const ORPHAN_RULE = "links/orphan-pages";
+const SITEMAP_RULE = "crawl/sitemap-coverage";
 
 // `filterRules` defaults every rule to disabled, so the enable list is
 // mandatory — `rules: {}` runs nothing and passes vacuously.
 const CONFIG = {
   rule_options: {},
-  rules: { enable: [...PAGE_RULES, LINK_RULE, ORPHAN_RULE] },
+  rules: { enable: [...PAGE_RULES, LINK_RULE] },
 } as unknown as Config;
 
 const EMPTY_ASSETS: PreFetchedAssets = {
@@ -372,35 +375,178 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
   });
 });
 
-// #2419: a 429 with no body never parses, so it used to leave no trace for the
-// orphan check, which then blamed a page whose linker was the throttled one.
-describe("#2419 — a bodiless rate-limited page hides possible inbound links", () => {
-  const link = (path: string) => `<a href="${BASE}${path}">x</a>`;
-  const seeds = (p2Status: number): SeedPage[] => [
-    { path: "/", status: 200, body: html(link("/p1") + link("/p2")) },
-    { path: "/p1", status: 200, body: html(link("/") + link("/p2")) },
-    {
-      path: "/p2",
-      status: p2Status,
-      body: p2Status === 200 ? html(link("/") + link("/p1")) : "",
-    },
-  ];
+// #2419: the crawler never stores a page for a throttled fetch. It turns the 429
+// into a rate-limit error and marks the frontier entry failed, so the only trace
+// is that frontier row. The orphan checks used to miss it: /p1 lost its inbound
+// link from the throttled /p2, and /p2 itself looked like an uncrawled sitemap
+// URL.
+describe("#2419: a rate-limited page hides possible inbound links", () => {
+  const SITEMAP_URL = `${BASE}/sitemap.xml`;
+  const P2 = `${BASE}/p2`;
+  // The streaming path reads links from the stored parse, which the crawler
+  // writes as parsePage's result without its DOM, so the fixture stores one.
+  const linking = (path: string, to: string[]): PageRecord => {
+    const url = `${BASE}${path}`;
+    const body = html(to.map((t) => `<a href="${BASE}${t}">x</a>`).join(""));
+    const { document: _doc, ...parsed } = parsePage(body, url);
+    return {
+      ...pageRecord("", { path, status: 200, body }),
+      parsedData: JSON.stringify(parsed),
+    } as PageRecord;
+  };
+  const PAGES = [linking("/", ["/p1", "/p2"]), linking("/p1", ["/", "/p2"])];
+  const P2_PAGE = linking("/p2", ["/", "/p1"]);
 
-  for (const engine of ["v1"] as const) {
-    test(`${engine}: orphan-pages is skipped, not warned, with /p2 at 429`, async () => {
-      const { checksFor } = await auditPages(seeds(429), engine);
-      const check = checksFor(ORPHAN_RULE).find(
-        (c) => c.name === "orphan-pages"
+  // What the crawler writes for a URL the host throttled: the fetcher's own
+  // rate-limit error message as the reason, and no page row.
+  const rateLimitedFrontier = (url: string) => ({
+    normalizedUrl: url,
+    rawUrl: url,
+    depth: 1,
+    priority: 0,
+    status: "failed" as const,
+    source: "discovered" as const,
+    enqueuedAt: 1,
+    retryCount: 0,
+    reason: CrawlError.rateLimit(url, 30_000, 429).message,
+  });
+
+  async function audit(p2RateLimited: boolean, engine: EnginePath) {
+    const storage = new SQLiteStorage(":memory:");
+    const config = {
+      rule_options: {},
+      rules: { enable: [ORPHAN_RULE, SITEMAP_RULE] },
+    } as unknown as Config;
+    return run(
+      Effect.gen(function* () {
+        yield* storage.init();
+        const crawlId = yield* storage.createCrawl({
+          baseUrl: BASE,
+          seedUrl: `${BASE}/`,
+          startedAt: Date.now(),
+          status: "completed",
+          config: {} as never,
+          stats: { sitemapReadState: "complete" },
+        } as never);
+        for (const page of p2RateLimited ? PAGES : [...PAGES, P2_PAGE])
+          yield* storage.upsertPage(crawlId, page);
+        if (p2RateLimited)
+          yield* storage.upsertFrontier(crawlId, rateLimitedFrontier(P2));
+        yield* storage.addSitemap(crawlId, {
+          url: SITEMAP_URL,
+          type: "urlset",
+          urlCount: 3,
+          childSitemaps: [],
+          errors: [],
+          fetchedAt: Date.now(),
+        });
+        yield* storage.addSitemapUrls(
+          crawlId,
+          ["/", "/p1", "/p2"].map((path) => ({
+            sitemapUrl: SITEMAP_URL,
+            loc: `${BASE}${path}`,
+          }))
+        );
+        const result =
+          engine === "streaming"
+            ? yield* runStreamingRules(storage, crawlId, config, EMPTY_ASSETS)
+            : yield* runRulesOnStorage(
+                storage,
+                crawlId,
+                yield* buildSiteContext(yield* storage.getPages(crawlId)),
+                config,
+                EMPTY_ASSETS
+              );
+        const checks = (ruleId: string) =>
+          (result.ruleResultsMap.get(ruleId)?.checks ?? []) as {
+            name: string;
+            status: string;
+            items?: { id: string }[];
+          }[];
+        return { orphan: checks(ORPHAN_RULE), sitemap: checks(SITEMAP_RULE) };
+      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
+    );
+  }
+
+  for (const engine of ["v1", "streaming"] as const) {
+    test(`${engine}: /p2 at 429 is unverified, and /p1 is not called an orphan`, async () => {
+      const { orphan, sitemap } = await audit(true, engine);
+      expect(orphan.find((c) => c.name === "orphan-pages")?.status).toBe(
+        "skipped"
       );
-      expect(check?.status).toBe("skipped");
+      const unverified = sitemap.find((c) => c.name === "sitemap-unverified");
+      expect(unverified?.status).toBe("info");
+      expect(unverified?.items?.map((i) => i.id)).toEqual([P2]);
+      expect(sitemap.find((c) => c.name === "sitemap-orphans")).toBeUndefined();
     });
 
-    test(`${engine}: all-200 control reports no orphan`, async () => {
-      const { checksFor } = await auditPages(seeds(200), engine);
-      const check = checksFor(ORPHAN_RULE).find(
-        (c) => c.name === "orphan-pages"
+    test(`${engine}: all-200 control reports no orphan of either kind`, async () => {
+      const { orphan, sitemap } = await audit(false, engine);
+      expect(orphan.find((c) => c.name === "orphan-pages")?.status).toBe(
+        "pass"
       );
-      expect(check?.status).toBe("pass");
+      expect(sitemap.find((c) => c.name === "sitemap-orphans")).toBeUndefined();
+      expect(
+        sitemap.find((c) => c.name === "sitemap-unverified")
+      ).toBeUndefined();
     });
   }
+
+  test("a sitemap URL the status probe was throttled on is unverified too", async () => {
+    // No frontier row here: only the end-of-crawl probe of the uncrawled
+    // sitemap URL saw the 429.
+    const storage = new SQLiteStorage(":memory:");
+    const config = {
+      rule_options: {},
+      rules: { enable: [SITEMAP_RULE] },
+    } as unknown as Config;
+    const sitemap = await run(
+      Effect.gen(function* () {
+        yield* storage.init();
+        const crawlId = yield* storage.createCrawl({
+          baseUrl: BASE,
+          seedUrl: `${BASE}/`,
+          startedAt: Date.now(),
+          status: "completed",
+          config: {} as never,
+          stats: { sitemapReadState: "complete" },
+        } as never);
+        for (const page of PAGES) yield* storage.upsertPage(crawlId, page);
+        yield* storage.addSitemap(crawlId, {
+          url: SITEMAP_URL,
+          type: "urlset",
+          urlCount: 3,
+          childSitemaps: [],
+          errors: [],
+          fetchedAt: Date.now(),
+        });
+        yield* storage.addSitemapUrls(
+          crawlId,
+          ["/", "/p1", "/p2"].map((path) => ({
+            sitemapUrl: SITEMAP_URL,
+            loc: `${BASE}${path}`,
+          }))
+        );
+        const result = yield* runRulesOnStorage(
+          storage,
+          crawlId,
+          yield* buildSiteContext(yield* storage.getPages(crawlId)),
+          config,
+          {
+            ...EMPTY_ASSETS,
+            sitemapUrlStatuses: [
+              { url: P2, status: 429, error: null, rateLimited: true },
+            ],
+          }
+        );
+        return (result.ruleResultsMap.get(SITEMAP_RULE)?.checks ?? []) as {
+          name: string;
+          items?: { id: string }[];
+        }[];
+      }).pipe(Effect.ensuring(storage.close().pipe(Effect.orDie)))
+    );
+    const unverified = sitemap.find((c) => c.name === "sitemap-unverified");
+    expect(unverified?.items?.map((i) => i.id)).toEqual([P2]);
+    expect(sitemap.find((c) => c.name === "sitemap-orphans")).toBeUndefined();
+  });
 });

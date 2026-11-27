@@ -17,6 +17,7 @@ import {
   classifyFetchErrorCode,
   fetchErrorCode,
 } from "@squirrelscan/core-contracts/failure-reason";
+import { RATE_LIMITED_FRONTIER_REASON_PREFIX } from "@squirrelscan/core-contracts/storage";
 import {
   CHROME_SEC_CH_UA,
   TECH_DETECT_HEADER_MAX_CHARS,
@@ -206,7 +207,7 @@ export class CrawlError extends Error {
     return new CrawlError(
       url,
       "rate_limit",
-      `Rate limited${suffix}${wait}`,
+      `${RATE_LIMITED_FRONTIER_REASON_PREFIX}${suffix}${wait}`,
       retryAfterMs,
       status ?? 429
     );
