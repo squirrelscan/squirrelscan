@@ -1,0 +1,112 @@
+---
+title: "squirrelscan for OpenClaw"
+sidebarTitle: "OpenClaw"
+description: "Set up squirrelscan in OpenClaw: openclaw mcp set with streamable-http and OAuth, openclaw mcp login, and openclaw mcp doctor."
+icon: "shell"
+---
+
+{/* Tested 2026-11-26 in a Linux sandbox with OpenClaw 2026.6.35 (c283867), installed from npm.
+    Verified: the `openclaw mcp set` command below writes mcp.servers.squirrelscan to
+    ~/.openclaw/openclaw.json exactly as shown. `openclaw mcp login squirrelscan` registered a client
+    (dynamic registration) and printed an authorize URL on mcp.squirrelscan.com/oauth/authorize with
+    S256 PKCE, resource=https://mcp.squirrelscan.com/mcp and a 127.0.0.1 redirect.
+    `openclaw mcp doctor squirrelscan --probe` reported "ok" with a warning that OAuth credentials
+    are not authorized. No login was completed. */}
+
+OpenClaw is an open source assistant that runs on your own hardware. It manages MCP servers under `mcp.servers` in its config, so squirrelscan's tools are available in every chat.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+Local audits run entirely on your machine. Logged out, they need no account and cost nothing; logged-in audits spend credits. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+Always set `transport`. OpenClaw defaults to SSE, and squirrelscan serves streamable HTTP only.
+
+```bash
+openclaw mcp set squirrelscan '{"url":"https://mcp.squirrelscan.com/mcp","transport":"streamable-http","auth":"oauth"}'
+```
+
+That writes this entry to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "squirrelscan": {
+        "url": "https://mcp.squirrelscan.com/mcp",
+        "transport": "streamable-http",
+        "auth": "oauth"
+      }
+    }
+  }
+}
+```
+
+## 3. Log in with OAuth
+
+```bash
+openclaw mcp login squirrelscan
+```
+
+OpenClaw registers a client and prints an authorization URL. Open it in a browser and approve access. On a headless host, finish with the code from the redirect:
+
+```bash
+openclaw mcp login squirrelscan --code <code>
+```
+
+Check the setup, including a live connection:
+
+```bash
+openclaw mcp doctor squirrelscan --probe
+```
+
+<Note>The final login step has not been verified by a human yet.</Note>
+
+## 4. Install the skills
+
+```bash
+squirrel skills install
+```
+
+That installs `audit-website` (the fix loop) and `squirrelscan` (operating the CLI). See [`squirrel skills`](/cli/skills).
+
+## 5. Run an audit
+
+Ask for the audit, then hand it the fixes:
+
+```text
+Audit https://nutshop.squirrelscan.com with squirrelscan and list the top issues by severity.
+```
+
+```text
+Fix every core/title-missing and images/alt-missing issue, then re-audit to confirm the score went up.
+```
+
+<Note>The hosted MCP server crawls from squirrelscan's cloud, so it needs a publicly reachable URL. Use the CLI or [`squirrel mcp`](/cli/mcp) for `localhost` and private staging websites.</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#openclaw">
+    Config for every other client.
+  </Card>
+</CardGroup>

@@ -1,0 +1,124 @@
+---
+title: "squirrelscan for Google Antigravity"
+sidebarTitle: "Antigravity"
+description: "Set up squirrelscan in Google Antigravity (CLI and IDE): mcp_config.json with serverUrl, automatic OAuth, the skills, and running audits."
+icon: "rocket"
+---
+
+{/* Tested 2026-11-26 in a Linux sandbox with Antigravity CLI (agy) 1.5.17.
+    Verified: `agy mcp add --type http squirrelscan https://mcp.squirrelscan.com/mcp` writes
+    ~/.gemini/config/mcp_config.json with {"mcpServers":{"squirrelscan":{"disabled":false,"serverUrl":"..."}}},
+    and `agy mcp list` shows it enabled. Not verified: OAuth discovery. agy asks for a Google login
+    before any session starts, and no login was completed, so it never contacted the MCP server.
+    The vendor MCP page (antigravity.google/docs/mcp) names ~/.gemini/config/mcp_config.json; the CLI
+    wrote exactly that path. The ~/.gemini/antigravity/ path is where the IDE and App keep MCP tool
+    schemas and OAuth tokens, not the config file. The Antigravity IDE and App were not installed. */}
+
+Antigravity is Google's agentic coding product, with a CLI (`agy`), an IDE and an app. All three read the same `mcp_config.json`, so squirrelscan's audit, report and issue tools show up next to the built-in tools.
+
+## 1. Install the CLI
+
+The skills and local audits run through the `squirrel` binary.
+
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    curl -fsSL https://install.squirrelscan.com | bash
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    iwr -useb https://install.squirrelscan.com/install.ps1 | iex
+    ```
+  </Tab>
+</Tabs>
+
+Local audits run entirely on your machine. Logged out, they need no account and cost nothing; logged-in audits spend credits. Verify with `squirrel --version`.
+
+## 2. Add the MCP server
+
+Antigravity needs a streamable HTTP server. Set the endpoint in `serverUrl` (`url` also works). The legacy SSE transport and `httpUrl` are not supported, so do not copy a Gemini CLI entry across unchanged.
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    agy mcp add --type http squirrelscan https://mcp.squirrelscan.com/mcp
+    ```
+
+    Run `/mcp` inside the CLI to open the MCP manager.
+  </Tab>
+  <Tab title="mcp_config.json">
+    ```json
+    {
+      "mcpServers": {
+        "squirrelscan": {
+          "serverUrl": "https://mcp.squirrelscan.com/mcp"
+        }
+      }
+    }
+    ```
+
+    Save it to `~/.gemini/config/mcp_config.json` for every project, or to `.agents/mcp_config.json` in a workspace. In the IDE, open the agent panel menu, choose **MCP Servers**, then **Manage MCP Servers** and **View raw config**.
+  </Tab>
+</Tabs>
+
+## 3. Log in with OAuth
+
+Antigravity runs OAuth 2.0 with PKCE on its own for servers that support dynamic client registration or client ID metadata documents. squirrelscan supports both, so no client ID is needed.
+
+- **CLI:** run `/mcp`, pick squirrelscan, and follow the browser login.
+- **IDE and app:** open the MCP servers list and click **Authenticate** next to squirrelscan.
+
+If the browser shows an authorization code, enter it in the **Enter authorization code** field in Antigravity. Tokens stay in `~/.gemini/antigravity/mcp_oauth_tokens.json`, never in the config file.
+
+<Note>The final login step has not been verified by a human yet. If you hit a problem, tell us with `squirrel feedback`.</Note>
+
+For CI or a shared config, use an API key instead. A `headers` entry stops OAuth from starting, so set only one:
+
+```json
+{
+  "mcpServers": {
+    "squirrelscan": {
+      "serverUrl": "https://mcp.squirrelscan.com/mcp",
+      "headers": { "Authorization": "Bearer sq_..." }
+    }
+  }
+}
+```
+
+Mint the key with `squirrel keys create --shell` and keep this file out of version control.
+
+## 4. Install the skills
+
+Antigravity reads skills from `.agents/skills/<name>/SKILL.md` in the workspace and its parent folders up to the repository root. See the [Antigravity skills docs](https://antigravity.google/docs/skills). Install the squirrelscan skills with:
+
+```bash
+squirrel skills install
+```
+
+That installs `audit-website` (the fix loop) and `squirrelscan` (operating the CLI). See [`squirrel skills`](/cli/skills) for where they land.
+
+## 5. Run an audit
+
+Ask for the audit, then hand it the fixes:
+
+```text
+Audit https://nutshop.squirrelscan.com with squirrelscan and list the top issues by severity.
+```
+
+```text
+Fix every core/title-missing and images/alt-missing issue, then re-audit to confirm the score went up.
+```
+
+<Note>The hosted MCP server crawls from squirrelscan's cloud, so it needs a publicly reachable URL. Use the CLI or [`squirrel mcp`](/cli/mcp) for `localhost` and private staging websites.</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Hosted MCP server" icon="plug" href="/developers/mcp">
+    The full tool list, auth, and credits.
+  </Card>
+  <Card title="MCP client setup" icon="toy-brick" href="/developers/mcp-clients#google-antigravity">
+    Config for every other client.
+  </Card>
+</CardGroup>

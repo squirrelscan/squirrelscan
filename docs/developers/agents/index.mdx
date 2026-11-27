@@ -1,7 +1,7 @@
 ---
 title: "Coding agents"
 sidebarTitle: "Overview"
-description: "Run squirrelscan audits from Claude Code, Cursor, Codex, Copilot, Gemini CLI, Windsurf, and any MCP client: setup, MCP, skills, and the fix loop."
+description: "Run squirrelscan audits from Claude Code, Cursor, Codex, GitHub Copilot, Gemini CLI, Antigravity, Hermes Agent, OpenClaw, Grok, Muse Code, and any MCP client: setup, MCP, skills, and the fix loop."
 icon: "bot"
 ---
 
@@ -13,17 +13,20 @@ squirrelscan is built for coding agents. Point your agent at squirrelscan and it
   <Card title="Claude Code" icon="terminal" href="/developers/agents/claude-code">
     Plugin (skills + MCP in one), or `claude mcp add`.
   </Card>
-  <Card title="Cursor" icon="mouse-pointer-click" href="/developers/agents/cursor">
-    One-click install, or a two-line `mcp.json`.
+  <Card title="GitHub Copilot" icon="github" href="/developers/agents/copilot">
+    VS Code, Visual Studio, CLI, cloud agent, Copilot Studio, and allowlisting.
   </Card>
   <Card title="OpenAI Codex" icon="square-terminal" href="/developers/agents/codex">
     `codex mcp add` or `~/.codex/config.toml`.
   </Card>
+  <Card title="Cursor" icon="mouse-pointer-click" href="/developers/agents/cursor">
+    One-click install, or a two-line `mcp.json`.
+  </Card>
+  <Card title="Google Antigravity" icon="rocket" href="/developers/agents/antigravity">
+    `agy mcp add`, or `serverUrl` in `mcp_config.json`.
+  </Card>
   <Card title="ChatGPT" icon="message-square" href="/developers/agents/chatgpt">
     Add squirrelscan as a developer-mode connector.
-  </Card>
-  <Card title="GitHub Copilot" icon="github" href="/developers/agents/copilot">
-    VS Code `mcp.json`, plus agent mode.
   </Card>
   <Card title="Gemini CLI" icon="gem" href="/developers/agents/gemini-cli">
     `gemini mcp add`, or `settings.json`.
@@ -34,10 +37,38 @@ squirrelscan is built for coding agents. Point your agent at squirrelscan and it
   <Card title="opencode" icon="code" href="/developers/agents/opencode">
     Remote MCP in `opencode.json`.
   </Card>
+</CardGroup>
+
+### More agents
+
+<CardGroup cols={2}>
+  <Card title="Hermes Agent" icon="message-square-code" href="/developers/agents/hermes">
+    `mcp_servers` in `config.yaml`, then `hermes mcp login`.
+  </Card>
+  <Card title="OpenClaw" icon="shell" href="/developers/agents/openclaw">
+    `openclaw mcp set` with `streamable-http` and OAuth.
+  </Card>
+  <Card title="Grok" icon="bot" href="/developers/agents/grok">
+    `grok mcp add`, then browser OAuth.
+  </Card>
+  <Card title="Muse" icon="bot" href="/developers/agents/muse">
+    `mcp_servers` in `settings.json`, then `muse mcp login`.
+  </Card>
   <Card title="Any MCP client" icon="plug" href="/developers/mcp-clients">
     Every other client, and the raw endpoint.
   </Card>
 </CardGroup>
+
+## Brand marks and setup at a glance
+
+| Agent | Config | OAuth login |
+|---|---|---|
+| <img src="/logo/agents/copilot.svg" alt="" width="18" height="18" /> [GitHub Copilot](/developers/agents/copilot) | `.vscode/mcp.json`, `copilot mcp add` | VS Code and Visual Studio |
+| <img src="/logo/agents/antigravity.svg" alt="" width="18" height="18" /> [Google Antigravity](/developers/agents/antigravity) | `~/.gemini/config/mcp_config.json` | `/mcp` or **Authenticate** |
+| <img src="/logo/agents/hermes.svg" alt="" width="18" height="18" /> [Hermes Agent](/developers/agents/hermes) | `~/.hermes/config.yaml` | `hermes mcp login squirrelscan` |
+| <img src="/logo/agents/openclaw.svg" alt="" width="18" height="18" /> [OpenClaw](/developers/agents/openclaw) | `~/.openclaw/openclaw.json` | `openclaw mcp login squirrelscan` |
+| [Grok](/developers/agents/grok) | `grok mcp add` | Browser OAuth on first use |
+| [Muse](/developers/agents/muse) | `~/.config/muse/settings.json` | `muse mcp login squirrelscan` |
 
 ## Three ways to connect
 

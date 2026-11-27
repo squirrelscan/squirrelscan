@@ -1,0 +1,1 @@
+- Docs: setup guides for Google Antigravity, Hermes Agent and OpenClaw, and a rewritten GitHub Copilot guide covering VS Code, Visual Studio, GitHub Copilot CLI, the cloud agent, Copilot Studio, Microsoft 365 Copilot and enterprise allowlisting (#5454)

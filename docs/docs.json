@@ -128,13 +128,18 @@
                 "group": "Coding agents",
                 "pages": [
                   "developers/agents/claude-code",
-                  "developers/agents/cursor",
-                  "developers/agents/codex",
-                  "developers/agents/chatgpt",
                   "developers/agents/copilot",
+                  "developers/agents/codex",
+                  "developers/agents/cursor",
+                  "developers/agents/antigravity",
+                  "developers/agents/chatgpt",
                   "developers/agents/gemini-cli",
                   "developers/agents/windsurf",
-                  "developers/agents/opencode"
+                  "developers/agents/opencode",
+                  "developers/agents/hermes",
+                  "developers/agents/openclaw",
+                  "developers/agents/grok",
+                  "developers/agents/muse"
                 ]
               },
               "developers/mcp",
