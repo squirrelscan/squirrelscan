@@ -31,6 +31,7 @@ export const ariaLabelsRule: Rule = {
       { name: "aria-buttons", outcome: "problem" },
       { name: "aria-buttons-unconfirmed", outcome: "problem" },
       { name: "aria-svg", outcome: "problem" },
+      { name: "aria-buttons", outcome: "skipped" },
       {
         name: "aria-buttons",
         outcome: "clean",
