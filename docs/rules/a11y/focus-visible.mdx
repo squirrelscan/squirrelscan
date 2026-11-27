@@ -15,7 +15,7 @@ This rule scans the page source as text, covering inline `<style>` blocks and `s
 
 - `focus-outline-global` fails when the source contains a universal-selector rule that removes the outline, matching the shape `* { ... outline: none }` or `outline: 0`. Report message: `Global outline removal detected`, with the value `* { outline: none } removes focus for all elements`.
 - `focus-outline` warns when no global removal pattern matched, `outline: none` or `outline: 0` appears anywhere, and `:focus-visible` does not. The two branches are exclusive, so a page with global removal never produces this warning. Report message: `outline:none found - ensure alternative focus styles exist`, with the value `Consider using :focus-visible for custom focus styles`.
-- `focus-modern` passes when `:focus-visible` or `:focus-within` appears, with the message `Modern focus selectors in use` and the matched selector as its value.
+- `focus-modern` passes when `:focus-visible` appears, or when `:focus-within` appears and `focus-outline` did not warn, with the message `Modern focus selectors in use` and the matched selector as its value. `:focus-within` alone does not restyle a ring that `outline: none` removed, so a page with that warning and no `:focus-visible` gets the warning only.
 - `focus-visible` returns info with `Focus styles not analyzed (requires CSS inspection)` when none of the above matched.
 
 ## How to fix it

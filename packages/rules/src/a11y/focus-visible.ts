@@ -65,7 +65,12 @@ export const focusVisibleRule: Rule = {
       });
     }
 
-    if (hasFocusVisible || hasFocusWithin) {
+    // focus-modern clears focus-outline, so it never sits beside one:
+    // :focus-within alone does not restyle the ring outline:none removed.
+    if (
+      hasFocusVisible ||
+      (hasFocusWithin && !checks.some((c) => c.name === "focus-outline"))
+    ) {
       checks.push({
         name: "focus-modern",
         status: "pass",
