@@ -75,6 +75,20 @@ Related (not tested): [1.3.1 Info and Relationships](https://www.w3.org/WAI/WCAG
 
 {/* rule-wcag:end */}
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `heading-order` | Problem |  |
+| `heading-order` | Clean | `heading-order` |
+| `heading-order` | Not checked |  |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [content/heading-hierarchy](/rules/content/heading-hierarchy): the same outline judged for structure and SEO.

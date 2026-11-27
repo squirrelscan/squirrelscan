@@ -20,6 +20,17 @@ export const tabindexRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "tabindex-very-high", outcome: "problem" },
+      { name: "tabindex-positive", outcome: "problem" },
+      {
+        name: "tabindex",
+        outcome: "clean",
+        clears: ["tabindex-very-high", "tabindex-positive"],
+      },
+      { name: "tabindex", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

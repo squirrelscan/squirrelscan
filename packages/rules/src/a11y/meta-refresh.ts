@@ -111,6 +111,25 @@ export const metaRefreshRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "meta-refresh-redirect", outcome: "problem" },
+      { name: "meta-refresh-auto", outcome: "problem" },
+      { name: "refresh-header-redirect", outcome: "problem" },
+      { name: "refresh-header-reload", outcome: "problem" },
+      { name: "refresh-header-and-meta", outcome: "problem" },
+      {
+        name: "meta-refresh",
+        outcome: "clean",
+        clears: [
+          "meta-refresh-redirect",
+          "meta-refresh-auto",
+          "refresh-header-redirect",
+          "refresh-header-reload",
+          "refresh-header-and-meta",
+        ],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

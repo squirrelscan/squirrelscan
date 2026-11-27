@@ -23,6 +23,13 @@ export const videoCaptionsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "video-captions", outcome: "problem" },
+      { name: "video-captions", outcome: "clean", clears: ["video-captions"] },
+      { name: "video-captions", outcome: "skipped" },
+      { name: "video-embeds", outcome: "problem" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

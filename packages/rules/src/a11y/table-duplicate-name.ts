@@ -59,6 +59,22 @@ export const tableDuplicateNameRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "table-duplicate-name", outcome: "problem" },
+      { name: "table-duplicate-name-unconfirmed", outcome: "problem" },
+      { name: "tables-without-names", outcome: "problem" },
+      {
+        name: "table-duplicate-name",
+        outcome: "clean",
+        clears: [
+          "table-duplicate-name",
+          "table-duplicate-name-unconfirmed",
+          "tables-without-names",
+        ],
+      },
+      { name: "table-duplicate-name", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

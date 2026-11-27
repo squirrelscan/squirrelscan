@@ -239,6 +239,16 @@ export const htmlLangValidRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "html-has-lang", outcome: "problem" },
+      { name: "html-lang-valid", outcome: "problem" },
+      {
+        name: "html-lang-valid",
+        outcome: "clean",
+        clears: ["html-lang-valid", "html-has-lang"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

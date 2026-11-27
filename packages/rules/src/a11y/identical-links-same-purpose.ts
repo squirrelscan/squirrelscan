@@ -105,6 +105,16 @@ export const identicalLinksSamePurposeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "identical-links-same-purpose", outcome: "problem" },
+      {
+        name: "identical-links-same-purpose",
+        outcome: "clean",
+        clears: ["identical-links-same-purpose"],
+      },
+      { name: "identical-links-same-purpose", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

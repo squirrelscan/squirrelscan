@@ -80,6 +80,16 @@ export const imageRedundantAltRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "image-redundant-alt", outcome: "problem" },
+      {
+        name: "image-redundant-alt",
+        outcome: "clean",
+        clears: ["image-redundant-alt"],
+      },
+      { name: "image-redundant-alt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

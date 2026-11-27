@@ -223,6 +223,12 @@ export const validLangRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "valid-lang", outcome: "problem" },
+      { name: "valid-lang", outcome: "clean", clears: ["valid-lang"] },
+      { name: "valid-lang", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -1,0 +1,1 @@
+- The rule pages for 30 more accessibility rules (frame-title to zoom-disabled) list the check names each rule emits and which clean check clears which problem check (#2218).

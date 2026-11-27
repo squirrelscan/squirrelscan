@@ -20,6 +20,17 @@ export const objectAltRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "object-alt", outcome: "problem" },
+      { name: "object-alt-unconfirmed", outcome: "problem" },
+      {
+        name: "object-alt",
+        outcome: "clean",
+        clears: ["object-alt", "object-alt-unconfirmed"],
+      },
+      { name: "object-alt", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

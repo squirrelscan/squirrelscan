@@ -80,6 +80,16 @@ export const linkInTextBlockRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "link-in-text-block", outcome: "problem" },
+      {
+        name: "link-in-text-block",
+        outcome: "clean",
+        clears: ["link-in-text-block"],
+      },
+      { name: "link-in-text-block", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

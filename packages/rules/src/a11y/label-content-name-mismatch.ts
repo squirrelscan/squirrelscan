@@ -35,6 +35,20 @@ export const labelContentNameMismatchRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "label-content-name-mismatch", outcome: "problem" },
+      { name: "label-content-name-mismatch-unconfirmed", outcome: "problem" },
+      {
+        name: "label-content-name-mismatch",
+        outcome: "clean",
+        clears: [
+          "label-content-name-mismatch",
+          "label-content-name-mismatch-unconfirmed",
+        ],
+      },
+      { name: "label-content-name-mismatch", outcome: "skipped" },
+    ],
     messageCountsItems: true,
     itemSelectors: true,
   },

@@ -72,6 +72,12 @@ export const pasteInputsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "paste-inputs", outcome: "problem" },
+      { name: "paste-inputs", outcome: "clean", clears: ["paste-inputs"] },
+      { name: "paste-inputs", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

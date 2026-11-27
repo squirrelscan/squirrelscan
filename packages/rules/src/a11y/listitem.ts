@@ -18,6 +18,12 @@ export const listitemRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "listitem", outcome: "problem" },
+      { name: "listitem", outcome: "clean", clears: ["listitem"] },
+      { name: "listitem", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
