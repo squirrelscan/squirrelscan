@@ -4005,6 +4005,12 @@
    "hsts-not-applicable|info|HSTS not applicable - site not served over HTTPS||"
   ]
  },
+ "security/html-comment-exposure": {
+  "digest": "95267602098137",
+  "lines": [
+   "html-comment-exposure|pass|No HTML comment holds sensitive information||"
+  ]
+ },
  "security/http-methods": {
   "digest": "85143878141028",
   "lines": [

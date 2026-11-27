@@ -323,6 +323,7 @@
   "security/graphql-get-mutations": 1,
   "security/graphql-introspection": 1,
   "security/hsts": 1,
+  "security/html-comment-exposure": 500,
   "security/http-methods": 1,
   "security/http-to-https": 1,
   "security/https": 500,

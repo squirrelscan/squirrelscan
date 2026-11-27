@@ -1,0 +1,1 @@
+- New rule `security/html-comment-exposure` flags HTML comments that hold internal hosts or IPs, exposure notes (TODO, FIXME, password, debug), secrets (redacted in the report) or commented-out script, form and admin markup. (#2332)

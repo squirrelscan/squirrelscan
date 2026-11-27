@@ -19,6 +19,7 @@ import { graphqlGetMutationsRule } from "./graphql-get-mutations";
 import { graphqlIntrospectionRule } from "./graphql-introspection";
 import { hstsRule } from "./hsts";
 import { httpMethodsRule } from "./http-methods";
+import { htmlCommentExposureRule } from "./html-comment-exposure";
 import { httpToHttpsRule } from "./http-to-https";
 import { httpsRule } from "./https";
 import { infoDisclosureRule } from "./info-disclosure";
@@ -63,6 +64,7 @@ export const rules: Rule[] = [
   newTabRule,
   passwordFormGetRule,
   leakedSecretsRule,
+  htmlCommentExposureRule,
   tokenStorageRule,
   thirdPartyCookiesRule,
   sriRule,

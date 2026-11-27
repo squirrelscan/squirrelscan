@@ -669,6 +669,7 @@
                   "rules/security/new-tab",
                   "rules/security/password-form-get",
                   "rules/security/leaked-secrets",
+                  "rules/security/html-comment-exposure",
                   "rules/security/token-storage",
                   "rules/security/graphql-introspection",
                   "rules/security/json-sensitive-fields",
