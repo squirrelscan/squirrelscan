@@ -18,6 +18,7 @@ The rule is site-wide. It uses the sitemap processor's precomputed missing and o
 - `sitemap-coverage` warns when indexable pages are missing. Message: `23 indexable page(s) not in sitemap (18%)`, where the percentage is of all crawled pages. It passes otherwise with `All indexable pages are in sitemap`. Severity warning, weight 5.
 - `sitemap-orphans` warns for sitemap URLs the crawl did not reach. Message: `N sitemap URL(s) were not crawled`.
 - `sitemap-orphans` reports info instead when the crawl hit its page cap and the sitemap holds more URLs than that cap. Message: `N sitemap URL(s) not audited this run (crawl capped at M pages)`.
+- `sitemap-unverified` reports info for sitemap URLs that answered the crawl with a rate limit (429 or 430, or 503 with `Retry-After`) or a bot challenge, and for uncrawled sitemap URLs whose status check was rate limited. Message: `N sitemap URL(s) were refused or rate limited when crawled, so whether they are orphans is unknown`. Those URLs are left out of `sitemap-orphans`, and `details` carries the `statuses` and `reasons` (`rate_limited`, `waf_challenge`).
 
 - `product-discovery` reports info, only for a site with commerce evidence. Message: `N product URL(s) found: B by both sitemap and crawl links, S by sitemap only, C by crawl only; <sitemap state>`, plus a note when the crawl stopped at its page limit or did not follow links. `details` carries `bySource`, `sitemapState` (`complete`, `partial`, `unreadable`, `unknown` or `none`) and `crawlBounded`.
 

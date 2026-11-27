@@ -15,6 +15,7 @@ The rule is site-wide. It counts inbound internal links for every crawled page, 
 
 - Skipped when fewer than two pages were crawled. Message: `Insufficient pages for orphan analysis`.
 - Skipped when the crawl stopped at its page cap. Message: `Crawl stopped at its 10-page cap, so an inbound link may sit on a page not crawled`. A page the crawl did not reach may contain the links that would put a reported page over the threshold. Raise `max_pages` or use a deeper coverage profile to get a verdict. Every report shows the rule as **Not checked** with that reason, and a finding it reported on an earlier audit stays open.
+- Skipped, instead of warning, when some page has too few inbound links and the host rate limited one or more URLs during the audit (a 429 or 430 answer, or a 503 with `Retry-After`). Message: `N page(s) were rate limited, so an inbound link may sit on a page that was not read`. A page that was never read may hold the missing links. The report shows the rule as **Not checked** with the reason `Rate-limited pages hide possible inbound links`.
 - Warn when any page has fewer inbound links than `minInboundLinks`. Message: `6 orphan page(s) with <2 incoming links`. The value lists up to five paths with a `+N more` suffix, and every URL is listed as an item. Severity warning, weight 5.
 - Pass otherwise. Message: `All pages have sufficient internal links pointing to them`.
 
