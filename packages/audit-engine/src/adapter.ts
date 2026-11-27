@@ -2082,6 +2082,13 @@ export function runRulesOnStorage(
         // 3xx is stored only when its redirect never resolved: no answer.
         if (answeredOutsidePages(page)) {
           fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+        } else if (isRateLimitStatus(page.status)) {
+          // A bodiless 429 never parses, but its status is still unverified (#2419).
+          fetchedTargets.push({
+            url: page.normalizedUrl,
+            status: page.status,
+            rateLimited: true,
+          });
         }
         continue;
       }
@@ -2972,6 +2979,12 @@ function createParsedUniverseAccumulator(): {
             fetchedTargets.push({
               url: page.normalizedUrl,
               status: page.status,
+            });
+          } else if (isRateLimitStatus(page.status)) {
+            fetchedTargets.push({
+              url: page.normalizedUrl,
+              status: page.status,
+              rateLimited: true,
             });
           }
           continue;

@@ -35,12 +35,13 @@ const PAGE_RULES = [
   "security/http-to-https",
 ];
 const LINK_RULE = "links/broken-links";
+const ORPHAN_RULE = "links/orphan-pages";
 
 // `filterRules` defaults every rule to disabled, so the enable list is
 // mandatory — `rules: {}` runs nothing and passes vacuously.
 const CONFIG = {
   rule_options: {},
-  rules: { enable: [...PAGE_RULES, LINK_RULE] },
+  rules: { enable: [...PAGE_RULES, LINK_RULE, ORPHAN_RULE] },
 } as unknown as Config;
 
 const EMPTY_ASSETS: PreFetchedAssets = {
@@ -369,4 +370,37 @@ describe("#1829 on the streaming path — same exclusion, same advisory (#1860)"
 
     expect([...streamed.gradedUrls].sort()).toEqual([...v1.gradedUrls].sort());
   });
+});
+
+// #2419: a 429 with no body never parses, so it used to leave no trace for the
+// orphan check, which then blamed a page whose linker was the throttled one.
+describe("#2419 — a bodiless rate-limited page hides possible inbound links", () => {
+  const link = (path: string) => `<a href="${BASE}${path}">x</a>`;
+  const seeds = (p2Status: number): SeedPage[] => [
+    { path: "/", status: 200, body: html(link("/p1") + link("/p2")) },
+    { path: "/p1", status: 200, body: html(link("/") + link("/p2")) },
+    {
+      path: "/p2",
+      status: p2Status,
+      body: p2Status === 200 ? html(link("/") + link("/p1")) : "",
+    },
+  ];
+
+  for (const engine of ["v1"] as const) {
+    test(`${engine}: orphan-pages is skipped, not warned, with /p2 at 429`, async () => {
+      const { checksFor } = await auditPages(seeds(429), engine);
+      const check = checksFor(ORPHAN_RULE).find(
+        (c) => c.name === "orphan-pages"
+      );
+      expect(check?.status).toBe("skipped");
+    });
+
+    test(`${engine}: all-200 control reports no orphan`, async () => {
+      const { checksFor } = await auditPages(seeds(200), engine);
+      const check = checksFor(ORPHAN_RULE).find(
+        (c) => c.name === "orphan-pages"
+      );
+      expect(check?.status).toBe("pass");
+    });
+  }
 });

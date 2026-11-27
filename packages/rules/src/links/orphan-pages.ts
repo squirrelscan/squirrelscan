@@ -28,7 +28,27 @@ const SKIP_CHECK: CheckResult = {
 // Shared result builder — both the legacy `site.pages` path and the streaming
 // `siteQuery` path feed it the SAME `orphans` list, so the emitted check is
 // byte-identical regardless of how the incoming-link counts were sourced.
-function buildOrphanCheck(orphans: string[], minLinks: number): CheckResult {
+function buildOrphanCheck(
+  orphans: string[],
+  minLinks: number,
+  rateLimitedPages = 0
+): CheckResult {
+  // A rate-limited page was never read, so any link it carries is unknown, not
+  // missing: a page below the threshold may be linked from it (#2419).
+  if (orphans.length > 0 && rateLimitedPages > 0) {
+    return {
+      name: "orphan-pages",
+      status: "skipped",
+      message: `${rateLimitedPages} page(s) were rate limited, so an inbound link may sit on a page that was not read`,
+      skipReason: "Rate-limited pages hide possible inbound links",
+      observation: {
+        mode: "crawl",
+        applicability: "unknown",
+        uncertainty:
+          "Rate-limited pages were not read, so missing inbound links cannot be established.",
+      },
+    };
+  }
   if (orphans.length > 0) {
     const pathList = orphans
       .slice(0, 5)
@@ -170,6 +190,10 @@ export const orphanPagesRule: Rule = {
       return { checks };
     }
 
+    const rateLimitedCount = (ctx.site?.fetchedTargets ?? []).filter(
+      (target) => target.rateLimited === true
+    ).length;
+
     // Streaming path (#1022): read pre-materialized incoming-link counts instead
     // of holding every parsed page resident. `incomingLinkCounts()` is keyed by
     // each crawled page's stored URL (crawl order) with its dofollow internal
@@ -190,7 +214,7 @@ export const orphanPagesRule: Rule = {
           noindexUrls,
           ctx.site?.entryUrls ?? []
         );
-        checks.push(buildOrphanCheck(orphans, minLinks));
+        checks.push(buildOrphanCheck(orphans, minLinks, rateLimitedCount));
         return { checks };
       };
       if (!skipsNoindexPages(ctx.site)) return finish(new Set());
@@ -273,7 +297,7 @@ export const orphanPagesRule: Rule = {
     );
 
     // Report results
-    checks.push(buildOrphanCheck(orphans, minLinks));
+    checks.push(buildOrphanCheck(orphans, minLinks, rateLimitedCount));
 
     return { checks };
   },
