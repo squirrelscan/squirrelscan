@@ -1,0 +1,1 @@
+- A sitemap URL that answers 429 is now listed under the informational `sitemap-unverified` check instead of `sitemap-orphans`, and `links/orphan-pages` is skipped rather than warning when a rate-limited page may have held the missing inbound link. (#2419)

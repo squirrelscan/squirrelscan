@@ -2082,6 +2082,13 @@ export function runRulesOnStorage(
         // 3xx is stored only when its redirect never resolved: no answer.
         if (answeredOutsidePages(page)) {
           fetchedTargets.push({ url: page.normalizedUrl, status: page.status });
+        } else if (isRateLimitStatus(page.status)) {
+          // A bodiless 429 never parses, but its status is still unverified (#2419).
+          fetchedTargets.push({
+            url: page.normalizedUrl,
+            status: page.status,
+            rateLimited: true,
+          });
         }
         continue;
       }
@@ -2385,6 +2392,12 @@ export function runRulesOnStorage(
       webAppManifests,
       webAppManifestsDropped,
     } = assets;
+    yield* appendRateLimitedTargets(
+      storage,
+      crawlId,
+      fetchedTargets,
+      sitemapUrlStatuses
+    );
 
     // Differential cloaking probe (#118) — opt-in, bounded. Re-fetches suspicious
     // paths (orphan / recently-modified) with a googlebot UA + query variation and
@@ -2880,6 +2893,51 @@ function answeredOutsidePages(
   return page.status < 300 || page.redirectChain?.endsInError !== true;
 }
 
+/**
+ * Add the URLs the host rate limited to `fetchedTargets` (#2419). The crawler
+ * stores no page for a throttled fetch: it marks the frontier entry failed, so
+ * only the frontier knows. A sitemap URL the status probe was throttled on is
+ * just as unverified. Without these, the orphan checks blame a page whose
+ * linker was never read, and call a throttled sitemap URL an orphan.
+ *
+ * A failed read adds none: a coverage caveat must never fail the audit.
+ */
+function appendRateLimitedTargets(
+  storage: CrawlStorage,
+  crawlId: string,
+  fetchedTargets: NonNullable<SiteData["fetchedTargets"]>,
+  // Optional in practice: some callers hand over assets without the probe.
+  sitemapUrlStatuses: readonly SitemapUrlStatusData[] | undefined
+): Effect.Effect<void, never, never> {
+  return Effect.gen(function* () {
+    const keyOf = (url: string): string | null => {
+      try {
+        return normalizeUrl(url);
+      } catch {
+        return null;
+      }
+    };
+    const known = new Set<string>();
+    for (const target of fetchedTargets) {
+      const key = keyOf(target.url);
+      if (key) known.add(key);
+    }
+    const add = (url: string, status: number) => {
+      const key = keyOf(url);
+      if (!key || known.has(key)) return;
+      known.add(key);
+      fetchedTargets.push({ url: key, status, rateLimited: true });
+    };
+    const throttled = yield* Effect.suspend(() =>
+      storage.getRateLimitedFrontierUrls(crawlId, REPORT_LIMITS.maxPages)
+    ).pipe(Effect.catchAllCause(() => Effect.succeed([])));
+    for (const entry of throttled) add(entry.url, entry.status);
+    for (const check of sitemapUrlStatuses ?? []) {
+      if (check.rateLimited === true) add(check.url, check.status ?? 429);
+    }
+  });
+}
+
 interface StreamPageIdentity {
   normalizedUrl: string;
   status: number;
@@ -2972,6 +3030,12 @@ function createParsedUniverseAccumulator(): {
             fetchedTargets.push({
               url: page.normalizedUrl,
               status: page.status,
+            });
+          } else if (isRateLimitStatus(page.status)) {
+            fetchedTargets.push({
+              url: page.normalizedUrl,
+              status: page.status,
+              rateLimited: true,
             });
           }
           continue;
@@ -3437,6 +3501,12 @@ function buildStreamingSiteData(
       webAppManifests,
       webAppManifestsDropped,
     } = assets;
+    yield* appendRateLimitedTargets(
+      storage,
+      crawlId,
+      fetchedTargets,
+      sitemapUrlStatuses
+    );
 
     const cloakingSite = {
       baseUrl: crawl?.baseUrl ?? "",

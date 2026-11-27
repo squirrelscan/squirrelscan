@@ -686,6 +686,13 @@ export interface PageRecord {
 // FRONTIER RECORDS
 // ============================================
 
+/**
+ * How every frontier `reason` written for a URL the host rate limited begins
+ * (#2419). The crawler marks such a URL `failed` and stores no page, so the
+ * engine finds it by this prefix to treat it as unverified, not missing.
+ */
+export const RATE_LIMITED_FRONTIER_REASON_PREFIX = "Rate limited";
+
 export type FrontierStatus =
   | "pending"
   | "fetching"
@@ -2020,6 +2027,15 @@ export interface CrawlStorage {
     crawlId: string
   ): Effect.Effect<number, StorageError, never>;
   getFetchingCount(crawlId: string): Effect.Effect<number, StorageError, never>;
+  /**
+   * Frontier URLs that failed because the host rate limited them and have no
+   * stored page (#2419), at most `limit`, oldest first. `status` is the status
+   * named in the reason, 429 when it names none.
+   */
+  getRateLimitedFrontierUrls(
+    crawlId: string,
+    limit: number
+  ): Effect.Effect<Array<{ url: string; status: number }>, StorageError, never>;
   updateFrontierStatus(
     crawlId: string,
     normalizedUrl: string,
