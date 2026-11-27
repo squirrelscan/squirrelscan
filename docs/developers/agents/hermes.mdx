@@ -1,5 +1,5 @@
 ---
-title: "squirrelscan for Hermes Agent"
+title: "Website audits in Hermes Agent"
 sidebarTitle: "Hermes Agent"
 description: "Set up squirrelscan in Nous Research's Hermes Agent: mcp_servers in config.yaml, hermes mcp login, hermes mcp test, and running audits."
 icon: "message-square-code"
@@ -13,6 +13,8 @@ icon: "message-square-code"
     `--flow device` fails with "Server does not advertise device authorization": squirrelscan's
     authorization server has no device authorization endpoint, so the device flow is not usable.
     No login was completed. */}
+
+To run a website audit in Hermes Agent, add squirrelscan under `mcp_servers` in `config.yaml` and ask it to audit your site.
 
 Hermes Agent is Nous Research's open source agent. It speaks MCP over HTTP with OAuth, so squirrelscan's tools appear as `mcp_*` tools in a session.
 

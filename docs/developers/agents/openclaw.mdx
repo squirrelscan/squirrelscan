@@ -1,5 +1,5 @@
 ---
-title: "squirrelscan for OpenClaw"
+title: "Website audits in OpenClaw"
 sidebarTitle: "OpenClaw"
 description: "Set up squirrelscan in OpenClaw: openclaw mcp set with streamable-http and OAuth, openclaw mcp login, and openclaw mcp doctor."
 icon: "shell"
@@ -12,6 +12,8 @@ icon: "shell"
     S256 PKCE, resource=https://mcp.squirrelscan.com/mcp and a 127.0.0.1 redirect.
     `openclaw mcp doctor squirrelscan --probe` reported "ok" with a warning that OAuth credentials
     are not authorized. No login was completed. */}
+
+To run a website audit in OpenClaw, register the squirrelscan MCP server with `openclaw mcp set` and ask it to audit your site.
 
 OpenClaw is an open source assistant that runs on your own hardware. It manages MCP servers under `mcp.servers` in its config, so squirrelscan's tools are available in every chat.
 
