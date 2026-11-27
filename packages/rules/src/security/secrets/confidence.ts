@@ -693,6 +693,18 @@ function hygraphIssuerHost(iss: string | undefined): string | undefined {
   }
 }
 
+// Calendly's personal access tokens and OAuth tokens are JWTs it signs with
+// its own auth host as issuer (#359): the holder can read and change the
+// account's scheduling data through the API. Whole-host comparison.
+function isCalendlyIssuer(iss: string | undefined): boolean {
+  if (iss === undefined) return false;
+  try {
+    return new URL(iss).hostname.toLowerCase() === "auth.calendly.com";
+  } catch {
+    return false;
+  }
+}
+
 // A JWT that is the value of a URL query parameter is a signed-URL grant: a
 // storage service's per-object, short-lived access token (Supabase
 // `/storage/v1/object/sign/<bucket>/<path>?token=eyJ...`), valid for a GET on
@@ -854,6 +866,14 @@ function classifyJwt(
         provider: "Hygraph",
         keyKind: management ? "management" : "content",
       },
+    };
+  }
+  if (isCalendlyIssuer(iss)) {
+    return {
+      type: "Calendly API Token",
+      confidence: "high",
+      publicByDesign: false,
+      extra: { ...extra, provider: "Calendly" },
     };
   }
   // Shopify's boot code embeds a storefront JWT on every page of a Shopify
@@ -1170,8 +1190,75 @@ const STRIPE_TYPES = new Set([
   "Stripe Test Key",
   "Stripe Restricted Key",
   "Stripe Publishable Key",
+  "Stripe Publishable Test Key",
   "Clerk Secret Key",
 ]);
+
+// ── Azure SAS ───────────────────────────────────────────────────────────────
+
+// The SAS permissions that only read: read, list and find-by-tag. Every other
+// letter (write, delete, create, add, update, process, delete version,
+// permanent delete, tags, move, execute, ownership, permissions, immutability)
+// changes something.
+const SAS_WRITE_PERMISSIONS_RE = /[^rlf]/i;
+// A blob, a blob snapshot or version, or one file: the narrowest resource.
+const SAS_ONE_OBJECT_RE = /^(?:b|bs|bv|f)$/i;
+
+/**
+ * What an Azure SAS grants, from its own parameters (#359). An expired one is
+ * informational. A read-only grant on a single blob or file is the storage
+ * service's capability URL, put in the page so the browser can fetch the
+ * object, the way a presigned S3 URL is: informational. One that can write
+ * or delete is high. Anything else (a container or account read grant, a
+ * stored access policy whose permissions the URL does not show) is medium.
+ */
+function refineAzureSas(value: string, now: number): Refinement {
+  const params = new Map<string, string>();
+  for (const part of value.split("&")) {
+    const eq = part.indexOf("=");
+    if (eq > 0) params.set(part.slice(0, eq).toLowerCase(), part.slice(eq + 1));
+  }
+  const decode = (v: string | undefined): string | undefined => {
+    if (v === undefined) return v;
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
+  const sp = decode(params.get("sp"));
+  const sr = decode(params.get("sr"));
+  const se = decode(params.get("se"));
+  const extra: FindingExtra = {};
+  if (sp !== undefined) extra.permissions = sp;
+  if (sr !== undefined) extra.resource = sr;
+  else if (params.has("ss")) extra.resource = "account";
+  const expiry = se === undefined ? NaN : Date.parse(se);
+  if (!Number.isNaN(expiry)) {
+    extra.expiresAt = new Date(expiry).toISOString();
+    extra.expired = expiry < now;
+    if (expiry < now)
+      return { type: "Azure SAS Token (expired)", confidence: "info", extra };
+  }
+  if (sp !== undefined && SAS_WRITE_PERMISSIONS_RE.test(sp))
+    return { confidence: "high", extra: { ...extra, kind: "write" } };
+  if (
+    sp !== undefined &&
+    sr !== undefined &&
+    SAS_ONE_OBJECT_RE.test(sr) &&
+    /^[rl]+$/i.test(sp)
+  ) {
+    return {
+      confidence: "info",
+      extra: {
+        ...extra,
+        kind: "read-one-object",
+        hint: "a read-only grant on one blob or file, valid until expiresAt: a storage service issues these so the browser can fetch the object",
+      },
+    };
+  }
+  return { confidence: "medium", extra };
+}
 
 /** What the scanner knows about where the value sits. */
 export interface FindingContext {
@@ -1206,6 +1293,7 @@ export function refineFinding(
     if (STRIPE_TYPES.has(type)) return refineStripeKey(value);
     if (type === "Slack Token") return refineSlackToken(value);
     if (type === "Sentry DSN") return refineSentryDsn(value);
+    if (type === "Azure SAS Token") return refineAzureSas(value, now);
     return null;
   } catch {
     // A decoder that throws on some input leaves the finding as the pattern

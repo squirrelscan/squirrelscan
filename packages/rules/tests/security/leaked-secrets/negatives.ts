@@ -85,11 +85,23 @@ export const NEGATIVES: Case[] = [
     }
   ),
 
-  neg("stripe-publishable-test", (r) =>
-    page(
-      "",
-      `<script>const stripe=Stripe(${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))});</script>`
-    )
+  neg(
+    "stripe-publishable-test",
+    (r) =>
+      page(
+        "",
+        `<script>const stripe=Stripe(${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))});</script>`
+      ),
+    {
+      // Public, like its live twin (#359).
+      expect: [
+        {
+          pattern: "Stripe Publishable Test Key",
+          check: "public",
+          location: "inline-script",
+        },
+      ],
+    }
   ),
 
   neg(
@@ -100,16 +112,15 @@ export const NEGATIVES: Case[] = [
         `<script>const cfg={apiKey:${JSON.stringify(["p", "k_te", "st_"].join("") + runOf(r, ALNUM, 24))},locale:"en"};</script>`
       ),
     {
-      // No Stripe pattern knows `pk_test_`, so the generic assignment gets it.
+      // The Stripe pattern claims `pk_test_` ahead of the generic
+      // assignment, so `apiKey:` no longer warns on a public test key (#359).
       expect: [
         {
-          pattern: "Generic API Key Assignment",
-          check: "medium",
+          pattern: "Stripe Publishable Test Key",
+          check: "public",
           location: "inline-script",
         },
       ],
-      knownGap:
-        "Stripe `pk_test_` (public, test mode) has no pattern; under `apiKey:` the generic assignment reports a medium warning for it",
     }
   ),
 

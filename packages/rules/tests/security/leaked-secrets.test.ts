@@ -211,6 +211,25 @@ describe("security/leaked-secrets corpus: coverage", () => {
     expect(wrong).toEqual([]);
   });
 
+  test("the rule's docs page states the pattern count the detector has (#359)", () => {
+    // Every place the page says how many patterns there are. A pattern added
+    // or dropped without a docs edit fails here.
+    const page = readFileSync(
+      join(
+        import.meta.dir,
+        "../../../../docs/rules/security/leaked-secrets.mdx"
+      ),
+      "utf8"
+    );
+    const stated = [...page.matchAll(/against (\d+) (?:key )?patterns/g)].map(
+      (m) => Number(m[1])
+    );
+    expect(stated.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(stated)).toEqual(
+      new Set([FAST_PATTERNS.length + CONTEXT_PATTERNS.length])
+    );
+  });
+
   test("case ids are unique", () => {
     const ids = CASES.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -339,7 +358,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       ).not.toContain(expected);
     });
 
-    if (g.tier === "prefixed") {
+    if (g.tier === "prefixed" && !g.anchoredInside) {
       test(`${g.pattern}: the prefix mid-token (foo…) does not fire`, () => {
         const midToken = bare(g, `foo${value.text}`);
         expect(
@@ -365,8 +384,11 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
       const keyword = keywords[0]!;
       // From the end of the keyword to the first character of the value:
       // ` */` (3), the filler, `;` (1) and `credential:"` (12).
+      // A pattern that reads its key's name (#359) is probed under the
+      // generator's `gapKey`, which names its half of the pair.
+      const key = g.gapKey ?? "credential";
       const at = (gap: number) =>
-        `/* ${keyword} */${"x".repeat(gap - 3 - 1 - 'credential:"'.length)};credential:${JSON.stringify(value.text)}`;
+        `/* ${keyword} */${"x".repeat(gap - 3 - 1 - `${key}:"`.length)};${key}:${JSON.stringify(value.text)}`;
       test(`${g.pattern}: keyword 30 before the value fires, 60 before does not, after does not`, () => {
         expect(scanContent(at(30), "inline-script").map((f) => f.type)).toEqual(
           [g.pattern]
@@ -382,7 +404,7 @@ describe("security/leaked-secrets corpus: meta (every pattern, derived from its 
         expect(scanContent(at(60), "inline-script")).toEqual([]);
         expect(
           scanContent(
-            `credential:${JSON.stringify(value.text)}; /* ${keyword} */`,
+            `${key}:${JSON.stringify(value.text)}; /* ${keyword} */`,
             "inline-script"
           )
         ).toEqual([]);
@@ -407,6 +429,40 @@ describe("security/leaked-secrets corpus: rule output", () => {
       // Masked output never carries the sensitive core.
       if (c.secret && c.secret.length > 12) {
         for (const id of got.ids) expect(id).not.toContain(c.secret);
+      }
+    });
+  }
+});
+
+// pub#359's public-by-design list, written out rather than read from the
+// table: the generated cases take their expected check from the pattern's own
+// `publicByDesign`, so a flag flipped to false would move the expectation with
+// it. This list does not move.
+const PUBLIC_BY_DESIGN_359 = [
+  "Stripe Publishable Test Key",
+  "PostHog Project Key",
+  "Pusher App Key",
+  "PubNub Subscribe Key",
+  "Algolia Search-Only API Key",
+  "LaunchDarkly Client-side ID",
+];
+
+describe("security/leaked-secrets corpus: pub#359 public tiers", () => {
+  for (const pattern of PUBLIC_BY_DESIGN_359) {
+    const prefix = `${pattern
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")}@`;
+    test(`${pattern}: reported under leaked-secrets-public in every context, never high or medium`, async () => {
+      const cases = ok.filter((c) => c.id.startsWith(prefix));
+      expect(cases.length).toBeGreaterThanOrEqual(2);
+      for (const c of cases) {
+        const got = await observed(c);
+        expect(got.findings.length).toBeGreaterThan(0);
+        expect(
+          got.findings.filter((f) => f.check !== "public").map((f) => f.pattern)
+        ).toEqual([]);
+        expect(got.passed).toBe(true);
       }
     });
   }

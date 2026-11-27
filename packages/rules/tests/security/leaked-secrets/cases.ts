@@ -384,9 +384,16 @@ const PROBES: Case[] = [
   })),
   probe("naming-attribute-after-the-value-in-the-same-tag", (r) => ({
     // The tag-scoped exception to the keyword gap: the naming attribute may
-    // follow the value, with other attributes between them.
+    // follow the value, with other attributes between them. The name says
+    // search, so it is the search-only key, public (#359).
     html: `<!DOCTYPE html><html><head><title>x</title><meta content="${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}" lang="en" dir="ltr" data-testid="row" name="algolia-search-key"></head><body></body></html>`,
-    expect: [{ pattern: "Algolia API Key", check: "medium", location: "html" }],
+    expect: [
+      {
+        pattern: "Algolia Search-Only API Key",
+        check: "public",
+        location: "html",
+      },
+    ],
   })),
   probe("keyed-identifier-unquoted-is-still-dropped", () => ({
     html: inline(
@@ -992,6 +999,149 @@ const PROBES: Case[] = [
       ],
     };
   }),
+
+  // ── #359: services the generators cannot express on their own ─────────
+  //
+  // Calendly's tokens are JWTs: the JSON Web Token pattern finds them and the
+  // decoded issuer names them. A positive in two contexts, and a near-miss
+  // whose issuer only starts with Calendly's host.
+  probe("calendly-token-inline", (r) => {
+    const v = issuerJwt(r, {
+      iss: ["https://auth.", "calendly.com"].join(""),
+      user_uuid: runOf(r, HEX, 16),
+      iat: 1700000000,
+      exp: 2000000000,
+    });
+    return {
+      html: inline(`window.__CFG__={calendlyToken:"${v}"};`),
+      secret: v,
+      expect: [
+        {
+          pattern: "Calendly API Token",
+          check: "high",
+          location: "inline-script",
+        },
+      ],
+    };
+  }),
+  probe("calendly-token-external-bundle", (r) => {
+    const v = issuerJwt(r, {
+      iss: ["https://auth.", "calendly.com"].join(""),
+      user_uuid: runOf(r, HEX, 16),
+      iat: 1700000000,
+    });
+    return {
+      html: `<!DOCTYPE html><html><head><title>x</title></head><body><script src="/app.js"></script></body></html>`,
+      scripts: [
+        {
+          url: "https://app.acme.test/app.js",
+          content: `const api=new Api({headers:{"X-Calendly":"${v}"}});`,
+        },
+      ],
+      secret: v,
+      expect: [
+        {
+          pattern: "Calendly API Token",
+          check: "high",
+          location: "external-script",
+        },
+      ],
+    };
+  }),
+  probe("calendly-issuer-look-alike-is-a-plain-jwt", (r) => ({
+    html: inline(
+      `window.__CFG__={calendlyToken:"${issuerJwt(r, {
+        iss: ["https://auth.", "calendly.com"].join("") + ".evil.test",
+        iat: 1700000000,
+      })}"};`
+    ),
+    expect: [
+      { pattern: "JSON Web Token", check: "medium", location: "inline-script" },
+    ],
+    mustNotFire: ["Calendly API Token"],
+  })),
+
+  // Azure SAS: what the signature grants decides the tier.
+  probe("azure-sas-read-one-blob-is-info", (r) => ({
+    html: `<!DOCTYPE html><html><head><title>x</title></head><body><img src="https://acmeprod.blob.core.windows.net/media/hero.jpg?sp=r&amp;st=2026-01-01T00:00:00Z&amp;se=2031-01-01T00:00:00Z&amp;spr=https&amp;sv=2022-11-02&amp;sr=b&amp;sig=${encodeURIComponent(Buffer.from(runOf(r, ALNUM, 32)).toString("base64"))}"></body></html>`,
+    expect: [{ pattern: "Azure SAS Token", check: "info", location: "html" }],
+  })),
+  probe("azure-sas-expired-is-info", (r) => ({
+    html: inline(
+      `window.__UP__={url:"https://acmeprod.blob.core.windows.net/uploads?sv=2022-11-02&ss=b&srt=co&sp=rwdlac&se=2021-01-01T00:00:00Z&spr=https&sig=${encodeURIComponent(Buffer.from(runOf(r, ALNUM, 32)).toString("base64"))}"};`
+    ),
+    expect: [
+      {
+        pattern: "Azure SAS Token (expired)",
+        check: "info",
+        location: "inline-script",
+      },
+    ],
+  })),
+  probe("azure-sas-container-read-is-medium", (r) => ({
+    html: inline(
+      `window.__UP__={url:"https://acmeprod.blob.core.windows.net/media?sv=2022-11-02&sr=c&sp=rl&se=2031-01-01T00:00:00Z&sig=${encodeURIComponent(Buffer.from(runOf(r, ALNUM, 32)).toString("base64"))}"};`
+    ),
+    expect: [
+      {
+        pattern: "Azure SAS Token",
+        check: "medium",
+        location: "inline-script",
+      },
+    ],
+  })),
+  probe("azure-sas-without-expiry-does-not-fire", (r) => ({
+    // A signature with no `se` is not a SAS query string.
+    html: inline(
+      `window.__UP__={url:"https://acme.test/a?sv=2022-11-02&sr=b&sp=rw&sig=${encodeURIComponent(Buffer.from(runOf(r, ALNUM, 32)).toString("base64"))}"};`
+    ),
+    expect: [],
+  })),
+
+  // A public/secret pair under one parent: each half by its own key.
+  probe("pusher-key-and-secret-side-by-side", (r) => ({
+    html: inline(
+      `window.__RT__={pusher:{key:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 19)}",secret:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 19)}",cluster:"eu"}};`
+    ),
+    expect: [
+      { pattern: "Pusher App Key", check: "public", location: "inline-script" },
+      {
+        pattern: "Pusher App Secret",
+        check: "medium",
+        location: "inline-script",
+      },
+    ],
+  })),
+  probe("uploadcare-public-key-attribute", (r) => ({
+    html: `<!DOCTYPE html><html><head><title>x</title></head><body><lr-config ctx-name="uploadcare" pubkey="${runOf(r, DIGIT, 1)}${runOf(r, HEX, 19)}"></lr-config></body></html>`,
+    expect: [
+      { pattern: "Uploadcare Public Key", check: "public", location: "html" },
+    ],
+  })),
+  // The search-only claim must not take an admin key: an admin-named Algolia
+  // key keeps the generic tier's admin escalation to high.
+  probe("algolia-admin-key-is-not-search-only", (r) => ({
+    html: inline(
+      `window.__SEARCH__={algoliaSearchAdminApiKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}",algoliaAdminKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}",algoliaSearchKey:"${runOf(r, DIGIT, 1)}${runOf(r, HEX, 31)}"};`
+    ),
+    expect: [
+      {
+        pattern: "Generic API Key Assignment",
+        check: "high",
+        location: "inline-script",
+      },
+      {
+        pattern: "Algolia API Key",
+        check: "medium",
+        location: "inline-script",
+      },
+      {
+        pattern: "Algolia Search-Only API Key",
+        check: "public",
+        location: "inline-script",
+      },
+    ],
+  })),
 ];
 
 export const CASES: Case[] = [
