@@ -217,6 +217,7 @@ import type {
   HealthScore as _HS,
   JavascriptShipped as _JS,
   RefusedFetch,
+  SeedTwinFallback,
   WafBlockedSummary,
   WafSuspectSummary,
   ReportStructure as _RST,
@@ -571,6 +572,8 @@ export interface AuditReport {
    * structurally different, so it has to be declared in both.
    */
   wafBlocked?: WafBlockedSummary;
+  /** The audit ran on the www/apex twin of a challenged seed host (#2257). Mirrors core-contracts `AuditReport`. */
+  seedTwin?: SeedTwinFallback;
   /** Pages that look like a provider's refusal without its block marker (#1258); audited. Mirrors core-contracts `AuditReport`. */
   wafSuspect?: WafSuspectSummary;
   siteChecks: CheckResult[];

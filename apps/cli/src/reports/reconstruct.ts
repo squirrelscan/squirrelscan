@@ -1374,6 +1374,8 @@ export function reconstructReport(
       ...(crawl.stats?.wafBlocked && crawl.stats.wafBlocked.total > 0
         ? { wafBlocked: crawl.stats.wafBlocked }
         : {}),
+      // The seed host was challenged and the audit ran on its www/apex twin (#2257).
+      ...(crawl.stats?.seedTwin ? { seedTwin: crawl.stats.seedTwin } : {}),
       // Refusal-shaped pages with no provider marker (#1258): audited, but flagged.
       ...(crawl.stats?.wafSuspect && crawl.stats.wafSuspect.total > 0
         ? { wafSuspect: crawl.stats.wafSuspect }

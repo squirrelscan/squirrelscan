@@ -14,7 +14,11 @@ import type {
 import type { JavascriptShipped } from "./javascript-shipped";
 import type { RefusedFetch } from "./refused-fetch";
 import type { UnverifiedReason } from "./services";
-import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
+import type {
+  SeedTwinFallback,
+  WafBlockedSummary,
+  WafSuspectSummary,
+} from "./waf-block";
 
 // ============================================
 // SHARED DOMAIN TYPES (used by storage + report)
@@ -301,6 +305,8 @@ export interface CrawlStats {
    * compatibility with older persisted stats blobs.
    */
   wafBlocked?: WafBlockedSummary;
+  /** Set when the crawl was re-seeded from the www/apex twin of a challenged seed host (#2257). */
+  seedTwin?: SeedTwinFallback;
   /**
    * Stored pages that look like a provider's refusal but carry no block marker (#1258).
    * Audited like any page; recorded so the report can warn. Optional for backward

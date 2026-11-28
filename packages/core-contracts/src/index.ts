@@ -104,7 +104,11 @@ import type {
   WellKnownProbe,
 } from "./storage";
 import type { UndecodableFetch } from "./storage";
-import type { WafBlockedSummary, WafSuspectSummary } from "./waf-block";
+import type {
+  SeedTwinFallback,
+  WafBlockedSummary,
+  WafSuspectSummary,
+} from "./waf-block";
 
 import { SKIP_REASON_CLASSES } from "./rule-outcome";
 
@@ -1077,6 +1081,8 @@ export interface AuditReport {
    * evaluation and never scored. Absent when no page was blocked.
    */
   wafBlocked?: WafBlockedSummary;
+  /** The audit ran on the www/apex twin of a challenged seed host (#2257). Absent otherwise. */
+  seedTwin?: SeedTwinFallback;
   /**
    * Pages that look like a provider's refusal but carry none of its block markers
    * (#1258). They were audited like any other page, so the findings on them may

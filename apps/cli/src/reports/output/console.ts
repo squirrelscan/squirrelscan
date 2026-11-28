@@ -205,6 +205,12 @@ export function generateConsoleReport(
   );
   log(divider());
 
+  // #2257: the seed host was challenged, so the audit ran on its www/apex twin.
+  if (report.seedTwin) {
+    log("");
+    log(fmt.yellow(`Note: ${report.seedTwin.reason}.`));
+  }
+
   // #1253: pages a WAF or bot manager blocked. Never audited, never scored.
   const blockedPageLines = wafBlockedPagesLines(report);
   if (blockedPageLines.length > 0) {

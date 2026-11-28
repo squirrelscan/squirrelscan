@@ -85,7 +85,7 @@ describe("renderers", () => {
     const meta = (r: AuditReport) =>
       (JSON.parse(renderJson(r)) as { meta: Record<string, unknown> }).meta;
     expect(meta(honoured)).toMatchObject({
-      schemaVersion: "1.30",
+      schemaVersion: "1.31",
       respectRobots: true,
       robotsBlockedPages: 7,
     });

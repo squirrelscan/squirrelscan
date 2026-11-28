@@ -337,6 +337,8 @@ https://example.com • Site blocked the crawler (bot protection / auth / rate l
 
 **Other pages.** A blocked page that is not the audited one is never audited as the site: it is left out of every rule and of the score, counted, and listed with its provider. The report says `N of M pages blocked by <provider>`, and the JSON report lists them under `wafBlocked.pages` (up to 50, with `wafBlocked.total` counting all of them).
 
+**The www or apex twin.** When the host you asked for serves a challenge or block page on the audited page, the crawler tries the same path on its `www` or apex twin (`example.com` and `www.example.com`). If the twin answers `2xx` with a normal HTML page, the crawl re-seeds from the twin and the audit runs there instead of failing as blocked. The report says so: the terminal prints a `Note:` line, and the JSON report carries `seedTwin` with `fromHost`, `toHost`, `status`, `provider`, `signal` and `reason`. `baseUrl` is the twin host. If both hosts are challenged, the audit is blocked exactly as described above. The fallback does not apply to targeted runs.
+
 **What is recognised.**
 
 | Provider | Marker the crawler reads | Statuses | How it was checked |
