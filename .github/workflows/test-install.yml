@@ -360,6 +360,8 @@ jobs:
 
   test-install-linux-musl:
     name: Linux (musl/Alpine)
+    # container: jobs need Docker sandboxes, which Turntable lacks (turntable-ci/turntable#497).
+    if: vars.TURNTABLE_CI != 'true'
     runs-on: ubuntu-latest
     # Advisory on the release path, where the musl binary for the version under
     # test may not be published yet. Not advisory for the canary: it installs
@@ -633,6 +635,8 @@ jobs:
 
   test-install-macos-arm64:
     name: macOS (arm64)
+    # Skipped on Turntable CI until its macOS class exists (turntable-ci/turntable#492); remove this guard then.
+    if: vars.TURNTABLE_CI != 'true'
     runs-on: macos-latest
     env:
       TEST_VERSION: ${{ inputs.version }}
@@ -948,6 +952,8 @@ jobs:
 
   test-install-macos-x64:
     name: macOS (x64)
+    # Skipped on Turntable CI until its macOS class exists (turntable-ci/turntable#492); remove this guard then.
+    if: vars.TURNTABLE_CI != 'true'
     runs-on: macos-15-intel  # x64 runner
     env:
       TEST_VERSION: ${{ inputs.version }}
@@ -1256,6 +1262,8 @@ jobs:
 
   test-install-windows:
     name: Windows (PowerShell)
+    # Turntable has no Windows class yet (turntable-ci/turntable#537).
+    if: vars.TURNTABLE_CI != 'true'
     runs-on: windows-latest
     env:
       TEST_VERSION: ${{ inputs.version }}

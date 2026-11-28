@@ -32,7 +32,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # The macOS legs are dropped on Turntable CI until its macOS class exists
+        # (turntable-ci/turntable#492); remove the expression then. A job-level `if`
+        # cannot read `matrix`, so the guard lives in the matrix itself.
+        os: ${{ fromJSON(vars.TURNTABLE_CI == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest","macos-latest"]') }}
         shell: [zsh, bash]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,6 +110,8 @@ jobs:
 
   windows:
     name: PATH setup (windows)
+    # Turntable has no Windows class yet (turntable-ci/turntable#537).
+    if: vars.TURNTABLE_CI != 'true'
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
