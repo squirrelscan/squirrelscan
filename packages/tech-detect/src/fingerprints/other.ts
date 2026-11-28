@@ -110,6 +110,7 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: /jquery(?:\.min)?\.js/i },
       { type: "script-content", pattern: /jQuery\.fn\.jquery/ },
+      ...scriptSrc(String.raw`(?:https?:)?\/\/code\.jquery\.com\/jquery[-.]`),
     ],
     versionPattern: /jquery[.-]v?(\d+\.\d+\.\d+)/i,
   },
@@ -197,6 +198,9 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "sentry",
     detectors: [
       { type: "script-url", pattern: /browser\.sentry-cdn\.com/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/js\.sentry-cdn\.com\/[0-9a-f]{32}\.min\.js(?![\w.-])`
+      ),
       // `[Sentry]` (the SDK's own log prefix) or a real init call with a config object. The bare
       // `Sentry.init` also appears in other libraries' prose (supabase-js says "in Sentry.init() to
       // emit it"), which matters once a whole bundle is read (#1387).
@@ -586,6 +590,116 @@ export const OTHER_FINGERPRINTS: TechFingerprint[] = [
     icon: "vercel",
     detectors: scriptSrc(
       String.raw`(?:(?:(?:https?:)?\/\/[^\/?#]+)?\/_vercel\/speed-insights\/script(?:\.debug)?\.js(?![\w.-])|(?:https?:)?\/\/va\.vercel-scripts\.com\/v1\/speed-insights\/script(?:\.debug)?\.js(?![\w.-]))`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "apollo-io",
+    name: "Apollo.io",
+    category: "other",
+    website: "https://www.apollo.io",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/assets\.apollo\.io\/micro\/website-tracker\/`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "impact-com",
+    name: "impact.com",
+    category: "other",
+    website: "https://impact.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/utt\.impactcdn\.com\/[\w-]{1,64}\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "firstpromoter",
+    name: "FirstPromoter",
+    category: "other",
+    website: "https://firstpromoter.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/cdn\.firstpromoter\.com\/fpr\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "tolt",
+    name: "Tolt",
+    category: "other",
+    website: "https://tolt.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/cdn\.tolt\.io\/(?:v\d+\/)?tolt\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "highlevel",
+    name: "HighLevel",
+    category: "other",
+    website: "https://www.gohighlevel.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:widgets|stcdn)\.leadconnectorhq\.com\/[\w.\/-]{1,128}\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "trustindex",
+    name: "Trustindex",
+    category: "widget",
+    website: "https://www.trustindex.io",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/cdn\.trustindex\.io\/(?:loader|assets\/js\/[\w.-]{1,64})\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "hostinger-reach",
+    name: "Hostinger Reach",
+    category: "other",
+    website: "https://www.hostinger.com/reach",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/cdn-reach\.hostinger\.com\/[\w.\/-]{1,128}\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "emergent",
+    name: "Emergent",
+    category: "other",
+    website: "https://emergent.sh",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/assets\.emergent\.sh\/scripts\/[\w.-]{1,64}\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "google-maps",
+    name: "Google Maps JavaScript API",
+    category: "widget",
+    website: "https://developers.google.com/maps",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/maps\.(?:googleapis|google)\.com\/maps\/api\/js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "google-identity-services",
+    name: "Google Identity Services",
+    category: "other",
+    website: "https://developers.google.com/identity/gsi/web",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/accounts\.google\.com\/gsi\/client(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "google-funding-choices",
+    name: "Google Funding Choices",
+    category: "other",
+    website: "https://developers.google.com/funding-choices/fc-api-docs",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/fundingchoicesmessages\.google\.com\/[iaf]\/[\w.-]{1,128}`
     ),
     confidence: "high",
   },

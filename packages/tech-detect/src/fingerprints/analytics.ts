@@ -1,6 +1,6 @@
 import type { TechFingerprint } from "../types";
 
-import { inBundle, inBundleString } from "./helpers";
+import { inBundle, inBundleString, scriptSrc } from "./helpers";
 
 export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
   {
@@ -38,6 +38,9 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       { type: "script-url", pattern: /us\.i\.posthog\.com/i },
       { type: "script-url", pattern: /eu\.i\.posthog\.com/i },
       { type: "script-url", pattern: /app\.posthog\.com/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/(?:us|eu)-assets\.i\.posthog\.com\/static\/`
+      ),
       { type: "html", pattern: /posthog\.init/i },
       { type: "script-content", pattern: /posthog\.init/i },
     ],
@@ -156,5 +159,55 @@ export const ANALYTICS_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /_paq\.push/i },
       { type: "script-content", pattern: /_paq\.push/ },
     ],
+  },
+  {
+    id: "ahrefs-analytics",
+    name: "Ahrefs Web Analytics",
+    category: "analytics",
+    website: "https://ahrefs.com/web-analytics",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/analytics\.ahrefs\.com\/analytics\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "datafast",
+    name: "DataFast",
+    category: "analytics",
+    website: "https://datafa.st",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/datafa\.st\/js\/script(?:\.[\w-]{1,32})?\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "openpanel",
+    name: "OpenPanel",
+    category: "analytics",
+    website: "https://openpanel.dev",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/openpanel\.dev\/op1\.js(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "statcounter",
+    name: "StatCounter",
+    category: "analytics",
+    website: "https://statcounter.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:www\.)?statcounter\.com\/(?:counter\/counter(?:_xhtml)?\.js|js\/packed\/statcounter-[\w-]{1,64}\.js)(?![\w.-])`
+    ),
+    confidence: "high",
+  },
+  {
+    id: "metricool",
+    name: "Metricool",
+    category: "analytics",
+    website: "https://metricool.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/(?:tracker|apus)\.metricool\.com\/(?:resources\/be|js\/web)\.js(?![\w.-])`
+    ),
+    confidence: "high",
   },
 ];

@@ -2481,6 +2481,8 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     icon: "shop-pay",
     detectors: [
       { type: "html", pattern: new RegExp("<shop-pay-(?:button|payment-request)", "i") },
+      { type: "script-url", pattern: new RegExp("^(?:https?:)?\\/\\/shop\\.app\\/checkouts\\/internal\\/preloads\\.js(?![\\w.-])", "i") },
+      { type: "tag-attr", tags: ["script"], attrs: ["src"], pattern: new RegExp("^(?:https?:)?\\/\\/shop\\.app\\/checkouts\\/internal\\/preloads\\.js(?![\\w.-])", "i") },
     ],
     confidence: "high",
   },
@@ -2541,6 +2543,8 @@ export const GENERATED_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "script-url", pattern: new RegExp("app\\.lemonsqueezy\\.com/js/lemon\\.js", "i") },
       { type: "script-content", pattern: new RegExp("createLemonSqueezy\\(", "i") },
+      { type: "script-url", pattern: new RegExp("^(?:https?:)?\\/\\/(?:assets\\.lemonsqueezy\\.com\\/[\\w.-]{1,64}\\.js|(?:[a-z0-9-]{1,32}\\.)?lmsqueezy\\.com\\/[\\w.\\/-]{1,128}\\.js)(?![\\w.-])", "i") },
+      { type: "tag-attr", tags: ["script"], attrs: ["src"], pattern: new RegExp("^(?:https?:)?\\/\\/(?:assets\\.lemonsqueezy\\.com\\/[\\w.-]{1,64}\\.js|(?:[a-z0-9-]{1,32}\\.)?lmsqueezy\\.com\\/[\\w.\\/-]{1,128}\\.js)(?![\\w.-])", "i") },
     ],
     confidence: "high",
   },

@@ -1,5 +1,7 @@
 import type { TechFingerprint } from "../types";
 
+import { scriptSrc } from "./helpers";
+
 export const CHAT_FINGERPRINTS: TechFingerprint[] = [
   {
     id: "intercom",
@@ -42,7 +44,9 @@ export const CHAT_FINGERPRINTS: TechFingerprint[] = [
     website: "https://hubspot.com",
     icon: "hubspot",
     detectors: [
-      { type: "script-url", pattern: /js\.hs-scripts\.com/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/js(?:-[a-z0-9]{2,6})?\.hs-scripts\.com\/`
+      ),
       { type: "html", pattern: /hubspot-messages-iframe/i },
     ],
   },

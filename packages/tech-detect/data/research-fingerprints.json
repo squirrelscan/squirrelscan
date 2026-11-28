@@ -4033,6 +4033,20 @@
           {
             "type": "html",
             "pattern": "<shop-pay-(?:button|payment-request)"
+          },
+          {
+            "type": "script-url",
+            "pattern": "^(?:https?:)?\\/\\/shop\\.app\\/checkouts\\/internal\\/preloads\\.js(?![\\w.-])"
+          },
+          {
+            "type": "tag-attr",
+            "tags": [
+              "script"
+            ],
+            "attrs": [
+              "src"
+            ],
+            "pattern": "^(?:https?:)?\\/\\/shop\\.app\\/checkouts\\/internal\\/preloads\\.js(?![\\w.-])"
           }
         ],
         "confidence": "high"
@@ -4123,6 +4137,20 @@
           {
             "type": "script-content",
             "pattern": "createLemonSqueezy\\("
+          },
+          {
+            "type": "script-url",
+            "pattern": "^(?:https?:)?\\/\\/(?:assets\\.lemonsqueezy\\.com\\/[\\w.-]{1,64}\\.js|(?:[a-z0-9-]{1,32}\\.)?lmsqueezy\\.com\\/[\\w.\\/-]{1,128}\\.js)(?![\\w.-])"
+          },
+          {
+            "type": "tag-attr",
+            "tags": [
+              "script"
+            ],
+            "attrs": [
+              "src"
+            ],
+            "pattern": "^(?:https?:)?\\/\\/(?:assets\\.lemonsqueezy\\.com\\/[\\w.-]{1,64}\\.js|(?:[a-z0-9-]{1,32}\\.)?lmsqueezy\\.com\\/[\\w.\\/-]{1,128}\\.js)(?![\\w.-])"
           }
         ],
         "confidence": "high"
