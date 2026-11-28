@@ -57,3 +57,19 @@ describe("release flags (#1414)", () => {
     expect(body("build-ci")).not.toContain("--minify");
   });
 });
+
+describe("CI compiles with the release flags (#2313)", () => {
+  const workflow = readFileSync(join(import.meta.dir, "..", ".github", "workflows", "ci.yml"), "utf8");
+  // The `build:` job, up to the next top-level job key.
+  const buildJob = workflow.match(/^ {2}build:\n((?: {4}.*\n|\s*\n)+)/m)?.[1] ?? "";
+  const runs = [...buildJob.matchAll(/^\s+(?:- )?run:\s*(.+)$/gm)].map((m) => (m[1] as string).trim());
+
+  test("the Compile CLI job is found", () => {
+    expect(buildJob).toContain("name: Compile CLI");
+  });
+
+  test("it compiles with `make build-ci`, never the dev `bun run build`", () => {
+    expect(runs).toContain("make build-ci");
+    expect(runs).not.toContain("bun run build");
+  });
+});

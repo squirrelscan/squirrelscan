@@ -1,0 +1,376 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NO_TELEMETRY: "1"
+
+jobs:
+  # Which jobs a change needs. Gating is job-level on purpose, NOT
+  # `on.push.paths`: a filtered-out push produces no CI run at all, so every
+  # ruleset-required check would sit at "Expected" forever and the PR could
+  # never merge. A skipped job satisfies a required check; an absent one does
+  # not.
+  #
+  # scripts/ci-classify.sh maps the changed paths to five outputs. Its header
+  # holds the path rules and how to add one; scripts/test-ci-classify.sh is
+  # its table test.
+  #
+  #   code       false for a docs-only change (docs/**, the root README,
+  #              CONTRIBUTING, CODE_OF_CONDUCT, SECURITY and TRADEMARKS, issue
+  #              and PR templates): only Docs check and build runs
+  #   engine     Audit engine golden tests
+  #   installer  Installer script syntax
+  #   release    Release tooling tests
+  #   build      Compile CLI
+  #
+  # Format, lint, and typecheck, CLI tests and Dependency audit run on every
+  # code change: CLI tests is the only job that runs every test file, and bun
+  # audit's answer moves with the advisory database, not only with bun.lock.
+  #
+  # Fail open, twice. This job writes every output `true` when the base is
+  # unknown or unreachable, the diff is empty, or the classifier fails or
+  # prints anything unexpected. And every gate also runs when this job did not
+  # succeed: a job that dies after writing `false` (a failed post-checkout
+  # step, say) keeps its outputs, and its outputs are empty if it never ran.
+  changes:
+    name: Classify changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      engine: ${{ steps.classify.outputs.engine }}
+      installer: ${{ steps.classify.outputs.installer }}
+      release: ${{ steps.classify.outputs.release }}
+      build: ${{ steps.classify.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: classify
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          set -u
+          run_everything() {
+            echo "$1: running every job"
+            printf '%s=true\n' code engine installer release build >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          # Unknown base (first push, force-push, empty sha) → run everything.
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            run_everything "no base commit"
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null || run_everything "cannot fetch base $BASE"
+          # --no-renames: a move lists both paths, so source moved under docs/
+          # still counts as the code change it is.
+          changed=$(git -c core.quotepath=false diff --name-only --no-renames "$BASE" HEAD) || run_everything "git diff failed"
+          echo "$changed"
+          result=$(printf '%s\n' "$changed" | bash scripts/ci-classify.sh) || run_everything "classifier failed"
+          shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
+          [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
+          echo "$result" | tee -a "$GITHUB_OUTPUT"
+
+  changelog-guard:
+    name: Changelog guard
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch pull request base
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags --depth=1 origin "$BASE"
+      - name: Fetch release tags without blobs
+        run: git fetch --force --quiet --depth=1 --filter=blob:none origin 'refs/tags/v*:refs/tags/v*'
+      - name: Check released changelog sections
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/check-released-changelog.sh "$BASE"
+
+  quality:
+    name: Format, lint, and typecheck
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      # First: it takes ~20ms and it is the check that explains itself. Fails if
+      # a test file lands outside every suite, if two suites would run the same
+      # file, if a named suite points at a package that no longer exists, or if
+      # the CLI tests job stops matching scripts/test-suites.ts.
+      - name: Check every test suite is wired into CI
+        run: bun run scripts/test-suites.ts --check
+      - name: Check the CI path classifier
+        run: bash scripts/test-ci-classify.sh
+      - name: Check formatting
+        run: bun run format:check
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck all workspaces
+        run: bun run typecheck
+      - name: Check third-party notices
+        run: bun run notices:check
+      # Claude Code reads .claude-plugin/marketplace.json from the default
+      # branch: it must keep redirecting the old marketplace to squirrelscan/skills.
+      # Checked on every PR because nothing else notices until an install breaks.
+      - name: Check manifests are in sync
+        run: bun run scripts/sync-plugin-manifests.ts --check
+      # install.sh / install.ps1 carry pre-rendered copies of the CLI header
+      # (apps/cli/src/cli/brand.ts); this fails when they drift from it.
+      - name: Check installer header is in sync
+        run: bun run scripts/sync-install-header.ts --check
+
+  # ---------------------------------------------------------------------------
+  # Which test suites run where (#1670):
+  #
+  #   CLI tests (this job)  every test file in the repo, one step per suite.
+  #                         This job was a single bare `bun test`, which walks the
+  #                         WHOLE tree — packages/* already gated every PR, just
+  #                         invisibly, under a job named for apps/cli. The steps
+  #                         below run exactly that set; a red step now names the
+  #                         package. `rest` is the complement of the named suites,
+  #                         so a new package is covered the day it lands.
+  #   Audit engine golden   packages/audit-engine golden/streaming/redirect/deadline
+  #                         files, again, on their own — a corpus regression is
+  #                         unreadable inside a 400-file log.
+  #   Release tooling       scripts/release-version.test.ts, again, next to the
+  #                         changelog shell test.
+  #   release.yml           still one bare whole-tree `bun test` before a release.
+  #
+  # The last three deliberately re-run files the steps below already cover.
+  #
+  # "Every test file" means what bun discovers: *.test.* / *.spec.* / *_test.* /
+  # *_spec.* with a js/ts extension, any case, outside dot-directories.
+  # scripts/test-suites.ts owns that definition and the split; the quality job's
+  # --check step fails if the two ever disagree.
+  #
+  # Do NOT swap these for `bun run test`: that script is `cd apps/cli && bun test`
+  # and would drop every package. The job name is fixed by the "CLI tests"
+  # required status check in the repo ruleset; renaming it means updating the
+  # ruleset in the same change or every PR blocks on a check that never reports.
+  #
+  # Wall time, measured on main run 41308096807 (job total 23m, cap 25m; #1518):
+  #   apps/cli 603s · audit-engine 372s · rules 143s · rest 125s · crawler 121s
+  #   report 2s, plus about 20s of checkout and setup per job
+  # One job ran them back to back and sat 2 minutes under the cap (a PR run hit
+  # 24m54s; five runs were cancelled at the cap and showed as failed checks). The
+  # suites now run as two parallel jobs of about 12 and 11 minutes, grouped so
+  # each is balanced, and "CLI tests" is a small aggregate job that needs both and
+  # fails unless both passed. The required status check keeps its name and its
+  # job id (`build` needs it), so the ruleset needs no edit. Every suite still
+  # runs once: `scripts/test-suites.ts --check` in the quality job fails if a
+  # test file belongs to no suite or ci.yml has no `--run` step for a suite, in
+  # whichever job the step sits.
+  # ---------------------------------------------------------------------------
+  cli-tests-app:
+    name: CLI tests (apps/cli and crawler)
+    needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      # Every suite runs even when an earlier one is red, the way the single bare
+      # `bun test` reported every failure at once; each still fails the job. The
+      # setup guard keeps a broken toolchain to one red step instead of several.
+      - name: Report tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run report
+      - name: apps/cli tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run cli
+      - name: Crawler tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run crawler
+
+  cli-tests-packages:
+    name: CLI tests (rules, engine and the rest)
+    needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: setup
+        uses: ./.github/actions/setup-bun
+      - name: Rules tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rules
+      - name: Remaining package and script tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run rest
+      - name: Audit engine tests
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: bun run scripts/test-suites.ts --run audit-engine
+
+  # The required status check. Skipped exactly when the old single job was (quality
+  # not green); otherwise it passes only when both test jobs passed, so a cancelled
+  # or skipped half is a red check, never a green one.
+  cli-tests:
+    name: CLI tests
+    needs: [quality, cli-tests-app, cli-tests-packages]
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both test jobs passed
+        env:
+          APP: ${{ needs.cli-tests-app.result }}
+          PACKAGES: ${{ needs.cli-tests-packages.result }}
+        run: |
+          echo "apps/cli and crawler: $APP; rules, engine and the rest: $PACKAGES"
+          [ "$APP" = success ] && [ "$PACKAGES" = success ]
+
+  installer-scripts:
+    name: Installer script syntax
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.installer != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # install.ps1 only ever runs on Windows machines, and the install test
+      # workflow fetches the PUBLISHED script from main — so nothing here ever
+      # exercised a change to it before users did. pwsh ships on the
+      # GitHub-hosted ubuntu image and exposes the same parser and runtime
+      # Windows PowerShell uses.
+      #
+      # The step runs from bash and probes for pwsh rather than declaring
+      # `shell: pwsh`. That declaration is resolved before the step's command
+      # runs, so on a runner without pwsh (a self-hosted or slimmed image) the
+      # step fails with a shell-not-found error that reads like an installer
+      # bug. Probing degrades to a skip with a notice instead.
+      #
+      # The script parses install.ps1 in full and then runs its download helpers
+      # against a stubbed Invoke-WebRequest. Parsing alone proved only that the
+      # file is syntactically PowerShell, which is how a script-scope Join-Path
+      # on a null LOCALAPPDATA got through review: it parses, and it kills the
+      # installer on its first line.
+      - name: Check install.ps1
+        run: |
+          if ! command -v pwsh > /dev/null 2>&1; then
+            echo "::notice::pwsh is not available on this runner; skipping the install.ps1 checks"
+            exit 0
+          fi
+          pwsh -NoProfile -File ./scripts/install-ps-contract.test.ps1
+      - name: Parse install.sh
+        run: bash -n install.sh
+
+  dependency-audit:
+    name: Dependency audit
+    needs: quality
+    if: ${{ !cancelled() && needs.quality.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run audit:dependencies
+
+  engine-tests:
+    name: Audit engine golden tests
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.engine != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run test:engine
+
+  release-tooling:
+    name: Release tooling tests
+    needs: [changes, quality]
+    if: ${{ !cancelled() && needs.quality.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.release != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run test:release
+
+  # Runs on every change (docs cross-reference rule ids and CLI flags), and is
+  # the only build job a docs-only change triggers. Deliberately not behind
+  # `quality`, or `changes`: nothing in docs:check depends on the code lint
+  # passing, and a dead classifier must not take the docs check with it.
+  docs:
+    name: Docs check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run docs:check
+      # The code tests that read docs/ pages. CLI tests runs them too, but a
+      # docs-only change skips CLI tests, and these are the ones it can break.
+      # A new test that reads docs/ belongs in this list.
+      - name: Code tests that read docs pages
+        run: >-
+          bun test
+          ./packages/rules/tests/docs-rule-pages.test.ts
+          ./packages/rules/tests/docs-category-table.test.ts
+          ./apps/cli/tests/mcp/docs-sync.test.ts
+      - run: bun run docs:build
+
+  build:
+    name: Compile CLI
+    needs: [changes, cli-tests, engine-tests, release-tooling]
+    # engine-tests and release-tooling may be skipped by their own gates; a
+    # failure in any of the three still stops the build.
+    if: >-
+      ${{ !cancelled()
+      && (needs.changes.result != 'success' || needs.changes.outputs.build != 'false')
+      && needs.cli-tests.result == 'success'
+      && contains(fromJSON('["success", "skipped"]'), needs.engine-tests.result)
+      && contains(fromJSON('["success", "skipped"]'), needs.release-tooling.result) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      # The release flags (RELEASE_FLAGS in the Makefile, --minify included),
+      # so CI tests the artifact shape we ship, not the dev build (#2313).
+      - run: make build-ci
+      - name: Verify compiled rules version
+        run: |
+          expected=$(bun -e 'import { fingerprintRuleSources } from "./apps/cli/src/audit/rules-fingerprint"; console.log(fingerprintRuleSources(process.cwd(), undefined, { strict: true }))')
+          # An empty value would make `grep -F ""` match any file.
+          if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Could not compute the rules fingerprint for this checkout: '$expected'" >&2
+            exit 1
+          fi
+          if ! grep -aFq "$expected" apps/cli/build/squirrelscan; then
+            echo "Compiled CLI does not embed the rules version for this checkout: $expected" >&2
+            exit 1
+          fi
+          echo "Compiled CLI embeds rules version $expected"
+      - name: Verify the compiled binary ignores a working-directory bunfig.toml and .env
+        run: bun run apps/cli/scripts/check-compiled-autoload.ts apps/cli/build/squirrelscan
+
+  psl-freshness:
+    name: Public suffix data freshness
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+      - run: bun run check:psl-freshness
