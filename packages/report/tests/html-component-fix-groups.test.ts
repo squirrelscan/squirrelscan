@@ -451,7 +451,7 @@ describe("a rollup is one card, however many slots the block holds", () => {
     expect(cardSentences(html)[0]).toBe(
       'Likely one shared block ("Install squirrel") in the main content: ' +
         '7 links with generic text "run", "grab", "copy" (+4 more), ' +
-        "seen on 14 pages: /r/0, /r/1, /r/10 (+11 more)"
+        "seen on 14 pages: /r/0, /r/1, /r/10 (+11 more) (site-wide)"
     );
     // Word for word what markdown prints for the same audit.
     expect(cardSentences(html)).toEqual(

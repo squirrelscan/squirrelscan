@@ -299,6 +299,7 @@ export function fixUnits(
     representative: group,
     affectedPages: group.affectedPages,
     affectedPageCount: group.affectedPageCount,
+    ...(group.pageShare ? { pageShare: group.pageShare } : {}),
     elementCount: group.occurrences.length,
     distinctValues: [],
     additionalValues: 0,

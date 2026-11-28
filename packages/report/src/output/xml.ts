@@ -422,7 +422,9 @@ export function renderXml(
 
   const categoryIssues = groupIssuesByCategory(
     report.ruleResults,
-    report.checkTallies
+    report.checkTallies,
+    undefined,
+    report.totalPages
   );
 
   if (categoryIssues.length > 0) {

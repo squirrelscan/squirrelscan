@@ -7,6 +7,7 @@ import type {
   RootHint,
 } from "@squirrelscan/core-contracts";
 
+import type { UnitPageShare } from "./page-share";
 import type { CheckResult } from "./types";
 
 export type ComponentFixAttribution =
@@ -71,6 +72,8 @@ export interface ComponentFixGroup {
   rootHint?: RootHint;
   affectedPages: string[];
   affectedPageCount: number;
+  /** Share of the crawl this unit covers (repo#1885); absent when the crawl size is unknown. */
+  pageShare?: UnitPageShare;
   /** Safe repair-target context from the representative observed element. */
   region: ComponentOccurrence["region"];
   element: ComponentOccurrence["element"];

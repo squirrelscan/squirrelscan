@@ -102,6 +102,7 @@ import {
 import { ruleRuns, type RuleRun } from "../rule-runs";
 import { getScoreGrade } from "../scoring";
 import { domainAgeYears, siteProfileRows } from "../site-metadata";
+import type { UnitPageShare } from "../page-share";
 import { siteResourceFixGroups } from "../site-resource-fix-groups";
 import { isRenderableSiteResourceGroup } from "../site-resource-presentation";
 import { siteWideContext, siteWideItem } from "../site-wide-items";
@@ -512,6 +513,8 @@ interface SlimJsonReport {
       variantCount: number;
       groupIds: string[];
       affectedPageCount: number;
+      /** Share of the crawl the unit covers (schema 1.31, repo#1885); absent without a crawl size. */
+      pageShare?: UnitPageShare;
       elementCount: number;
       attribution: string;
       defectKind: string;
@@ -746,7 +749,9 @@ function buildSlimReport(
   const siteWide = siteWideContext(report);
   const categoryIssues = groupIssuesByCategory(
     report.ruleResults,
-    report.checkTallies
+    report.checkTallies,
+    undefined,
+    report.totalPages
   );
   const passedRules = reportPassedRules(report, includePassed);
   const es = editorSummaryView(report.editorSummary, report);
@@ -1036,6 +1041,7 @@ function buildSlimReport(
                   REPORT_PAGES_HARD_CAP
                 ),
                 affectedPageCount: group.affectedPageCount,
+                ...(group.pageShare ? { pageShare: group.pageShare } : {}),
                 rendered: isRenderableSiteResourceGroup(group),
               })),
             }
@@ -1053,6 +1059,7 @@ function buildSlimReport(
                 variantCount: rollup.variantCount,
                 groupIds: rollup.groupIds,
                 affectedPageCount: rollup.affectedPageCount,
+                ...(rollup.pageShare ? { pageShare: rollup.pageShare } : {}),
                 elementCount: rollup.elementCount,
                 attribution: rollup.representative.attribution,
                 defectKind: rollup.representative.defect.kind,

@@ -180,7 +180,7 @@ describe("#2307 component evidence survives the real audit pipeline", () => {
   test("the stored audit renders the group with a labelled page sample in llm, markdown and text", async () => {
     const llm = await cli(["report", "-f", "llm"]);
     expect(llm).toContain(
-      '<fix-once pages="3">Fix once in the site footer: copyright year 2019 is behind 2026, 3 pages: /, /about, /docs [footer &gt; p:1]</fix-once>'
+      '<fix-once pages="3">Fix once in the site footer: copyright year 2019 is behind 2026, 3 pages: /, /about, /docs (template) [footer &gt; p:1]</fix-once>'
     );
     // The group REPLACED the legacy lines for that rule rather than joining them.
     expect(llm).not.toContain("Pages (3)");
@@ -188,7 +188,7 @@ describe("#2307 component evidence survives the real audit pipeline", () => {
 
     const markdown = await cli(["report", "-f", "markdown"]);
     expect(markdown).toContain(
-      "**Fix once in the site footer (footer > p:1): copyright year 2019 is behind 2026, 3 pages: /, /about, /docs**"
+      "**Fix once in the site footer (footer > p:1): copyright year 2019 is behind 2026, 3 pages: /, /about, /docs (template)**"
     );
     expect(markdown).not.toContain("s128:");
 

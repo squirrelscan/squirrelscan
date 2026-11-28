@@ -151,10 +151,10 @@ describe("#2341 shared source maps collapse through the real audit pipeline", ()
     const llm = await cli(["report", "-f", "llm"]);
     // The sample is bounded at 3 and says so; the COUNT is the exact 4.
     expect(llm).toContain(
-      '<fix-once scope="site-resource" pages="4" resources="2">Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more)</fix-once>'
+      '<fix-once scope="site-resource" pages="4" resources="2">Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more) (site-wide)</fix-once>'
     );
     expect(llm).toContain(
-      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /blog/one, /blog/two</fix-once>'
+      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /blog/one, /blog/two (template)</fix-once>'
     );
     // Exactly two units for the whole rule, not one per page.
     expect(llm.split('scope="site-resource"')).toHaveLength(3);
@@ -172,10 +172,10 @@ describe("#2341 shared source maps collapse through the real audit pipeline", ()
     const file = join(out, "report.json");
     const llm = await cli(["report", "-i", file, "-f", "llm"]);
     expect(llm).toContain(
-      '<fix-once scope="site-resource" pages="4" resources="2">Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more)</fix-once>'
+      '<fix-once scope="site-resource" pages="4" resources="2">Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more) (site-wide)</fix-once>'
     );
     expect(llm).toContain(
-      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /blog/one, /blog/two</fix-once>'
+      '<fix-once scope="site-resource" pages="2" resources="1">Fix once in the build: 1 source map exposed by shared bundles (blog.js.map), 2 pages: /blog/one, /blog/two (template)</fix-once>'
     );
     expect(llm.split('scope="site-resource"')).toHaveLength(3);
   }, 120_000);
@@ -183,7 +183,7 @@ describe("#2341 shared source maps collapse through the real audit pipeline", ()
   test("markdown and text say it in the same words", async () => {
     const markdown = await cli(["report", "-f", "markdown"]);
     expect(markdown).toContain(
-      "**Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more)**"
+      "**Fix once in the build: 2 source maps exposed by shared bundles (app.js.map, vendor.js.map), 4 pages: /, /about, /blog/one (+1 more) (site-wide)**"
     );
     const text = await cli(["report", "-f", "text"]);
     expect(text).toContain(

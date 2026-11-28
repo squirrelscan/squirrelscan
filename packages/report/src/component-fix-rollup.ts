@@ -12,6 +12,7 @@
 // where the defect appears.
 
 import type { ComponentFixGroup } from "./component-fix-groups";
+import { type UnitPageShare, unitPageShare } from "./page-share";
 
 /** Distinct defect values to name inside a rolled-up block before counting. */
 export const ROLLUP_MAX_DISTINCT_VALUES = 3;
@@ -39,12 +40,25 @@ export interface ComponentFixRollup {
   /** Pages the whole unit affects. Identical to every member's, by construction. */
   affectedPages: string[];
   affectedPageCount: number;
+  /** Share of the crawl this unit covers (repo#1885); absent when the crawl size is unknown. */
+  pageShare?: UnitPageShare;
   /** Faulty elements in the block: the sum of the members' occurrences. */
   elementCount: number;
   /** Distinct defect values across the members, in first-seen order. */
   distinctValues: string[];
   /** Distinct values beyond {@link ROLLUP_MAX_DISTINCT_VALUES}. */
   additionalValues: number;
+}
+
+/** A family's page share, over the crawl size its members carry; nothing when none carries one. */
+function familyShare(
+  affectedPageCount: number,
+  members: readonly ComponentFixRollup[]
+): { pageShare?: UnitPageShare } {
+  const crawled = members.find((member) => member.pageShare)?.pageShare
+    ?.crawledPages;
+  const share = unitPageShare(affectedPageCount, crawled);
+  return share ? { pageShare: share } : {};
 }
 
 /**
@@ -127,6 +141,10 @@ export function componentFixRollups(
       representative,
       affectedPages: representative.affectedPages,
       affectedPageCount: representative.affectedPageCount,
+      // Every member covers the same pages, so the representative's share is the unit's.
+      ...(representative.pageShare
+        ? { pageShare: representative.pageShare }
+        : {}),
       elementCount: members.reduce(
         (sum, member) => sum + member.occurrences.length,
         0
@@ -268,6 +286,8 @@ export function componentFamilyRollups(
       representative: members[0]!.representative,
       affectedPages: pages,
       affectedPageCount: pages.length,
+      // The variants cover a union of pages, so the share is re-taken over the same crawl.
+      ...familyShare(pages.length, members),
       elementCount: members.reduce(
         (sum, member) => sum + member.elementCount,
         0

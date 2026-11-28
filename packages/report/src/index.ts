@@ -47,10 +47,17 @@ export type { SkippedCheck } from "./skipped";
 export { checkOccurrences } from "./occurrences";
 export {
   pageShare,
+  pageShareSuffix,
+  pageShareTag,
+  unitPageShare,
   PAGE_SHARE_SITE_WIDE,
   PAGE_SHARE_TEMPLATE,
 } from "./page-share";
-export type { PageShare, PageShareLabel } from "./page-share";
+export type {
+  PageShare,
+  PageShareLabel,
+  UnitPageShare,
+} from "./page-share";
 
 // Cross-site prevalence (#2491)
 export {

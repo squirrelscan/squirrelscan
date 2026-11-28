@@ -20,6 +20,7 @@
 import type { SiteResourceOccurrence } from "@squirrelscan/core-contracts";
 
 import type { GroupedCheck, GroupedRule } from "./grouping";
+import { type UnitPageShare, unitPageShare } from "./page-share";
 
 /**
  * A set of shared resources that every one of `affectedPages` references, and
@@ -38,6 +39,8 @@ export interface SiteResourceFixGroup {
   /** Pages referencing exactly this key set, sorted. Never sampled. */
   affectedPages: string[];
   affectedPageCount: number;
+  /** Share of the crawl this unit covers (repo#1885); absent when the crawl size is unknown. */
+  pageShare?: UnitPageShare;
 }
 
 /** Codepoint order, so two machines serialize one report identically. */
@@ -55,7 +58,8 @@ function byCodepoint(a: string, b: string): number {
 function groupsForCheck(
   ruleId: string,
   check: GroupedCheck,
-  occurrences: readonly SiteResourceOccurrence[]
+  occurrences: readonly SiteResourceOccurrence[],
+  crawledPages: number | undefined
 ): SiteResourceFixGroup[] {
   // (origin, kind) -> key -> pages. The page set is what decides the grouping,
   // so it is built first and completely; nothing is emitted until every
@@ -100,6 +104,7 @@ function groupsForCheck(
         right.pages.length - left.pages.length || byCodepoint(leftSig, rightSig)
     );
     for (const [, bucket] of ordered) {
+      const share = unitPageShare(bucket.pages.length, crawledPages);
       groups.push({
         id: `${ruleId}\u0000${check.name}\u0000${siteOrigin}\u0000${bucket.keys.join(",")}`,
         ruleId,
@@ -110,6 +115,7 @@ function groupsForCheck(
         resourceKeys: bucket.keys,
         affectedPages: bucket.pages,
         affectedPageCount: bucket.pages.length,
+        ...(share ? { pageShare: share } : {}),
       });
     }
   }
@@ -127,12 +133,15 @@ export function siteResourceFixGroups(
   rule: GroupedRule
 ): SiteResourceFixGroup[] {
   const groups: SiteResourceFixGroup[] = [];
+  if (rule.findingScope === "page") return groups;
   for (const check of rule.checks) {
     const occurrences = (
       check as { siteResourceOccurrences?: SiteResourceOccurrence[] }
     ).siteResourceOccurrences;
     if (!occurrences?.length) continue;
-    groups.push(...groupsForCheck(rule.id, check, occurrences));
+    groups.push(
+      ...groupsForCheck(rule.id, check, occurrences, rule.crawledPages)
+    );
   }
   return groups;
 }

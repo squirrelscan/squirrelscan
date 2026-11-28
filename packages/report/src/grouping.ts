@@ -51,6 +51,7 @@ import {
   type MessageShape,
 } from "./message-merge";
 import { checkOccurrences } from "./occurrences";
+import { unitPageShare } from "./page-share";
 import { prevalenceNote, type RulePrevalenceData } from "./rule-prevalence";
 
 export interface GroupedCheck {
@@ -165,6 +166,8 @@ export interface GroupedRule {
   subcategory?: string;
   /** WCAG criteria (a11y rules, repo#3093). */
   wcag?: WcagCriterion[];
+  /** repo#1885: a "page" rule is never collapsed across pages, whatever its locators say. */
+  findingScope?: "page" | "resource";
   checks: GroupedCheck[];
   failCount: number;
   warnCount: number;
@@ -176,6 +179,11 @@ export interface GroupedRule {
   prevalenceNote?: string;
   /** Additive actionable groups derived only from component occurrence evidence. */
   componentFixGroups?: ComponentFixGroup[];
+  /**
+   * The crawl size the rule's fix-once units take their page share of (repo#1885). Absent when the
+   * caller did not pass one, and then no unit carries a share.
+   */
+  crawledPages?: number;
 }
 
 export interface GroupedCategory {
@@ -367,7 +375,9 @@ export function groupIssuesByCategory(
     | Map<string, ReportRuleResult>,
   checkTallies?: CheckTallies,
   /** Overrides the shipped corpus prevalence (#2491); tests only. */
-  prevalence?: RulePrevalenceData
+  prevalence?: RulePrevalenceData,
+  /** The report's `totalPages`: every fix-once unit carries its page share of it (repo#1885). */
+  crawledPages?: number
 ): GroupedCategory[] {
   const categoryMap = new Map<string, GroupedRule[]>();
   const entries =
@@ -386,6 +396,7 @@ export function groupIssuesByCategory(
       severity: string;
       weight: number;
       messageCountsItems?: boolean;
+      findingScope?: "page" | "resource";
     };
     // Normalize legacy category codes (e.g. stored "adblock" → "blocking").
     const category = normalizeCategoryCode(meta.category);
@@ -749,10 +760,14 @@ export function groupIssuesByCategory(
           ? "warning"
           : metaSeverity;
 
-    const actionableComponentFixGroups = componentFixGroups(
-      ruleId,
-      result.checks
-    );
+    // A rule declared page-scope states facts about single pages: matching locators never merge them.
+    const actionableComponentFixGroups =
+      meta.findingScope === "page"
+        ? []
+        : componentFixGroups(ruleId, result.checks).map((group) => {
+            const share = unitPageShare(group.affectedPageCount, crawledPages);
+            return share ? { ...group, pageShare: share } : group;
+          });
     const ruleNote = prevalenceNote(ruleId, prevalence);
     const rule: GroupedRule = {
       id: ruleId,
@@ -769,6 +784,7 @@ export function groupIssuesByCategory(
           ? deriveBlockingSubcategory(ruleId)
           : undefined),
       ...(meta.wcag && meta.wcag.length > 0 ? { wcag: meta.wcag } : {}),
+      ...(meta.findingScope ? { findingScope: meta.findingScope } : {}),
       checks,
       failCount,
       warnCount,
@@ -776,6 +792,9 @@ export function groupIssuesByCategory(
       ...(ruleNote ? { prevalenceNote: ruleNote } : {}),
       ...(actionableComponentFixGroups.length > 0
         ? { componentFixGroups: actionableComponentFixGroups }
+        : {}),
+      ...(crawledPages !== undefined && crawledPages > 0
+        ? { crawledPages }
         : {}),
     };
 

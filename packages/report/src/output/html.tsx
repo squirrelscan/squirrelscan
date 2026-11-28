@@ -49,6 +49,7 @@ import {
   getGroupTitle,
   severityLabel,
 } from "../categories";
+import { pageShareSuffix } from "../page-share";
 import {
   describeRoot,
   fixRollupLine,
@@ -964,11 +965,12 @@ function PageLinks({
  * label at all) renders the sentence untouched.
  */
 function FixSentence({ unit }: { unit: ReturnType<typeof fixUnits>[number] }) {
-  const sentence = fixRollupLine(
-    unit,
-    REPORT_SOURCE_PAGES_PREVIEW,
-    (page) => getPathname(page) || "/"
-  );
+  const sentence =
+    fixRollupLine(
+      unit,
+      REPORT_SOURCE_PAGES_PREVIEW,
+      (page) => getPathname(page) || "/"
+    ) + pageShareSuffix(unit.pageShare);
   const label = describeRoot(unit);
   const at = label ? sentence.indexOf(label) : -1;
   if (!label || at < 0) return <>{sentence}</>;
@@ -1069,7 +1071,7 @@ export function SiteResourceFixCards({
                 group,
                 REPORT_SOURCE_PAGES_PREVIEW,
                 (page) => getPathname(page) || "/"
-              )}
+              ) + pageShareSuffix(group.pageShare)}
             </p>
           </div>
           <PageLinks
@@ -2100,7 +2102,12 @@ function ReportPage({
   const agentLines = agentSignalLines(report);
   const failedRun = isAuditFailed(report.status);
   const issues = flattenIssuesBySeverity(
-    groupIssuesByCategory(report.ruleResults, report.checkTallies)
+    groupIssuesByCategory(
+      report.ruleResults,
+      report.checkTallies,
+      undefined,
+      report.totalPages
+    )
   );
   const es = editorSummaryView(report.editorSummary, report);
   const priorities = es?.priorities ?? [];

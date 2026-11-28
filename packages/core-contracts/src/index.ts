@@ -622,6 +622,11 @@ export interface RuleMetaLite {
   scope: RuleScope;
   severity: RuleSeverity;
   weight: number;
+  /**
+   * Whether a finding is about one page or something shared across pages (repo#1885). Absent on
+   * reports that predate it, which read as "page": silence never collapses a finding.
+   */
+  findingScope?: "page" | "resource";
 }
 
 export interface ReportRuleResult {
