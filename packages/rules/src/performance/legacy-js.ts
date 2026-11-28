@@ -55,6 +55,26 @@ export const legacyJsRule: Rule = {
     verdictScope: "template",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "legacy-polyfills", outcome: "problem" },
+      { name: "es5-code-patterns", outcome: "problem" },
+      {
+        name: "differential-serving",
+        outcome: "clean",
+        clears: ["legacy-polyfills", "es5-code-patterns"],
+      },
+      {
+        name: "es-modules",
+        outcome: "clean",
+        clears: ["legacy-polyfills", "es5-code-patterns"],
+      },
+      {
+        name: "legacy-js",
+        outcome: "clean",
+        clears: ["legacy-polyfills", "es5-code-patterns"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

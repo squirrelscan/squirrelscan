@@ -72,6 +72,24 @@ Fixes for large DOMs:
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "dom-total-nodes", outcome: "problem" },
+      { name: "dom-depth", outcome: "problem" },
+      { name: "dom-max-children", outcome: "problem" },
+      {
+        name: "dom-total-nodes",
+        outcome: "clean",
+        clears: ["dom-total-nodes"],
+      },
+      { name: "dom-depth", outcome: "clean", clears: ["dom-depth"] },
+      {
+        name: "dom-max-children",
+        outcome: "clean",
+        clears: ["dom-max-children"],
+      },
+      { name: "dom-total-nodes", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

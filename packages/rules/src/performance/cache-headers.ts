@@ -25,6 +25,34 @@ export const cacheHeadersRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "cache-headers-missing", outcome: "problem" },
+      { name: "cache-control", outcome: "problem" },
+      { name: "cache-control-html", outcome: "problem" },
+      { name: "cache-control-static", outcome: "problem" },
+      { name: "cache-expires", outcome: "problem" },
+      {
+        name: "cache-control",
+        outcome: "clean",
+        clears: ["cache-control", "cache-headers-missing"],
+      },
+      {
+        name: "cache-control-html",
+        outcome: "clean",
+        clears: ["cache-control-html", "cache-headers-missing"],
+      },
+      {
+        name: "cache-control-static",
+        outcome: "clean",
+        clears: ["cache-control-static", "cache-headers-missing"],
+      },
+      {
+        name: "cache-immutable",
+        outcome: "clean",
+        clears: ["cache-control-static", "cache-control-html"],
+      },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
     optionsSchema,

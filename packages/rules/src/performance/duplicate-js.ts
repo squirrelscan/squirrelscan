@@ -55,6 +55,16 @@ export const duplicateJsRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "duplicate-js-version-mismatch", outcome: "problem" },
+      { name: "duplicate-js-same-version", outcome: "problem" },
+      {
+        name: "duplicate-js",
+        outcome: "clean",
+        clears: ["duplicate-js-version-mismatch", "duplicate-js-same-version"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

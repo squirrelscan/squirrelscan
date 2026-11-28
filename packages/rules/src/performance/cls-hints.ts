@@ -26,6 +26,12 @@ export const clsHintsRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "cls-images", outcome: "problem" },
+      { name: "cls-iframes", outcome: "problem" },
+      { name: "cls-images", outcome: "clean", clears: ["cls-images"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

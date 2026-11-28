@@ -94,6 +94,20 @@ export const contentInJsBundleRule: Rule = {
     findingScope: "resource",
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "content-in-js-bundle", outcome: "problem" },
+      { name: "content-in-js-bundle-sitewide", outcome: "problem" },
+      {
+        name: "content-in-js-bundle",
+        outcome: "clean",
+        clears: ["content-in-js-bundle", "content-in-js-bundle-sitewide"],
+      },
+      { name: "content-in-js-bundle", outcome: "skipped" },
+      { name: "content-in-js-bundle-skipped", outcome: "skipped" },
+      { name: "content-in-js-bundle-partial", outcome: "skipped" },
+      { name: "content-in-js-bundle-unchecked", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

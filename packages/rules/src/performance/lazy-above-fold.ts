@@ -95,6 +95,15 @@ export const lazyAboveFoldRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "lazy-above-fold", outcome: "problem" },
+      {
+        name: "lazy-above-fold",
+        outcome: "clean",
+        clears: ["lazy-above-fold"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

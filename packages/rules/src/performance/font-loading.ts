@@ -31,6 +31,17 @@ export const fontLoadingRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "font-display", outcome: "problem" },
+      { name: "font-preconnect", outcome: "problem" },
+      { name: "font-display", outcome: "clean", clears: ["font-display"] },
+      {
+        name: "font-preconnect",
+        outcome: "clean",
+        clears: ["font-preconnect"],
+      },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

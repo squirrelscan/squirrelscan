@@ -174,6 +174,16 @@ export const unminifiedJsRule: Rule = {
     verdictScope: "template",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "unminified-js", outcome: "problem" },
+      { name: "potentially-unminified-js", outcome: "problem" },
+      {
+        name: "minified-js",
+        outcome: "clean",
+        clears: ["unminified-js", "potentially-unminified-js"],
+      },
+    ],
     optionsSchema,
   },
 

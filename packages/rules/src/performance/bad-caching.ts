@@ -323,6 +323,35 @@ export const badCachingRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "bad-caching-freshness", outcome: "problem" },
+      { name: "bad-caching-validators", outcome: "problem" },
+      { name: "bad-caching-compression", outcome: "problem" },
+      { name: "bad-caching-subresources", outcome: "problem" },
+      {
+        name: "bad-caching-freshness",
+        outcome: "clean",
+        clears: ["bad-caching-freshness"],
+      },
+      {
+        name: "bad-caching-validators",
+        outcome: "clean",
+        clears: ["bad-caching-validators"],
+      },
+      {
+        name: "bad-caching-compression",
+        outcome: "clean",
+        clears: ["bad-caching-compression"],
+      },
+      {
+        name: "bad-caching-subresources",
+        outcome: "clean",
+        clears: ["bad-caching-subresources"],
+      },
+      { name: "bad-caching", outcome: "skipped" },
+      { name: "bad-caching-headers-not-recorded", outcome: "skipped" },
+    ],
     // A dev server or private-network host is not the delivery edge (pub#629).
     skipOnPrivateTarget: true,
     optionsSchema,

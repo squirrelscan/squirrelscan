@@ -35,6 +35,13 @@ Fixes for slow TTFB:
     verdictScope: "page",
     severity: "warning",
     weight: 7,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "ttfb", outcome: "problem" },
+      { name: "download-time", outcome: "problem" },
+      { name: "ttfb", outcome: "clean", clears: ["ttfb"] },
+      { name: "ttfb", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

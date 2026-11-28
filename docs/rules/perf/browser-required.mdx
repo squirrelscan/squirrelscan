@@ -64,6 +64,19 @@ enable = ["perf/browser-required"]
 
 For one run without editing the config: `squirrel audit https://nutshop.squirrelscan.com --rule-include perf/browser-required`.
 
+## Check names by outcome
+
+Each check name this rule can emit, by what it means to a tool comparing two audits. A **problem** check is a finding. A **clean** check says the rule ran over what it covers and found nothing; it clears the problem checks listed beside it, so a finding is fixed when the rule ran over the same scope and a clean check took its place. A **not checked** check says the rule did not evaluate, and never clears a finding.
+
+{/* rule-checks:start */}
+
+| Check name | Outcome | Clears |
+| --- | --- | --- |
+| `browser-required-audits` | Problem |  |
+| `browser-required-audits` | Clean | `browser-required-audits` |
+
+{/* rule-checks:end */}
+
 ## Related rules
 
 - [perf/lcp-hints](/rules/perf/lcp-hints): the static hints for the paint metric this rule says it cannot measure.

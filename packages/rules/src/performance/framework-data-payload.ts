@@ -62,6 +62,15 @@ export const frameworkDataPayloadRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 2,
+    // Check names by outcome class (#1741, #2218).
+    checks: [
+      { name: "framework-data-payload", outcome: "problem" },
+      {
+        name: "framework-data-payload",
+        outcome: "clean",
+        clears: ["framework-data-payload"],
+      },
+    ],
     optionsSchema,
   },
 
