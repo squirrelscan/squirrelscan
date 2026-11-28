@@ -149,7 +149,9 @@ jobs:
   #                         unreadable inside a 400-file log.
   #   Release tooling       scripts/release-version.test.ts, again, next to the
   #                         changelog shell test.
-  #   release.yml           still one bare whole-tree `bun test` before a release.
+  #   release.yml           reuses a green run of this workflow for the same tree
+  #                         (scripts/release-ci-reuse.ts reads these job names),
+  #                         else runs the same split as parallel jobs (#1824).
   #
   # The last three deliberately re-run files the steps below already cover.
   #

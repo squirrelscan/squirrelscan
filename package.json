@@ -12,7 +12,7 @@
     "typecheck": "bun run --sequential --filter '*' --if-present typecheck",
     "test": "cd apps/cli && bun test",
     "test:engine": "cd packages/audit-engine && bun run test:golden",
-    "test:release": "bash scripts/test-changelog-extraction.sh && bash scripts/test-released-changelog.sh && bash scripts/test-changelog-entries.sh && bun test scripts/release-version.test.ts scripts/changelog.test.ts",
+    "test:release": "bash scripts/test-changelog-extraction.sh && bash scripts/test-released-changelog.sh && bash scripts/test-changelog-entries.sh && bun test scripts/release-version.test.ts scripts/changelog.test.ts scripts/release-ci-reuse.test.ts",
     "changelog": "bun run scripts/changelog.ts unreleased",
     "changelog:release": "bun run scripts/changelog.ts release",
     "changelog:convert": "bun run scripts/changelog.ts convert",
