@@ -1,0 +1,619 @@
+name: Release
+
+# Turntable's tag-first release shape (#2351, turntable-ci/turntable#534):
+#   1. The run is built FROM a protected `v*` tag: a tag push, or a dispatch at
+#      the tag. The tag is created beforehand, from a merged version bump;
+#      nothing in this workflow creates or moves a tag.
+#   2. `quality` and `build` upload the release artifacts; Turntable records
+#      their digests.
+#   3. `release-gate` is the LATE gate: it sits in `environment: release` after
+#      the builds (and after `verify-darwin`, where that runs), so the approval
+#      covers exactly the recorded artifacts.
+#   4. On Turntable, a release request made outside this run asks the release
+#      lane to publish. No job that runs there holds a publish credential. The
+#      CLI-facing manifest.json.sig and per-binary .sig files come from the
+#      pinned release key, outside this workflow.
+#   5. Everything that publishes from inside the run, and every job Turntable
+#      cannot run, carries `if: vars.TURNTABLE_CI != 'true'`. Turntable sets the
+#      variable; on GitHub it is unset, so the same file still releases there.
+on:
+  push:
+    tags: ["v*"]
+  # Dispatch AT the tag (`gh workflow run release.yml --ref vX.Y.Z`). A dispatch
+  # at a branch is refused by the `version` job.
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NO_TELEMETRY: "1"
+
+jobs:
+  version:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      channel: ${{ steps.version.outputs.channel }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun
+
+      # The tag is the only input: `vX.Y.Z-beta.N` is a beta, `vX.Y.Z` is
+      # stable. Anything else (a branch, an alpha, a malformed tag) is refused
+      # before any later step uses it.
+      - name: Read version and channel from the tag
+        id: version
+        env:
+          REF: ${{ github.ref }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" != "tag" ] || [ "${REF#refs/tags/}" = "$REF" ]; then
+            echo "::error::A release runs from a v* tag, not from ${REF}. Push the tag, or dispatch the workflow at it."
+            exit 1
+          fi
+          tag="${REF#refs/tags/}"
+          semver='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+          if [[ "$tag" =~ ^v${semver}$ ]]; then
+            channel=stable
+          elif [[ "$tag" =~ ^v${semver}-beta\.(0|[1-9][0-9]*)$ ]]; then
+            channel=beta
+          else
+            echo "::error::Tag ${tag} is not vX.Y.Z or vX.Y.Z-beta.N."
+            exit 1
+          fi
+          prerelease=false
+          if [ "$channel" = beta ]; then prerelease=true; fi
+          {
+            echo "version=${tag#v}"
+            echo "tag=${tag}"
+            echo "channel=${channel}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing ${tag} (${channel}) at ${GITHUB_SHA}"
+
+      # Nothing here creates the tag, so this is the last chance to refuse a tag
+      # that points somewhere wrong. `main` is covered by a ruleset with an
+      # empty bypass list, so the version bump always lands by PR first
+      # (`make release` opens it) and the tag is cut from the merged commit.
+      - name: Verify the tagged commit carries this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Resolve main from the remote rather than trusting whatever refs
+          # actions/checkout happened to create. Ancestry, not tip-equality: the
+          # tag is cut from the merged bump, and main may have moved on since.
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::${GITHUB_SHA} is not on main; refusing to release it."
+            exit 1
+          fi
+
+          # Reuses the same SYNCED_MANIFESTS list the local `make release`
+          # preflight uses, so the two can never disagree about what "carries
+          # this version" means. Throws if a manifest is missing entirely.
+          # shellcheck disable=SC2016  # ${v} is a JS template literal, not shell
+          bun -e '
+            import { manifestsCarry } from "./scripts/release.ts";
+            const v = process.env.VERSION;
+            if (!(await manifestsCarry(v))) {
+              console.log(`::error::the tagged commit does not carry ${v} in every manifest. Tag the merged version bump, not another commit.`);
+              process.exit(1);
+            }
+          '
+
+          # Also fails if .claude-plugin/marketplace.json stops redirecting the
+          # old marketplace to squirrelscan/skills, where the plugins live now.
+          bun run scripts/sync-plugin-manifests.ts --check
+
+  quality:
+    name: Release quality gate
+    needs: version
+    runs-on: ubuntu-latest
+    # bun test alone takes 31-36 min (releases 11-12/11-13) and the reuse step can wait up to 45 min for main CI first;
+    # a real stall fails here instead of at the 6 h default
+    timeout-minutes: 100
+    permissions:
+      contents: read
+      actions: read # main CI's jobs at this sha (the reuse step below)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun
+      # Main CI (ci.yml on push) already runs every test file ("CLI tests", via scripts/test-suites.ts), the engine
+      # goldens and the release tooling tests. When all three jobs passed at THIS exact sha, the three test steps below
+      # are skipped instead of re-running ~30 min of the same suite (#1839). Main CI still running: wait for it (cap
+      # 45 min). Anything else (no run, a skipped or failed job, cancelled, API error) runs the tests here as before.
+      - name: Reuse main CI's test results at this sha
+        id: mainci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          deadline=$(( $(date +%s) + 45 * 60 ))
+          ok=false
+          while :; do
+            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=5" \
+              --jq '[.workflow_runs[] | select(.head_branch == "main")] | sort_by(.created_at) | last | (.id|tostring) + " " + .status' 2>/dev/null) || run=""
+            id=${run%% *}; status=${run#* }
+            if [ -z "$run" ] || [ "$id" = null ]; then echo "no main CI run for $SHA: running the tests here"; break; fi
+            if [ "$status" = completed ]; then
+              jobs=$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100" \
+                --jq '[.jobs[] | select(.name == "CLI tests" or .name == "Audit engine golden tests" or .name == "Release tooling tests") | .conclusion] | (length|tostring) + " " + (all(. == "success")|tostring)' 2>/dev/null) || jobs=""
+              echo "main CI run $id at $SHA: test jobs found, all success = $jobs"
+              [ "$jobs" = "3 true" ] && ok=true
+              break
+            fi
+            [ "$(date +%s)" -ge "$deadline" ] && { echo "main CI run $id still $status after 45 min: running the tests here"; break; }
+            echo "main CI run $id is $status; waiting"; sleep 30
+          done
+          echo "passed=$ok" >> "$GITHUB_OUTPUT"
+      # No manifest stamping: the `version` job has already established that the
+      # tagged tree carries $VERSION, so the gate runs against exactly the bytes
+      # that are released.
+      - run: bun run format:check
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run notices:check
+      - run: bun run audit:dependencies
+      - run: bun test
+        if: steps.mainci.outputs.passed != 'true'
+        # per-test timeouts already default to 5 s; this catches a hook or an open handle that keeps the process alive
+        timeout-minutes: 55
+      - run: bun run test:engine
+        if: steps.mainci.outputs.passed != 'true'
+      - run: bun run test:release
+        if: steps.mainci.outputs.passed != 'true'
+
+
+  build:
+    name: Build release binaries
+    needs: [version, quality]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun
+
+      # `make build-all` re-signs the darwin binaries after compiling them
+      # (#2310). The signature is AD-HOC (scripts/sign-darwin.sh passes no
+      # certificate), so this job needs no secret and runs on Turntable. It
+      # runs on Linux, where Apple's `codesign` does not
+      # exist. rcodesign is pinned by version AND by digest: a release must
+      # never be able to pull down a different signing tool than the reviewed
+      # one, and `cargo install` at release time would do exactly that.
+      - name: Install rcodesign
+        env:
+          RCODESIGN_VERSION: 0.29.0
+          RCODESIGN_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002 # pragma: allowlist secret
+        run: |
+          set -euo pipefail
+          tarball="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 --max-redirs 3 -fsSL \
+            -o "$tarball" \
+            "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/${tarball}"
+          echo "${RCODESIGN_SHA256}  ${tarball}" | sha256sum --check --status
+          tar xzf "$tarball"
+          mkdir -p "${RUNNER_TEMP}/bin"
+          install -m 0755 \
+            "apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl/rcodesign" \
+            "${RUNNER_TEMP}/bin/rcodesign"
+          echo "${RUNNER_TEMP}/bin" >> "$GITHUB_PATH"
+          "${RUNNER_TEMP}/bin/rcodesign" --version
+
+      - name: Build all platforms
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: make build-all VERSION="$VERSION"
+      # Signing happens inside `make build-all`, so the hashes below are taken
+      # from the signed bytes. Never move this step above the build.
+      - name: Generate manifest
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: make manifest VERSION="$VERSION"
+      # The hash check used to run only on the macOS runner. This one covers
+      # every binary and also runs on Turntable, where verify-darwin does not:
+      # manifest.json must list exactly the binaries on disk, each with the
+      # sha256 of its final (post-signing) bytes. SHA256SUMS is written from the
+      # same hashes, then re-checked by coreutils as an independent hasher.
+      - name: Check manifest against the final bytes and write SHA256SUMS
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016  # ${...} are JS template literals, not shell
+          bun -e '
+            const dir = "apps/cli/build";
+            const version = process.env.VERSION;
+            const fail = (msg) => { console.log(`::error::${msg}`); process.exit(1); };
+            const manifest = await Bun.file(`${dir}/manifest.json`).json();
+            if (manifest.version !== version) fail(`manifest.json says ${manifest.version}, the tag says ${version}`);
+            // The lane publishes manifest.json unmodified and its signature
+            // covers these bytes, so the key id must already be the pinned
+            // current key: the CLI refuses a signed manifest without it.
+            const keys = await Bun.file("release-keys.json").json();
+            const pinnedId = keys.keys?.[0]?.slot === "current" ? keys.keys[0].id : "";
+            if (!/^[0-9a-f]{16}$/.test(pinnedId)) fail(`release-keys.json pins no current key id`);
+            if (manifest.signing_key_id !== pinnedId) fail(`manifest.json names signing key ${manifest.signing_key_id}, release-keys.json pins ${pinnedId}`);
+            const listed = Object.values(manifest.binaries ?? {});
+            const onDisk = [...new Bun.Glob(`squirrel-${version}-*`).scanSync(dir)].sort();
+            const names = listed.map((b) => b.filename).sort();
+            if (onDisk.length !== 7 || JSON.stringify(names) !== JSON.stringify(onDisk)) {
+              fail(`manifest.json lists [${names}], the build produced [${onDisk}]`);
+            }
+            const lines = [];
+            for (const b of listed.sort((a, c) => a.filename.localeCompare(c.filename))) {
+              const bytes = await Bun.file(`${dir}/${b.filename}`).arrayBuffer();
+              const sha = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+              if (sha !== b.sha256) fail(`manifest.json records ${b.sha256} for ${b.filename}, the file hashes to ${sha}`);
+              lines.push(`${sha}  ${b.filename}`);
+            }
+            await Bun.write(`${dir}/SHA256SUMS`, lines.join("\n") + "\n");
+          '
+          (cd apps/cli/build && sha256sum --check --strict SHA256SUMS)
+      # One artifact under a version-independent name, holding every file the
+      # release publishes: the seven binaries, manifest.json, SHA256SUMS,
+      # LICENSE and THIRD_PARTY_NOTICES.md. The .sig files are not in it: they
+      # are made from these bytes with the pinned release key, outside this run.
+      - name: Stage release assets
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          cp apps/cli/build/squirrel-"${VERSION}"-* apps/cli/build/manifest.json apps/cli/build/SHA256SUMS \
+            LICENSE THIRD_PARTY_NOTICES.md release-assets/
+          ls -l release-assets
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-binaries
+          path: release-assets/
+          if-no-files-found: error
+      # The npm package as a recorded tarball, for the release lane's npm
+      # target. The lane's npm target has one fixed dist-tag (default
+      # `latest`) and no prerelease logic: the operator sets `--tag beta`
+      # on the target while betas ship and switches it back to `latest`
+      # before a stable release. The target's `--artifact` matches the file
+      # name inside the run's zip, so it must name `squirrelscan-<version>.tgz`
+      # and be updated each release, or npm silently skips. The `version`
+      # job already checked every manifest; this re-checks the one npm reads.
+      - name: Check the npm package version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          stamped=$(jq -r .version npm/package.json)
+          if [ "$stamped" != "$VERSION" ]; then
+            echo "::error::npm/package.json says ${stamped}, the tag says ${VERSION}"
+            exit 1
+          fi
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.14.0"
+      - name: Pack the npm package
+        working-directory: npm
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm pack
+          test -f "squirrelscan-${VERSION}.tgz"
+          mkdir ../npm-package
+          mv "squirrelscan-${VERSION}.tgz" ../npm-package/
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: npm-package/
+          if-no-files-found: error
+
+  # The authoritative signature gate, and the only place in the pipeline where
+  # Apple's own verifier exists. It runs BEFORE the release gate, so a build
+  # whose darwin assets do not verify can no longer reach users (#2310). It
+  # also re-hashes the two assets against the manifest, which is what proves
+  # the manifest was generated from the signed bytes rather than the
+  # pre-signing ones.
+  # Turntable runs Linux sandboxes only (turntable-ci/turntable#492, #537), so
+  # macOS and Windows jobs carry `if: vars.TURNTABLE_CI != 'true'`. On GitHub
+  # they run as before.
+  verify-darwin:
+    name: Verify darwin signatures
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, build]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-binaries
+          path: release-assets
+      - name: Verify signatures and manifest hashes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in arm64 x64; do
+            file="release-assets/squirrel-${VERSION}-darwin-${arch}"
+            if [ ! -f "$file" ]; then
+              echo "::error::${file} is missing from the release artifact"
+              exit 1
+            fi
+            # upload-artifact drops the executable bit; restoring it does not
+            # touch the bytes, so the hash below is still the published one.
+            chmod +x "$file"
+            codesign -dv "$file" 2>&1 || true
+            if ! codesign --verify --strict "$file"; then
+              echo "::error::${file} is not validly signed. Nothing was published."
+              exit 1
+            fi
+            recorded=$(jq -r ".binaries[\"darwin-${arch}\"].sha256 // \"\"" release-assets/manifest.json)
+            actual=$(shasum -a 256 "$file" | cut -d' ' -f1)
+            if [ "$recorded" != "$actual" ]; then
+              echo "::error::manifest.json records ${recorded} for darwin-${arch}, the asset hashes to ${actual}. The manifest was generated before signing."
+              exit 1
+            fi
+            echo "darwin-${arch}: signature valid, manifest hash matches"
+          done
+          (cd release-assets && shasum -a 256 --check --strict SHA256SUMS)
+      # macos-latest runners are arm64, so the asset that was being SIGKILLed
+      # in the field is the one this executes.
+      - name: Run the signed arm64 binary
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          home=$(mktemp -d)
+          HOME="$home" "./release-assets/squirrel-${VERSION}-darwin-arm64" --version
+
+  # The LATE gate, in the signing environment. It runs after the build and,
+  # where it runs, after verify-darwin, so the approval covers the recorded
+  # artifacts. It holds no secret and only reports what is being approved.
+  # verify-darwin is skipped on Turntable, which would skip this job by default,
+  # hence the explicit condition; on GitHub a skipped verify-darwin still blocks.
+  release-gate:
+    name: Release gate
+    needs: [version, build, verify-darwin]
+    if: >-
+      ${{ !cancelled() && needs.version.result == 'success' && needs.build.result == 'success' &&
+      (needs.verify-darwin.result == 'success' ||
+      (vars.TURNTABLE_CI == 'true' && needs.verify-darwin.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release
+    permissions: {}
+    steps:
+      - name: Release gate
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          SHA: ${{ github.sha }}
+        run: echo "Release ${TAG} at ${SHA} approved for signing"
+
+  # In-run publishing. On Turntable the release lane publishes the GitHub
+  # release and npm from the control plane with its own credentials, and signs
+  # its own provenance, so these jobs never run there.
+  github-release:
+    name: Publish GitHub release
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, release-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-binaries
+          path: release-assets
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release-assets/*
+      - name: Resolve release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes=$(awk -v "v=$VERSION" -f scripts/extract-changelog.awk CHANGELOG.md)
+          if [ -z "${notes//[[:space:]]/}" ]; then
+            notes="squirrelscan v${VERSION}"
+          fi
+          printf '%s\n' "$notes" > release-notes.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flag=()
+          if [ "$PRERELEASE" = true ]; then flag+=(--prerelease); fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            "${flag[@]}" \
+            release-assets/squirrel-* \
+            release-assets/manifest.json \
+            release-assets/SHA256SUMS \
+            release-assets/LICENSE \
+            release-assets/THIRD_PARTY_NOTICES.md
+
+  npm:
+    name: Publish npm package
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.14.0"
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11.5.1
+      - name: Publish with provenance
+        working-directory: npm
+        run: npm publish --access public --provenance
+
+  installers-publish:
+    name: Publish installers and channel metadata
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      # wrangler >= 4.99 requires Node 22+; runners default to Node 20.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.x"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-binaries
+          path: release-assets
+
+      # install.squirrelscan.com serves the install scripts and the per-channel
+      # "latest release" metadata from R2, because resolving a version through
+      # api.github.com is capped at 60 req/hr per IP and users behind shared
+      # egress (corporate NAT, VPN, CI) get 403s. R2 is only correct while
+      # something keeps writing to it, and that is this job.
+      - name: Build per-channel manifests
+        env:
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          # The build job generates one manifest.json and it always carries
+          # channel="stable". The beta channel serves every release, so its copy
+          # has to be restamped: a channels/beta.json that says "stable" is how
+          # the two keys ended up byte-identical last time.
+          jq '.channel = "beta"' release-assets/manifest.json > channel-beta.json
+          if [ "$PRERELEASE" != "true" ]; then
+            jq '.channel = "stable"' release-assets/manifest.json > channel-stable.json
+          fi
+
+      - name: Publish installers and channel metadata to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+
+          put() {
+            npx --yes wrangler@4.99.0 r2 object put "squirrelscan-installers/$1" \
+              --file "$2" --content-type "$3" --remote
+          }
+
+          put install.sh install.sh "text/x-shellscript; charset=utf-8"
+          put install.ps1 install.ps1 "text/plain; charset=utf-8"
+
+          # Beta tracks every release; stable only non-prereleases. This mirrors
+          # the worker's GitHub fallback (beta accepts prereleases, stable does
+          # not) so the primary and fallback paths can never disagree about what
+          # a channel means.
+          put channels/beta.json channel-beta.json "application/json; charset=utf-8"
+          if [ "$PRERELEASE" != "true" ]; then
+            put channels/stable.json channel-stable.json "application/json; charset=utf-8"
+          fi
+
+      # Writing to a bucket proves nothing about the bucket the deployed worker
+      # reads: they are separate configs and can point at different accounts.
+      # Assert the pairing against the live endpoint instead of assuming it.
+      - name: Verify the live endpoint serves this release
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          verify() {
+            channel="$1"
+            got_version="" got_channel=""
+            # Responses are edge-cached for 300s, so a colo that answered before
+            # the upload can keep serving the previous object for a few minutes.
+            # Poll past that window rather than racing it.
+            for _ in $(seq 1 24); do
+              body=$(curl -fsS "https://install.squirrelscan.com/releases/${channel}" || true)
+              got_version=$(printf '%s' "$body" | jq -r '.version // ""' 2>/dev/null || true)
+              got_channel=$(printf '%s' "$body" | jq -r '.channel // ""' 2>/dev/null || true)
+              if [ "$got_version" = "$VERSION" ] && [ "$got_channel" = "$channel" ]; then
+                echo "/releases/${channel} -> ${got_version} (${got_channel})"
+                return 0
+              fi
+              sleep 20
+            done
+            echo "::error::/releases/${channel} reports version='${got_version}' channel='${got_channel}', expected version='${VERSION}' channel='${channel}'"
+            return 1
+          }
+
+          verify beta
+          if [ "$PRERELEASE" != "true" ]; then
+            verify stable
+          fi
+
+  hosted-release-refresh:
+    name: Refresh hosted release cache
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, github-release]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Notify private website
+        env:
+          RELEASE_WEBHOOK_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
+        run: |
+          test -n "$RELEASE_WEBHOOK_SECRET"
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${RELEASE_WEBHOOK_SECRET}" \
+            --header "Content-Type: application/json" \
+            https://squirrelscan.com/api/release-refresh
+
+  # Installs the published release on Linux, macOS and Windows. Turntable has
+  # no macOS or Windows runners (turntable-ci/turntable#492, #537), and on
+  # Turntable the release is published after the run ends, so this runs on
+  # GitHub only.
+  install-tests:
+    name: Verify installers
+    if: vars.TURNTABLE_CI != 'true'
+    needs: [version, github-release]
+    uses: ./.github/workflows/test-install.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
