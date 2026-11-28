@@ -1,0 +1,1 @@
+- The `x-squirrel-installer-version` header on `install.sh` and `install.ps1` from `install.squirrelscan.com` now names the release the served script was published from, instead of `unknown`. (#1871)
