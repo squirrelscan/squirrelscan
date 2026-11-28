@@ -424,17 +424,11 @@ async function fetchSingleScriptAsync(
  * host: a site whose linked manifests 404 is not a tarpit. Slow answers still
  * strike on their latency.
  */
-function scriptOutcome(
-  result: ScriptFetchResult,
-  anyContentType = false
-): FetchOutcome {
+function scriptOutcome(result: ScriptFetchResult): FetchOutcome {
   if (result.error === "timeout") return "timeout";
-  if (
-    anyContentType &&
-    result.status !== null &&
-    result.error?.startsWith("HTTP ")
-  )
-    return "ok";
+  // #2340: an HTTP status answer is a responding host whatever the caller's
+  // content-type policy; only its latency can strike.
+  if (result.status !== null && result.error?.startsWith("HTTP ")) return "ok";
   if (result.error != null) return "error";
   return "ok";
 }
@@ -556,9 +550,7 @@ function fetchSingleScript(
     // A refusal is an answer for the budget: only its latency strikes (see the
     // resource checker).
     const outcome =
-      result.error === ASSET_FETCH_REFUSED_ERROR
-        ? "ok"
-        : scriptOutcome(result, options.anyContentType === true);
+      result.error === ASSET_FETCH_REFUSED_ERROR ? "ok" : scriptOutcome(result);
     const elapsed = Date.now() - startedAt;
     options.budget?.record(url, elapsed, outcome);
     // A hit replays the body with its content type, content-encoding, caching

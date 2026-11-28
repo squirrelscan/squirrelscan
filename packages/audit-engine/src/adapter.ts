@@ -965,22 +965,18 @@ export function fetchAssetsFromOccurrences(
 
     const maxResources = overrides?.resourceCheckMaxItems;
 
-    // #1252: cloud passes resourceCheckBudgetMs → a shared tarpit-aware budget
-    // bounds CSS + images + scripts + PDFs + sitemap fetches together. Once the
-    // budget is spent or a host escalates its latency (activera.com.au), the
-    // REMAINING fetches skip fast instead of re-hitting a tarpit for minutes.
-    // Unset (the CLI) → undefined → fetch as today. One budget for both
-    // fetchers so a slow origin is detected across resource types, not
-    // per-category.
+    // #1252: one shared tarpit-aware budget covers CSS + images + scripts +
+    // PDFs + sitemap fetches, so a host that escalates its latency
+    // (activera.com.au) has its REMAINING fetches skipped fast instead of
+    // being re-hit for minutes. #2340: it is always built, so a plain CLI
+    // audit is protected too; `resourceCheckBudgetMs` (cloud, or the CLI's
+    // --max-duration) only adds the wall-clock bound on top.
     const budgetMs = overrides?.resourceCheckBudgetMs;
-    const fetchBudget: FetchBudget | undefined =
-      budgetMs && budgetMs > 0
-        ? createFetchBudget({
-            totalBudgetMs: budgetMs,
-            tarpitLatencyMs: CLOUD_RESOURCE_CHECK.tarpitLatencyMs,
-            tarpitStrikes: CLOUD_RESOURCE_CHECK.tarpitStrikes,
-          })
-        : undefined;
+    const fetchBudget: FetchBudget = createFetchBudget({
+      ...(budgetMs && budgetMs > 0 ? { totalBudgetMs: budgetMs } : {}),
+      tarpitLatencyMs: CLOUD_RESOURCE_CHECK.tarpitLatencyMs,
+      tarpitStrikes: CLOUD_RESOURCE_CHECK.tarpitStrikes,
+    });
 
     // repo#2764: the site's own assets may not reach a link-local or cloud
     // metadata address. An open redirect on the site

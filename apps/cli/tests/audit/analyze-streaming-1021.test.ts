@@ -57,7 +57,9 @@ function html(i: number, filler: number): string {
     i % 4 === 0 ? "" : `<meta name="description" content="Description ${i}">`;
   const h1 = i % 5 === 0 ? "" : `<h1>Heading ${i}</h1>`;
   const body = `<p>${"Lorem ipsum dolor sit amet. ".repeat(filler)}</p>`;
-  const next = `<a href="/p/${(i + 1) % 1000}">next</a><a href="/missing-${i}">gone</a>`;
+  // No link to an uncrawled path: the host does not resolve, so probing it errors, and
+  // enough errors trip the tarpit budget (#2340), a timing-dependent note in one run only.
+  const next = `<a href="/p/${(i + 1) % 1000}">next</a>`;
   return `<!doctype html><html lang="en"><head>${title}${desc}</head><body>${h1}${body}${next}</body></html>`;
 }
 
