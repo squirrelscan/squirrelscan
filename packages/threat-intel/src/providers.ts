@@ -38,32 +38,62 @@ function vtUrlId(url: string): string {
 
 // ── feed providers (daily-pull blocklists) ──────────────────────────
 
-/** abuse.ch URLhaus — recent malicious URL feed (JSON). */
+/** Splits one CSV line, honouring double-quoted fields and `""` escapes. */
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === '"') quoted = false;
+      else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/**
+ * abuse.ch URLhaus: recent malicious URL export (CSV). The legacy keyless JSON
+ * export was retired, so the key goes in the path. Without a key there is
+ * nothing to pull: throw so the provider is skipped, not counted as consulted.
+ */
 export const urlhausFeed: FeedProvider = {
   id: "urlhaus",
   async fetchFeed(transport, config): Promise<FeedEntry[]> {
+    if (!config.apiKey) throw new Error("urlhaus: an abuse.ch key is required");
     const res = await transport(
-      "https://urlhaus.abuse.ch/downloads/json_recent/",
-      {
-        headers: authKeyHeaders(config),
-      }
+      `https://urlhaus-api.abuse.ch/v2/files/exports/${encodeURIComponent(config.apiKey)}/recent.csv`
     );
-    if (!res.ok) return [];
-    const body = asRecord(await res.json().catch(() => ({})));
+    if (!res.ok) throw new Error(`urlhaus: feed returned HTTP ${res.status}`);
+    const text = await res.text();
+    // Columns: id, dateadded, url, url_status, last_online, threat, tags,
+    // urlhaus_link, reporter. The header is a `#` comment line.
+    if (!text.includes("url_status")) {
+      throw new Error("urlhaus: unexpected feed format");
+    }
     const out: FeedEntry[] = [];
-    for (const group of Object.values(body)) {
-      for (const row of asArray(group)) {
-        const rec = asRecord(row);
-        const url = str(rec.url);
-        if (!url) continue;
-        if (rec.url_status === "offline") continue; // only currently-live threats
-        out.push({
-          value: url,
-          kind: "url",
-          threat: str(rec.threat) ?? "malware_download",
-          reference: str(rec.urlhaus_reference),
-        });
-      }
+    for (const line of text.split("\n")) {
+      const l = line.trim();
+      if (!l || l.startsWith("#")) continue;
+      const f = splitCsvLine(l);
+      const url = f[2];
+      if (!url?.startsWith("http")) continue;
+      if (f[3] === "offline") continue; // only currently-live threats
+      out.push({
+        value: url,
+        kind: "url",
+        threat: f[5] || "malware_download",
+        reference: f[7] || undefined,
+      });
     }
     return out;
   },
@@ -81,8 +111,11 @@ export const threatfoxFeed: FeedProvider = {
       },
       body: JSON.stringify({ query: "get_iocs", days: 1 }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error(`threatfox: feed returned HTTP ${res.status}`);
     const body = asRecord(await res.json().catch(() => ({})));
+    if (!Array.isArray(body.data)) {
+      throw new Error("threatfox: unexpected response format");
+    }
     const out: FeedEntry[] = [];
     for (const row of asArray(body.data)) {
       const rec = asRecord(row);
@@ -108,8 +141,10 @@ export const openphishFeed: FeedProvider = {
   id: "openphish",
   async fetchFeed(transport): Promise<FeedEntry[]> {
     const res = await transport("https://openphish.com/feed.txt");
-    if (!res.ok) return [];
-    const text = await res.text().catch(() => "");
+    if (!res.ok) throw new Error(`openphish: feed returned HTTP ${res.status}`);
+    const text = await res.text();
+    if (!text.includes("http"))
+      throw new Error("openphish: unexpected feed format");
     return text
       .split("\n")
       .map((l) => l.trim())
@@ -122,15 +157,19 @@ export const openphishFeed: FeedProvider = {
 export const phishtankFeed: FeedProvider = {
   id: "phishtank",
   async fetchFeed(transport, config): Promise<FeedEntry[]> {
+    // The keyless dump is gone (it redirects to a 404), so a key is required.
     const key = config.apiKey;
-    const url = key
-      ? `https://data.phishtank.com/data/${key}/online-valid.json`
-      : "https://data.phishtank.com/data/online-valid.json";
-    const res = await transport(url, {
-      headers: { "user-agent": "phishtank/squirrelscan" },
-    });
-    if (!res.ok) return [];
-    const rows = asArray(await res.json().catch(() => []));
+    if (!key) throw new Error("phishtank: an application key is required");
+    const res = await transport(
+      `https://data.phishtank.com/data/${encodeURIComponent(key)}/online-valid.json`,
+      { headers: { "user-agent": "phishtank/squirrelscan" } }
+    );
+    if (!res.ok) throw new Error(`phishtank: feed returned HTTP ${res.status}`);
+    const parsed: unknown = await res.json();
+    if (!Array.isArray(parsed)) {
+      throw new Error("phishtank: unexpected response format");
+    }
+    const rows = parsed;
     const out: FeedEntry[] = [];
     for (const row of rows) {
       const rec = asRecord(row);
