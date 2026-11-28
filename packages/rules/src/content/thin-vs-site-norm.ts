@@ -351,6 +351,16 @@ export const thinVsSiteNormRule: Rule = {
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the content category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "thin-vs-site-norm", outcome: "problem" },
+      {
+        name: "thin-vs-site-norm",
+        outcome: "clean",
+        clears: ["thin-vs-site-norm"],
+      },
+      { name: "thin-vs-site-norm", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

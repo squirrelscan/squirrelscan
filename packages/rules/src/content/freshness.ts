@@ -15,6 +15,14 @@ export const freshnessRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "freshness", outcome: "problem" },
+      { name: "http-last-modified", outcome: "clean", clears: ["freshness"] },
+      { name: "schema-dates", outcome: "clean", clears: ["freshness"] },
+      { name: "time-elements", outcome: "clean", clears: ["freshness"] },
+      { name: "og-article-dates", outcome: "clean", clears: ["freshness"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

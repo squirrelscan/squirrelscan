@@ -663,6 +663,16 @@ export const titlePatternOutlierRule: Rule = {
     // Deliberately light: one site-wide check, capped items, so a single rule
     // cannot dominate the content category score.
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "title-pattern-outlier", outcome: "problem" },
+      {
+        name: "title-pattern-outlier",
+        outcome: "clean",
+        clears: ["title-pattern-outlier"],
+      },
+      { name: "title-pattern-outlier", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

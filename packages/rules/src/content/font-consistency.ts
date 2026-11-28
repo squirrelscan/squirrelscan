@@ -429,6 +429,18 @@ export const fontConsistencyRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "font-sprawl", outcome: "problem" },
+      { name: "rogue-font-family", outcome: "problem" },
+      { name: "unreferenced-font-face", outcome: "problem" },
+      {
+        name: "font-consistency",
+        outcome: "clean",
+        clears: ["font-sprawl", "rogue-font-family", "unreferenced-font-face"],
+      },
+      { name: "font-consistency", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

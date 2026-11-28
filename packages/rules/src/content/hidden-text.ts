@@ -1263,6 +1263,12 @@ export const hiddenTextRule: Rule = {
     // LINKS are involved, which is the stronger spam signal.
     severity: "warning",
     weight: 6,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "hidden-text", outcome: "problem" },
+      { name: "hidden-text", outcome: "clean", clears: ["hidden-text"] },
+      { name: "hidden-text", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

@@ -144,6 +144,16 @@ export const mojibakeRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "encoding-corruption", outcome: "problem" },
+      {
+        name: "encoding-corruption",
+        outcome: "clean",
+        clears: ["encoding-corruption"],
+      },
+      { name: "encoding-corruption", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

@@ -39,6 +39,12 @@ export const wordCountRule: Rule = {
     skipOnPageType: ["contact", "legal"],
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "word-count", outcome: "problem" },
+      { name: "word-count", outcome: "clean", clears: ["word-count"] },
+      { name: "word-count", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

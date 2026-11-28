@@ -528,6 +528,16 @@ export const terminologyConsistencyRule: Rule = {
     findingScope: "page",
     severity: "warning",
     weight: 2,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "terminology-consistency", outcome: "problem" },
+      {
+        name: "terminology-consistency",
+        outcome: "clean",
+        clears: ["terminology-consistency"],
+      },
+      { name: "terminology-consistency", outcome: "skipped" },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult | Promise<RuleResult> {

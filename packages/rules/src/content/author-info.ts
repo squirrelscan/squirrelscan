@@ -15,6 +15,22 @@ export const authorInfoRule: Rule = {
     verdictScope: "page",
     severity: "info",
     weight: 3,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "visible-author", outcome: "problem" },
+      { name: "author-info", outcome: "problem" },
+      {
+        name: "author-schema",
+        outcome: "clean",
+        clears: ["visible-author", "author-info"],
+      },
+      {
+        name: "author-links",
+        outcome: "clean",
+        clears: ["visible-author", "author-info"],
+      },
+      { name: "og-author", outcome: "clean", clears: ["author-info"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

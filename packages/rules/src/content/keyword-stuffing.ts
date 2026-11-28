@@ -631,6 +631,17 @@ export const keywordStuffingRule: Rule = {
     skipOnPageType: ["legal"],
     severity: "warning",
     weight: 5,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "keyword-stuffing", outcome: "problem" },
+      { name: "keyword-stuffing-footer", outcome: "problem" },
+      {
+        name: "keyword-stuffing",
+        outcome: "clean",
+        clears: ["keyword-stuffing"],
+      },
+      { name: "keyword-stuffing", outcome: "skipped" },
+    ],
     optionsSchema,
   },
 

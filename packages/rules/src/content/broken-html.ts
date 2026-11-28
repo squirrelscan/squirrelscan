@@ -16,6 +16,11 @@ export const brokenHtmlRule: Rule = {
     verdictScope: "page",
     severity: "warning",
     weight: 4,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "broken-html", outcome: "problem" },
+      { name: "broken-html", outcome: "clean", clears: ["broken-html"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {

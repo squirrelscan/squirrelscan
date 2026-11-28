@@ -15,6 +15,11 @@ export const metaInBodyRule: Rule = {
     verdictScope: "page",
     severity: "error",
     weight: 8,
+    // Check names by outcome class (#1741, #2346).
+    checks: [
+      { name: "meta-in-body", outcome: "problem" },
+      { name: "meta-in-body", outcome: "clean", clears: ["meta-in-body"] },
+    ],
   },
 
   run(ctx: RuleContext): RuleResult {
