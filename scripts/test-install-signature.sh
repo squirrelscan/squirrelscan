@@ -380,6 +380,28 @@ check eval 'grep -q "add --no-cache.*openssl" "$WORK/apk.log"'
 check eval '! gh_verify_ran'
 CASE_PATH=""
 
+# Non-root with passwordless sudo (the Alpine canary user, #2279): openssl is
+# added with `sudo -n apk`. The sudo shim runs its arguments and records them;
+# without it (next case) the install fails with the exact fix, never a prompt.
+SHIMS_MUSL3="$WORK/shims-musl3"
+mkdir -p "$SHIMS_MUSL3"
+cp "$SHIMS_MUSL/curl" "$SHIMS_MUSL/apk" "$SHIMS_MUSL3/"
+sed -i "s#$SHIMS_MUSL/openssl#$SHIMS_MUSL3/openssl#; s#apk.log#apk3.log#" "$SHIMS_MUSL3/apk"
+printf '#!/bin/sh\necho 1000\n' > "$SHIMS_MUSL3/id"
+cat > "$SHIMS_MUSL3/sudo" <<SUDOEOF
+#!/bin/sh
+echo "sudo \$*" >> "$WORK/sudo3.log"
+[ "\$1" = "-n" ] && shift
+exec "\$@"
+SUDOEOF
+chmod 755 "$SHIMS_MUSL3/id" "$SHIMS_MUSL3/sudo"
+rm -f "$WORK/apk3.log" "$WORK/sudo3.log"
+CASE_PATH="$SHIMS_MUSL3:$WORK/farm-nogh-nossl"
+run_case "era: Alpine/musl, non-root with passwordless sudo: sudo -n apk adds openssl, install succeeds" \
+  "$WORK/install-era-musl.sh" "$R/good" pass "Release signature verified: signed by squirrelscan release key $PINNED_ID"
+check eval 'grep -q "^sudo -n apk add --no-cache.*openssl" "$WORK/sudo3.log"'
+CASE_PATH=""
+
 # apk add is atomic: with BOTH libstdc++ and openssl missing and openssl
 # unavailable from the mirror, the combined add fails; libstdc++ alone must be
 # retried, openssl reported as a warning, and the install must go on.

@@ -1355,14 +1355,25 @@ ensure_musl_runtime() {
     return 0
   fi
 
-  if command -v apk >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+  # Root runs apk directly; a non-root user with passwordless sudo (the usual
+  # Alpine container user, #2279) gets `sudo -n apk`, which never prompts.
+  local apk_cmd=""
+  if command -v apk >/dev/null 2>&1; then
+    if [ "$(id -u)" = "0" ]; then
+      apk_cmd="apk"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+      apk_cmd="sudo -n apk"
+    fi
+  fi
+
+  if [ -n "$apk_cmd" ]; then
     local pkgs=""
     [ "$have_libstdcxx" = true ] || pkgs="libstdc++"
     [ "$need_openssl" = false ] || pkgs="$pkgs openssl"
     pkgs="${pkgs# }"
     log "Installing required runtime packages ($pkgs)..."
     # shellcheck disable=SC2086 # $pkgs is a space-separated package list
-    if apk add --no-cache $pkgs >/dev/null 2>&1; then
+    if $apk_cmd add --no-cache $pkgs >/dev/null 2>&1; then
       info "Installed $pkgs"
       return 0
     fi
@@ -1373,7 +1384,7 @@ ensure_musl_runtime() {
     fi
     # apk add is atomic: a failing openssl also kept libstdc++ out. Retry the
     # required package alone so a mirror without openssl does not fail the install.
-    if [ "$need_openssl" = true ] && apk add --no-cache libstdc++ >/dev/null 2>&1; then
+    if [ "$need_openssl" = true ] && $apk_cmd add --no-cache libstdc++ >/dev/null 2>&1; then
       info "Installed libstdc++"
       warn "Auto-install of openssl failed"
       return 0

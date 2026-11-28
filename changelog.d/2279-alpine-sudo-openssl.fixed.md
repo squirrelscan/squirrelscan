@@ -1,0 +1,1 @@
+- The installer on Alpine/musl now adds `openssl` (and `libstdc++`) with `sudo -n apk` when run as a non-root user with passwordless sudo, so signed releases install without a manual step. (#2279)
