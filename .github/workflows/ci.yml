@@ -39,34 +39,62 @@ jobs:
   # Format, lint, and typecheck, CLI tests and Dependency audit run on every
   # code change: CLI tests is the only job that runs every test file, and bun
   # audit's answer moves with the advisory database, not only with bun.lock.
+  # Inside the first two, the work narrows to what the diff affects (below).
   #
-  # Fail open, twice. This job writes every output `true` when the base is
-  # unknown or unreachable, the diff is empty, or the classifier fails or
-  # prints anything unexpected. And every gate also runs when this job did not
-  # succeed: a job that dies after writing `false` (a failed post-checkout
-  # step, say) keeps its outputs, and its outputs are empty if it never ran.
+  # scripts/ci-affected.ts (#2180) narrows the code jobs further, to the
+  # workspaces and test suites the diff can reach through the workspace
+  # dependency graph:
+  #
+  #   full        true: every workspace and every suite
+  #   workspaces  affected workspace names: format, lint and typecheck run
+  #               only in these, in parallel
+  #   suites      the scripts/test-suites.ts suites the CLI tests matrix runs;
+  #               every other matrix leg skips its steps and reports success
+  #
+  # A push to main always runs everything: it is the backstop for a selection
+  # miss on the pull request.
+  #
+  # Fail open, twice. This job writes every output `true` (and `full=true`)
+  # when the event is a push, the base is unknown or unreachable, the diff is
+  # empty, or either script fails or prints anything unexpected. And every gate
+  # also runs when this job did not succeed: a job that dies after writing
+  # `false` (a failed post-checkout step, say) keeps its outputs, and its
+  # outputs are empty if it never ran.
   changes:
     name: Classify changed files
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     outputs:
       code: ${{ steps.classify.outputs.code }}
       engine: ${{ steps.classify.outputs.engine }}
       installer: ${{ steps.classify.outputs.installer }}
       release: ${{ steps.classify.outputs.release }}
       build: ${{ steps.classify.outputs.build }}
+      full: ${{ steps.classify.outputs.full }}
+      workspaces: ${{ steps.classify.outputs.workspaces }}
+      suites: ${{ steps.classify.outputs.suites }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Bun only, no install: scripts/ci-affected.ts reads package.json files
+      # and imports nothing outside node: and bun builtins.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
       - id: classify
         env:
+          EVENT: ${{ github.event_name }}
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.before }}
         run: |
           set -u
           run_everything() {
             echo "$1: running every job"
-            printf '%s=true\n' code engine installer release build >> "$GITHUB_OUTPUT"
+            printf '%s=true\n' code engine installer release build full >> "$GITHUB_OUTPUT"
+            printf '%s=\n' workspaces suites >> "$GITHUB_OUTPUT"
             exit 0
           }
+          if [ "$EVENT" = push ]; then
+            run_everything "push to main"
+          fi
           # Unknown base (first push, force-push, empty sha) → run everything.
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             run_everything "no base commit"
@@ -79,7 +107,11 @@ jobs:
           result=$(printf '%s\n' "$changed" | bash scripts/ci-classify.sh) || run_everything "classifier failed"
           shape=$'^code=(true|false)\nengine=(true|false)\ninstaller=(true|false)\nrelease=(true|false)\nbuild=(true|false)$'
           [[ "$result" =~ $shape ]] || run_everything "unexpected classifier output"
+          affected=$(printf '%s\n' "$changed" | bun run scripts/ci-affected.ts) || run_everything "ci-affected failed"
+          shape=$'^full=(true|false)\nworkspaces=[@a-z0-9/._ -]*\nsuites=[a-z0-9 -]*$'
+          [[ "$affected" =~ $shape ]] || run_everything "unexpected ci-affected output"
           echo "$result" | tee -a "$GITHUB_OUTPUT"
+          echo "$affected" | tee -a "$GITHUB_OUTPUT"
 
   changelog-guard:
     name: Changelog guard
@@ -116,12 +148,30 @@ jobs:
         run: bun run scripts/test-suites.ts --check
       - name: Check the CI path classifier
         run: bash scripts/test-ci-classify.sh
+      - name: Check the CI workspace and suite selection
+        run: bun test ./scripts/ci-affected.test.ts
+      # Repository-wide guards from the `rest` suite: they read every tracked
+      # file, so a diff confined to one workspace can break them while the
+      # selection skips `rest`. About a second, so they run on every code change.
+      - name: Repository-wide file guards
+        run: bun test ./scripts/no-nul-bytes.test.ts ./scripts/no-stray-backups.test.ts
+      # Only in the workspaces the diff affects (every one when `full` is not
+      # `false`), in parallel: scripts/ci-run-workspaces.sh.
       - name: Check formatting
-        run: bun run format:check
+        env:
+          FULL: ${{ needs.changes.result == 'success' && needs.changes.outputs.full || 'true' }}
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bash scripts/ci-run-workspaces.sh format:check
       - name: Lint
-        run: bun run lint
-      - name: Typecheck all workspaces
-        run: bun run typecheck
+        env:
+          FULL: ${{ needs.changes.result == 'success' && needs.changes.outputs.full || 'true' }}
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bash scripts/ci-run-workspaces.sh lint
+      - name: Typecheck affected workspaces
+        env:
+          FULL: ${{ needs.changes.result == 'success' && needs.changes.outputs.full || 'true' }}
+          WORKSPACES: ${{ needs.changes.outputs.workspaces }}
+        run: bash scripts/ci-run-workspaces.sh typecheck
       - name: Check third-party notices
         run: bun run notices:check
       # Claude Code reads .claude-plugin/marketplace.json from the default
@@ -135,107 +185,96 @@ jobs:
         run: bun run scripts/sync-install-header.ts --check
 
   # ---------------------------------------------------------------------------
-  # Which test suites run where (#1670):
+  # Which test suites run where (#1670, #2180):
   #
-  #   CLI tests (this job)  every test file in the repo, one step per suite.
-  #                         This job was a single bare `bun test`, which walks the
-  #                         WHOLE tree — packages/* already gated every PR, just
-  #                         invisibly, under a job named for apps/cli. The steps
-  #                         below run exactly that set; a red step now names the
-  #                         package. `rest` is the complement of the named suites,
-  #                         so a new package is covered the day it lands.
+  #   CLI tests (<suite>)   one matrix leg per scripts/test-suites.ts suite, all
+  #                         in parallel. Together they cover every test file in
+  #                         the repo; `rest` is the complement of the named
+  #                         suites, so a new package is covered the day it lands.
+  #                         A leg whose suite the diff cannot affect (the
+  #                         `changes` job's `suites` output) skips its steps and
+  #                         reports success; every leg runs on a push to main,
+  #                         and whenever `changes` did not succeed or set
+  #                         `full`.
   #   Audit engine golden   packages/audit-engine golden/streaming/redirect/deadline
-  #                         files, again, on their own — a corpus regression is
+  #                         files, again, on their own: a corpus regression is
   #                         unreadable inside a 400-file log.
   #   Release tooling       scripts/release-version.test.ts, again, next to the
   #                         changelog shell test.
   #   release.yml           still one bare whole-tree `bun test` before a release.
   #
-  # The last three deliberately re-run files the steps below already cover.
+  # The last three deliberately re-run files the matrix already covers.
   #
   # "Every test file" means what bun discovers: *.test.* / *.spec.* / *_test.* /
   # *_spec.* with a js/ts extension, any case, outside dot-directories.
   # scripts/test-suites.ts owns that definition and the split; the quality job's
-  # --check step fails if the two ever disagree.
+  # --check step fails if a test file belongs to no suite, or if the matrix list
+  # below stops naming every suite exactly once.
   #
   # Do NOT swap these for `bun run test`: that script is `cd apps/cli && bun test`
-  # and would drop every package. The job name is fixed by the "CLI tests"
-  # required status check in the repo ruleset; renaming it means updating the
-  # ruleset in the same change or every PR blocks on a check that never reports.
+  # and would drop every package. "CLI tests" is a required status check in the
+  # repo ruleset, so it stays a small aggregate job with that name and job id
+  # (`build` needs it): it passes only when the matrix job passed.
   #
-  # Wall time, measured on main run 41308096807 (job total 23m, cap 25m; #1518):
-  #   apps/cli 603s · audit-engine 372s · rules 143s · rest 125s · crawler 121s
-  #   report 2s, plus about 20s of checkout and setup per job
-  # One job ran them back to back and sat 2 minutes under the cap (a PR run hit
-  # 24m54s; five runs were cancelled at the cap and showed as failed checks). The
-  # suites now run as two parallel jobs of about 12 and 11 minutes, grouped so
-  # each is balanced, and "CLI tests" is a small aggregate job that needs both and
-  # fails unless both passed. The required status check keeps its name and its
-  # job id (`build` needs it), so the ruleset needs no edit. Every suite still
-  # runs once: `scripts/test-suites.ts --check` in the quality job fails if a
-  # test file belongs to no suite or ci.yml has no `--run` step for a suite, in
-  # whichever job the step sits.
+  # Wall time per suite, measured on main run 44638698886 (a full run):
+  #   apps/cli 564s · audit-engine 545s · rules 411s · rest 141s · crawler 108s
+  #   report 2s, plus about 20s of checkout and setup per leg
+  # Back to back in two jobs the slower took 18.6 minutes; in parallel the run
+  # waits only for apps/cli.
   # ---------------------------------------------------------------------------
-  cli-tests-app:
-    name: CLI tests (apps/cli and crawler)
-    needs: quality
+  cli-tests-suite:
+    name: CLI tests (${{ matrix.suite }})
+    needs: [changes, quality]
     if: ${{ !cancelled() && needs.quality.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      # Every suite reports, the way one bare `bun test` reported every failure.
+      fail-fast: false
+      matrix:
+        suite: [report, crawler, rest, rules, audit-engine, cli]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: setup
+      # Fail open: anything but a successful `changes` job with `full=false`
+      # and a non-empty suite list that leaves this suite out runs it.
+      - id: gate
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          FULL: ${{ needs.changes.outputs.full }}
+          SUITES: ${{ needs.changes.outputs.suites }}
+          SUITE: ${{ matrix.suite }}
+        run: |
+          set -u
+          if [ "$CHANGES" = success ] && [ "$FULL" = false ] && [ -n "${SUITES// /}" ] &&
+            [[ " $SUITES " != *" $SUITE "* ]]; then
+            echo "The diff cannot affect the $SUITE suite (affected suites: ${SUITES:-none}); skipping"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: ${{ steps.gate.outputs.run == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: ${{ steps.gate.outputs.run == 'true' }}
         uses: ./.github/actions/setup-bun
-      # Every suite runs even when an earlier one is red, the way the single bare
-      # `bun test` reported every failure at once; each still fails the job. The
-      # setup guard keeps a broken toolchain to one red step instead of several.
-      - name: Report tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run report
-      - name: apps/cli tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run cli
-      - name: Crawler tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run crawler
-
-  cli-tests-packages:
-    name: CLI tests (rules, engine and the rest)
-    needs: quality
-    if: ${{ !cancelled() && needs.quality.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: setup
-        uses: ./.github/actions/setup-bun
-      - name: Rules tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run rules
-      - name: Remaining package and script tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run rest
-      - name: Audit engine tests
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        run: bun run scripts/test-suites.ts --run audit-engine
+      - name: Run the suite
+        if: ${{ steps.gate.outputs.run == 'true' }}
+        run: bun run scripts/test-suites.ts --run ${{ matrix.suite }}
 
   # The required status check. Skipped exactly when the old single job was (quality
-  # not green); otherwise it passes only when both test jobs passed, so a cancelled
-  # or skipped half is a red check, never a green one.
+  # not green); otherwise it passes only when every matrix leg passed (a skipped
+  # leg passes), so a cancelled or failed leg is a red check, never a green one.
   cli-tests:
     name: CLI tests
-    needs: [quality, cli-tests-app, cli-tests-packages]
+    needs: [quality, cli-tests-suite]
     if: ${{ !cancelled() && needs.quality.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Both test jobs passed
+      - name: Every suite passed
         env:
-          APP: ${{ needs.cli-tests-app.result }}
-          PACKAGES: ${{ needs.cli-tests-packages.result }}
+          SUITES: ${{ needs.cli-tests-suite.result }}
         run: |
-          echo "apps/cli and crawler: $APP; rules, engine and the rest: $PACKAGES"
-          [ "$APP" = success ] && [ "$PACKAGES" = success ]
+          echo "test suites: $SUITES"
+          [ "$SUITES" = success ]
 
   installer-scripts:
     name: Installer script syntax

@@ -7,6 +7,7 @@ import {
   checkCoverage,
   planSuites,
   selectedBy,
+  suiteForRoot,
   suiteNames,
   suiteRoot,
   suitesRunBy,
@@ -108,6 +109,37 @@ describe("suitesRunBy", () => {
   test("ignores a commented-out step, which runs nothing", () => {
     const yaml = `${workflowRunning(["cli"])}      # - run: bun run scripts/test-suites.ts --run rest\n`;
     expect(suitesRunBy(yaml)).toEqual(["cli"]);
+  });
+});
+
+describe("suitesRunBy with a matrix (#2180)", () => {
+  const matrixJob = (list: string) =>
+    `    strategy:\n      matrix:\n        suite: [${list}]\n    steps:\n` +
+    "      - run: bun run scripts/test-suites.ts --run ${{ matrix.suite }}\n";
+
+  test("reads the suite names from the matrix list a `--run ${{ matrix.suite }}` step runs", () => {
+    expect(suitesRunBy(matrixJob("report, cli, 'rest'"))).toEqual(["report", "cli", "rest"]);
+  });
+
+  test("a matrix list no step runs is not coverage", () => {
+    expect(suitesRunBy("        suite: [cli, rest]\n")).toEqual([]);
+  });
+
+  test("a matrix that drops a suite fails the coverage check", () => {
+    const dropped = suiteNames().filter((n) => n !== "rules");
+    expect(checkCoverage(files, matrixJob(dropped.join(", ")))).toContain(
+      'ci.yml never runs suite "rules"',
+    );
+    expect(checkCoverage(files, matrixJob(suiteNames().join(", ")))).toEqual([]);
+  });
+});
+
+describe("suiteForRoot", () => {
+  test("a named suite's root maps to it, any other workspace to rest", () => {
+    expect(suiteForRoot("packages/rules")).toBe("rules");
+    expect(suiteForRoot("apps/cli")).toBe("cli");
+    expect(suiteForRoot("packages/fetchers")).toBe("rest");
+    expect(suiteForRoot("packages/report-v2")).toBe("rest");
   });
 });
 
