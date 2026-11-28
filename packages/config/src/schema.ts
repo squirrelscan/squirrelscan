@@ -401,6 +401,22 @@ export const StorageConfigSchema = z.object({
   store_scripts_max_scripts: z.number().int().min(1).max(500).optional(),
 });
 
+/** `[render]`: where pages are rendered when it is not the squirrelscan cloud (#2306). */
+export const RenderConfigSchema = z.object({
+  /**
+   * Chrome DevTools Protocol endpoint of a browser you run (`ws://host:port/...` or
+   * `http://host:port`). When set, pages render in that browser, signed out, with no credits and
+   * nothing sent to the squirrelscan cloud. `--render-cdp` overrides it for one run.
+   */
+  cdp_url: z
+    .string()
+    .url()
+    .refine((u) => /^(wss?|https?):\/\//i.test(u), {
+      message: "must be a ws://, wss://, http:// or https:// URL",
+    })
+    .optional(),
+});
+
 export const CloudConfigSchema = z.object({
   /** Master switch — no-op when not logged in. */
   enabled: z.boolean().default(true),
@@ -611,6 +627,8 @@ export const ConfigSchema = z.object({
   // Local disk retention (#1912) — how many audits a project keeps.
   storage: StorageConfigSchema.default(defaultStorage),
   cloud: CloudConfigSchema.default(defaultCloud),
+  // Optional like `classifier`: absent reads as no local browser, and a Config built by hand needs no change.
+  render: RenderConfigSchema.optional(),
   // Threat-intel feature (#117) — opt-in, default disabled.
   intel: IntelConfigSchema.default(defaultIntel),
   // Site-integrity feature (#115) — holds the opt-in cloaking probe (#118).

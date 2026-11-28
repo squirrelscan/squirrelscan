@@ -66,6 +66,7 @@ const auditBashFlags = [
   "-y",
   "--render",
   "--render-mode",
+  "--render-cdp",
   "--http",
   "--offline",
   "--external-links",
@@ -828,6 +829,7 @@ _squirrel() {
             '(-y --yes)'{-y,--yes}'[Skip confirmation prompts]' \\
             '--render[Force cloud rendering; your machine still fetches the site]' \\
             '--render-mode[Render strategy; your machine still fetches the site]:mode:(off auto all)' \\
+            '--render-cdp[Render pages in a Chrome you run, over the DevTools Protocol]:endpoint:' \\
             '--http[Force plain HTTP fetch for this run]' \\
             '--offline[Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)]' \\
             '--external-links[Check links to other sites this run, at any level]' \\
@@ -1174,6 +1176,7 @@ complete -c squirrel -n "__fish_seen_subcommand_from audit" -l no-follow-redirec
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -s y -l yes -d "Skip confirmation prompts (cloud credit spend)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render -d "Force cloud rendering; your machine still fetches the site"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-mode -a "off auto all" -d "Render strategy; your machine still fetches the site"
+complete -c squirrel -n "__fish_seen_subcommand_from audit" -l render-cdp -r -d "Render pages in a Chrome you run, over the DevTools Protocol"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l http -d "Force plain HTTP fetch for this run"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l offline -d "Run offline: no cloud, publishing, telemetry, or requests to other sites (does not imply --passive)"
 complete -c squirrel -n "__fish_seen_subcommand_from audit" -l external-links -d "Check links to other sites this run, at any level"
