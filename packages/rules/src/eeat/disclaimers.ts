@@ -4,6 +4,8 @@ import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const disclaimersRule: Rule = {
   meta: {
     id: "eeat/disclaimers",
@@ -23,7 +25,7 @@ export const disclaimersRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({

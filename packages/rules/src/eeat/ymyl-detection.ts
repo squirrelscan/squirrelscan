@@ -4,6 +4,8 @@ import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 const HEALTH_KEYWORDS = [
   "symptoms",
   "treatment",
@@ -69,7 +71,7 @@ export const ymylDetectionRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -85,11 +87,7 @@ export const ymylDetectionRule: Rule = {
     let legalPages = 0;
 
     for (const page of pages) {
-      const content = (
-        page.parsed.meta.title +
-        " " +
-        page.parsed.meta.description
-      ).toLowerCase();
+      const content = (page.title + " " + page.description).toLowerCase();
       const path = getPathname(page.url).toLowerCase();
 
       // Check categories

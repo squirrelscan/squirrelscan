@@ -66,6 +66,7 @@ import {
 import {
   applySiteFindingBudget,
   buildCollectedPageSignal,
+  buildSitePageView,
   createSiteFindingBudget,
   createRunner,
   isRuleEnabled,
@@ -4438,6 +4439,9 @@ export function runStreamingRules(
           .filter((p) => !p.redirectSource)
           .map((p) => p.url),
         pageScanBatchSize: batchSize,
+        // The scalars the sitemap, hreflang and E-E-A-T site rules read (#2309), from the
+        // same pages `site.pages` holds, so the rules see one universe on both paths.
+        pageViews: parsedPages.map(buildSitePageView),
         // Only a run with links/anchor-mismatch or links/anchor-target-conflict enabled pays for
         // the anchor graph (#110, #1372).
         anchorGraph: [

@@ -4,6 +4,8 @@ import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const authorExpertiseRule: Rule = {
   meta: {
     id: "eeat/author-expertise",
@@ -32,7 +34,7 @@ export const authorExpertiseRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -64,7 +66,7 @@ export const authorExpertiseRule: Rule = {
     // Check for Person schema
     let hasPersonSchema = false;
     for (const page of pages) {
-      if (page.parsed.schema.types.includes("Person")) {
+      if (page.schemaTypes.includes("Person")) {
         hasPersonSchema = true;
         break;
       }

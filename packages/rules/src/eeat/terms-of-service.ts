@@ -5,6 +5,8 @@ import { EEAT_PAGE_PATTERNS } from "@squirrelscan/utils/constants";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const termsOfServiceRule: Rule = {
   meta: {
     id: "eeat/terms-of-service",
@@ -21,7 +23,7 @@ export const termsOfServiceRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({

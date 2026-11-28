@@ -31,6 +31,7 @@ import {
 import { contentDatesRule } from "../src/eeat/content-dates";
 import { getAllRuleIds, type RuleNamespace } from "../src/loader";
 import { RuleRunner } from "../src/runner";
+import { buildSitePageView } from "../src/shared/site-page-view";
 
 interface PageSpec {
   pageType: string | null;
@@ -257,7 +258,10 @@ describe("eeat/byline-consistency: silence guards (skipped)", () => {
     expect(check.message).toContain("no byline convention");
     expect(check.items).toBeUndefined();
     // And so nothing is handed to the per-page rules as a deviant.
-    const deviants = bylineConsistencyDeviants(legacyCtx(specs).site);
+    const deviants = bylineConsistencyDeviants(
+      legacyCtx(specs).site!.pages.map(buildSitePageView),
+      false
+    );
     expect(deviants.author.size).toBe(0);
     expect(deviants.date.size).toBe(0);
   });

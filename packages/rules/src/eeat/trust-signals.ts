@@ -4,6 +4,8 @@ import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const trustSignalsRule: Rule = {
   meta: {
     id: "eeat/trust-signals",
@@ -20,7 +22,7 @@ export const trustSignalsRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -37,8 +39,8 @@ export const trustSignalsRule: Rule = {
 
     for (const page of pages) {
       if (
-        page.parsed.schema.types.includes("Review") ||
-        page.parsed.schema.types.includes("AggregateRating")
+        page.schemaTypes.includes("Review") ||
+        page.schemaTypes.includes("AggregateRating")
       ) {
         hasReviewSchema = true;
       }

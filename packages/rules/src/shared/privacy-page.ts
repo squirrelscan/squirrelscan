@@ -75,12 +75,56 @@ export function isPrivacyPage(
   page: PrivacyCandidatePage,
   paths: readonly string[] = []
 ): boolean {
+  return isPrivacyView(
+    {
+      url: page.url,
+      title: page.parsed?.meta?.title ?? null,
+      h1: page.parsed?.h1?.texts ?? [],
+    },
+    paths
+  );
+}
+
+/** The slice of a page view {@link isPrivacyView} reads. */
+export interface PrivacyViewPage {
+  url: string;
+  title: string | null;
+  h1: readonly string[];
+}
+
+/** {@link isPrivacyPage} over a page view. */
+export function isPrivacyView(
+  page: PrivacyViewPage,
+  paths: readonly string[] = []
+): boolean {
   if (matchesConfiguredPaths(page.url, paths) || isPrivacyPath(page.url))
     return true;
-  const title = page.parsed?.meta?.title ?? "";
-  if (isPrivacyHeading(title)) return true;
-  const h1s = page.parsed?.h1?.texts ?? [];
-  return h1s.some((t) => isPrivacyHeading(t));
+  if (isPrivacyHeading(page.title ?? "")) return true;
+  return page.h1.some((t) => isPrivacyHeading(t));
+}
+
+/** URL of the first page view that is the privacy policy, or null. */
+export function findPrivacyView(
+  pages: readonly PrivacyViewPage[],
+  paths: readonly string[] = []
+): string | null {
+  for (const page of pages) {
+    if (isPrivacyView(page, paths)) return page.url;
+  }
+  return null;
+}
+
+/** {@link pageLinksToPrivacyHref} over a page view. */
+export function viewLinksToPrivacyHref(
+  page: { url: string; links: ReadonlyArray<{ url: string }> },
+  paths: readonly string[] = []
+): boolean {
+  return page.links.some((l) => {
+    const resolved = resolveUrl(l.url, page.url);
+    return resolved
+      ? matchesConfiguredPaths(resolved, paths) || isPrivacyPath(resolved)
+      : false;
+  });
 }
 
 // URL of the first crawled page that is the privacy policy, or null.

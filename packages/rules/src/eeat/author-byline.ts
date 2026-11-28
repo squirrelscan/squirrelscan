@@ -1,9 +1,11 @@
 // eeat/author-byline - Author names on content pages
 
-import { flattenJsonLdNodes, getPathname } from "@squirrelscan/utils";
+import { getPathname } from "@squirrelscan/utils";
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { skipsNoindexPages } from "../shared/noindex";
+import { sitePageViews } from "../shared/site-page-view";
 import {
   bylineConsistencyDeviants,
   defersToBylineConsistency,
@@ -37,7 +39,7 @@ export const authorBylineRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -51,7 +53,7 @@ export const authorBylineRule: Rule = {
     // Precedence (#1364): a page that breaks its page type's own byline convention
     // is reported by eeat/byline-consistency, so it is not counted missing here too.
     const deferred = defersToBylineConsistency(ctx)
-      ? bylineConsistencyDeviants(ctx.site).author
+      ? bylineConsistencyDeviants(pages, skipsNoindexPages(ctx.site)).author
       : new Set<string>();
     let deferredPages = 0;
 
@@ -63,12 +65,12 @@ export const authorBylineRule: Rule = {
       const path = getPathname(page.url);
       const isContentPage =
         /\/(blog|article|post|news|guide|how-to|review)/i.test(path) ||
-        page.parsed.schema.types.includes("Article") ||
-        page.parsed.schema.types.includes("BlogPosting") ||
-        page.parsed.schema.types.includes("NewsArticle") ||
+        page.schemaTypes.includes("Article") ||
+        page.schemaTypes.includes("BlogPosting") ||
+        page.schemaTypes.includes("NewsArticle") ||
         // Visible byline markup (Kadence-style entry pages) marks article
         // content even without a recognized URL slug or JSON-LD Article schema.
-        page.parsed.visibleAuthor != null;
+        page.visibleAuthor != null;
 
       if (!isContentPage && pages.length > 5) continue;
       contentPages++;
@@ -77,16 +79,11 @@ export const authorBylineRule: Rule = {
       // author already handles @graph (incl. @id-referenced Person nodes);
       // fall back to scanning all flattened JSON-LD nodes (top-level-only
       // checks miss Yoast-style @graph sites).
-      let hasAuthor = page.parsed.author !== null;
-      if (!hasAuthor && page.parsed.schema.raw) {
-        hasAuthor = flattenJsonLdNodes(page.parsed.schema.raw).some(
-          (s) => s["author"]
-        );
-      }
+      let hasAuthor = page.hasAuthor || page.schemaAuthor;
       // Fall back to visible byline markup (hCard `.author.vcard .fn`,
       // `rel="author"`, etc.) for themes (Kadence et al.) that omit JSON-LD
       // author. Org-level / footer noise is already filtered by the parser.
-      if (!hasAuthor && page.parsed.visibleAuthor) {
+      if (!hasAuthor && page.visibleAuthor) {
         hasAuthor = true;
       }
 

@@ -27,6 +27,7 @@ import type {
   PageFeatureRow,
   PageLinkRow,
   PageOutgoingEdges,
+  SitePageView,
   SiteQuery,
   StorageError,
 } from "@squirrelscan/core-contracts";
@@ -83,6 +84,12 @@ export function createSiteQuery(
      * `anchorGraph()` is then absent.
      */
     anchorGraph?: boolean;
+    /**
+     * One view per page of the audit universe, redirect sources included (#2309), built by
+     * `buildSitePageView` from the same pages `site.pages` holds. Omitted: `pageViews` is absent
+     * and the rules derive the views from `site.pages`.
+     */
+    pageViews?: readonly SitePageView[];
   }
 ): Effect.Effect<SiteQuery, StorageError, never> {
   return Effect.gen(function* () {
@@ -103,6 +110,7 @@ export function createSiteQuery(
     );
 
     // page_features rollups (PR-A read API). All bounded by construction.
+    const views = opts?.pageViews;
     const pageCount = yield* storage.getPageFeaturesCount(crawlId);
     const homepageRow = yield* storage.getHomepageFeature(crawlId);
     const dupTitle = yield* storage.getPageFeatureDuplicateGroups(
@@ -154,6 +162,7 @@ export function createSiteQuery(
       sumTransferBytes: () => transferBytes,
       sumSecretHits: () => secretHits,
       pagesMatching: (pred) => iteratePagesMatching(storage, crawlId, pred),
+      ...(views ? { pageViews: () => views } : {}),
       outgoingEdges: () =>
         iterateOutgoingEdges(
           storage,

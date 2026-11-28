@@ -1,25 +1,8 @@
 // eeat/citations - External citations and source references
 
-import { getHostname } from "@squirrelscan/utils";
-
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
-const AUTHORITATIVE_DOMAINS = [
-  "gov",
-  "edu",
-  "who.int",
-  "cdc.gov",
-  "nih.gov",
-  "fda.gov",
-  "mayo.clinic",
-  "webmd",
-  "healthline",
-  "wikipedia.org",
-  "reuters.com",
-  "bbc.com",
-  "nytimes.com",
-  "wsj.com",
-];
+import { sitePageViews } from "../shared/site-page-view";
 
 export const citationsRule: Rule = {
   meta: {
@@ -49,7 +32,7 @@ export const citationsRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -64,25 +47,8 @@ export const citationsRule: Rule = {
     let totalAuthoritativeLinks = 0;
 
     for (const page of pages) {
-      let pageHasAuthCitation = false;
-
-      for (const link of page.parsed.links) {
-        if (link.isInternal) continue;
-
-        const hostname = getHostname(link.url).toLowerCase();
-        if (!hostname) continue;
-
-        const isAuthoritative = AUTHORITATIVE_DOMAINS.some(
-          (d) => hostname.includes(d) || hostname.endsWith(`.${d}`)
-        );
-
-        if (isAuthoritative) {
-          totalAuthoritativeLinks++;
-          pageHasAuthCitation = true;
-        }
-      }
-
-      if (pageHasAuthCitation) pagesWithAuthoritativeCitations++;
+      totalAuthoritativeLinks += page.authoritativeLinks;
+      if (page.authoritativeLinks > 0) pagesWithAuthoritativeCitations++;
     }
 
     if (totalAuthoritativeLinks > 0) {

@@ -2,6 +2,8 @@
 
 import type { Rule, RuleContext, RuleResult, CheckResult } from "../types";
 
+import { sitePageViews } from "../shared/site-page-view";
+
 export const physicalAddressRule: Rule = {
   meta: {
     id: "eeat/physical-address",
@@ -22,7 +24,7 @@ export const physicalAddressRule: Rule = {
 
   run(ctx: RuleContext): RuleResult {
     const checks: CheckResult[] = [];
-    const pages = ctx.site?.pages;
+    const pages = sitePageViews(ctx);
 
     if (!pages || pages.length === 0) {
       checks.push({
@@ -38,11 +40,11 @@ export const physicalAddressRule: Rule = {
     let hasLocalBusinessSchema = false;
 
     for (const page of pages) {
-      if (page.parsed.schema.types.includes("PostalAddress")) {
+      if (page.schemaTypes.includes("PostalAddress")) {
         hasAddressSchema = true;
       }
       if (
-        page.parsed.schema.types.some((t) =>
+        page.schemaTypes.some((t) =>
           ["LocalBusiness", "Organization", "Restaurant", "Store"].includes(t)
         )
       ) {
