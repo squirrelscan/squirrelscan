@@ -1,5 +1,7 @@
 import type { TechFingerprint } from "../types";
 
+import { scriptSrc } from "./helpers";
+
 export const HOSTING_FINGERPRINTS: TechFingerprint[] = [
   {
     // Curated, not generated: the generated pattern matched `.web.app` anywhere in the page HTML, so a Shopify
@@ -111,5 +113,15 @@ export const HOSTING_FINGERPRINTS: TechFingerprint[] = [
       { type: "header", name: "server", pattern: /AmazonS3/i },
       { type: "header", name: "x-amz-request-id", pattern: /.+/ },
     ],
+  },
+  {
+    id: "godaddy",
+    name: "GoDaddy",
+    category: "hosting",
+    website: "https://www.godaddy.com",
+    detectors: scriptSrc(
+      String.raw`(?:https?:)?\/\/img1\.wsimg\.com\/(?:isteam|blobby\/go|tcc|signals)\/[\w.\/-]{1,200}\.js(?![\w.-])`
+    ),
+    confidence: "high",
   },
 ];

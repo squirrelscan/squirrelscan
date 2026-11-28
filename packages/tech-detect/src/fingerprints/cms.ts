@@ -1,5 +1,7 @@
 import type { TechFingerprint } from "../types";
 
+import { scriptSrc } from "./helpers";
+
 export const CMS_FINGERPRINTS: TechFingerprint[] = [
   {
     id: "wordpress",
@@ -9,6 +11,9 @@ export const CMS_FINGERPRINTS: TechFingerprint[] = [
     icon: "wordpress",
     detectors: [
       { type: "meta", name: "generator", pattern: /WordPress/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/stats\.wp\.com\/(?:w|e-\d+)\.js(?![\w.-])`
+      ),
       { type: "html", pattern: /wp-content\/themes\//i },
       { type: "html", pattern: /wp-content\/plugins\//i },
       { type: "url-path", pattern: /\/wp-json\//i },
@@ -53,6 +58,9 @@ export const CMS_FINGERPRINTS: TechFingerprint[] = [
     detectors: [
       { type: "meta", name: "generator", pattern: /Squarespace/i },
       { type: "html", pattern: /static1\.squarespace\.com/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/(?:definitions\.sqspcdn\.com|assets\.squarespace\.com)\/`
+      ),
       { type: "html", pattern: /sqsp-/i },
       { type: "header", name: "server", pattern: /Squarespace/i },
     ],
@@ -69,6 +77,9 @@ export const CMS_FINGERPRINTS: TechFingerprint[] = [
       { type: "html", pattern: /assets\.website-files\.com/i },
       { type: "html", pattern: /data-wf-site/i },
       { type: "script-url", pattern: /webflow\.js/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/cdn\.prod\.website-files\.com\/[0-9a-f]{24}\/js\/`
+      ),
     ],
   },
   {
@@ -136,7 +147,9 @@ export const CMS_FINGERPRINTS: TechFingerprint[] = [
     icon: "hubspot",
     detectors: [
       { type: "meta", name: "generator", pattern: /HubSpot/i },
-      { type: "script-url", pattern: /js\.hs-scripts\.com/i },
+      ...scriptSrc(
+        String.raw`(?:https?:)?\/\/js(?:-[a-z0-9]{2,6})?\.hs-scripts\.com\/`
+      ),
       { type: "html", pattern: /hs-script-loader/i },
     ],
   },
