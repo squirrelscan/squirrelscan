@@ -15,6 +15,7 @@ import { SECURITY_FINGERPRINTS } from "./security";
 import { SERVER_FINGERPRINTS } from "./servers";
 import { STACK_FINGERPRINTS } from "./stack";
 import { TAG_MANAGER_FINGERPRINTS } from "./tag-managers";
+import { WAPPALYZER_MIT_FINGERPRINTS } from "./wappalyzer-mit";
 import { WORDPRESS_FINGERPRINTS } from "./wordpress";
 
 export const ALL_FINGERPRINTS: TechFingerprint[] = [
@@ -35,6 +36,8 @@ export const ALL_FINGERPRINTS: TechFingerprint[] = [
   ...STACK_FINGERPRINTS,
   // Researched, adversarially-reviewed extension set (see ./generated.ts).
   ...GENERATED_FINGERPRINTS,
+  // Ported from the MIT-licensed Wappalyzer snapshot (#2422), registered last so a curated fingerprint wins a tie.
+  ...WAPPALYZER_MIT_FINGERPRINTS,
 ];
 
 export {
@@ -54,4 +57,5 @@ export {
   WORDPRESS_FINGERPRINTS,
   STACK_FINGERPRINTS,
   GENERATED_FINGERPRINTS,
+  WAPPALYZER_MIT_FINGERPRINTS,
 };

@@ -1,0 +1,1 @@
+- Technology detection recognizes 73 more technologies, ported from the MIT-licensed Wappalyzer snapshot: Contentsquare, Clicky, Lucky Orange, Inspectlet, Rewardful, Ezoic, Mediavine, AdThrive, Branch, Qualtrics, Tabby, ManyChat, Ketch, Highcharts, amCharts, Socket.io and others. Each is found by its script host or a marker in the page markup, never by a bare brand word (#2422)
